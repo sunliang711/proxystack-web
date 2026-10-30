@@ -58,7 +58,9 @@ case "$(uname -m)" in
 esac
 
 install_polkit() {
-    if command -v pkaction >/dev/null || [[ -d /usr/share/polkit-1 ]]; then
+    # systemd 自带 /usr/share/polkit-1 下的 action 文件，目录存在不代表装了 polkitd，
+    # 必须以 polkit 服务是否存在为准。
+    if systemctl cat polkit.service >/dev/null 2>&1; then
         return
     fi
     log "installing polkit"
@@ -71,6 +73,9 @@ install_polkit() {
     else
         die "polkit is required; install it with your package manager"
     fi
+    # 新装的 polkitd 带有自己的 D-Bus 策略文件；系统总线重新加载策略之前，polkitd 无法占用
+    # org.freedesktop.PolicyKit1 而立即退出，管理服务的启停请求会一直等到超时。
+    systemctl reload dbus.service 2>/dev/null || systemctl reload dbus-broker.service 2>/dev/null || true
 }
 
 fetch_binary() {
@@ -135,7 +140,8 @@ asset_file systemd/psw-mihomo@.service /etc/systemd/system/psw-mihomo@.service
 install -d -m 0755 /etc/polkit-1/rules.d
 asset_file polkit/50-proxystack-web.rules /etc/polkit-1/rules.d/50-proxystack-web.rules
 systemctl daemon-reload
-systemctl try-reload-or-restart polkit.service 2>/dev/null || true
+systemctl restart polkit.service || die "polkit failed to start; check 'journalctl -u polkit'"
+systemctl is-active --quiet polkit.service || die "polkit is not running; check 'journalctl -u polkit'"
 
 log "initializing database"
 INIT_ARGS=(--base-dir "$BASE" init --port "$PORT" --tls "$TLS")

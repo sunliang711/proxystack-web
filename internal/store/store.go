@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
@@ -38,6 +39,12 @@ func Open(path string) (*Store, error) {
 	if err := db.Ping(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("open database: %w", err)
+	}
+	// 数据库含凭据：收紧较早创建、权限过宽的数据库文件（WAL/SHM 由 SQLite 按主文件权限创建）。
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if info, err := os.Stat(path + suffix); err == nil && info.Mode().Perm()&0o027 != 0 {
+			_ = os.Chmod(path+suffix, info.Mode().Perm()&^0o027)
+		}
 	}
 	return &Store{DB: db, Q: dbq.New(db)}, nil
 }
