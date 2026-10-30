@@ -156,6 +156,10 @@ func (s *Service) mutateConfig(ctx context.Context, actor Actor, change *ConfigC
 	}
 	// 手动暂停开关不进入待应用变更：无论改动来自哪里，保存后立即生效。
 	change.Notes = s.syncPauses(ctx, before, result)
+	// 订阅监听设置同样立即生效。
+	if before.Settings != nil && before.Settings.Subscription != result.Settings.Subscription {
+		s.ApplySubscriptionListener(ctx)
+	}
 	return result, nil
 }
 
@@ -172,11 +176,14 @@ func (s *Service) writeRevision(ctx context.Context, q *dbq.Queries, actor Actor
 
 // reservedPorts 返回配置文档之外占用的端口（面板端口）。
 func (s *Service) reservedPorts(ctx context.Context, q *dbq.Queries) []int {
-	panel, err := store.GetPanelSettings(ctx, q)
-	if err != nil || panel.Port == 0 {
-		return nil
+	var ports []int
+	if panel, err := store.GetPanelSettings(ctx, q); err == nil && panel.Port != 0 {
+		ports = append(ports, panel.Port)
 	}
-	return []int{panel.Port}
+	if settings, err := store.LoadSettings(ctx, q); err == nil && settings.Subscription.Enabled {
+		ports = append(ports, settings.Subscription.Port)
+	}
+	return ports
 }
 
 // AuditSecretView 记录一次查看明文凭据的操作。
@@ -283,6 +290,7 @@ func (s *Service) DeleteUser(ctx context.Context, actor Actor, id int64) error {
 		name := doc.Users[index].Name
 		change.Object, change.Summary = "user:"+name, "删除用户 "+name
 		configdoc.RemoveUserRefs(doc, name)
+		configdoc.RemoveUserNodes(doc, name)
 		doc.Users = append(doc.Users[:index], doc.Users[index+1:]...)
 		return nil
 	})

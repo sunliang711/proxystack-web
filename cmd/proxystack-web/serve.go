@@ -21,6 +21,7 @@ import (
 	"github.com/eagle/proxystack-web/internal/app"
 	"github.com/eagle/proxystack-web/internal/runtime"
 	"github.com/eagle/proxystack-web/internal/store"
+	"github.com/eagle/proxystack-web/internal/subserver"
 	"github.com/eagle/proxystack-web/internal/units"
 	"github.com/eagle/proxystack-web/internal/version"
 	"github.com/eagle/proxystack-web/internal/xrayapi"
@@ -70,6 +71,9 @@ func runServe(ctx context.Context, g *globalFlags, dev bool) error {
 		return err
 	}
 	defer svc.Units.Close()
+	subListener := &subserver.Manager{Handler: subserver.Handler(svc)}
+	defer subListener.Close()
+	svc.SubListener = subListener
 	if err := svc.StartBackground(ctx); err != nil {
 		return err
 	}

@@ -81,7 +81,7 @@ const changeLabels: Record<string, [string, 'success' | 'error' | 'warning']> = 
   removed: ['删除', 'error'],
   modified: ['修改', 'warning'],
 }
-const kindLabels: Record<string, string> = { settings: '系统设置', user: '用户', stack: 'Stack' }
+const kindLabels: Record<string, string> = { settings: '系统设置', user: '用户', stack: 'Stack', manual_node: '手工节点', remote_source: '远端节点源', templates: '订阅模板' }
 const showExport = computed({
   get: () => exportRevision.value !== null,
   set: (value: boolean) => {

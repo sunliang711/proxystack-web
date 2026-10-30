@@ -8,7 +8,7 @@ import (
 
 // DiffEntry 是两个版本之间一个实体的变化。
 type DiffEntry struct {
-	Kind   string        `json:"kind" enum:"settings,user,stack"`
+	Kind   string        `json:"kind" enum:"settings,user,stack,manual_node,remote_source,templates"`
 	Name   string        `json:"name"`
 	Change string        `json:"change" enum:"added,removed,modified"`
 	Fields []FieldChange `json:"fields"`
@@ -44,6 +44,36 @@ func Diff(from, to *Document) []DiffEntry {
 		func(i int) (int64, string, any) {
 			return to.Stacks[i].ID, to.Stacks[i].Name, withoutStackIDs(to.Stacks[i])
 		})...)
+	nodeName := func(n ManualNode) string { return n.User + " / " + n.Remark }
+	entries = append(entries, diffEntities("manual_node", len(from.ManualNodes), len(to.ManualNodes),
+		func(i int) (int64, string, any) {
+			n := from.ManualNodes[i]
+			id := n.ID
+			n.ID = 0
+			return id, nodeName(n), n
+		},
+		func(i int) (int64, string, any) {
+			n := to.ManualNodes[i]
+			id := n.ID
+			n.ID = 0
+			return id, nodeName(n), n
+		})...)
+	entries = append(entries, diffEntities("remote_source", len(from.RemoteSources), len(to.RemoteSources),
+		func(i int) (int64, string, any) {
+			r := from.RemoteSources[i]
+			id := r.ID
+			r.ID = 0
+			return id, r.Name, r
+		},
+		func(i int) (int64, string, any) {
+			r := to.RemoteSources[i]
+			id := r.ID
+			r.ID = 0
+			return id, r.Name, r
+		})...)
+	if fields := diffValues(from.Templates, to.Templates); len(fields) > 0 {
+		entries = append(entries, DiffEntry{Kind: "templates", Name: "templates", Change: "modified", Fields: fields})
+	}
 	return entries
 }
 

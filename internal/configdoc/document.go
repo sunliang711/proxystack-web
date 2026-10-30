@@ -35,6 +35,60 @@ type Document struct {
 	Settings   *Settings   `json:"settings,omitempty" yaml:"settings,omitempty"`
 	Users      []User      `json:"users,omitempty" yaml:"users,omitempty"`
 	Stacks     []Stack     `json:"stacks,omitempty" yaml:"stacks,omitempty"`
+	// ManualNodes 是手工添加的订阅节点。
+	ManualNodes []ManualNode `json:"manual_nodes,omitempty" yaml:"manual_nodes,omitempty"`
+	// RemoteSources 是从其他实例拉取节点的远端节点源。
+	RemoteSources []RemoteSource `json:"remote_sources,omitempty" yaml:"remote_sources,omitempty"`
+	// Templates 是自定义订阅模板，nil 表示文档不涉及模板。
+	Templates *Templates `json:"templates,omitempty" yaml:"templates,omitempty"`
+}
+
+// 手工节点模式。
+const (
+	NodeStandard = "standard"
+	NodeDirect   = "direct"
+)
+
+// ManualNode 是手工添加到某个用户订阅中的节点。标准节点按协议填写字段；
+// 原生节点（direct）按 mihomo proxy 字段原样输出到 Clash/Premium Clash。
+type ManualNode struct {
+	ID              int64             `json:"id,omitempty" yaml:"-"`
+	User            string            `json:"user" yaml:"user"`
+	Mode            string            `json:"mode" yaml:"mode" enum:"standard,direct"`
+	Protocol        string            `json:"protocol" yaml:"protocol,omitempty" enum:",vmess,shadowsocks,socks5,http"`
+	Server          string            `json:"server" yaml:"server"`
+	Port            int               `json:"port" yaml:"port" minimum:"0" maximum:"65535"`
+	Tag             string            `json:"tag" yaml:"tag,omitempty"`
+	Remark          string            `json:"remark" yaml:"remark"`
+	Region          string            `json:"region" yaml:"region,omitempty"`
+	UDP             bool              `json:"udp" yaml:"udp,omitempty"`
+	UUID            string            `json:"uuid" yaml:"uuid,omitempty"`
+	Network         string            `json:"network" yaml:"network,omitempty" enum:",raw,ws,grpc"`
+	WSPath          string            `json:"ws_path" yaml:"ws_path,omitempty"`
+	WSHeaders       map[string]string `json:"ws_headers" yaml:"ws_headers,omitempty"`
+	GRPCServiceName string            `json:"grpc_service_name" yaml:"grpc_service_name,omitempty"`
+	Method          string            `json:"method" yaml:"method,omitempty"`
+	Password        string            `json:"password" yaml:"password,omitempty"`
+	AuthType        string            `json:"auth_type" yaml:"auth_type,omitempty" enum:",noauth,password"`
+	AuthUsername    string            `json:"auth_username" yaml:"auth_username,omitempty"`
+	AuthPassword    string            `json:"auth_password" yaml:"auth_password,omitempty"`
+	Config          RawMapping        `json:"config" yaml:"config,omitempty" doc:"mode=direct 时的 mihomo proxy 字段"`
+}
+
+// RemoteSource 是另一个实例的节点导出接口。
+type RemoteSource struct {
+	ID      int64  `json:"id,omitempty" yaml:"-"`
+	Name    string `json:"name" yaml:"name"`
+	URL     string `json:"url" yaml:"url"`
+	Token   string `json:"token" yaml:"token"`
+	Enabled bool   `json:"enabled" yaml:"enabled"`
+}
+
+// Templates 是三种订阅格式的自定义模板，空字符串表示使用内置模板。
+type Templates struct {
+	Clash   string `json:"clash" yaml:"clash,omitempty"`
+	Premium string `json:"premium" yaml:"premium,omitempty"`
+	Surge   string `json:"surge" yaml:"surge,omitempty"`
 }
 
 // Encryption 描述口令加密参数。
@@ -54,6 +108,32 @@ type Settings struct {
 	Security      SecuritySettings      `json:"security" yaml:"security"`
 	Deps          DepsSettings          `json:"deps" yaml:"deps"`
 	DownloadProxy DownloadProxySettings `json:"download_proxy" yaml:"download_proxy"`
+	Subscription  SubscriptionSettings  `json:"subscription" yaml:"subscription"`
+	NodeExport    NodeExportSettings    `json:"node_export" yaml:"node_export"`
+}
+
+// 用户被停用或已到期时订阅的返回方式。
+const (
+	DisabledNotFound = "not_found"
+	DisabledEmpty    = "empty"
+)
+
+// SubscriptionSettings 是订阅监听器的设置。
+type SubscriptionSettings struct {
+	Enabled          bool   `json:"enabled" yaml:"enabled"`
+	Listen           string `json:"listen" yaml:"listen"`
+	Port             int    `json:"port" yaml:"port" minimum:"1" maximum:"65535"`
+	PublicBaseURL    string `json:"public_base_url" yaml:"public_base_url,omitempty" doc:"订阅链接的对外地址，为空时用 http://<对外地址>:<端口>"`
+	SurgeManaged     bool   `json:"surge_managed" yaml:"surge_managed"`
+	Interval         int    `json:"interval" yaml:"interval" minimum:"0" doc:"Surge managed config 的更新间隔（秒）"`
+	Strict           bool   `json:"strict" yaml:"strict"`
+	DisabledResponse string `json:"disabled_response" yaml:"disabled_response" enum:"not_found,empty"`
+}
+
+// NodeExportSettings 是只读节点导出接口：其他实例凭 token 拉取本机节点。
+type NodeExportSettings struct {
+	Enabled bool   `json:"enabled" yaml:"enabled"`
+	Token   string `json:"token" yaml:"token"`
 }
 
 // DepSource 是一个组件的安装来源。

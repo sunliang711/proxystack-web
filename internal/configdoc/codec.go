@@ -77,6 +77,18 @@ func (d *Document) Normalize() {
 	for index := range d.Stacks {
 		d.Stacks[index].Normalize()
 	}
+	if d.Templates == nil {
+		d.Templates = &Templates{}
+	}
+	for index := range d.ManualNodes {
+		node := &d.ManualNodes[index]
+		if node.Mode == "" {
+			node.Mode = NodeStandard
+		}
+		if node.WSHeaders == nil {
+			node.WSHeaders = map[string]string{}
+		}
+	}
 }
 
 // Normalize 用默认值补齐设置中缺失的分组和字段（例如较早版本导出的文件）。
@@ -103,6 +115,10 @@ func (s *Settings) Normalize() {
 	fill(&s.Deps.MihomoVariant, defaults.Deps.MihomoVariant)
 	fill(&s.Deps.WindowStart, defaults.Deps.WindowStart)
 	fill(&s.Deps.WindowEnd, defaults.Deps.WindowEnd)
+	if s.Subscription.Listen == "" && s.Subscription.Port == 0 {
+		s.Subscription = defaults.Subscription
+	}
+	fill(&s.Subscription.DisabledResponse, defaults.Subscription.DisabledResponse)
 	if s.DownloadProxy.Mode == "" {
 		s.DownloadProxy = defaults.DownloadProxy
 	}

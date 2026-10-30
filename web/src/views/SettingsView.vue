@@ -5,7 +5,8 @@ import {
   NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NSwitch, NTimePicker, NAlert,
   useDialog, useMessage,
 } from 'naive-ui'
-import { api, emptyErrors, fieldState, splitProblem, type FormErrors, type Schemas } from '../api/client'
+import { api, emptyErrors, fieldState, MASKED, splitProblem, type FormErrors, type Schemas } from '../api/client'
+import { randomString } from '../util/generate'
 import SecretInput from '../components/SecretInput.vue'
 import ErrorList from '../components/ErrorList.vue'
 import { useDirty } from '../composables/useDirty'
@@ -111,6 +112,37 @@ async function testProxy() {
   testing.value = false
   proxyTest.value = data ?? null
 }
+const subStatus = ref<Schemas['SubscriptionStatus'] | null>(null)
+async function loadSubStatus() {
+  subStatus.value = (await api.GET('/api/subscription/status')).data ?? null
+}
+onMounted(loadSubStatus)
+
+/** 订阅更新间隔：秒 ⇄ 小时/天。 */
+const intervalUnit = ref<3600 | 86400>(86400)
+const intervalValue = computed({
+  get: () => (form.value ? Math.round((form.value.subscription.interval / intervalUnit.value) * 100) / 100 : 0),
+  set: (value: number) => {
+    if (form.value) form.value.subscription.interval = Math.round(value * intervalUnit.value)
+  },
+})
+
+const exportURL = computed(() => {
+  if (!form.value) return ''
+  const sub = form.value.subscription
+  const base = sub.public_base_url || `http://${form.value.basic.external_host || '<对外地址>'}:${sub.port}`
+  return `${base.replace(/\/$/, '')}/export/nodes`
+})
+
+async function revealSettings() {
+  const { data } = await api.GET('/api/config/settings/secrets')
+  if (!data || !settings.value) return
+  const wasDirty = dirty.value
+  if (settings.value.node_export.token === MASKED) settings.value.node_export.token = data.node_export.token
+  if (settings.value.download_proxy.password === MASKED) settings.value.download_proxy.password = data.download_proxy.password
+  if (!wasDirty) markClean()
+}
+
 const proxyStack = () => stacks.value.find((s) => s.name === settings.value?.download_proxy.stack)
 
 
@@ -149,6 +181,7 @@ async function save() {
   errors.value = emptyErrors()
   settings.value = data!
   markClean()
+  loadSubStatus()
   message.success('已保存，配置变更将在下次应用时生效')
 }
 </script>
@@ -225,6 +258,55 @@ async function save() {
         <NFormItem label="允许公开的无认证入站" label-width="200">
           <NSwitch :value="settings.security.allow_noauth_public" @update:value="toggleNoAuth" />
         </NFormItem>
+      </NCard>
+
+      <NCard title="订阅" size="small" class="card">
+        <NAlert v-if="subStatus?.error" type="error" :bordered="false" style="margin-bottom: 12px">订阅监听 {{ subStatus.address }} 启动失败：{{ subStatus.error }}</NAlert>
+        <NAlert v-else-if="subStatus?.listening" type="success" :bordered="false" style="margin-bottom: 12px">订阅监听运行中：{{ subStatus.address }}</NAlert>
+        <NFormItem label="启用订阅监听" v-bind="f('subscription.enabled', '订阅端口与管理端口分开，可以对公网开放；保存后立即生效')">
+          <NSwitch v-model:value="form.subscription.enabled" />
+        </NFormItem>
+        <NFormItem label="监听地址" v-bind="f('subscription.listen')">
+          <NSelect v-model:value="form.subscription.listen" :options="['0.0.0.0', '127.0.0.1', '::'].map((v) => ({ label: v, value: v }))" filterable tag />
+        </NFormItem>
+        <NFormItem label="端口" v-bind="f('subscription.port')">
+          <NInputNumber v-model:value="form.subscription.port" :min="1" :max="65535" :show-button="false" />
+        </NFormItem>
+        <NFormItem label="对外地址" v-bind="f('subscription.public_base_url', '订阅链接和 Surge managed 首行使用的地址，例如 https://sub.example.com；为空时用 http://<对外地址>:<端口>')">
+          <NInput v-model:value="form.subscription.public_base_url" placeholder="https://sub.example.com" />
+        </NFormItem>
+        <NFormItem label="Surge managed config" v-bind="f('subscription.surge_managed')">
+          <NSwitch v-model:value="form.subscription.surge_managed" />
+        </NFormItem>
+        <NFormItem label="更新间隔" v-bind="f('subscription.interval')">
+          <NSpace>
+            <NInputNumber v-model:value="intervalValue" :min="0" :precision="2" />
+            <NSelect v-model:value="intervalUnit" :options="[{ label: '小时', value: 3600 }, { label: '天', value: 86400 }]" style="width: 90px" />
+          </NSpace>
+        </NFormItem>
+        <NFormItem label="strict" v-bind="f('subscription.strict')">
+          <NSwitch v-model:value="form.subscription.strict" />
+        </NFormItem>
+        <NFormItem label="停用或到期用户" v-bind="f('subscription.disabled_response')">
+          <NRadioGroup v-model:value="form.subscription.disabled_response">
+            <NRadioButton value="not_found">返回 404</NRadioButton>
+            <NRadioButton value="empty">返回空订阅</NRadioButton>
+          </NRadioGroup>
+        </NFormItem>
+      </NCard>
+
+      <NCard title="节点导出" size="small" class="card">
+        <NFormItem label="开启只读导出" v-bind="f('node_export.enabled', '其他 proxystack-web 实例可以凭 token 拉取本机节点（远端节点源）')">
+          <NSwitch v-model:value="form.node_export.enabled" />
+        </NFormItem>
+        <template v-if="form.node_export.enabled">
+          <NFormItem label="token" v-bind="f('node_export.token', '至少 16 个字符')">
+            <SecretInput v-model:value="form.node_export.token" :generate="() => randomString(32)" :reveal="revealSettings" />
+          </NFormItem>
+          <NFormItem label="导出地址">
+            <NText code>{{ exportURL }}</NText>
+          </NFormItem>
+        </template>
       </NCard>
 
       <NCard title="依赖源" size="small" class="card">
@@ -313,7 +395,7 @@ async function save() {
             <NInput v-model:value="form.download_proxy.username" :input-props="{ autocomplete: 'off' }" />
           </NFormItem>
           <NFormItem label="密码" v-bind="f('download_proxy.password')">
-            <SecretInput v-model:value="form.download_proxy.password" />
+            <SecretInput v-model:value="form.download_proxy.password" :reveal="revealSettings" />
           </NFormItem>
           <NFormItem v-if="form.download_proxy.protocol === 'socks5'" label="由代理解析域名" v-bind="f('download_proxy.remote_dns', '开启后本机不做 DNS 查询')">
             <NSwitch v-model:value="form.download_proxy.remote_dns" />

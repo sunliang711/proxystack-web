@@ -17,6 +17,8 @@ const (
 	SettingSecurity  = "security"
 	SettingDeps      = "deps"
 	SettingProxy     = "download_proxy"
+	SettingSub       = "subscription"
+	SettingExport    = "node_export"
 )
 
 // LoadSettings 读取全局设置，缺失的分组使用默认值。
@@ -29,6 +31,8 @@ func LoadSettings(ctx context.Context, q *dbq.Queries) (configdoc.Settings, erro
 		SettingSecurity:  &settings.Security,
 		SettingDeps:      &settings.Deps,
 		SettingProxy:     &settings.DownloadProxy,
+		SettingSub:       &settings.Subscription,
+		SettingExport:    &settings.NodeExport,
 	}
 	for key, target := range groups {
 		if err := GetJSON(ctx, q, key, target); err != nil && err != ErrNotFound {
@@ -47,6 +51,8 @@ func SaveSettings(ctx context.Context, q *dbq.Queries, settings configdoc.Settin
 		SettingSecurity:  settings.Security,
 		SettingDeps:      settings.Deps,
 		SettingProxy:     settings.DownloadProxy,
+		SettingSub:       settings.Subscription,
+		SettingExport:    settings.NodeExport,
 	}
 	for key, value := range groups {
 		if err := PutJSON(ctx, q, key, value); err != nil {
@@ -241,8 +247,105 @@ func LoadDocument(ctx context.Context, q *dbq.Queries) (*configdoc.Document, err
 		user := &doc.Users[userIndex[row.UserID]]
 		user.PausedStacks = append(user.PausedStacks, stackNames[row.StackID])
 	}
+	if err := loadSubscription(ctx, q, doc, userIndex); err != nil {
+		return nil, err
+	}
 	doc.Normalize()
 	return doc, nil
+}
+
+func loadSubscription(ctx context.Context, q *dbq.Queries, doc *configdoc.Document, userIndex map[int64]int) error {
+	doc.ManualNodes, doc.RemoteSources, doc.Templates = []configdoc.ManualNode{}, []configdoc.RemoteSource{}, &configdoc.Templates{}
+	nodes, err := q.ListManualNodes(ctx)
+	if err != nil {
+		return err
+	}
+	for _, row := range nodes {
+		var node configdoc.ManualNode
+		if err := json.Unmarshal([]byte(row.Data), &node); err != nil {
+			return fmt.Errorf("manual node %d is corrupt: %w", row.ID, err)
+		}
+		node.ID, node.User = row.ID, doc.Users[userIndex[row.UserID]].Name
+		doc.ManualNodes = append(doc.ManualNodes, node)
+	}
+	sources, err := q.ListRemoteSources(ctx)
+	if err != nil {
+		return err
+	}
+	for _, row := range sources {
+		doc.RemoteSources = append(doc.RemoteSources, configdoc.RemoteSource{
+			ID: row.ID, Name: row.Name, URL: row.Url, Token: row.Token, Enabled: row.Enabled != 0,
+		})
+	}
+	templates, err := q.ListSubTemplates(ctx)
+	if err != nil {
+		return err
+	}
+	for _, row := range templates {
+		switch row.Format {
+		case "clash":
+			doc.Templates.Clash = row.Content
+		case "premium":
+			doc.Templates.Premium = row.Content
+		case "surge":
+			doc.Templates.Surge = row.Content
+		}
+	}
+	return nil
+}
+
+func saveSubscription(ctx context.Context, q *dbq.Queries, doc *configdoc.Document, userIDByName map[string]int64) error {
+	for position := range doc.ManualNodes {
+		node := &doc.ManualNodes[position]
+		userID, ok := userIDByName[node.User]
+		if !ok {
+			return fmt.Errorf("manual node references a missing user: %s", node.User)
+		}
+		stored := *node
+		stored.ID, stored.User = 0, ""
+		data, err := json.Marshal(stored)
+		if err != nil {
+			return err
+		}
+		id, err := q.InsertManualNode(ctx, dbq.InsertManualNodeParams{NULLIF: node.ID, UserID: userID, Position: int64(position), Data: string(data)})
+		if err != nil {
+			return err
+		}
+		node.ID = id
+	}
+	sourceIDs := []int64{}
+	for _, source := range doc.RemoteSources {
+		if source.ID != 0 {
+			sourceIDs = append(sourceIDs, source.ID)
+		}
+	}
+	if err := deleteExcept(ctx, sourceIDs, q.DeleteRemoteSourcesExcept, q.DeleteAllRemoteSources); err != nil {
+		return err
+	}
+	for position := range doc.RemoteSources {
+		source := &doc.RemoteSources[position]
+		id, err := q.UpsertRemoteSource(ctx, dbq.UpsertRemoteSourceParams{
+			NULLIF: source.ID, Position: int64(position), Name: source.Name, Url: source.URL, Token: source.Token, Enabled: boolInt(source.Enabled),
+		})
+		if err != nil {
+			return fmt.Errorf("save remote source %s: %w", source.Name, err)
+		}
+		source.ID = id
+	}
+	if doc.Templates != nil {
+		for format, content := range map[string]string{"clash": doc.Templates.Clash, "premium": doc.Templates.Premium, "surge": doc.Templates.Surge} {
+			var err error
+			if content == "" {
+				err = q.DeleteSubTemplate(ctx, format)
+			} else {
+				err = q.PutSubTemplate(ctx, dbq.PutSubTemplateParams{Format: format, Content: content})
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // SaveDocument 把文档整体写入配置表，新实体的 ID 回填到文档。调用方负责事务和校验。
@@ -253,7 +356,7 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 		}
 	}
 	for _, clear := range []func(context.Context) error{
-		q.DeleteUserPausedStacks, q.DeleteMihomoUpstreams, q.DeleteMihomoGroups, q.DeleteMihomoListeners,
+		q.DeleteUserPausedStacks, q.DeleteManualNodes, q.DeleteMihomoUpstreams, q.DeleteMihomoGroups, q.DeleteMihomoListeners,
 		q.DeleteInboundUserRefs, q.DeleteInbounds, q.DeleteUserProfiles,
 	} {
 		if err := clear(ctx); err != nil {
@@ -405,6 +508,9 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 			}
 			group.ID = groupID
 		}
+	}
+	if err := saveSubscription(ctx, q, doc, userIDByName); err != nil {
+		return err
 	}
 	stackIDByName := map[string]int64{}
 	for _, stack := range doc.Stacks {

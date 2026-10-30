@@ -85,6 +85,7 @@ func Validate(doc *Document) Issues {
 		stackNames[stack.Name] = true
 		validateStack(&issues, doc, path, stack)
 	}
+	validateSubscription(&issues, doc)
 	if len(issues) > 0 {
 		return issues
 	}
@@ -131,6 +132,9 @@ func validateDomain(doc *Document) Issues {
 		} else {
 			issues.add("", "%s", err.Error())
 		}
+	}
+	if len(issues) == 0 {
+		validateSubscriptionNodes(&issues, doc, resolved)
 	}
 	return issues
 }

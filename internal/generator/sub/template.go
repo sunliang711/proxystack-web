@@ -30,6 +30,11 @@ func RenderTemplate(templateName string, context map[string]any, templateDir str
 	if err != nil {
 		return "", err
 	}
+	return renderTemplateText(templateName, source, context)
+}
+
+// renderTemplateText 校验模板引用的变量并渲染模板文本。
+func renderTemplateText(templateName string, source string, context map[string]any) (string, error) {
 	if err := validateTemplateVariables(source, context); err != nil {
 		return "", err
 	}
@@ -45,6 +50,26 @@ func RenderTemplate(templateName string, context map[string]any, templateDir str
 		return "", TemplateError{Message: fmt.Sprintf("subscription template render failed: %s", templateName)}
 	}
 	return rendered, nil
+}
+
+// CheckTemplate 只检查模板语法，供保存自定义模板前使用。
+func CheckTemplate(source string) error {
+	if err := registerTemplateFilters(); err != nil {
+		return err
+	}
+	if _, err := pongo2.FromString(source); err != nil {
+		return TemplateError{Message: "subscription template syntax error: " + err.Error()}
+	}
+	return nil
+}
+
+// BuiltinTemplate 返回内置模板文本。
+func BuiltinTemplate(templateName string) (string, error) {
+	data, err := builtintemplates.SubFS.ReadFile(templateName)
+	if err != nil {
+		return "", TemplateError{Message: "subscription template is missing: " + templateName}
+	}
+	return string(data), nil
 }
 
 // LoadTemplate 按约定顺序读取模板文本。

@@ -50,7 +50,7 @@ type PortChange struct {
 // ImportEntry 是预览中的一个实体。
 type ImportEntry struct {
 	Key                string       `json:"key"`
-	Kind               string       `json:"kind" enum:"settings,user,stack"`
+	Kind               string       `json:"kind" enum:"settings,user,stack,manual_node,remote_source,templates"`
 	Name               string       `json:"name"`
 	Action             string       `json:"action" enum:"create,overwrite,skip,rename,excluded"`
 	NewName            string       `json:"new_name,omitempty"`
@@ -77,6 +77,8 @@ func PlanImport(current, incoming *Document, opts ImportOptions) (*ImportPlan, e
 	if opts.Mode == ImportReplace {
 		result.Users = []User{}
 		result.Stacks = []Stack{}
+		result.ManualNodes = []ManualNode{}
+		result.RemoteSources = []RemoteSource{}
 	}
 	plan := &ImportPlan{Result: result, Entries: []ImportEntry{}}
 
@@ -202,6 +204,73 @@ func PlanImport(current, incoming *Document, opts ImportOptions) (*ImportPlan, e
 			return nil, err
 		}
 		entry.PortChanges = changes
+	}
+
+	// 手工节点：同一用户下同名（remark）的节点按冲突选项处理；远端节点源按名字；模板整体覆盖。
+	for _, node := range incoming.ManualNodes {
+		node.ID = 0
+		key := "manual_node:" + node.User + "/" + node.Remark
+		entry := ImportEntry{Key: key, Kind: "manual_node", Name: node.User + " / " + node.Remark, PortChanges: []PortChange{}}
+		existing := slices.IndexFunc(result.ManualNodes, func(n ManualNode) bool { return n.User == node.User && n.Remark == node.Remark })
+		switch {
+		case excluded(key):
+			entry.Action = ActionExcluded
+		case existing < 0:
+			entry.Action = ActionCreate
+			result.ManualNodes = append(result.ManualNodes, node)
+		case opts.Conflict == ConflictOverwrite:
+			entry.Action = ActionOverwrite
+			node.ID = result.ManualNodes[existing].ID
+			result.ManualNodes[existing] = node
+		case opts.Conflict == ConflictRename:
+			entry.Action = ActionRename
+			node.Remark = uniqueName(node.Remark, func(name string) bool {
+				return slices.ContainsFunc(result.ManualNodes, func(n ManualNode) bool { return n.User == node.User && n.Remark == name })
+			})
+			node.Tag = ""
+			entry.NewName = node.User + " / " + node.Remark
+			result.ManualNodes = append(result.ManualNodes, node)
+		default:
+			entry.Action = ActionSkip
+		}
+		plan.Entries = append(plan.Entries, entry)
+	}
+	for _, source := range incoming.RemoteSources {
+		source.ID = 0
+		key := "remote_source:" + source.Name
+		entry := ImportEntry{Key: key, Kind: "remote_source", Name: source.Name, PortChanges: []PortChange{}}
+		existing := slices.IndexFunc(result.RemoteSources, func(r RemoteSource) bool { return r.Name == source.Name })
+		switch {
+		case excluded(key):
+			entry.Action = ActionExcluded
+		case existing < 0:
+			entry.Action = ActionCreate
+			result.RemoteSources = append(result.RemoteSources, source)
+		case opts.Conflict == ConflictOverwrite:
+			entry.Action = ActionOverwrite
+			source.ID = result.RemoteSources[existing].ID
+			result.RemoteSources[existing] = source
+		case opts.Conflict == ConflictRename:
+			entry.Action = ActionRename
+			source.Name = uniqueName(source.Name, func(name string) bool {
+				return slices.ContainsFunc(result.RemoteSources, func(r RemoteSource) bool { return r.Name == name })
+			})
+			entry.NewName = source.Name
+			result.RemoteSources = append(result.RemoteSources, source)
+		default:
+			entry.Action = ActionSkip
+		}
+		plan.Entries = append(plan.Entries, entry)
+	}
+	if incoming.Templates != nil && *incoming.Templates != (Templates{}) {
+		entry := ImportEntry{Key: "templates", Kind: "templates", Name: "templates", Action: ActionOverwrite, PortChanges: []PortChange{}}
+		if excluded(entry.Key) {
+			entry.Action = ActionExcluded
+		} else {
+			templates := *incoming.Templates
+			result.Templates = &templates
+		}
+		plan.Entries = append(plan.Entries, entry)
 	}
 
 	if omitted {

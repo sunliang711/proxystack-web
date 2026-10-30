@@ -4,9 +4,10 @@ import { NAlert, NButton, NForm, NFormItem, NInput, NModal, NRadioButton, NRadio
 import { api, problemMessage, saveBlob } from '../api/client'
 
 const props = defineProps<{
-  scope: 'all' | 'stacks' | 'users'
+  scope: 'all' | 'stacks' | 'users' | 'manual_nodes' | 'templates'
   stacks?: string[]
   users?: string[]
+  manualNodes?: number[]
   revisionId?: number
   allowCsv?: boolean
 }>()
@@ -37,6 +38,8 @@ watch(format, (value) => {
 const scopeLabel = computed(() => {
   if (props.scope === 'stacks') return `stack：${props.stacks?.join('、')}`
   if (props.scope === 'users') return `用户：${props.users?.join('、')}`
+  if (props.scope === 'manual_nodes') return `手工节点：${props.manualNodes?.length ?? 0} 个`
+  if (props.scope === 'templates') return '订阅模板'
   return props.revisionId ? `版本 #${props.revisionId} 的全部配置` : '全部配置'
 })
 
@@ -54,6 +57,7 @@ async function download() {
       scope: props.scope,
       stacks: props.stacks ?? [],
       users: props.users ?? [],
+      manual_nodes: props.manualNodes ?? [],
       include_referenced_users: includeUsers.value,
       revision_id: props.revisionId ?? 0,
       format: format.value,

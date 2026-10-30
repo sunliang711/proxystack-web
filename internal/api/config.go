@@ -190,7 +190,8 @@ type revisionDiffOutput struct {
 
 type exportInput struct {
 	Body struct {
-		Scope                  string   `json:"scope" enum:"all,stacks,users"`
+		Scope                  string   `json:"scope" enum:"all,stacks,users,manual_nodes,templates"`
+		ManualNodes            []int64  `json:"manual_nodes" required:"false"`
 		Stacks                 []string `json:"stacks" required:"false"`
 		Users                  []string `json:"users" required:"false"`
 		IncludeReferencedUsers bool     `json:"include_referenced_users" required:"false"`
@@ -501,7 +502,7 @@ func registerConfig(api huma.API, s *Server) {
 			result, err := s.svc.ExportConfig(ctx, actorFrom(ctx), app.ExportOptions{
 				Scope: configdoc.ExportScope{
 					Scope: in.Body.Scope, Stacks: in.Body.Stacks, Users: in.Body.Users,
-					IncludeReferencedUsers: in.Body.IncludeReferencedUsers,
+					IncludeReferencedUsers: in.Body.IncludeReferencedUsers, ManualNodes: in.Body.ManualNodes,
 				},
 				RevisionID: in.Body.RevisionID, Format: in.Body.Format, Secrets: in.Body.Secrets, Passphrase: in.Body.Passphrase,
 			})

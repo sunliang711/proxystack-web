@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -117,6 +118,60 @@ func RenderSurgeSubscription(index Index, user string, templateDir string, dataD
 		context["managed_config_strict"] = "false"
 	}
 	return RenderTemplate(SurgeTemplateName, context, templateDir, dataDir)
+}
+
+// 订阅格式。
+const (
+	FormatClash   = "clash"
+	FormatPremium = "premium"
+	FormatSurge   = "surge"
+)
+
+// TemplateNameFor 返回订阅格式对应的内置模板名。
+func TemplateNameFor(format string) string {
+	switch format {
+	case FormatPremium:
+		return PremiumClashTemplateName
+	case FormatSurge:
+		return SurgeTemplateName
+	default:
+		return ClashTemplateName
+	}
+}
+
+// SurgeManaged 是 Surge managed config 首行的参数；URL 为空时不输出首行。
+type SurgeManaged struct {
+	URL      string
+	Interval int
+	Strict   bool
+}
+
+// Render 按格式渲染订阅。override 非空时使用该模板文本代替内置模板。
+func Render(format string, index Index, user string, override string, managed SurgeManaged) (string, error) {
+	context, err := BuildTemplateContext(index, user)
+	if err != nil {
+		return "", err
+	}
+	if format == FormatSurge {
+		surgeContext := buildSurgeTemplateContext(NodesForUser(index, user))
+		context["surge_proxy_lines"] = surgeContext.proxyLines
+		context["surge_proxy_names"] = surgeContext.proxyNames
+		context["surge_region_groups"] = surgeContext.regionGroups
+		context["managed_config_url"] = managed.URL
+		context["managed_config_interval"] = managed.Interval
+		context["managed_config_strict"] = strconv.FormatBool(managed.Strict)
+	}
+	name := TemplateNameFor(format)
+	source := override
+	if source == "" {
+		if source, err = BuiltinTemplate(name); err != nil {
+			return "", err
+		}
+	}
+	if err := registerTemplateFilters(); err != nil {
+		return "", err
+	}
+	return renderTemplateText(name, source, context)
 }
 
 // BuildTemplateContext 生成三类订阅模板共享上下文。

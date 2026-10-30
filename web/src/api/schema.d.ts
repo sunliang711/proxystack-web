@@ -175,6 +175,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/config/settings/secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查看设置中的明文凭据（记入审计日志） */
+        get: operations["getSettingsSecrets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/deps": {
         parameters: {
             query?: never;
@@ -294,6 +311,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/manual-nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 手工节点 */
+        get: operations["listManualNodes"];
+        /** 保存手工节点列表 */
+        put: operations["saveManualNodes"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manual-nodes/secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查看手工节点明文凭据（记入审计日志） */
+        get: operations["getManualNodeSecrets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ports/allocate": {
         parameters: {
             query?: never;
@@ -322,6 +374,41 @@ export interface paths {
         get: operations["checkPort"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/remote-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 远端节点源 */
+        get: operations["listRemoteSources"];
+        /** 保存远端节点源列表 */
+        put: operations["saveRemoteSources"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/remote-sources/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 立即同步远端节点源 */
+        post: operations["syncRemoteSources"];
         delete?: never;
         options?: never;
         head?: never;
@@ -586,6 +673,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sub-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 订阅模板 */
+        get: operations["getTemplates"];
+        /** 保存订阅模板（空字符串恢复内置模板） */
+        put: operations["saveTemplates"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sub-templates/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 用指定模板预览某个用户的订阅 */
+        post: operations["previewTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/subscription/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 订阅监听器状态 */
+        get: operations["getSubscriptionStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/info": {
         parameters: {
             query?: never;
@@ -743,6 +882,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/users/{id}/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 用户的订阅链接（含 token，记入审计日志） */
+        get: operations["getUserSubscription"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{id}/subscription/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 预览用户的订阅内容 */
+        get: operations["previewUserSubscription"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -860,7 +1033,7 @@ export interface components {
             change: "added" | "removed" | "modified";
             fields: components["schemas"]["FieldChange"][];
             /** @enum {string} */
-            kind: "settings" | "user" | "stack";
+            kind: "settings" | "user" | "stack" | "manual_node" | "remote_source" | "templates";
             name: string;
         };
         DownloadProxySettings: {
@@ -924,11 +1097,12 @@ export interface components {
             /** @enum {string} */
             format: "yaml" | "json" | "csv";
             include_referenced_users?: boolean;
+            manual_nodes?: number[];
             passphrase?: string;
             /** Format: int64 */
             revision_id?: number;
             /** @enum {string} */
-            scope: "all" | "stacks" | "users";
+            scope: "all" | "stacks" | "users" | "manual_nodes" | "templates";
             /** @enum {string} */
             secrets: "plain" | "encrypted" | "omitted";
             stacks?: string[];
@@ -970,7 +1144,7 @@ export interface components {
             action: "create" | "overwrite" | "skip" | "rename" | "excluded";
             key: string;
             /** @enum {string} */
-            kind: "settings" | "user" | "stack";
+            kind: "settings" | "user" | "stack" | "manual_node" | "remote_source" | "templates";
             name: string;
             new_name?: string;
             port_changes: components["schemas"]["PortChange"][];
@@ -1061,6 +1235,40 @@ export interface components {
             password: string;
             username: string;
         };
+        ManualNode: {
+            auth_password: string;
+            /** @enum {string} */
+            auth_type: "" | "noauth" | "password";
+            auth_username: string;
+            /** @description mode=direct 时的 mihomo proxy 字段 */
+            config: {
+                [key: string]: unknown;
+            } | null;
+            grpc_service_name: string;
+            /** Format: int64 */
+            id?: number;
+            method: string;
+            /** @enum {string} */
+            mode: "standard" | "direct";
+            /** @enum {string} */
+            network: "" | "raw" | "ws" | "grpc";
+            password: string;
+            /** Format: int64 */
+            port: number;
+            /** @enum {string} */
+            protocol: "" | "vmess" | "shadowsocks" | "socks5" | "http";
+            region: string;
+            remark: string;
+            server: string;
+            tag: string;
+            udp: boolean;
+            user: string;
+            uuid: string;
+            ws_headers: {
+                [key: string]: string;
+            };
+            ws_path: string;
+        };
         Mihomo: {
             /** Format: int64 */
             controller_port: number;
@@ -1081,6 +1289,10 @@ export interface components {
             loglevel: "debug" | "info" | "warning" | "error" | "silent";
             /** @enum {string} */
             mode: "Rule" | "Global" | "Direct";
+        };
+        NodeExportSettings: {
+            enabled: boolean;
+            token: string;
         };
         Outbound: {
             password: string;
@@ -1175,6 +1387,32 @@ export interface components {
         ReleasesOutputBody: {
             releases: components["schemas"]["Release"][];
         };
+        RemoteSource: {
+            enabled: boolean;
+            /** Format: int64 */
+            id?: number;
+            name: string;
+            token: string;
+            url: string;
+        };
+        RemoteSourceStatus: {
+            /** Format: int64 */
+            id: number;
+            last_error: string;
+            /** Format: date-time */
+            last_sync_at: string;
+            /** Format: int64 */
+            node_count: number;
+        };
+        RemoteSourceView: {
+            enabled: boolean;
+            /** Format: int64 */
+            id?: number;
+            name: string;
+            status: components["schemas"]["RemoteSourceStatus"];
+            token: string;
+            url: string;
+        };
         ResetInputBody: {
             new_password: string;
             token: string;
@@ -1237,8 +1475,10 @@ export interface components {
             defaults: components["schemas"]["DefaultsSettings"];
             deps: components["schemas"]["DepsSettings"];
             download_proxy: components["schemas"]["DownloadProxySettings"];
+            node_export: components["schemas"]["NodeExportSettings"];
             port_pools: components["schemas"]["PortPools"];
             security: components["schemas"]["SecuritySettings"];
+            subscription: components["schemas"]["SubscriptionSettings"];
         };
         Stack: {
             desired_running: boolean;
@@ -1296,6 +1536,47 @@ export interface components {
             role: string;
             xray_enabled: boolean;
         };
+        SubscriptionLinks: {
+            base_url: string;
+            links: {
+                [key: string]: string;
+            };
+            /** Format: int64 */
+            nodes: number;
+        };
+        SubscriptionSettings: {
+            /** @enum {string} */
+            disabled_response: "not_found" | "empty";
+            enabled: boolean;
+            /**
+             * Format: int64
+             * @description Surge managed config 的更新间隔（秒）
+             */
+            interval: number;
+            listen: string;
+            /** Format: int64 */
+            port: number;
+            /** @description 订阅链接的对外地址，为空时用 http://<对外地址>:<端口> */
+            public_base_url: string;
+            strict: boolean;
+            surge_managed: boolean;
+        };
+        SubscriptionStatus: {
+            address: string;
+            enabled: boolean;
+            error: string;
+            listening: boolean;
+        };
+        SyncInputBody: {
+            /**
+             * Format: int64
+             * @description 为 0 时同步全部启用的源
+             */
+            id?: number;
+        };
+        SyncOutputBody: {
+            error: string;
+        };
         SystemInfo: {
             build_date: string;
             commit: string;
@@ -1335,6 +1616,26 @@ export interface components {
         };
         TaskListOutputBody: {
             tasks: components["schemas"]["Task"][];
+        };
+        TemplatePreviewInputBody: {
+            /** @description 为空时预览内置模板 */
+            content: string;
+            /** @enum {string} */
+            format: "clash" | "premium" | "surge";
+            /** Format: int64 */
+            user_id: number;
+        };
+        Templates: {
+            clash: string;
+            premium: string;
+            surge: string;
+        };
+        TemplatesView: {
+            builtin: components["schemas"]["Templates"];
+            current: components["schemas"]["Templates"];
+        };
+        TextOutputBody: {
+            text: string;
         };
         UnitActionInputBody: {
             /** @enum {string} */
@@ -1793,6 +2094,35 @@ export interface operations {
             };
         };
     };
+    getSettingsSecrets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Settings"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     getDeps: {
         parameters: {
             query?: never;
@@ -2044,6 +2374,97 @@ export interface operations {
             };
         };
     };
+    listManualNodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualNode"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    saveManualNodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualNode"][];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualNode"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getManualNodeSecrets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualNode"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     allocatePort: {
         parameters: {
             query?: never;
@@ -2096,6 +2517,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CheckPortOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listRemoteSources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteSourceView"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    saveRemoteSources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteSource"][];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteSourceView"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    syncRemoteSources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncOutputBody"];
                 };
             };
             /** @description Error */
@@ -2687,6 +3203,130 @@ export interface operations {
             };
         };
     };
+    getTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplatesView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    saveTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Templates"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Templates"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    previewTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplatePreviewInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TextOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getSubscriptionStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     getSystemInfo: {
         parameters: {
             query?: never;
@@ -3075,6 +3715,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["User"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getUserSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionLinks"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    previewUserSubscription: {
+        parameters: {
+            query?: {
+                format?: "clash" | "premium" | "surge";
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TextOutputBody"];
                 };
             };
             /** @description Error */

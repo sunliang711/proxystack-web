@@ -17,6 +17,16 @@ func RenameUser(doc *Document, oldName, newName string) {
 			ref.User = newName
 		}
 	})
+	for index := range doc.ManualNodes {
+		if doc.ManualNodes[index].User == oldName {
+			doc.ManualNodes[index].User = newName
+		}
+	}
+}
+
+// RemoveUserNodes 删除用户的全部手工节点。
+func RemoveUserNodes(doc *Document, user string) {
+	doc.ManualNodes = slices.DeleteFunc(doc.ManualNodes, func(node ManualNode) bool { return node.User == user })
 }
 
 // RenameProfile 把引用 user 的 oldName 档案改为 newName。

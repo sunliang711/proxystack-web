@@ -23,11 +23,56 @@ func unmask(value *string, old string, found bool) {
 // MaskSettings 遮蔽设置中的凭据字段。
 func MaskSettings(settings *Settings) {
 	mask(&settings.DownloadProxy.Password)
+	mask(&settings.NodeExport.Token)
 }
 
 // UnmaskSettings 把仍为占位的设置凭据恢复为原值。
 func UnmaskSettings(settings *Settings, old *Settings) {
 	unmask(&settings.DownloadProxy.Password, old.DownloadProxy.Password, true)
+	unmask(&settings.NodeExport.Token, old.NodeExport.Token, true)
+}
+
+// MaskManualNode 遮蔽手工节点的凭据字段。
+func MaskManualNode(node *ManualNode) {
+	mask(&node.UUID)
+	mask(&node.Password)
+	mask(&node.AuthPassword)
+}
+
+// UnmaskManualNodes 按 ID 把仍为占位的手工节点凭据恢复为原值。
+func UnmaskManualNodes(nodes []ManualNode, old []ManualNode) {
+	for index := range nodes {
+		node := &nodes[index]
+		var previous ManualNode
+		found := false
+		for _, candidate := range old {
+			if node.ID != 0 && candidate.ID == node.ID {
+				previous, found = candidate, true
+			}
+		}
+		unmask(&node.UUID, previous.UUID, found)
+		unmask(&node.Password, previous.Password, found)
+		unmask(&node.AuthPassword, previous.AuthPassword, found)
+	}
+}
+
+// MaskRemoteSource 遮蔽远端节点源的 token。
+func MaskRemoteSource(source *RemoteSource) {
+	mask(&source.Token)
+}
+
+// UnmaskRemoteSources 按 ID 把仍为占位的 token 恢复为原值。
+func UnmaskRemoteSources(sources []RemoteSource, old []RemoteSource) {
+	for index := range sources {
+		source := &sources[index]
+		previous, found := "", false
+		for _, candidate := range old {
+			if source.ID != 0 && candidate.ID == source.ID {
+				previous, found = candidate.Token, true
+			}
+		}
+		unmask(&source.Token, previous, found)
+	}
 }
 
 // MaskUser 遮蔽用户的凭据字段。

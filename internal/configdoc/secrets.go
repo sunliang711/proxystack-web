@@ -38,7 +38,17 @@ type secretField struct {
 func secretFields(doc *Document) []secretField {
 	fields := []secretField{}
 	if doc.Settings != nil {
-		fields = append(fields, secretField{&doc.Settings.DownloadProxy.Password, nil})
+		fields = append(fields,
+			secretField{&doc.Settings.DownloadProxy.Password, nil},
+			secretField{&doc.Settings.NodeExport.Token, RandomToken},
+		)
+	}
+	for index := range doc.RemoteSources {
+		fields = append(fields, secretField{&doc.RemoteSources[index].Token, nil})
+	}
+	for index := range doc.ManualNodes {
+		node := &doc.ManualNodes[index]
+		fields = append(fields, secretField{&node.UUID, nil}, secretField{&node.Password, nil}, secretField{&node.AuthPassword, nil})
 	}
 	for userIndex := range doc.Users {
 		user := &doc.Users[userIndex]
@@ -197,6 +207,9 @@ func RegenerateMissingSecrets(doc *Document) int {
 // secretNeeded 判断空字段是否需要补齐：用户凭据、controller secret 总是需要，
 // 入站密码只在对应协议和认证方式下需要。
 func secretNeeded(doc *Document, value *string) bool {
+	if doc.Settings != nil && value == &doc.Settings.NodeExport.Token {
+		return doc.Settings.NodeExport.Enabled
+	}
 	for stackIndex := range doc.Stacks {
 		for inboundIndex := range doc.Stacks[stackIndex].Xray.Inbounds {
 			inbound := &doc.Stacks[stackIndex].Xray.Inbounds[inboundIndex]

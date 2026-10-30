@@ -133,7 +133,7 @@ const columns: DataTableColumns<Entry> = [
         onChange: (event: Event) => toggle(row.key, (event.target as HTMLInputElement).checked),
       }),
   },
-  { title: '类型', key: 'kind', width: 80, render: (row) => ({ settings: '系统设置', user: '用户', stack: 'Stack' })[row.kind] ?? row.kind },
+  { title: '类型', key: 'kind', width: 80, render: (row) => (({ settings: '系统设置', user: '用户', stack: 'Stack', manual_node: '手工节点', remote_source: '远端节点源', templates: '订阅模板' }) as Record<string, string>)[row.kind] ?? row.kind },
   { title: '名称', key: 'name', render: (row) => (row.new_name ? `${row.name} → ${row.new_name}` : row.name) },
   {
     title: '动作',

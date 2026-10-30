@@ -104,6 +104,13 @@ type InboundUserRef struct {
 	Tag             string        `json:"tag"`
 }
 
+type ManualNode struct {
+	ID       int64  `json:"id"`
+	UserID   int64  `json:"user_id"`
+	Position int64  `json:"position"`
+	Data     string `json:"data"`
+}
+
 type MihomoGroup struct {
 	ID       int64  `json:"id"`
 	StackID  int64  `json:"stack_id"`
@@ -135,6 +142,23 @@ type MihomoUpstream struct {
 	Type         string        `json:"type"`
 	RefInboundID sql.NullInt64 `json:"ref_inbound_id"`
 	RawConfig    string        `json:"raw_config"`
+}
+
+type RemoteSource struct {
+	ID       int64  `json:"id"`
+	Position int64  `json:"position"`
+	Name     string `json:"name"`
+	Url      string `json:"url"`
+	Token    string `json:"token"`
+	Enabled  int64  `json:"enabled"`
+}
+
+type RemoteSourceState struct {
+	SourceID   int64  `json:"source_id"`
+	LastSyncAt int64  `json:"last_sync_at"`
+	LastError  string `json:"last_error"`
+	NodeCount  int64  `json:"node_count"`
+	Nodes      string `json:"nodes"`
 }
 
 type Session struct {
@@ -181,6 +205,11 @@ type Stack struct {
 	RuleProfile           string `json:"rule_profile"`
 	RuleFinal             string `json:"rule_final"`
 	RuleExtra             string `json:"rule_extra"`
+}
+
+type SubTemplate struct {
+	Format  string `json:"format"`
+	Content string `json:"content"`
 }
 
 type Task struct {

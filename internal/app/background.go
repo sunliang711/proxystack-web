@@ -12,6 +12,7 @@ import (
 const (
 	unitMonitorInterval = 3 * time.Second
 	reconcileInterval   = 5 * time.Minute
+	remoteSyncInterval  = 30 * time.Minute
 )
 
 // StartBackground 在服务启动时执行一次对账（纠正 unit 状态），并启动 unit 状态推送和定期对账报告。
@@ -29,6 +30,21 @@ func (s *Service) StartBackground(ctx context.Context) error {
 		slog.Info("startup reconcile", "finding", finding)
 	}
 	go s.MonitorUnits(ctx, unitMonitorInterval)
+	s.ApplySubscriptionListener(ctx)
+	go func() {
+		ticker := time.NewTicker(remoteSyncInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := s.SyncRemoteSources(ctx, 0); err != nil {
+					slog.Warn("remote node sync", "err", err)
+				}
+			}
+		}
+	}()
 	go func() {
 		ticker := time.NewTicker(reconcileInterval)
 		defer ticker.Stop()

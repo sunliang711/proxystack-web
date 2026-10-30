@@ -430,7 +430,10 @@
             "enum": [
               "settings",
               "user",
-              "stack"
+              "stack",
+              "manual_node",
+              "remote_source",
+              "templates"
             ],
             "type": "string"
           },
@@ -590,6 +593,13 @@
           "include_referenced_users": {
             "type": "boolean"
           },
+          "manual_nodes": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
           "passphrase": {
             "type": "string"
           },
@@ -601,7 +611,9 @@
             "enum": [
               "all",
               "stacks",
-              "users"
+              "users",
+              "manual_nodes",
+              "templates"
             ],
             "type": "string"
           },
@@ -777,7 +789,10 @@
             "enum": [
               "settings",
               "user",
-              "stack"
+              "stack",
+              "manual_node",
+              "remote_source",
+              "templates"
             ],
             "type": "string"
           },
@@ -1143,6 +1158,131 @@
         ],
         "type": "object"
       },
+      "ManualNode": {
+        "additionalProperties": false,
+        "properties": {
+          "auth_password": {
+            "type": "string"
+          },
+          "auth_type": {
+            "enum": [
+              "",
+              "noauth",
+              "password"
+            ],
+            "type": "string"
+          },
+          "auth_username": {
+            "type": "string"
+          },
+          "config": {
+            "additionalProperties": true,
+            "description": "mode=direct 时的 mihomo proxy 字段",
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "grpc_service_name": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "method": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "standard",
+              "direct"
+            ],
+            "type": "string"
+          },
+          "network": {
+            "enum": [
+              "",
+              "raw",
+              "ws",
+              "grpc"
+            ],
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "port": {
+            "format": "int64",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "protocol": {
+            "enum": [
+              "",
+              "vmess",
+              "shadowsocks",
+              "socks5",
+              "http"
+            ],
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "remark": {
+            "type": "string"
+          },
+          "server": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "udp": {
+            "type": "boolean"
+          },
+          "user": {
+            "type": "string"
+          },
+          "uuid": {
+            "type": "string"
+          },
+          "ws_headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "ws_path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "user",
+          "mode",
+          "protocol",
+          "server",
+          "port",
+          "tag",
+          "remark",
+          "region",
+          "udp",
+          "uuid",
+          "network",
+          "ws_path",
+          "ws_headers",
+          "grpc_service_name",
+          "method",
+          "password",
+          "auth_type",
+          "auth_username",
+          "auth_password",
+          "config"
+        ],
+        "type": "object"
+      },
       "Mihomo": {
         "additionalProperties": false,
         "properties": {
@@ -1239,6 +1379,22 @@
         "required": [
           "mode",
           "loglevel"
+        ],
+        "type": "object"
+      },
+      "NodeExportSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "token"
         ],
         "type": "object"
       },
@@ -1597,6 +1753,93 @@
         ],
         "type": "object"
       },
+      "RemoteSource": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "url",
+          "token",
+          "enabled"
+        ],
+        "type": "object"
+      },
+      "RemoteSourceStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "last_error": {
+            "type": "string"
+          },
+          "last_sync_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "node_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "last_sync_at",
+          "last_error",
+          "node_count"
+        ],
+        "type": "object"
+      },
+      "RemoteSourceView": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RemoteSourceStatus"
+          },
+          "token": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "name",
+          "url",
+          "token",
+          "enabled"
+        ],
+        "type": "object"
+      },
       "ResetInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -1847,11 +2090,17 @@
           "download_proxy": {
             "$ref": "#/components/schemas/DownloadProxySettings"
           },
+          "node_export": {
+            "$ref": "#/components/schemas/NodeExportSettings"
+          },
           "port_pools": {
             "$ref": "#/components/schemas/PortPools"
           },
           "security": {
             "$ref": "#/components/schemas/SecuritySettings"
+          },
+          "subscription": {
+            "$ref": "#/components/schemas/SubscriptionSettings"
           }
         },
         "required": [
@@ -1860,7 +2109,9 @@
           "defaults",
           "security",
           "deps",
-          "download_proxy"
+          "download_proxy",
+          "subscription",
+          "node_export"
         ],
         "type": "object"
       },
@@ -2097,6 +2348,128 @@
         ],
         "type": "object"
       },
+      "SubscriptionLinks": {
+        "additionalProperties": false,
+        "properties": {
+          "base_url": {
+            "type": "string"
+          },
+          "links": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "nodes": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "base_url",
+          "links",
+          "nodes"
+        ],
+        "type": "object"
+      },
+      "SubscriptionSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "disabled_response": {
+            "enum": [
+              "not_found",
+              "empty"
+            ],
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "interval": {
+            "description": "Surge managed config 的更新间隔（秒）",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "listen": {
+            "type": "string"
+          },
+          "port": {
+            "format": "int64",
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "public_base_url": {
+            "description": "订阅链接的对外地址，为空时用 http://\u003c对外地址\u003e:\u003c端口\u003e",
+            "type": "string"
+          },
+          "strict": {
+            "type": "boolean"
+          },
+          "surge_managed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "listen",
+          "port",
+          "public_base_url",
+          "surge_managed",
+          "interval",
+          "strict",
+          "disabled_response"
+        ],
+        "type": "object"
+      },
+      "SubscriptionStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          },
+          "listening": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "address",
+          "listening",
+          "error"
+        ],
+        "type": "object"
+      },
+      "SyncInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "为 0 时同步全部启用的源",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "SyncOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
       "SystemInfo": {
         "additionalProperties": false,
         "properties": {
@@ -2243,6 +2616,81 @@
         },
         "required": [
           "tasks"
+        ],
+        "type": "object"
+      },
+      "TemplatePreviewInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "description": "为空时预览内置模板",
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "clash",
+              "premium",
+              "surge"
+            ],
+            "type": "string"
+          },
+          "user_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "format",
+          "user_id",
+          "content"
+        ],
+        "type": "object"
+      },
+      "Templates": {
+        "additionalProperties": false,
+        "properties": {
+          "clash": {
+            "type": "string"
+          },
+          "premium": {
+            "type": "string"
+          },
+          "surge": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "clash",
+          "premium",
+          "surge"
+        ],
+        "type": "object"
+      },
+      "TemplatesView": {
+        "additionalProperties": false,
+        "properties": {
+          "builtin": {
+            "$ref": "#/components/schemas/Templates"
+          },
+          "current": {
+            "$ref": "#/components/schemas/Templates"
+          }
+        },
+        "required": [
+          "current",
+          "builtin"
+        ],
+        "type": "object"
+      },
+      "TextOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
         ],
         "type": "object"
       },
@@ -3120,6 +3568,42 @@
         ]
       }
     },
+    "/api/config/settings/secrets": {
+      "get": {
+        "operationId": "getSettingsSecrets",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Settings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "查看设置中的明文凭据（记入审计日志）",
+        "tags": [
+          "subscription"
+        ]
+      }
+    },
     "/api/deps": {
       "get": {
         "operationId": "getDeps",
@@ -3551,6 +4035,134 @@
         ]
       }
     },
+    "/api/manual-nodes": {
+      "get": {
+        "operationId": "listManualNodes",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ManualNode"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "手工节点",
+        "tags": [
+          "subscription"
+        ]
+      },
+      "put": {
+        "operationId": "saveManualNodes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/ManualNode"
+                },
+                "type": "array"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ManualNode"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "保存手工节点列表",
+        "tags": [
+          "subscription"
+        ]
+      }
+    },
+    "/api/manual-nodes/secrets": {
+      "get": {
+        "operationId": "getManualNodeSecrets",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ManualNode"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "查看手工节点明文凭据（记入审计日志）",
+        "tags": [
+          "subscription"
+        ]
+      }
+    },
     "/api/ports/allocate": {
       "post": {
         "operationId": "allocatePort",
@@ -3652,6 +4264,141 @@
         "summary": "检查端口冲突与占用",
         "tags": [
           "config"
+        ]
+      }
+    },
+    "/api/remote-sources": {
+      "get": {
+        "operationId": "listRemoteSources",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RemoteSourceView"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "远端节点源",
+        "tags": [
+          "subscription"
+        ]
+      },
+      "put": {
+        "operationId": "saveRemoteSources",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/RemoteSource"
+                },
+                "type": "array"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RemoteSourceView"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "保存远端节点源列表",
+        "tags": [
+          "subscription"
+        ]
+      }
+    },
+    "/api/remote-sources/sync": {
+      "post": {
+        "operationId": "syncRemoteSources",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "立即同步远端节点源",
+        "tags": [
+          "subscription"
         ]
       }
     },
@@ -4546,6 +5293,168 @@
         ]
       }
     },
+    "/api/sub-templates": {
+      "get": {
+        "operationId": "getTemplates",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplatesView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "订阅模板",
+        "tags": [
+          "subscription"
+        ]
+      },
+      "put": {
+        "operationId": "saveTemplates",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Templates"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Templates"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "保存订阅模板（空字符串恢复内置模板）",
+        "tags": [
+          "subscription"
+        ]
+      }
+    },
+    "/api/sub-templates/preview": {
+      "post": {
+        "operationId": "previewTemplate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplatePreviewInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TextOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "用指定模板预览某个用户的订阅",
+        "tags": [
+          "subscription"
+        ]
+      }
+    },
+    "/api/subscription/status": {
+      "get": {
+        "operationId": "getSubscriptionStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "订阅监听器状态",
+        "tags": [
+          "subscription"
+        ]
+      }
+    },
     "/api/system/info": {
       "get": {
         "operationId": "getSystemInfo",
@@ -5103,6 +6012,114 @@
         "summary": "查看用户明文凭据（记入审计日志）",
         "tags": [
           "config"
+        ]
+      }
+    },
+    "/api/users/{id}/subscription": {
+      "get": {
+        "operationId": "getUserSubscription",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionLinks"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "用户的订阅链接（含 token，记入审计日志）",
+        "tags": [
+          "subscription"
+        ]
+      }
+    },
+    "/api/users/{id}/subscription/preview": {
+      "get": {
+        "operationId": "previewUserSubscription",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "default": "clash",
+              "enum": [
+                "clash",
+                "premium",
+                "surge"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TextOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "预览用户的订阅内容",
+        "tags": [
+          "subscription"
         ]
       }
     }

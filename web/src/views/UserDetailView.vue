@@ -10,6 +10,7 @@ import { api, emptyErrors, fieldState, MASKED, splitProblem, type FormErrors, ty
 import ByteSizeInput from '../components/ByteSizeInput.vue'
 import ErrorList from '../components/ErrorList.vue'
 import SecretInput from '../components/SecretInput.vue'
+import SubscriptionCard from '../components/SubscriptionCard.vue'
 import TemplateInput from '../components/TemplateInput.vue'
 import { useDirty } from '../composables/useDirty'
 import { randomString, randomUUID, shadowsocksKey } from '../util/generate'
@@ -219,6 +220,8 @@ async function remove() {
           </NSpace>
         </NFormItem>
       </NCard>
+
+      <SubscriptionCard :user-id="id" />
 
       <NCard title="凭据档案" size="small" class="card">
         <template #header-extra>

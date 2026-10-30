@@ -13,9 +13,11 @@ import (
 
 // 导出范围。
 const (
-	ScopeAll    = "all"
-	ScopeStacks = "stacks"
-	ScopeUsers  = "users"
+	ScopeAll         = "all"
+	ScopeStacks      = "stacks"
+	ScopeUsers       = "users"
+	ScopeManualNodes = "manual_nodes"
+	ScopeTemplates   = "templates"
 )
 
 // ExportScope 描述要导出的实体。
@@ -24,6 +26,8 @@ type ExportScope struct {
 	Stacks                 []string
 	Users                  []string
 	IncludeReferencedUsers bool
+	// ManualNodes 是要导出的手工节点 ID，Scope 为 manual_nodes 时使用。
+	ManualNodes []int64
 }
 
 // Subset 按范围取出文档的一部分并清空 ID，用于导出文件。
@@ -41,6 +45,9 @@ func Subset(doc *Document, scope ExportScope, exportedAt time.Time) (*Document, 
 		out.Settings = source.Settings
 		out.Users = source.Users
 		out.Stacks = source.Stacks
+		out.ManualNodes = source.ManualNodes
+		out.RemoteSources = source.RemoteSources
+		out.Templates = source.Templates
 	case ScopeStacks:
 		users := []string{}
 		for _, name := range scope.Stacks {
@@ -73,6 +80,19 @@ func Subset(doc *Document, scope ExportScope, exportedAt time.Time) (*Document, 
 			}
 			out.Users = append(out.Users, source.Users[index])
 		}
+		for _, node := range source.ManualNodes {
+			if slices.Contains(scope.Users, node.User) {
+				out.ManualNodes = append(out.ManualNodes, node)
+			}
+		}
+	case ScopeManualNodes:
+		for _, node := range source.ManualNodes {
+			if slices.Contains(scope.ManualNodes, node.ID) {
+				out.ManualNodes = append(out.ManualNodes, node)
+			}
+		}
+	case ScopeTemplates:
+		out.Templates = source.Templates
 	default:
 		return nil, fmt.Errorf("unknown scope: %s", scope.Scope)
 	}
@@ -81,6 +101,12 @@ func Subset(doc *Document, scope ExportScope, exportedAt time.Time) (*Document, 
 	}
 	for index := range out.Stacks {
 		clearStackIDs(&out.Stacks[index])
+	}
+	for index := range out.ManualNodes {
+		out.ManualNodes[index].ID = 0
+	}
+	for index := range out.RemoteSources {
+		out.RemoteSources[index].ID = 0
 	}
 	return out, nil
 }
