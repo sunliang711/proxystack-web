@@ -62,6 +62,24 @@ func RenameStack(doc *Document, oldName, newName string) {
 			upstream.Stack = newName
 		}
 	})
+	for index := range doc.Users {
+		paused := doc.Users[index].PausedStacks
+		for i := range paused {
+			if paused[i] == oldName {
+				paused[i] = newName
+			}
+		}
+	}
+	if doc.Settings != nil && doc.Settings.DownloadProxy.Stack == oldName {
+		doc.Settings.DownloadProxy.Stack = newName
+	}
+}
+
+// RemovePausedStack 从全部用户的手动暂停列表中删除已删除的 stack。
+func RemovePausedStack(doc *Document, stack string) {
+	for index := range doc.Users {
+		doc.Users[index].PausedStacks = slices.DeleteFunc(doc.Users[index].PausedStacks, func(name string) bool { return name == stack })
+	}
 }
 
 // RenameInbound 把 xray-socks5 上游对 stack.oldName 入站的引用改为 newName。

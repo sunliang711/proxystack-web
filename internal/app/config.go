@@ -109,6 +109,8 @@ type ConfigChange struct {
 	Summary string
 	// Scope 是校验错误定位到请求体时使用的文档路径前缀，可在 Mutate 内设置。
 	Scope string
+	// Notes 是保存后暂停状态当场生效时需要提示的情况。
+	Notes []string
 }
 
 // LoadConfig 读取当前完整配置。
@@ -124,12 +126,13 @@ func (s *Service) LoadConfig(ctx context.Context) (*configdoc.Document, error) {
 
 // mutateConfig 在一个事务内读取配置、执行修改、全量校验、写回并生成修订版本和审计记录。
 func (s *Service) mutateConfig(ctx context.Context, actor Actor, change *ConfigChange, fn func(doc *configdoc.Document) error) (*configdoc.Document, error) {
-	var result *configdoc.Document
+	var result, before *configdoc.Document
 	err := s.Store.InTx(ctx, func(q *dbq.Queries) error {
 		doc, err := store.LoadDocument(ctx, q)
 		if err != nil {
 			return err
 		}
+		before = doc.Clone()
 		if err := fn(doc); err != nil {
 			return err
 		}
@@ -148,7 +151,12 @@ func (s *Service) mutateConfig(ctx context.Context, actor Actor, change *ConfigC
 			Actor: actor.Name, SourceIP: actor.IP, Action: change.Action, Object: change.Object, Summary: change.Summary,
 		})
 	})
-	return result, err
+	if err != nil {
+		return nil, err
+	}
+	// 手动暂停开关不进入待应用变更：无论改动来自哪里，保存后立即生效。
+	change.Notes = s.syncPauses(ctx, before, result)
+	return result, nil
 }
 
 func (s *Service) writeRevision(ctx context.Context, q *dbq.Queries, actor Actor, summary string, doc *configdoc.Document) error {
@@ -184,6 +192,7 @@ func (s *Service) AuditSecretView(ctx context.Context, actor Actor, object strin
 func (s *Service) UpdateSettings(ctx context.Context, actor Actor, settings configdoc.Settings) (*configdoc.Document, error) {
 	change := &ConfigChange{Action: ActionConfigSettings, Object: "settings", Summary: "更新系统设置", Scope: "settings"}
 	return s.mutateConfig(ctx, actor, change, func(doc *configdoc.Document) error {
+		configdoc.UnmaskSettings(&settings, doc.Settings)
 		doc.Settings = &settings
 		return nil
 	})
@@ -377,6 +386,7 @@ func (s *Service) DeleteStack(ctx context.Context, actor Actor, id int64) error 
 		name := doc.Stacks[index].Name
 		change.Object, change.Summary = "stack:"+name, "删除 stack "+name
 		doc.Stacks = append(doc.Stacks[:index], doc.Stacks[index+1:]...)
+		configdoc.RemovePausedStack(doc, name)
 		return nil
 	})
 	return err

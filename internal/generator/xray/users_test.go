@@ -51,17 +51,22 @@ func TestRenderConfigIgnoresDisabledUserFromOtherStack(t *testing.T) {
 	require.Contains(t, output, "bob")
 }
 
-// TestRenderConfigRejectsFullyDisabledInbound 验证禁用某个 inbound 的全部用户会报错而不是生成空 clients。
-func TestRenderConfigRejectsFullyDisabledInbound(t *testing.T) {
+// TestRenderConfigUsesPlaceholderForFullyDisabledInbound 验证全部用户被暂停时写入稳定的占位用户，入站继续监听。
+func TestRenderConfigUsesPlaceholderForFullyDisabledInbound(t *testing.T) {
 	stackSet := makeStackSet(t, makeStack(t, "vm", noAuthSocksOutboundYAML, asListItem(twoUserVmessInboundYAML), ""))
 	stackSet.DisabledUsers = domain.DisabledUserSet{}
 	stackSet.DisabledUsers.Add("vm", "alice")
 	stackSet.DisabledUsers.Add("vm", "bob")
 
-	_, err := xray.DumpsConfig(stackSet, "vm")
+	first, err := xray.DumpsConfig(stackSet, "vm")
+	require.NoError(t, err)
+	second, err := xray.DumpsConfig(stackSet, "vm")
+	require.NoError(t, err)
 
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "all users of inbound are disabled")
+	require.Equal(t, first, second)
+	require.Contains(t, first, xray.PlaceholderUser)
+	require.NotContains(t, first, "alice")
+	require.NotContains(t, first, "bob")
 }
 
 // TestRenderConfigKeepsSocksAccountWhenUserDisabled 验证单账号 socks inbound 不受用户启停影响。

@@ -21,6 +21,10 @@ import ListenerForm from './ListenerForm.vue'
 import PreviewTab from './PreviewTab.vue'
 import RulesTab from './RulesTab.vue'
 import UpstreamsTab from './UpstreamsTab.vue'
+import LogsTab from './LogsTab.vue'
+import TaskDialog from '../../components/TaskDialog.vue'
+import UnitStatus from '../../components/UnitStatus.vue'
+import { refreshPending } from '../../runtime'
 import { stackPorts } from './ports'
 
 type Stack = Schemas['Stack']
@@ -87,8 +91,21 @@ async function reveal() {
   if (!wasDirty) markClean()
 }
 
-async function save() {
-  if (!stack.value) return
+const taskId = ref<number | null>(null)
+
+/** 保存后只应用本 stack。 */
+async function saveAndApply() {
+  if (dirty.value && !(await save())) return
+  const { data, error } = await api.POST('/api/runtime/apply', { body: { stacks: [stack.value!.name] } })
+  if (error) {
+    message.error(splitProblem(error, '应用失败').global.join('；'))
+    return
+  }
+  taskId.value = data!.task_id
+}
+
+async function save(): Promise<boolean> {
+  if (!stack.value) return false
   saving.value = true
   const { data, error } = await api.PUT('/api/stacks/{id}', { params: { path: { id: id.value } }, body: stack.value })
   saving.value = false
@@ -96,13 +113,15 @@ async function save() {
     errors.value = splitProblem(error)
     const first = Object.keys(errors.value.fields)[0]
     if (first) tab.value = tabFor(first)
-    return
+    return false
   }
   stack.value = data!
   errors.value = emptyErrors()
   markClean()
   savedVersion.value++
+  refreshPending()
   message.success('已保存，配置变更将在下次应用时生效')
+  return true
 }
 
 function tabFor(path: string): string {
@@ -202,6 +221,7 @@ async function saveMembers() {
           <NSpace align="center">
             <NText strong style="font-size: 16px">{{ stack.name }}</NText>
             <NText v-if="dirty" type="warning">未保存</NText>
+            <UnitStatus :stack="stack.name" actions />
           </NSpace>
           <NSpace>
             <NButton @click="(cloning = true), (cloneName = `${stack.name}-copy`), (cloneErrors = emptyErrors())">克隆</NButton>
@@ -209,7 +229,8 @@ async function saveMembers() {
               <template #trigger><NButton type="error" ghost>删除</NButton></template>
               删除 stack 的全部配置。被其他 stack 引用时无法删除。确定？
             </NPopconfirm>
-            <NButton type="primary" :disabled="!dirty" :loading="saving" @click="save">保存</NButton>
+            <NButton :disabled="!dirty" :loading="saving" @click="save">保存</NButton>
+            <NButton type="primary" :loading="saving" @click="saveAndApply">{{ dirty ? '保存并应用' : '应用' }}</NButton>
           </NSpace>
         </NSpace>
       </NCard>
@@ -350,12 +371,18 @@ async function saveMembers() {
           </NForm>
         </NTabPane>
 
+        <NTabPane name="logs" tab="日志" display-directive="if">
+          <LogsTab :stack="stack.name" />
+        </NTabPane>
+
         <NTabPane name="preview" tab="生成预览">
           <PreviewTab :stack-id="stack.id!" :dirty="dirty" :version="savedVersion" />
         </NTabPane>
       </NTabs>
     </template>
   </NSpin>
+
+  <TaskDialog :task-id="taskId" @close="taskId = null" @finished="refreshPending" />
 
   <NModal v-model:show="cloning" preset="card" title="克隆 stack" style="max-width: 480px">
     <ErrorList :errors="cloneErrors.global" title="克隆失败" />

@@ -235,7 +235,7 @@ func RenderConfig(stackSet domain.StackSet, stackName string) (Config, error) {
 	}
 	config.Inbounds = make([]any, 0, len(stack.Xray.Inbounds))
 	for _, inbound := range stack.Xray.Inbounds {
-		inbound, err := applyDisabledUsers(inbound, stackSet.DisabledUsers, stack.Name)
+		inbound, err := applyDisabledUsers(inbound, stackSet.DisabledUsers, stack.Name, stack.Clash.Controller.Secret)
 		if err != nil {
 			return Config{}, err
 		}

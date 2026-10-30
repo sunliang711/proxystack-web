@@ -89,6 +89,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/config/download-proxy/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 测试下载代理（无需先保存） */
+        post: operations["testDownloadProxy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/config/export": {
         parameters: {
             query?: never;
@@ -151,6 +168,125 @@ export interface paths {
         get: operations["getSettings"];
         /** 保存系统设置 */
         put: operations["updateSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** xray、mihomo、geo 的安装状态 */
+        get: operations["getDeps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deps/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 检查各组件的最新版本 */
+        post: operations["checkDepUpdates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deps/{component}/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 安装或升级组件（后台作业） */
+        post: operations["installDep"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deps/{component}/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 上游版本列表 */
+        get: operations["listDepReleases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deps/{component}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 回滚到上一个版本（后台作业） */
+        post: operations["rollbackDep"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deps/{component}/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 上传安装包安装（后台作业） */
+        post: operations["uploadDep"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 运行状态与作业进度事件流 */
+        get: operations["events"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -237,6 +373,108 @@ export interface paths {
         put?: never;
         /** 回滚到指定版本 */
         post: operations["rollbackRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runtime/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 应用配置（后台作业） */
+        post: operations["applyConfig"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runtime/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** stack 日志（实时） */
+        get: operations["streamLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runtime/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 待应用变更 */
+        get: operations["getPending"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runtime/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 按期望运行状态纠正 unit */
+        post: operations["reconcile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runtime/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** stack 运行状态 */
+        get: operations["getRuntimeStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runtime/units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 启动、停止或重启 stack 的服务 */
+        post: operations["unitAction"];
         delete?: never;
         options?: never;
         head?: never;
@@ -365,6 +603,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 检查管理服务新版本 */
+        get: operations["checkSelfUpdate"];
+        put?: never;
+        /** 更新管理服务（后台作业） */
+        post: operations["selfUpdate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 最近的后台作业 */
+        get: operations["listTasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 后台作业详情 */
+        get: operations["getTask"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users": {
         parameters: {
             query?: never;
@@ -397,6 +687,23 @@ export interface paths {
         post?: never;
         /** 删除用户 */
         delete: operations["deleteUser"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 暂停或恢复用户（当场生效） */
+        put: operations["setUserPause"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -457,11 +764,23 @@ export interface components {
             /** Format: int64 */
             port: number;
         };
+        ApplyInputBody: {
+            /** @description 为空时应用全部 stack */
+            stacks?: string[];
+        };
         BasicSettings: {
             /** @description 订阅节点默认 server，域名或 IP */
             external_host: string;
             /** @description 流量统计周期边界使用的时区 */
             timezone: string;
+        };
+        Change: {
+            /** @enum {string} */
+            component: "xray" | "mihomo";
+            diff: string;
+            /** @enum {string} */
+            kind: "create" | "update" | "delete";
+            stack: string;
         };
         ChangePasswordInputBody: {
             new_password: string;
@@ -475,6 +794,67 @@ export interface components {
             mihomo: components["schemas"]["MihomoDefaults"];
             xray: components["schemas"]["XrayDefaults"];
         };
+        DepInstall: {
+            actor: string;
+            error: string;
+            /** Format: date-time */
+            finished_at: string;
+            platform: string;
+            /** @enum {string} */
+            result: "succeeded" | "failed" | "rolled_back";
+            sha256: string;
+            source: string;
+            /** Format: date-time */
+            started_at: string;
+            version: string;
+        };
+        DepSource: {
+            archive_member: string;
+            sha256: string;
+            /** @enum {string} */
+            source: "auto" | "github" | "custom";
+            /** @description source=custom 时的下载地址 */
+            url: string;
+            /** @description latest 或具体版本号 */
+            version: string;
+        };
+        DepStatus: {
+            /** @enum {string} */
+            component: "xray" | "mihomo" | "geo";
+            history: components["schemas"]["DepInstall"][];
+            installed: boolean;
+            /** Format: date-time */
+            installed_at: string;
+            latest: string;
+            /** Format: date-time */
+            latest_checked_at: string;
+            platform: string;
+            /** @description 存在可回滚的上一个版本 */
+            previous: boolean;
+            previous_version: string;
+            sha256: string;
+            source: string;
+            update_available: boolean;
+            /** @description 期望运行且使用该组件的 stack */
+            used_by: string[];
+            version: string;
+        };
+        DepsOutputBody: {
+            components: components["schemas"]["DepStatus"][];
+        };
+        DepsSettings: {
+            auto_upgrade_mihomo: boolean;
+            auto_upgrade_xray: boolean;
+            geo: components["schemas"]["DepSource"];
+            mihomo: components["schemas"]["DepSource"];
+            /** @enum {string} */
+            mihomo_variant: "auto" | "standard" | "compatible";
+            /** @description 维护时间窗结束，HH:MM */
+            window_end: string;
+            /** @description 维护时间窗开始，HH:MM */
+            window_start: string;
+            xray: components["schemas"]["DepSource"];
+        };
         DiffEntry: {
             /** @enum {string} */
             change: "added" | "removed" | "modified";
@@ -482,6 +862,22 @@ export interface components {
             /** @enum {string} */
             kind: "settings" | "user" | "stack";
             name: string;
+        };
+        DownloadProxySettings: {
+            host: string;
+            /** @enum {string} */
+            listener: "socks" | "http";
+            /** @enum {string} */
+            mode: "direct" | "stack" | "custom";
+            password: string;
+            /** Format: int64 */
+            port: number;
+            /** @enum {string} */
+            protocol: "http" | "socks5";
+            remote_dns: boolean;
+            /** @description mode=stack 时经该 stack 的 mihomo 监听出站 */
+            stack: string;
+            username: string;
         };
         ErrorDetail: {
             /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
@@ -633,6 +1029,12 @@ export interface components {
             protocol: string;
             sub: boolean;
         };
+        InstallInputBody: {
+            /** @enum {string} */
+            restart: "sequential" | "all" | "none";
+            /** @description 为空时按依赖源设置安装 */
+            version?: string;
+        };
         Listener: {
             accounts: components["schemas"]["ListenerAccount"][];
             /** @enum {string} */
@@ -646,6 +1048,14 @@ export interface components {
         ListenerAccount: {
             password: string;
             username: string;
+        };
+        LogEntry: {
+            message: string;
+            /** Format: int64 */
+            priority: number;
+            /** Format: date-time */
+            time: string;
+            unit: string;
         };
         LoginInputBody: {
             password: string;
@@ -684,6 +1094,20 @@ export interface components {
              */
             type: "mihomo" | "socks5" | "http" | "direct";
             username: string;
+        };
+        PauseInputBody: {
+            enabled: boolean;
+            paused_stacks: string[];
+        };
+        PauseOutputBody: {
+            notes: string[];
+            user: components["schemas"]["User"];
+        };
+        PendingView: {
+            changes: components["schemas"]["Change"][];
+            error?: string;
+            /** Format: int64 */
+            revision: number;
         };
         Policy: {
             enabled: boolean;
@@ -729,6 +1153,28 @@ export interface components {
             tag: string;
             uuid: string;
         };
+        ProxyTestResult: {
+            /** @description 失败类型：proxy_connect、proxy_auth、timeout、tls、upstream、network、config */
+            kind: string;
+            /** Format: int64 */
+            latency_ms: number;
+            message: string;
+            ok: boolean;
+        };
+        ReconcileOutputBody: {
+            findings: string[];
+        };
+        Release: {
+            name: string;
+            notes: string;
+            prerelease: boolean;
+            /** Format: date-time */
+            published_at: string;
+            tag: string;
+        };
+        ReleasesOutputBody: {
+            releases: components["schemas"]["Release"][];
+        };
         ResetInputBody: {
             new_password: string;
             token: string;
@@ -749,6 +1195,10 @@ export interface components {
             /** Format: int64 */
             total: number;
         };
+        RollbackInputBody: {
+            /** @enum {string} */
+            restart: "sequential" | "all" | "none";
+        };
         Rule: {
             no_resolve: boolean;
             target: string;
@@ -761,9 +1211,21 @@ export interface components {
             /** @enum {string} */
             profile: "default";
         };
+        RuntimeEvent: {
+            stacks: components["schemas"]["StackRuntime"][];
+        };
+        RuntimeStatusOutputBody: {
+            stacks: components["schemas"]["StackRuntime"][];
+        };
         SecuritySettings: {
             allow_noauth_public: boolean;
             require_auth_for_public_socks_http: boolean;
+        };
+        SelfVersion: {
+            current: string;
+            latest: string;
+            notes: string;
+            update_available: boolean;
         };
         SessionBody: {
             admin: components["schemas"]["AdminView"];
@@ -773,6 +1235,8 @@ export interface components {
         Settings: {
             basic: components["schemas"]["BasicSettings"];
             defaults: components["schemas"]["DefaultsSettings"];
+            deps: components["schemas"]["DepsSettings"];
+            download_proxy: components["schemas"]["DownloadProxySettings"];
             port_pools: components["schemas"]["PortPools"];
             security: components["schemas"]["SecuritySettings"];
         };
@@ -804,6 +1268,17 @@ export interface components {
         StackMembersInputBody: {
             members: string[];
         };
+        StackRuntime: {
+            /** Format: date-time */
+            applied_at: string;
+            /** Format: int64 */
+            applied_revision: number;
+            desired_running: boolean;
+            /** @description 磁盘上的生成物与最近一次应用不一致 */
+            drift: boolean;
+            name: string;
+            units: components["schemas"]["UnitView"][];
+        };
         StackSummary: {
             desired_running: boolean;
             enabled: boolean;
@@ -832,6 +1307,51 @@ export interface components {
             tls_mode: string;
             version: string;
         };
+        Task: {
+            actor: string;
+            error: string;
+            /** Format: date-time */
+            finished_at: string;
+            /** Format: int64 */
+            id: number;
+            kind: string;
+            log: string[];
+            /** Format: date-time */
+            started_at: string;
+            /** @enum {string} */
+            status: "running" | "succeeded" | "failed";
+            title: string;
+        };
+        TaskEvent: {
+            error?: string;
+            /** Format: int64 */
+            id: number;
+            line?: string;
+            status: string;
+        };
+        TaskIDOutputBody: {
+            /** Format: int64 */
+            task_id: number;
+        };
+        TaskListOutputBody: {
+            tasks: components["schemas"]["Task"][];
+        };
+        UnitActionInputBody: {
+            /** @enum {string} */
+            action: "start" | "stop" | "restart";
+            /** @enum {string} */
+            component: "all" | "xray" | "mihomo";
+            stack: string;
+        };
+        UnitView: {
+            active: string;
+            /** @description 生成物存在 */
+            present: boolean;
+            /** Format: date-time */
+            since: string;
+            sub: string;
+            unit: string;
+        };
         Upstream: {
             /** @description type=raw 时的 mihomo 节点字段 */
             config: {
@@ -856,6 +1376,7 @@ export interface components {
             id?: number;
             name: string;
             note: string;
+            paused_stacks?: string[];
             profiles: components["schemas"]["Profile"][];
             /** Format: int64 */
             quota_bytes: number;
@@ -1076,6 +1597,39 @@ export interface operations {
             };
         };
     };
+    testDownloadProxy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DownloadProxySettings"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyTestResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     exportConfig: {
         parameters: {
             query?: never;
@@ -1239,6 +1793,257 @@ export interface operations {
             };
         };
     };
+    getDeps: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    checkDepUpdates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    installDep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                component: "xray" | "mihomo" | "geo";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstallInputBody"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskIDOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listDepReleases: {
+        parameters: {
+            query?: {
+                prerelease?: boolean;
+            };
+            header?: never;
+            path: {
+                component: "xray" | "mihomo" | "geo";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleasesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    rollbackDep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                component: "xray" | "mihomo" | "geo";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RollbackInputBody"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskIDOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    uploadDep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                component: "xray" | "mihomo" | "geo";
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description release 归档或二进制
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskIDOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    events: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": ({
+                        data: components["schemas"]["RuntimeEvent"];
+                        /**
+                         * @description The event name.
+                         * @constant
+                         */
+                        event: "runtime";
+                        /** @description The event ID. */
+                        id?: number | string;
+                        /** @description The retry time in milliseconds. */
+                        retry?: number;
+                    } | {
+                        data: components["schemas"]["TaskEvent"];
+                        /**
+                         * @description The event name.
+                         * @constant
+                         */
+                        event: "task";
+                        /** @description The event ID. */
+                        id?: number | string;
+                        /** @description The retry time in milliseconds. */
+                        retry?: number;
+                    })[];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     allocatePort: {
         parameters: {
             query?: never;
@@ -1379,6 +2184,201 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    applyConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyInputBody"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskIDOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    streamLogs: {
+        parameters: {
+            query?: {
+                stack?: string;
+                component?: "all" | "xray" | "mihomo";
+                lines?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": {
+                        data: components["schemas"]["LogEntry"];
+                        /**
+                         * @description The event name.
+                         * @constant
+                         */
+                        event: "log";
+                        /** @description The event ID. */
+                        id?: number | string;
+                        /** @description The retry time in milliseconds. */
+                        retry?: number;
+                    }[];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getPending: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    reconcile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconcileOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getRuntimeStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeStatusOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    unitAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnitActionInputBody"];
+            };
+        };
         responses: {
             /** @description No Content */
             204: {
@@ -1716,6 +2716,124 @@ export interface operations {
             };
         };
     };
+    checkSelfUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SelfVersion"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    selfUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskIDOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskListOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listUsers: {
         parameters: {
             query?: never;
@@ -1861,6 +2979,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setUserPause: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PauseInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PauseOutputBody"];
+                };
             };
             /** @description Error */
             default: {

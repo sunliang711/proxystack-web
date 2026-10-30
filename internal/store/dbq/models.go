@@ -28,6 +28,14 @@ type AdminResetToken struct {
 	UsedAt    int64  `json:"used_at"`
 }
 
+type AppliedState struct {
+	StackName  string `json:"stack_name"`
+	RevisionID int64  `json:"revision_id"`
+	XraySha    string `json:"xray_sha"`
+	MihomoSha  string `json:"mihomo_sha"`
+	AppliedAt  int64  `json:"applied_at"`
+}
+
 type AuditLog struct {
 	ID       int64  `json:"id"`
 	At       int64  `json:"at"`
@@ -44,6 +52,20 @@ type ConfigRevision struct {
 	Actor     string `json:"actor"`
 	Summary   string `json:"summary"`
 	Snapshot  string `json:"snapshot"`
+}
+
+type DepInstall struct {
+	ID         int64  `json:"id"`
+	Component  string `json:"component"`
+	Version    string `json:"version"`
+	Platform   string `json:"platform"`
+	Source     string `json:"source"`
+	Sha256     string `json:"sha256"`
+	Actor      string `json:"actor"`
+	StartedAt  int64  `json:"started_at"`
+	FinishedAt int64  `json:"finished_at"`
+	Result     string `json:"result"`
+	Error      string `json:"error"`
 }
 
 type Inbound struct {
@@ -161,6 +183,18 @@ type Stack struct {
 	RuleExtra             string `json:"rule_extra"`
 }
 
+type Task struct {
+	ID         int64  `json:"id"`
+	Kind       string `json:"kind"`
+	Title      string `json:"title"`
+	Actor      string `json:"actor"`
+	Status     string `json:"status"`
+	StartedAt  int64  `json:"started_at"`
+	FinishedAt int64  `json:"finished_at"`
+	Log        string `json:"log"`
+	Error      string `json:"error"`
+}
+
 type User struct {
 	ID              int64  `json:"id"`
 	Position        int64  `json:"position"`
@@ -177,6 +211,11 @@ type User struct {
 	ResetDay        int64  `json:"reset_day"`
 	ExpireAt        string `json:"expire_at"`
 	Note            string `json:"note"`
+}
+
+type UserPausedStack struct {
+	UserID  int64 `json:"user_id"`
+	StackID int64 `json:"stack_id"`
 }
 
 type UserProfile struct {

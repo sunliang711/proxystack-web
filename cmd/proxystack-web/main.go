@@ -2,6 +2,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -17,6 +18,9 @@ type globalFlags struct {
 
 func main() {
 	if err := newRootCommand().Execute(); err != nil {
+		if errors.Is(err, errRestart) {
+			os.Exit(RestartExitCode)
+		}
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}

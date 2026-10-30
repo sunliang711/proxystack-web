@@ -260,6 +260,7 @@ func registerConfig(api huma.API, s *Server) {
 			if err != nil {
 				return nil, toHTTPError(err)
 			}
+			configdoc.MaskSettings(doc.Settings)
 			return &settingsOutput{Body: *doc.Settings}, nil
 		})
 	huma.Register(api, reg(huma.Operation{OperationID: "updateSettings", Method: http.MethodPut, Path: "/api/config/settings", Summary: "保存系统设置"}),
@@ -268,6 +269,7 @@ func registerConfig(api huma.API, s *Server) {
 			if err != nil {
 				return nil, toHTTPError(err)
 			}
+			configdoc.MaskSettings(doc.Settings)
 			return &settingsOutput{Body: *doc.Settings}, nil
 		})
 

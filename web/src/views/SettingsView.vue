@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import {
   NButton, NCard, NCheckbox, NCheckboxGroup, NCollapse, NCollapseItem, NForm, NFormItem, NGrid, NFormItemGi,
-  NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NSwitch, useDialog, useMessage,
+  NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NSwitch, NTimePicker, NAlert,
+  useDialog, useMessage,
 } from 'naive-ui'
 import { api, emptyErrors, fieldState, splitProblem, type FormErrors, type Schemas } from '../api/client'
+import SecretInput from '../components/SecretInput.vue'
 import ErrorList from '../components/ErrorList.vue'
 import { useDirty } from '../composables/useDirty'
 import { mihomoLogLevels, xrayLogLevels } from '../util/options'
@@ -41,6 +43,76 @@ const policyFlags: { key: keyof Settings['defaults']['xray']['policy']; label: s
 ]
 
 const f = (path: string, hint?: string) => fieldState(errors.value, path, hint)
+
+const depKeys = [
+  { key: 'xray' as const, label: 'Xray' },
+  { key: 'mihomo' as const, label: 'Mihomo' },
+  { key: 'geo' as const, label: 'Geo 数据' },
+]
+const stacks = ref<Schemas['StackSummary'][]>([])
+onMounted(async () => {
+  stacks.value = (await api.GET('/api/stacks')).data?.stacks ?? []
+})
+
+/** HH:MM 与 NTimePicker 的毫秒值互转。 */
+function timeValue(text: string): number | null {
+  const [h, m] = text.split(':').map(Number)
+  return Number.isFinite(h) && Number.isFinite(m) ? new Date(2000, 0, 1, h, m).getTime() : null
+}
+function timeText(value: number | null): string {
+  if (value === null) return ''
+  const date = new Date(value)
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+/** 粘贴 http://user:pass@host:port 或 socks5://… 时拆分填入各字段。 */
+function pasteProxyURL(text: string) {
+  const proxy = settings.value?.download_proxy
+  if (!proxy) return false
+  try {
+    const url = new URL(text.trim())
+    if (!['http:', 'socks5:', 'socks5h:'].includes(url.protocol)) return false
+    proxy.protocol = url.protocol === 'http:' ? 'http' : 'socks5'
+    proxy.host = url.hostname.replace(/^\[|\]$/g, '')
+    proxy.port = Number(url.port) || (proxy.protocol === 'http' ? 8080 : 1080)
+    proxy.username = decodeURIComponent(url.username)
+    proxy.password = decodeURIComponent(url.password)
+    if (url.protocol === 'socks5h:') proxy.remote_dns = true
+    message.success('已按 URL 填入代理字段')
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** 模板中 settings 非空时使用的别名，避免多处非空断言。 */
+const form = computed(() => settings.value as Settings)
+
+const proxyTest = ref<Schemas['ProxyTestResult'] | null>(null)
+const testing = ref(false)
+const failureLabels: Record<string, string> = {
+  proxy_connect: '连接代理失败',
+  proxy_auth: '代理认证失败',
+  timeout: '超时',
+  tls: 'TLS 错误',
+  upstream: '上游返回错误',
+  network: '网络错误',
+  config: '代理设置不可用',
+}
+function failureLabel(kind: string): string {
+  return failureLabels[kind] ?? '失败'
+}
+
+async function testProxy() {
+  if (!settings.value) return
+  testing.value = true
+  proxyTest.value = null
+  const { data } = await api.POST('/api/config/download-proxy/test', { body: settings.value.download_proxy })
+  testing.value = false
+  proxyTest.value = data ?? null
+}
+const proxyStack = () => stacks.value.find((s) => s.name === settings.value?.download_proxy.stack)
+
 
 onMounted(async () => {
   const { data } = await api.GET('/api/config/settings')
@@ -152,6 +224,109 @@ async function save() {
         </NFormItem>
         <NFormItem label="允许公开的无认证入站" label-width="200">
           <NSwitch :value="settings.security.allow_noauth_public" @update:value="toggleNoAuth" />
+        </NFormItem>
+      </NCard>
+
+      <NCard title="依赖源" size="small" class="card">
+        <template v-for="dep in depKeys" :key="dep.key">
+          <NFormItem :label="`${dep.label} 版本`" v-bind="f(`deps.${dep.key}.version`, 'latest 或具体版本号；「依赖」页的升级按钮按此安装')">
+            <NInput v-model:value="form.deps[dep.key].version" />
+          </NFormItem>
+          <NFormItem :label="`${dep.label} 来源`" v-bind="f(`deps.${dep.key}.source`)">
+            <NRadioGroup v-model:value="form.deps[dep.key].source">
+              <NRadioButton value="auto">自动</NRadioButton>
+              <NRadioButton value="github">GitHub</NRadioButton>
+              <NRadioButton value="custom">自定义 URL</NRadioButton>
+            </NRadioGroup>
+          </NFormItem>
+          <template v-if="form.deps[dep.key].source === 'custom'">
+            <NFormItem label="下载地址" v-bind="f(`deps.${dep.key}.url`)">
+              <NInput v-model:value="form.deps[dep.key].url" placeholder="https://…" />
+            </NFormItem>
+            <NFormItem label="sha256" v-bind="f(`deps.${dep.key}.sha256`, '自定义地址必须提供 sha256')">
+              <NInput v-model:value="form.deps[dep.key].sha256" />
+            </NFormItem>
+            <NFormItem label="归档成员" v-bind="f(`deps.${dep.key}.archive_member`, '归档中有多个文件时指定要取的成员')">
+              <NInput v-model:value="form.deps[dep.key].archive_member" />
+            </NFormItem>
+          </template>
+        </template>
+        <NFormItem label="mihomo 构建变体" v-bind="f('deps.mihomo_variant', '自动：CPU 不支持较新指令集时使用 compatible 构建')">
+          <NRadioGroup v-model:value="form.deps.mihomo_variant">
+            <NRadioButton value="auto">自动</NRadioButton>
+            <NRadioButton value="standard">标准</NRadioButton>
+            <NRadioButton value="compatible">compatible</NRadioButton>
+          </NRadioGroup>
+        </NFormItem>
+        <NFormItem label="自动升级 xray">
+          <NSwitch v-model:value="form.deps.auto_upgrade_xray" />
+        </NFormItem>
+        <NFormItem label="自动升级 mihomo">
+          <NSwitch v-model:value="form.deps.auto_upgrade_mihomo" />
+        </NFormItem>
+        <NFormItem label="维护时间窗" v-bind="f('deps.window_start')">
+          <NSpace align="center">
+            <NTimePicker :value="timeValue(form.deps.window_start)" format="HH:mm" @update:value="(v) => (form.deps.window_start = timeText(v))" />
+            <span>—</span>
+            <NTimePicker :value="timeValue(form.deps.window_end)" format="HH:mm" @update:value="(v) => (form.deps.window_end = timeText(v))" />
+          </NSpace>
+        </NFormItem>
+      </NCard>
+
+      <NCard title="下载代理" size="small" class="card">
+        <NFormItem label="模式" v-bind="f('download_proxy.mode', '作用于依赖管理和面板自更新的全部对外请求，保存后立即生效')">
+          <NRadioGroup v-model:value="form.download_proxy.mode">
+            <NRadioButton value="direct">直连</NRadioButton>
+            <NRadioButton value="stack">经指定 stack 的 mihomo 监听</NRadioButton>
+            <NRadioButton value="custom">自定义代理</NRadioButton>
+          </NRadioGroup>
+        </NFormItem>
+        <template v-if="form.download_proxy.mode === 'stack'">
+          <NFormItem label="stack" v-bind="f('download_proxy.stack', '该 stack 未运行时，下载作业会直接报错')">
+            <NSelect v-model:value="form.download_proxy.stack" :options="stacks.map((s) => ({ label: s.name, value: s.name }))" filterable />
+          </NFormItem>
+          <NFormItem label="监听" v-bind="f('download_proxy.listener', '监听要求认证时自动使用其账号')">
+            <NRadioGroup v-model:value="form.download_proxy.listener">
+              <NRadioButton value="socks">SOCKS（{{ proxyStack()?.mihomo_socks || '—' }}）</NRadioButton>
+              <NRadioButton value="http" :disabled="!proxyStack()?.mihomo_http">HTTP（{{ proxyStack()?.mihomo_http || '未启用' }}）</NRadioButton>
+            </NRadioGroup>
+          </NFormItem>
+        </template>
+        <template v-if="form.download_proxy.mode === 'custom'">
+          <NFormItem label="协议" v-bind="f('download_proxy.protocol')">
+            <NRadioGroup v-model:value="form.download_proxy.protocol">
+              <NRadioButton value="http">HTTP</NRadioButton>
+              <NRadioButton value="socks5">SOCKS5</NRadioButton>
+            </NRadioGroup>
+          </NFormItem>
+          <NFormItem label="主机" v-bind="f('download_proxy.host', '也可以直接粘贴 http://user:pass@host:port 或 socks5://… 形式的地址')">
+            <NInput
+              v-model:value="form.download_proxy.host"
+              placeholder="proxy.example.com"
+              @paste="(e: ClipboardEvent) => pasteProxyURL(e.clipboardData?.getData('text') ?? '') && e.preventDefault()"
+            />
+          </NFormItem>
+          <NFormItem label="端口" v-bind="f('download_proxy.port')">
+            <NInputNumber v-model:value="form.download_proxy.port" :min="1" :max="65535" :show-button="false" />
+          </NFormItem>
+          <NFormItem label="用户名" v-bind="f('download_proxy.username', '用户名和密码可同时留空')">
+            <NInput v-model:value="form.download_proxy.username" :input-props="{ autocomplete: 'off' }" />
+          </NFormItem>
+          <NFormItem label="密码" v-bind="f('download_proxy.password')">
+            <SecretInput v-model:value="form.download_proxy.password" />
+          </NFormItem>
+          <NFormItem v-if="form.download_proxy.protocol === 'socks5'" label="由代理解析域名" v-bind="f('download_proxy.remote_dns', '开启后本机不做 DNS 查询')">
+            <NSwitch v-model:value="form.download_proxy.remote_dns" />
+          </NFormItem>
+        </template>
+        <NFormItem label="测试连接">
+          <NSpace vertical style="width: 100%">
+            <NButton :loading="testing" @click="testProxy">用当前表单测试</NButton>
+            <NAlert v-if="proxyTest" :type="proxyTest.ok ? 'success' : 'error'" :bordered="false">
+              <template v-if="proxyTest.ok">经代理访问 GitHub API 成功，耗时 {{ proxyTest.latency_ms }} ms</template>
+              <template v-else>{{ failureLabel(proxyTest.kind) }}：{{ proxyTest.message }}</template>
+            </NAlert>
+          </NSpace>
         </NFormItem>
       </NCard>
 

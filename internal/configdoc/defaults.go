@@ -39,6 +39,15 @@ func DefaultSettings() Settings {
 			},
 		},
 		Security: SecuritySettings{RequireAuthForPublicSocksHTTP: true},
+		Deps: DepsSettings{
+			Xray:          DepSource{Version: "latest", Source: "auto"},
+			Mihomo:        DepSource{Version: "latest", Source: "auto"},
+			Geo:           DepSource{Version: "latest", Source: "auto"},
+			MihomoVariant: "auto",
+			WindowStart:   "04:00",
+			WindowEnd:     "06:00",
+		},
+		DownloadProxy: DownloadProxySettings{Mode: ProxyModeDirect, Listener: "socks", Protocol: "socks5", RemoteDNS: true},
 	}
 }
 

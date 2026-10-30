@@ -37,6 +37,9 @@ type secretField struct {
 // secretFields 列出文档内全部凭据字段。
 func secretFields(doc *Document) []secretField {
 	fields := []secretField{}
+	if doc.Settings != nil {
+		fields = append(fields, secretField{&doc.Settings.DownloadProxy.Password, nil})
+	}
 	for userIndex := range doc.Users {
 		user := &doc.Users[userIndex]
 		fields = append(fields,

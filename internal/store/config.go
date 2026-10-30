@@ -15,6 +15,8 @@ const (
 	SettingPortPools = "port_pools"
 	SettingDefaults  = "defaults"
 	SettingSecurity  = "security"
+	SettingDeps      = "deps"
+	SettingProxy     = "download_proxy"
 )
 
 // LoadSettings 读取全局设置，缺失的分组使用默认值。
@@ -25,6 +27,8 @@ func LoadSettings(ctx context.Context, q *dbq.Queries) (configdoc.Settings, erro
 		SettingPortPools: &settings.PortPools,
 		SettingDefaults:  &settings.Defaults,
 		SettingSecurity:  &settings.Security,
+		SettingDeps:      &settings.Deps,
+		SettingProxy:     &settings.DownloadProxy,
 	}
 	for key, target := range groups {
 		if err := GetJSON(ctx, q, key, target); err != nil && err != ErrNotFound {
@@ -41,6 +45,8 @@ func SaveSettings(ctx context.Context, q *dbq.Queries, settings configdoc.Settin
 		SettingPortPools: settings.PortPools,
 		SettingDefaults:  settings.Defaults,
 		SettingSecurity:  settings.Security,
+		SettingDeps:      settings.Deps,
+		SettingProxy:     settings.DownloadProxy,
 	}
 	for key, value := range groups {
 		if err := PutJSON(ctx, q, key, value); err != nil {
@@ -223,6 +229,18 @@ func LoadDocument(ctx context.Context, q *dbq.Queries) (*configdoc.Document, err
 		}
 		stack.Mihomo.Groups = append(stack.Mihomo.Groups, group)
 	}
+	paused, err := q.ListUserPausedStacks(ctx)
+	if err != nil {
+		return nil, err
+	}
+	stackNames := map[int64]string{}
+	for _, stack := range doc.Stacks {
+		stackNames[stack.ID] = stack.Name
+	}
+	for _, row := range paused {
+		user := &doc.Users[userIndex[row.UserID]]
+		user.PausedStacks = append(user.PausedStacks, stackNames[row.StackID])
+	}
 	doc.Normalize()
 	return doc, nil
 }
@@ -235,7 +253,7 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 		}
 	}
 	for _, clear := range []func(context.Context) error{
-		q.DeleteMihomoUpstreams, q.DeleteMihomoGroups, q.DeleteMihomoListeners,
+		q.DeleteUserPausedStacks, q.DeleteMihomoUpstreams, q.DeleteMihomoGroups, q.DeleteMihomoListeners,
 		q.DeleteInboundUserRefs, q.DeleteInbounds, q.DeleteUserProfiles,
 	} {
 		if err := clear(ctx); err != nil {
@@ -386,6 +404,21 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 				return err
 			}
 			group.ID = groupID
+		}
+	}
+	stackIDByName := map[string]int64{}
+	for _, stack := range doc.Stacks {
+		stackIDByName[stack.Name] = stack.ID
+	}
+	for _, user := range doc.Users {
+		for _, name := range user.PausedStacks {
+			stackID, ok := stackIDByName[name]
+			if !ok {
+				return fmt.Errorf("user %s pauses a missing stack: %s", user.Name, name)
+			}
+			if err := q.InsertUserPausedStack(ctx, dbq.InsertUserPausedStackParams{UserID: user.ID, StackID: stackID}); err != nil {
+				return err
+			}
 		}
 	}
 	// 上游可能引用后面才写入的 stack 的入站，所以在全部入站写入之后再写。

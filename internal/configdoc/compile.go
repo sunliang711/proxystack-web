@@ -2,6 +2,7 @@ package configdoc
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -28,15 +29,15 @@ func Compile(doc *Document) (domain.StackSet, error) {
 	return set, nil
 }
 
-// DisabledUsers 把停用的用户展开为每个 stack 上的停用集合。
+// DisabledUsers 把手动暂停展开为每个 stack 上的暂停集合：Enabled 为 false 的用户在全部 stack 上暂停，
+// 其余用户在 PausedStacks 列出的 stack 上暂停。
 func DisabledUsers(doc *Document) domain.DisabledUserSet {
 	disabled := domain.DisabledUserSet{}
 	for _, user := range doc.Users {
-		if user.Enabled {
-			continue
-		}
 		for _, stack := range doc.Stacks {
-			disabled.Add(stack.Name, user.Name)
+			if !user.Enabled || slices.Contains(user.PausedStacks, stack.Name) {
+				disabled.Add(stack.Name, user.Name)
+			}
 		}
 	}
 	return disabled

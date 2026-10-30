@@ -20,6 +20,16 @@ func unmask(value *string, old string, found bool) {
 	*value = ""
 }
 
+// MaskSettings 遮蔽设置中的凭据字段。
+func MaskSettings(settings *Settings) {
+	mask(&settings.DownloadProxy.Password)
+}
+
+// UnmaskSettings 把仍为占位的设置凭据恢复为原值。
+func UnmaskSettings(settings *Settings, old *Settings) {
+	unmask(&settings.DownloadProxy.Password, old.DownloadProxy.Password, true)
+}
+
 // MaskUser 遮蔽用户的凭据字段。
 func MaskUser(user *User) {
 	mask(&user.UUID)

@@ -48,10 +48,53 @@ type Encryption struct {
 
 // Settings 是参与配置生成的全局设置。
 type Settings struct {
-	Basic     BasicSettings    `json:"basic" yaml:"basic"`
-	PortPools PortPools        `json:"port_pools" yaml:"port_pools"`
-	Defaults  DefaultsSettings `json:"defaults" yaml:"defaults"`
-	Security  SecuritySettings `json:"security" yaml:"security"`
+	Basic         BasicSettings         `json:"basic" yaml:"basic"`
+	PortPools     PortPools             `json:"port_pools" yaml:"port_pools"`
+	Defaults      DefaultsSettings      `json:"defaults" yaml:"defaults"`
+	Security      SecuritySettings      `json:"security" yaml:"security"`
+	Deps          DepsSettings          `json:"deps" yaml:"deps"`
+	DownloadProxy DownloadProxySettings `json:"download_proxy" yaml:"download_proxy"`
+}
+
+// DepSource 是一个组件的安装来源。
+type DepSource struct {
+	Version       string `json:"version" yaml:"version" doc:"latest 或具体版本号"`
+	Source        string `json:"source" yaml:"source" enum:"auto,github,custom"`
+	URL           string `json:"url" yaml:"url,omitempty" doc:"source=custom 时的下载地址"`
+	SHA256        string `json:"sha256" yaml:"sha256,omitempty"`
+	ArchiveMember string `json:"archive_member" yaml:"archive_member,omitempty"`
+}
+
+// DepsSettings 是 xray、mihomo、geo 数据的安装与升级设置。
+type DepsSettings struct {
+	Xray              DepSource `json:"xray" yaml:"xray"`
+	Mihomo            DepSource `json:"mihomo" yaml:"mihomo"`
+	Geo               DepSource `json:"geo" yaml:"geo"`
+	MihomoVariant     string    `json:"mihomo_variant" yaml:"mihomo_variant" enum:"auto,standard,compatible"`
+	AutoUpgradeXray   bool      `json:"auto_upgrade_xray" yaml:"auto_upgrade_xray"`
+	AutoUpgradeMihomo bool      `json:"auto_upgrade_mihomo" yaml:"auto_upgrade_mihomo"`
+	WindowStart       string    `json:"window_start" yaml:"window_start" doc:"维护时间窗开始，HH:MM"`
+	WindowEnd         string    `json:"window_end" yaml:"window_end" doc:"维护时间窗结束，HH:MM"`
+}
+
+// 下载代理模式。
+const (
+	ProxyModeDirect = "direct"
+	ProxyModeStack  = "stack"
+	ProxyModeCustom = "custom"
+)
+
+// DownloadProxySettings 是依赖管理和自更新的全部对外请求使用的代理。
+type DownloadProxySettings struct {
+	Mode      string `json:"mode" yaml:"mode" enum:"direct,stack,custom"`
+	Stack     string `json:"stack" yaml:"stack,omitempty" doc:"mode=stack 时经该 stack 的 mihomo 监听出站"`
+	Listener  string `json:"listener" yaml:"listener,omitempty" enum:"socks,http"`
+	Protocol  string `json:"protocol" yaml:"protocol,omitempty" enum:"http,socks5"`
+	Host      string `json:"host" yaml:"host,omitempty"`
+	Port      int    `json:"port" yaml:"port,omitempty" minimum:"0" maximum:"65535"`
+	Username  string `json:"username" yaml:"username,omitempty"`
+	Password  string `json:"password" yaml:"password,omitempty"`
+	RemoteDNS bool   `json:"remote_dns" yaml:"remote_dns"`
 }
 
 // BasicSettings 是基本设置。
@@ -130,6 +173,8 @@ type User struct {
 	ExpireAt        string    `json:"expire_at" yaml:"expire_at,omitempty" doc:"RFC 3339 时间，空表示不过期"`
 	Note            string    `json:"note" yaml:"note,omitempty"`
 	Profiles        []Profile `json:"profiles" yaml:"profiles,omitempty"`
+	// PausedStacks 是手动暂停该用户的 stack；Enabled 为 false 时在全部 stack 上暂停。
+	PausedStacks []string `json:"paused_stacks" yaml:"paused_stacks,omitempty" required:"false"`
 }
 
 // Profile 是用户的额外凭据档案。

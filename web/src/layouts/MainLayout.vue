@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, h, ref } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
+  NBadge,
   NButton,
   NDropdown,
   NLayout,
@@ -12,6 +13,8 @@ import {
   type MenuOption,
 } from 'naive-ui'
 import { logout, session } from '../session'
+import PendingDrawer from '../components/PendingDrawer.vue'
+import { connectEvents, disconnectEvents, refreshPending, runtime } from '../runtime'
 
 const route = useRoute()
 const router = useRouter()
@@ -26,6 +29,7 @@ const menu: MenuOption[] = [
   link('dashboard', '总览'),
   link('stacks', 'Stack'),
   link('users', '用户'),
+  link('deps', '依赖'),
   link('history', '配置历史'),
   link('backup', '备份'),
   link('settings', '系统设置'),
@@ -37,6 +41,15 @@ const active = computed(() => {
   return parents[name] ?? name
 })
 const title = computed(() => String(route.meta.title ?? ''))
+
+const showPending = ref(false)
+onMounted(() => {
+  connectEvents()
+  refreshPending()
+})
+onBeforeUnmount(disconnectEvents)
+// 任何页面保存后都可能产生待应用变更：路由切换时顺便刷新。
+router.afterEach(() => refreshPending())
 
 const accountOptions = [
   { key: 'password', label: '修改密码' },
@@ -72,15 +85,21 @@ async function onAccount(key: string) {
     <NLayout>
       <NLayoutHeader bordered class="header">
         <span class="title">{{ title }}</span>
-        <NDropdown :options="accountOptions" trigger="click" @select="onAccount">
-          <NButton quaternary>{{ session.admin?.username }}</NButton>
-        </NDropdown>
+        <div class="header-actions">
+          <NBadge :value="runtime.pendingCount" :show="runtime.pendingCount > 0 || !!runtime.pendingError" :dot="!!runtime.pendingError && !runtime.pendingCount">
+            <NButton :type="runtime.pendingCount ? 'warning' : 'default'" secondary size="small" @click="showPending = true">待应用变更</NButton>
+          </NBadge>
+          <NDropdown :options="accountOptions" trigger="click" @select="onAccount">
+            <NButton quaternary>{{ session.admin?.username }}</NButton>
+          </NDropdown>
+        </div>
       </NLayoutHeader>
       <NLayoutContent content-style="padding: 16px;" :native-scrollbar="false" style="height: calc(100vh - 57px)">
         <RouterView />
       </NLayoutContent>
     </NLayout>
   </NLayout>
+  <PendingDrawer v-model:show="showPending" />
 </template>
 
 <style scoped>
@@ -96,6 +115,11 @@ async function onAccount(key: string) {
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 .title {
   font-size: 16px;

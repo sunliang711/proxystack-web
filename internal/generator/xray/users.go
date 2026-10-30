@@ -1,7 +1,10 @@
 package xray
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 
 	"github.com/eagle/proxystack-web/internal/domain"
 )
@@ -30,11 +33,16 @@ func enabledInboundUsers(inbound domain.Inbound, disabled domain.DisabledUserSet
 	return users
 }
 
-// applyDisabledUsers 过滤 inbound 上被禁用的用户；全部被禁用时报错而不是生成空 inbound。
+// PlaceholderUser 是入站全部用户都被暂停时写入的占位用户名，不会出现在任何订阅中。
+const PlaceholderUser = "psw-placeholder"
+
+// applyDisabledUsers 过滤 inbound 上被暂停的用户。
 //
-// 空的 clients 列表会被 Xray 直接拒绝（vmess），或让 shadowsocks 退回到 inbound
-// 级共享密码，两种都不是“禁用一个用户”该有的结果，所以这里 fail loud。
-func applyDisabledUsers(inbound domain.Inbound, disabled domain.DisabledUserSet, stackName string) (domain.Inbound, error) {
+// 全部用户都被暂停时写入一个占位用户：空的 clients 列表会被 Xray 拒绝（vmess），
+// 或让 shadowsocks 退回到 inbound 级共享密码；保留占位用户让入站继续监听，
+// 之后恢复任一用户仍然可以通过 HandlerService 热添加。占位凭据由 stack 的
+// controller secret 派生，生成结果稳定且无法从配置以外推算。
+func applyDisabledUsers(inbound domain.Inbound, disabled domain.DisabledUserSet, stackName string, seed string) (domain.Inbound, error) {
 	if !SupportsUserToggle(inbound.Protocol) || len(disabled) == 0 || len(inbound.Users) == 0 {
 		return inbound, nil
 	}
@@ -43,10 +51,28 @@ func applyDisabledUsers(inbound domain.Inbound, disabled domain.DisabledUserSet,
 		return inbound, nil
 	}
 	if len(users) == 0 {
-		return domain.Inbound{}, GeneratorError{Message: "all users of inbound are disabled: " + stackName + "/" + inbound.TagOrDefault() + " (edit runtime/disabled.json or disable the inbound in the stack file)"}
+		users = []domain.InboundUser{placeholderUser(inbound, stackName, seed)}
 	}
 	inbound.Users = users
 	return inbound, nil
+}
+
+func placeholderUser(inbound domain.Inbound, stackName string, seed string) domain.InboundUser {
+	sum := sha256.Sum256([]byte(seed + "|" + stackName + "|" + inbound.TagOrDefault()))
+	b := sum[:16]
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	user := domain.InboundUser{
+		User: PlaceholderUser,
+		UUID: fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]),
+	}
+	switch inbound.Method {
+	case "2022-blake3-aes-128-gcm":
+		user.Password = base64.StdEncoding.EncodeToString(sum[16:32])
+	default:
+		user.Password = base64.StdEncoding.EncodeToString(sum[:32])
+	}
+	return user
 }
 
 // DumpsInboundUserPatch 渲染只含单个用户的 inbound 片段，供 xray api adu 使用。

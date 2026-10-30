@@ -9,6 +9,7 @@ import { api, emptyErrors, fieldState, splitProblem, type FormErrors, type Schem
 import ErrorList from '../components/ErrorList.vue'
 import ExportDialog from '../components/ExportDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
+import UnitStatus from '../components/UnitStatus.vue'
 
 type Summary = Schemas['StackSummary']
 
@@ -45,6 +46,7 @@ const columns: DataTableColumns<Summary> = [
         row.enabled ? h(NTag, { size: 'small', type: row.desired_running ? 'info' : 'warning' }, () => (row.desired_running ? '期望运行' : '期望停止')) : null,
       ]),
   },
+  { title: '运行', key: 'runtime', render: (row) => h(UnitStatus, { stack: row.name, actions: true }) },
   { title: '角色', key: 'role', width: 70 },
   {
     title: 'Xray 入站',

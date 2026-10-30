@@ -69,9 +69,7 @@ func Marshal(doc *Document, format string) ([]byte, error) {
 // Normalize 补齐空列表和缺省枚举值，使 JSON 输出稳定（空列表输出为 [] 而不是 null）。
 func (d *Document) Normalize() {
 	if d.Settings != nil {
-		if d.Settings.Defaults.Xray.APIServices == nil {
-			d.Settings.Defaults.Xray.APIServices = []string{}
-		}
+		d.Settings.Normalize()
 	}
 	for index := range d.Users {
 		d.Users[index].Normalize()
@@ -81,10 +79,44 @@ func (d *Document) Normalize() {
 	}
 }
 
+// Normalize 用默认值补齐设置中缺失的分组和字段（例如较早版本导出的文件）。
+func (s *Settings) Normalize() {
+	defaults := DefaultSettings()
+	if s.Defaults.Xray.APIServices == nil {
+		s.Defaults.Xray.APIServices = []string{}
+	}
+	for _, pair := range []struct{ value, fallback *DepSource }{
+		{&s.Deps.Xray, &defaults.Deps.Xray}, {&s.Deps.Mihomo, &defaults.Deps.Mihomo}, {&s.Deps.Geo, &defaults.Deps.Geo},
+	} {
+		if pair.value.Version == "" {
+			pair.value.Version = pair.fallback.Version
+		}
+		if pair.value.Source == "" {
+			pair.value.Source = pair.fallback.Source
+		}
+	}
+	fill := func(target *string, value string) {
+		if *target == "" {
+			*target = value
+		}
+	}
+	fill(&s.Deps.MihomoVariant, defaults.Deps.MihomoVariant)
+	fill(&s.Deps.WindowStart, defaults.Deps.WindowStart)
+	fill(&s.Deps.WindowEnd, defaults.Deps.WindowEnd)
+	if s.DownloadProxy.Mode == "" {
+		s.DownloadProxy = defaults.DownloadProxy
+	}
+	fill(&s.DownloadProxy.Listener, defaults.DownloadProxy.Listener)
+	fill(&s.DownloadProxy.Protocol, defaults.DownloadProxy.Protocol)
+}
+
 // Normalize 补齐用户的空列表和缺省值。
 func (u *User) Normalize() {
 	if u.Profiles == nil {
 		u.Profiles = []Profile{}
+	}
+	if u.PausedStacks == nil {
+		u.PausedStacks = []string{}
 	}
 	if u.ResetMode == "" {
 		u.ResetMode = "none"

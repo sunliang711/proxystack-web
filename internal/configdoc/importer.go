@@ -214,6 +214,12 @@ func PlanImport(current, incoming *Document, opts ImportOptions) (*ImportPlan, e
 			}
 		}
 	}
+	// 导入的用户可能手动暂停了本实例不存在的 stack，这些条目没有意义，直接去掉。
+	for index := range result.Users {
+		result.Users[index].PausedStacks = slices.DeleteFunc(result.Users[index].PausedStacks, func(name string) bool {
+			return result.StackByName(name) < 0
+		})
+	}
 	result.Normalize()
 	return plan, nil
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/url"
 	"regexp"
 	"slices"
 	"strings"
@@ -39,10 +40,14 @@ func (i *Issues) add(path, format string, args ...any) {
 	*i = append(*i, Issue{Path: path, Message: fmt.Sprintf(format, args...)})
 }
 
+// xrayPlaceholderUser 与 xray 生成器的占位用户同名，不能用作真实用户名。
+const xrayPlaceholderUser = "psw-placeholder"
+
 var (
 	identifierPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*$`)
 	uuidPattern       = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
 	regionPattern     = regexp.MustCompile(`^[A-Z]{2}$`)
+	sha256Pattern     = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
 	hostnamePattern   = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$`)
 )
 
@@ -67,7 +72,7 @@ func Validate(doc *Document) Issues {
 	settings := DefaultSettings()
 	if doc.Settings != nil {
 		settings = *doc.Settings
-		validateSettings(&issues, settings)
+		validateSettings(&issues, doc, settings)
 	}
 	validateUsers(&issues, doc)
 	stackNames := map[string]bool{}
@@ -176,7 +181,7 @@ func MapDomainPath(doc *Document, path string) string {
 	return prefix + "." + rest
 }
 
-func validateSettings(issues *Issues, settings Settings) {
+func validateSettings(issues *Issues, doc *Document, settings Settings) {
 	if host := settings.Basic.ExternalHost; host != "" && !validHost(host) {
 		issues.add("settings.basic.external_host", "must be a domain name or IP address")
 	}
@@ -201,6 +206,57 @@ func validateSettings(issues *Issues, settings Settings) {
 	if xray.APIEnabled && len(xray.APIServices) == 0 {
 		issues.add("settings.defaults.xray.api_services", "at least one service is required when the API is enabled")
 	}
+	for name, source := range map[string]DepSource{"xray": settings.Deps.Xray, "mihomo": settings.Deps.Mihomo, "geo": settings.Deps.Geo} {
+		path := "settings.deps." + name
+		checkEnum(issues, path+".source", source.Source, "auto", "github", "custom")
+		if source.Version == "" {
+			issues.add(path+".version", "is required")
+		}
+		if source.Source == "custom" {
+			if parsed, err := url.Parse(source.URL); err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+				issues.add(path+".url", "must be an http(s) URL")
+			}
+			if !sha256Pattern.MatchString(source.SHA256) {
+				issues.add(path+".sha256", "a 64-character hex sha256 is required for custom URLs")
+			}
+		}
+	}
+	checkEnum(issues, "settings.deps.mihomo_variant", settings.Deps.MihomoVariant, "auto", "standard", "compatible")
+	for field, value := range map[string]string{"window_start": settings.Deps.WindowStart, "window_end": settings.Deps.WindowEnd} {
+		if _, err := time.Parse("15:04", value); err != nil {
+			issues.add("settings.deps."+field, "must use HH:MM")
+		}
+	}
+	validateDownloadProxy(issues, doc, settings.DownloadProxy)
+}
+
+func validateDownloadProxy(issues *Issues, doc *Document, proxy DownloadProxySettings) {
+	path := "settings.download_proxy"
+	switch proxy.Mode {
+	case ProxyModeDirect:
+	case ProxyModeStack:
+		index := doc.StackByName(proxy.Stack)
+		if index < 0 {
+			issues.add(path+".stack", "stack does not exist: %s", proxy.Stack)
+			return
+		}
+		checkEnum(issues, path+".listener", proxy.Listener, "socks", "http")
+		mihomo := doc.Stacks[index].Mihomo
+		if !mihomo.Enabled || (proxy.Listener == "http" && !mihomo.HTTP.Enabled) {
+			issues.add(path+".listener", "the stack has no such mihomo listener")
+		}
+	case ProxyModeCustom:
+		checkEnum(issues, path+".protocol", proxy.Protocol, "http", "socks5")
+		if proxy.Host == "" || !validHost(proxy.Host) {
+			issues.add(path+".host", "must be a domain name or IP address")
+		}
+		checkPort(issues, path+".port", proxy.Port)
+		if (proxy.Username == "") != (proxy.Password == "") {
+			issues.add(path+".password", "username and password must be set together")
+		}
+	default:
+		issues.add(path+".mode", "must be direct, stack or custom")
+	}
 }
 
 func validateUsers(issues *Issues, doc *Document) {
@@ -210,6 +266,14 @@ func validateUsers(issues *Issues, doc *Document) {
 		user := &doc.Users[index]
 		path := fmt.Sprintf("users[%d]", index)
 		checkIdentifier(issues, path+".name", user.Name)
+		if user.Name == xrayPlaceholderUser {
+			issues.add(path+".name", "this name is reserved")
+		}
+		for pausedIndex, stack := range user.PausedStacks {
+			if doc.StackByName(stack) < 0 {
+				issues.add(fmt.Sprintf("%s.paused_stacks[%d]", path, pausedIndex), "stack does not exist: %s", stack)
+			}
+		}
 		if names[user.Name] {
 			issues.add(path+".name", "duplicate user name: %s", user.Name)
 		}

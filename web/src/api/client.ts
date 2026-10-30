@@ -12,6 +12,11 @@ export function setCSRFToken(token: string) {
   csrfToken = token
 }
 
+/** 不经过 openapi-fetch 的请求（例如文件上传）需要手工带上 CSRF token。 */
+export function getCSRFToken(): string {
+  return csrfToken
+}
+
 const csrf: Middleware = {
   onRequest({ request }) {
     if (csrfToken && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {

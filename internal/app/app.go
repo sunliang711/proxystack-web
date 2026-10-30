@@ -4,11 +4,16 @@ package app
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/eagle/proxystack-web/internal/domain/validation"
+	"github.com/eagle/proxystack-web/internal/events"
 	"github.com/eagle/proxystack-web/internal/paths"
+	"github.com/eagle/proxystack-web/internal/runtime"
 	"github.com/eagle/proxystack-web/internal/store"
+	"github.com/eagle/proxystack-web/internal/units"
+	"github.com/eagle/proxystack-web/internal/xrayapi"
 )
 
 // Service 汇集应用服务层依赖。
@@ -18,11 +23,35 @@ type Service struct {
 	Now    func() time.Time
 	// PortChecker 探测本机端口占用；为 nil 时不探测。
 	PortChecker validation.PortChecker
+
+	// 运行时依赖：unit 管理、日志、xray 用户 API、生成物检查和事件总线。
+	Units   units.Manager
+	Logs    units.Logs
+	XrayAPI xrayapi.API
+	Checker runtime.Checker
+	Events  *events.Bus
+	// SettleDelay 是启动 unit 后检查其是否保持运行前的等待时间，为 0 时取默认值。
+	SettleDelay time.Duration
+	// HealthWait 是依赖替换后重启 unit 到检查其状态之间的等待时间，为 0 时取 10 秒。
+	HealthWait time.Duration
+	// ProbePorts 为 true 时依赖替换后的检查还要求监听端口已打开（内存实现下没有真实端口）。
+	ProbePorts bool
+	// RequestRestart 请求管理服务退出并由 systemd 重启（自更新后调用）。
+	RequestRestart func()
+
+	// runtimeMu 串行化 apply、unit 操作和暂停生效，避免并发写生成物或重启同一 unit。
+	runtimeMu sync.Mutex
+	tasks     taskRegistry
 }
 
 // New 创建应用服务。
 func New(st *store.Store, layout paths.Layout) *Service {
-	return &Service{Store: st, Layout: layout, Now: time.Now, PortChecker: validation.TCPPortChecker{}}
+	fake := units.NewFake()
+	return &Service{
+		Store: st, Layout: layout, Now: time.Now, PortChecker: validation.TCPPortChecker{},
+		Units: fake, Logs: fake, XrayAPI: &xrayapi.Fake{}, Checker: runtime.BinaryChecker{Layout: layout},
+		Events: events.New(),
+	}
 }
 
 // 应用层错误，由 HTTP 层映射为状态码。

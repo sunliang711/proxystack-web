@@ -17,6 +17,7 @@ const router = createRouter({
         { path: 'stacks/:id', name: 'stack', component: () => import('./views/stack/StackEditView.vue'), meta: { title: 'Stack 编辑' } },
         { path: 'users', name: 'users', component: () => import('./views/UsersView.vue'), meta: { title: '用户' } },
         { path: 'users/:id', name: 'user', component: () => import('./views/UserDetailView.vue'), meta: { title: '用户详情' } },
+        { path: 'deps', name: 'deps', component: () => import('./views/DepsView.vue'), meta: { title: '依赖' } },
         { path: 'history', name: 'history', component: () => import('./views/HistoryView.vue'), meta: { title: '配置历史' } },
         { path: 'backup', name: 'backup', component: () => import('./views/BackupView.vue'), meta: { title: '备份' } },
         { path: 'settings', name: 'settings', component: () => import('./views/SettingsView.vue'), meta: { title: '系统设置' } },

@@ -116,6 +116,8 @@ func (s *Server) register(api huma.API) {
 	registerAuth(api, s)
 	registerSystem(api, s)
 	registerConfig(api, s)
+	registerRuntime(api, s)
+	registerDeps(api, s)
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.handler.ServeHTTP(w, r) }

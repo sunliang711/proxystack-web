@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	goruntime "runtime"
 	"strconv"
 	"syscall"
 	"time"
@@ -18,8 +19,11 @@ import (
 
 	"github.com/eagle/proxystack-web/internal/api"
 	"github.com/eagle/proxystack-web/internal/app"
+	"github.com/eagle/proxystack-web/internal/runtime"
 	"github.com/eagle/proxystack-web/internal/store"
+	"github.com/eagle/proxystack-web/internal/units"
 	"github.com/eagle/proxystack-web/internal/version"
+	"github.com/eagle/proxystack-web/internal/xrayapi"
 	"github.com/eagle/proxystack-web/web"
 )
 
@@ -62,6 +66,22 @@ func runServe(ctx context.Context, g *globalFlags, dev bool) error {
 	if err != nil {
 		return fmt.Errorf("read panel settings: %w", err)
 	}
+	if err := setupRuntime(ctx, svc, dev); err != nil {
+		return err
+	}
+	defer svc.Units.Close()
+	if err := svc.StartBackground(ctx); err != nil {
+		return err
+	}
+	restartCh := make(chan struct{}, 1)
+	if !dev {
+		svc.RequestRestart = func() {
+			select {
+			case restartCh <- struct{}{}:
+			default:
+			}
+		}
+	}
 	handler := api.New(svc, api.Options{
 		PanelPath:  panel.Path,
 		Dev:        dev,
@@ -93,11 +113,43 @@ func runServe(ctx context.Context, g *globalFlags, dev bool) error {
 		}
 		return err
 	case <-ctx.Done():
+	case <-restartCh:
+		slog.Info("restarting after self-update")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdownCtx)
+		return errRestart
 	}
 	slog.Info("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+// errRestart 让进程以 RestartExitCode 退出：unit 的 RestartForceExitStatus 据此重启管理服务。
+var errRestart = errors.New("restart requested")
+
+// RestartExitCode 与 proxystack-web.service 的 RestartForceExitStatus 一致。
+const RestartExitCode = 75
+
+// setupRuntime 选择运行时实现：Linux 上使用 systemd、journald 和已安装的 xray；
+// 开发模式和其他平台使用内存实现，只模拟状态，不启动进程。
+func setupRuntime(ctx context.Context, svc *app.Service, dev bool) error {
+	if dev || goruntime.GOOS != "linux" {
+		if !dev {
+			slog.Warn("systemd is only available on Linux; using the in-memory runtime")
+		}
+		return nil
+	}
+	manager, err := units.NewSystemd(ctx)
+	if err != nil {
+		return err
+	}
+	svc.Units = manager
+	svc.Logs = units.Journal{}
+	svc.XrayAPI = xrayapi.CLI{Binary: runtime.BinaryPath(svc.Layout, units.Xray), TempDir: svc.Layout.RuntimeDir()}
+	svc.ProbePorts = true
+	return nil
 }
 
 // migrateWithBackup 在存在待执行迁移时先用 VACUUM INTO 备份数据库。

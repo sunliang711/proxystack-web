@@ -66,6 +66,19 @@
         ],
         "type": "object"
       },
+      "ApplyInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "stacks": {
+            "description": "为空时应用全部 stack",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "BasicSettings": {
         "additionalProperties": false,
         "properties": {
@@ -81,6 +94,39 @@
         "required": [
           "external_host",
           "timezone"
+        ],
+        "type": "object"
+      },
+      "Change": {
+        "additionalProperties": false,
+        "properties": {
+          "component": {
+            "enum": [
+              "xray",
+              "mihomo"
+            ],
+            "type": "string"
+          },
+          "diff": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "create",
+              "update",
+              "delete"
+            ],
+            "type": "string"
+          },
+          "stack": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "stack",
+          "component",
+          "kind",
+          "diff"
         ],
         "type": "object"
       },
@@ -136,6 +182,233 @@
         ],
         "type": "object"
       },
+      "DepInstall": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "finished_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "result": {
+            "enum": [
+              "succeeded",
+              "failed",
+              "rolled_back"
+            ],
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "platform",
+          "source",
+          "sha256",
+          "actor",
+          "started_at",
+          "finished_at",
+          "result",
+          "error"
+        ],
+        "type": "object"
+      },
+      "DepSource": {
+        "additionalProperties": false,
+        "properties": {
+          "archive_member": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "auto",
+              "github",
+              "custom"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "description": "source=custom 时的下载地址",
+            "type": "string"
+          },
+          "version": {
+            "description": "latest 或具体版本号",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "source",
+          "url",
+          "sha256",
+          "archive_member"
+        ],
+        "type": "object"
+      },
+      "DepStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "component": {
+            "enum": [
+              "xray",
+              "mihomo",
+              "geo"
+            ],
+            "type": "string"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/DepInstall"
+            },
+            "type": "array"
+          },
+          "installed": {
+            "type": "boolean"
+          },
+          "installed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "latest": {
+            "type": "string"
+          },
+          "latest_checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "previous": {
+            "description": "存在可回滚的上一个版本",
+            "type": "boolean"
+          },
+          "previous_version": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "update_available": {
+            "type": "boolean"
+          },
+          "used_by": {
+            "description": "期望运行且使用该组件的 stack",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "component",
+          "installed",
+          "version",
+          "sha256",
+          "installed_at",
+          "source",
+          "platform",
+          "previous",
+          "previous_version",
+          "latest",
+          "latest_checked_at",
+          "update_available",
+          "used_by",
+          "history"
+        ],
+        "type": "object"
+      },
+      "DepsOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "components": {
+            "items": {
+              "$ref": "#/components/schemas/DepStatus"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "components"
+        ],
+        "type": "object"
+      },
+      "DepsSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "auto_upgrade_mihomo": {
+            "type": "boolean"
+          },
+          "auto_upgrade_xray": {
+            "type": "boolean"
+          },
+          "geo": {
+            "$ref": "#/components/schemas/DepSource"
+          },
+          "mihomo": {
+            "$ref": "#/components/schemas/DepSource"
+          },
+          "mihomo_variant": {
+            "enum": [
+              "auto",
+              "standard",
+              "compatible"
+            ],
+            "type": "string"
+          },
+          "window_end": {
+            "description": "维护时间窗结束，HH:MM",
+            "type": "string"
+          },
+          "window_start": {
+            "description": "维护时间窗开始，HH:MM",
+            "type": "string"
+          },
+          "xray": {
+            "$ref": "#/components/schemas/DepSource"
+          }
+        },
+        "required": [
+          "xray",
+          "mihomo",
+          "geo",
+          "mihomo_variant",
+          "auto_upgrade_xray",
+          "auto_upgrade_mihomo",
+          "window_start",
+          "window_end"
+        ],
+        "type": "object"
+      },
       "DiffEntry": {
         "additionalProperties": false,
         "properties": {
@@ -170,6 +443,67 @@
           "name",
           "change",
           "fields"
+        ],
+        "type": "object"
+      },
+      "DownloadProxySettings": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "listener": {
+            "enum": [
+              "socks",
+              "http"
+            ],
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "direct",
+              "stack",
+              "custom"
+            ],
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "port": {
+            "format": "int64",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "protocol": {
+            "enum": [
+              "http",
+              "socks5"
+            ],
+            "type": "string"
+          },
+          "remote_dns": {
+            "type": "boolean"
+          },
+          "stack": {
+            "description": "mode=stack 时经该 stack 的 mihomo 监听出站",
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "stack",
+          "listener",
+          "protocol",
+          "host",
+          "port",
+          "username",
+          "password",
+          "remote_dns"
         ],
         "type": "object"
       },
@@ -683,6 +1017,27 @@
         ],
         "type": "object"
       },
+      "InstallInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "restart": {
+            "enum": [
+              "sequential",
+              "all",
+              "none"
+            ],
+            "type": "string"
+          },
+          "version": {
+            "description": "为空时按依赖源设置安装",
+            "type": "string"
+          }
+        },
+        "required": [
+          "restart"
+        ],
+        "type": "object"
+      },
       "Listener": {
         "additionalProperties": false,
         "properties": {
@@ -739,6 +1094,32 @@
         "required": [
           "username",
           "password"
+        ],
+        "type": "object"
+      },
+      "LogEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "priority": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "time",
+          "unit",
+          "priority",
+          "message"
         ],
         "type": "object"
       },
@@ -900,6 +1281,67 @@
           "username",
           "password",
           "private_direct"
+        ],
+        "type": "object"
+      },
+      "PauseInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "paused_stacks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "paused_stacks"
+        ],
+        "type": "object"
+      },
+      "PauseOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "required": [
+          "user",
+          "notes"
+        ],
+        "type": "object"
+      },
+      "PendingView": {
+        "additionalProperties": false,
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/Change"
+            },
+            "type": "array"
+          },
+          "error": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "revision",
+          "changes"
         ],
         "type": "object"
       },
@@ -1070,6 +1512,91 @@
         ],
         "type": "object"
       },
+      "ProxyTestResult": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "description": "失败类型：proxy_connect、proxy_auth、timeout、tls、upstream、network、config",
+            "type": "string"
+          },
+          "latency_ms": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "latency_ms",
+          "kind",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ReconcileOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "findings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "findings"
+        ],
+        "type": "object"
+      },
+      "Release": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "prerelease": {
+            "type": "boolean"
+          },
+          "published_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tag",
+          "name",
+          "prerelease",
+          "published_at",
+          "notes"
+        ],
+        "type": "object"
+      },
+      "ReleasesOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "releases": {
+            "items": {
+              "$ref": "#/components/schemas/Release"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "releases"
+        ],
+        "type": "object"
+      },
       "ResetInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -1151,6 +1678,23 @@
         ],
         "type": "object"
       },
+      "RollbackInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "restart": {
+            "enum": [
+              "sequential",
+              "all",
+              "none"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "restart"
+        ],
+        "type": "object"
+      },
       "Rule": {
         "additionalProperties": false,
         "properties": {
@@ -1201,6 +1745,36 @@
         ],
         "type": "object"
       },
+      "RuntimeEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "stacks": {
+            "items": {
+              "$ref": "#/components/schemas/StackRuntime"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "stacks"
+        ],
+        "type": "object"
+      },
+      "RuntimeStatusOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "stacks": {
+            "items": {
+              "$ref": "#/components/schemas/StackRuntime"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "stacks"
+        ],
+        "type": "object"
+      },
       "SecuritySettings": {
         "additionalProperties": false,
         "properties": {
@@ -1214,6 +1788,30 @@
         "required": [
           "require_auth_for_public_socks_http",
           "allow_noauth_public"
+        ],
+        "type": "object"
+      },
+      "SelfVersion": {
+        "additionalProperties": false,
+        "properties": {
+          "current": {
+            "type": "string"
+          },
+          "latest": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "update_available": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "current",
+          "latest",
+          "update_available",
+          "notes"
         ],
         "type": "object"
       },
@@ -1243,6 +1841,12 @@
           "defaults": {
             "$ref": "#/components/schemas/DefaultsSettings"
           },
+          "deps": {
+            "$ref": "#/components/schemas/DepsSettings"
+          },
+          "download_proxy": {
+            "$ref": "#/components/schemas/DownloadProxySettings"
+          },
           "port_pools": {
             "$ref": "#/components/schemas/PortPools"
           },
@@ -1254,7 +1858,9 @@
           "basic",
           "port_pools",
           "defaults",
-          "security"
+          "security",
+          "deps",
+          "download_proxy"
         ],
         "type": "object"
       },
@@ -1382,6 +1988,44 @@
         ],
         "type": "object"
       },
+      "StackRuntime": {
+        "additionalProperties": false,
+        "properties": {
+          "applied_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "applied_revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "desired_running": {
+            "type": "boolean"
+          },
+          "drift": {
+            "description": "磁盘上的生成物与最近一次应用不一致",
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "units": {
+            "items": {
+              "$ref": "#/components/schemas/UnitView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "desired_running",
+          "applied_revision",
+          "applied_at",
+          "drift",
+          "units"
+        ],
+        "type": "object"
+      },
       "StackSummary": {
         "additionalProperties": false,
         "properties": {
@@ -1496,6 +2140,172 @@
         ],
         "type": "object"
       },
+      "Task": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "finished_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "log": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "actor",
+          "status",
+          "started_at",
+          "finished_at",
+          "log",
+          "error"
+        ],
+        "type": "object"
+      },
+      "TaskEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "line": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "type": "object"
+      },
+      "TaskIDOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "task_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "task_id"
+        ],
+        "type": "object"
+      },
+      "TaskListOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/Task"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "tasks"
+        ],
+        "type": "object"
+      },
+      "UnitActionInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "start",
+              "stop",
+              "restart"
+            ],
+            "type": "string"
+          },
+          "component": {
+            "enum": [
+              "all",
+              "xray",
+              "mihomo"
+            ],
+            "type": "string"
+          },
+          "stack": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "stack",
+          "component",
+          "action"
+        ],
+        "type": "object"
+      },
+      "UnitView": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "type": "string"
+          },
+          "present": {
+            "description": "生成物存在",
+            "type": "boolean"
+          },
+          "since": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sub": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit",
+          "present",
+          "active",
+          "sub",
+          "since"
+        ],
+        "type": "object"
+      },
       "Upstream": {
         "additionalProperties": false,
         "properties": {
@@ -1561,6 +2371,12 @@
           },
           "note": {
             "type": "string"
+          },
+          "paused_stacks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "profiles": {
             "items": {
@@ -2027,6 +2843,52 @@
         ]
       }
     },
+    "/api/config/download-proxy/test": {
+      "post": {
+        "operationId": "testDownloadProxy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DownloadProxySettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyTestResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "测试下载代理（无需先保存）",
+        "tags": [
+          "deps"
+        ]
+      }
+    },
     "/api/config/export": {
       "post": {
         "operationId": "exportConfig",
@@ -2255,6 +3117,437 @@
         "summary": "保存系统设置",
         "tags": [
           "config"
+        ]
+      }
+    },
+    "/api/deps": {
+      "get": {
+        "operationId": "getDeps",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepsOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "xray、mihomo、geo 的安装状态",
+        "tags": [
+          "deps"
+        ]
+      }
+    },
+    "/api/deps/check": {
+      "post": {
+        "operationId": "checkDepUpdates",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "检查各组件的最新版本",
+        "tags": [
+          "deps"
+        ]
+      }
+    },
+    "/api/deps/{component}/install": {
+      "post": {
+        "operationId": "installDep",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "component",
+            "required": true,
+            "schema": {
+              "enum": [
+                "xray",
+                "mihomo",
+                "geo"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskIDOutputBody"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "安装或升级组件（后台作业）",
+        "tags": [
+          "deps"
+        ]
+      }
+    },
+    "/api/deps/{component}/releases": {
+      "get": {
+        "operationId": "listDepReleases",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "component",
+            "required": true,
+            "schema": {
+              "enum": [
+                "xray",
+                "mihomo",
+                "geo"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "prerelease",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleasesOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "上游版本列表",
+        "tags": [
+          "deps"
+        ]
+      }
+    },
+    "/api/deps/{component}/rollback": {
+      "post": {
+        "operationId": "rollbackDep",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "component",
+            "required": true,
+            "schema": {
+              "enum": [
+                "xray",
+                "mihomo",
+                "geo"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RollbackInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskIDOutputBody"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "回滚到上一个版本（后台作业）",
+        "tags": [
+          "deps"
+        ]
+      }
+    },
+    "/api/deps/{component}/upload": {
+      "post": {
+        "operationId": "uploadDep",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "component",
+            "required": true,
+            "schema": {
+              "enum": [
+                "xray",
+                "mihomo",
+                "geo"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "encoding": {
+                "file": {
+                  "contentType": "application/octet-stream"
+                }
+              },
+              "schema": {
+                "properties": {
+                  "file": {
+                    "contentEncoding": "binary",
+                    "contentMediaType": "application/octet-stream",
+                    "description": "release 归档或二进制",
+                    "format": "binary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskIDOutputBody"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "上传安装包安装（后台作业）",
+        "tags": [
+          "deps"
+        ]
+      }
+    },
+    "/api/events": {
+      "get": {
+        "operationId": "events",
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "description": "Each oneOf object in the array represents one possible Server Sent Events (SSE) message, serialized as UTF-8 text according to the SSE specification.",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "properties": {
+                          "data": {
+                            "$ref": "#/components/schemas/RuntimeEvent"
+                          },
+                          "event": {
+                            "const": "runtime",
+                            "description": "The event name.",
+                            "type": "string"
+                          },
+                          "id": {
+                            "description": "The event ID.",
+                            "oneOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "retry": {
+                            "description": "The retry time in milliseconds.",
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "data",
+                          "event"
+                        ],
+                        "title": "Event runtime",
+                        "type": "object"
+                      },
+                      {
+                        "properties": {
+                          "data": {
+                            "$ref": "#/components/schemas/TaskEvent"
+                          },
+                          "event": {
+                            "const": "task",
+                            "description": "The event name.",
+                            "type": "string"
+                          },
+                          "id": {
+                            "description": "The event ID.",
+                            "oneOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "retry": {
+                            "description": "The retry time in milliseconds.",
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "data",
+                          "event"
+                        ],
+                        "title": "Event task",
+                        "type": "object"
+                      }
+                    ]
+                  },
+                  "title": "Server Sent Events",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "运行状态与作业进度事件流",
+        "tags": [
+          "runtime"
         ]
       }
     },
@@ -2518,6 +3811,310 @@
         "summary": "回滚到指定版本",
         "tags": [
           "config"
+        ]
+      }
+    },
+    "/api/runtime/apply": {
+      "post": {
+        "operationId": "applyConfig",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskIDOutputBody"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "应用配置（后台作业）",
+        "tags": [
+          "runtime"
+        ]
+      }
+    },
+    "/api/runtime/logs": {
+      "get": {
+        "operationId": "streamLogs",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "stack",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "component",
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "xray",
+                "mihomo"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "lines",
+            "schema": {
+              "default": 200,
+              "format": "int64",
+              "maximum": 5000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "description": "Each oneOf object in the array represents one possible Server Sent Events (SSE) message, serialized as UTF-8 text according to the SSE specification.",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "properties": {
+                          "data": {
+                            "$ref": "#/components/schemas/LogEntry"
+                          },
+                          "event": {
+                            "const": "log",
+                            "description": "The event name.",
+                            "type": "string"
+                          },
+                          "id": {
+                            "description": "The event ID.",
+                            "oneOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "retry": {
+                            "description": "The retry time in milliseconds.",
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "data",
+                          "event"
+                        ],
+                        "title": "Event log",
+                        "type": "object"
+                      }
+                    ]
+                  },
+                  "title": "Server Sent Events",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "stack 日志（实时）",
+        "tags": [
+          "runtime"
+        ]
+      }
+    },
+    "/api/runtime/pending": {
+      "get": {
+        "operationId": "getPending",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "待应用变更",
+        "tags": [
+          "runtime"
+        ]
+      }
+    },
+    "/api/runtime/reconcile": {
+      "post": {
+        "operationId": "reconcile",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconcileOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "按期望运行状态纠正 unit",
+        "tags": [
+          "runtime"
+        ]
+      }
+    },
+    "/api/runtime/status": {
+      "get": {
+        "operationId": "getRuntimeStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeStatusOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "stack 运行状态",
+        "tags": [
+          "runtime"
+        ]
+      }
+    },
+    "/api/runtime/units": {
+      "post": {
+        "operationId": "unitAction",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnitActionInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "启动、停止或重启 stack 的服务",
+        "tags": [
+          "runtime"
         ]
       }
     },
@@ -2985,6 +4582,159 @@
         ]
       }
     },
+    "/api/system/update": {
+      "get": {
+        "operationId": "checkSelfUpdate",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelfVersion"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "检查管理服务新版本",
+        "tags": [
+          "deps"
+        ]
+      },
+      "post": {
+        "operationId": "selfUpdate",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskIDOutputBody"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "更新管理服务（后台作业）",
+        "tags": [
+          "deps"
+        ]
+      }
+    },
+    "/api/tasks": {
+      "get": {
+        "operationId": "listTasks",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskListOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "最近的后台作业",
+        "tags": [
+          "runtime"
+        ]
+      }
+    },
+    "/api/tasks/{id}": {
+      "get": {
+        "operationId": "getTask",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "后台作业详情",
+        "tags": [
+          "runtime"
+        ]
+      }
+    },
     "/api/users": {
       "get": {
         "operationId": "listUsers",
@@ -3202,6 +4952,63 @@
         "summary": "保存用户",
         "tags": [
           "config"
+        ]
+      }
+    },
+    "/api/users/{id}/pause": {
+      "put": {
+        "operationId": "setUserPause",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PauseInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PauseOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "暂停或恢复用户（当场生效）",
+        "tags": [
+          "runtime"
         ]
       }
     },

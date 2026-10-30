@@ -23,6 +23,8 @@ const message = useMessage()
 const id = computed(() => Number(route.params.id))
 const user = ref<User | null>(null)
 const references = ref<Reference[]>([])
+const stacks = ref<Schemas['StackSummary'][]>([])
+const pausing = ref(false)
 const errors = ref<FormErrors>(emptyErrors())
 const saving = ref(false)
 const { dirty, markClean } = useDirty(user)
@@ -38,9 +40,37 @@ async function load() {
   }
   user.value = data.user
   references.value = data.references
+  stacks.value = (await api.GET('/api/stacks')).data?.stacks ?? []
   markClean()
 }
 onMounted(load)
+
+/** 启用开关和逐 stack 暂停当场生效并写入配置，不需要点「保存」，也不需要应用。 */
+async function setPause(enabled: boolean, pausedStacks: string[]) {
+  if (!user.value) return
+  pausing.value = true
+  const { data, error } = await api.PUT('/api/users/{id}/pause', {
+    params: { path: { id: id.value } },
+    body: { enabled, paused_stacks: pausedStacks },
+  })
+  pausing.value = false
+  if (error) {
+    const problem = splitProblem(error, '操作失败')
+    message.error([...problem.global, ...Object.values(problem.fields)].join('；'))
+    return
+  }
+  const wasDirty = dirty.value
+  user.value.enabled = data!.user.enabled
+  user.value.paused_stacks = data!.user.paused_stacks
+  if (!wasDirty) markClean()
+  for (const note of data!.notes) message.warning(note, { duration: 8000 })
+  message.success(enabled && !pausedStacks.length ? '已恢复，当场生效' : '已暂停，当场生效')
+}
+
+function toggleStack(stack: string, paused: boolean) {
+  const current = user.value?.paused_stacks ?? []
+  setPause(user.value!.enabled, paused ? [...current, stack] : current.filter((name) => name !== stack))
+}
 
 /** 取回明文凭据，只替换仍是占位的字段，不覆盖已修改的内容。 */
 async function reveal() {
@@ -130,8 +160,8 @@ async function remove() {
         <NFormItem label="名称" required v-bind="f('name', '字母或数字开头，可含 _ . -；改名不影响引用')">
           <NInput v-model:value="user.name" />
         </NFormItem>
-        <NFormItem label="启用" v-bind="f('enabled', '关闭等价于在所有 stack 上停用该用户')">
-          <NSwitch v-model:value="user.enabled" />
+        <NFormItem label="启用" :feedback="'切换后当场生效：通过 xray API 移除或加回该用户，配置不删除'">
+          <NSwitch :value="user.enabled" :loading="pausing" @update:value="(v) => setPause(v, user!.paused_stacks ?? [])" />
         </NFormItem>
         <NFormItem label="备注" v-bind="f('remark')">
           <NInput v-model:value="user.remark" />
@@ -237,6 +267,28 @@ async function remove() {
 
       <NCard title="备注" size="small" class="card">
         <NInput v-model:value="user.note" type="textarea" :autosize="{ minRows: 2 }" />
+      </NCard>
+
+      <NCard title="各 stack 暂停" size="small" class="card">
+        <NText depth="3" tag="div" style="margin-bottom: 8px">
+          只在选中的 stack 上暂停该用户，当场生效。SOCKS5/HTTP 入站的账号由多个用户共用，暂停只把它们从该用户的订阅中去掉。
+        </NText>
+        <NEmpty v-if="!stacks.length" size="small" description="还没有 stack" />
+        <NList v-else>
+          <NListItem v-for="stack in stacks" :key="stack.id">
+            <NSpace justify="space-between" align="center">
+              <span>{{ stack.name }}</span>
+              <NSwitch
+                :value="!(user.paused_stacks ?? []).includes(stack.name)"
+                :disabled="!user.enabled || pausing"
+                @update:value="(v) => toggleStack(stack.name, !v)"
+              >
+                <template #checked>启用</template>
+                <template #unchecked>已暂停</template>
+              </NSwitch>
+            </NSpace>
+          </NListItem>
+        </NList>
       </NCard>
 
       <NCard title="被以下入站引用" size="small" class="card">
