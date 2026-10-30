@@ -235,7 +235,7 @@ func subscriptionData(doc *configdoc.Document, nodes []sub.Node, now time.Time) 
 	}
 	for _, user := range doc.Users {
 		data.Users = append(data.Users, subscription.User{
-			Name: user.Name, Token: user.SubToken, Enabled: user.Enabled, ExpireAt: user.ExpireAt, QuotaBytes: user.QuotaBytes,
+			Name: user.Name, Token: user.SubToken, Enabled: user.Enabled, ExpireAt: user.ExpireAt,
 		})
 	}
 	return data

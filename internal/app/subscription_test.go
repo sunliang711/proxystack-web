@@ -110,7 +110,7 @@ func TestSubscriptionBundleServesAppliedNodes(t *testing.T) {
 	require.Contains(t, body, "name: usa1 vmess")
 	require.Contains(t, body, "name: auto relay socks")
 	require.Contains(t, headers.Get("Content-Disposition"), "alice.yaml")
-	require.Contains(t, headers.Get("Subscription-Userinfo"), "total=0")
+	require.Empty(t, headers.Get("Subscription-Userinfo"), "the subscription server carries no traffic data")
 
 	status, body, _ = get(t, subs.http, "/s/alice-token/surge")
 	require.Equal(t, http.StatusOK, status)

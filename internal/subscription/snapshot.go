@@ -55,15 +55,12 @@ func (t Templates) forFormat(format string) string {
 	return map[string]string{sub.FormatClash: t.Clash, sub.FormatPremium: t.Premium, sub.FormatSurge: t.Surge}[format]
 }
 
-// User 是订阅用户。Upload/Download 是导出时的已用流量。
+// User 是订阅用户。订阅端只需要鉴权和判断能否提供订阅，不含用量和额度。
 type User struct {
-	Name       string `json:"name"`
-	Token      string `json:"token"`
-	Enabled    bool   `json:"enabled"`
-	ExpireAt   string `json:"expire_at,omitempty"`
-	QuotaBytes int64  `json:"quota_bytes"`
-	Upload     int64  `json:"upload"`
-	Download   int64  `json:"download"`
+	Name     string `json:"name"`
+	Token    string `json:"token"`
+	Enabled  bool   `json:"enabled"`
+	ExpireAt string `json:"expire_at,omitempty"`
 }
 
 // Expired 判断用户在 now 时是否已到期。
@@ -237,7 +234,7 @@ func (v *View) Render(user, format, template, managedURL string) (string, error)
 	return sub.Render(format, v.Index, user, template, managed)
 }
 
-// headers 返回客户端识别的响应头：文件名、更新间隔和额度信息。
+// headers 返回客户端识别的响应头：文件名和更新间隔。
 func (v *View) headers(user *User, format string) map[string]string {
 	extension := map[string]string{sub.FormatSurge: "conf"}[format]
 	if extension == "" {
@@ -255,16 +252,5 @@ func (v *View) headers(user *User, format string) map[string]string {
 		}
 		headers["Profile-Update-Interval"] = strconv.Itoa(hours)
 	}
-	info := []string{
-		"upload=" + strconv.FormatInt(user.Upload, 10),
-		"download=" + strconv.FormatInt(user.Download, 10),
-		"total=" + strconv.FormatInt(user.QuotaBytes, 10),
-	}
-	if user.ExpireAt != "" {
-		if expire, err := time.Parse(time.RFC3339, user.ExpireAt); err == nil {
-			info = append(info, "expire="+strconv.FormatInt(expire.Unix(), 10))
-		}
-	}
-	headers["Subscription-Userinfo"] = strings.Join(info, "; ")
 	return headers
 }
