@@ -11,9 +11,10 @@ import (
 )
 
 func newInfoCommand(g *globalFlags) *cobra.Command {
-	return &cobra.Command{
+	var subKey bool
+	cmd := &cobra.Command{
 		Use:   "info",
-		Short: "Show the panel URL and certificate fingerprint",
+		Short: "Show the panel URL, certificate fingerprint and subscription bundle public key",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			svc, closeFn, err := openService(cmd.Context(), g.layout())
@@ -21,6 +22,14 @@ func newInfoCommand(g *globalFlags) *cobra.Command {
 				return err
 			}
 			defer closeFn()
+			source, publicKey, err := svc.SubscriptionIdentity(cmd.Context())
+			if err != nil {
+				return err
+			}
+			if subKey {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", source, publicKey)
+				return nil
+			}
 			info, err := svc.Info(cmd.Context())
 			if err != nil {
 				return err
@@ -33,9 +42,13 @@ func newInfoCommand(g *globalFlags) *cobra.Command {
 			if info.Fingerprint != "" {
 				fmt.Fprintf(out, "TLS SHA-256 fingerprint:\n  %s\n", info.Fingerprint)
 			}
+			fmt.Fprintf(out, "Subscription source:     %s\n", source)
+			fmt.Fprintf(out, "Subscription public key: %s\n", publicKey)
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&subKey, "sub-key", false, "print only \"SOURCE PUBLIC_KEY\" for configuring a subscription server")
+	return cmd
 }
 
 func newOpenAPICommand() *cobra.Command {

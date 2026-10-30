@@ -115,7 +115,7 @@ func (s *Settings) Normalize() {
 	fill(&s.Deps.MihomoVariant, defaults.Deps.MihomoVariant)
 	fill(&s.Deps.WindowStart, defaults.Deps.WindowStart)
 	fill(&s.Deps.WindowEnd, defaults.Deps.WindowEnd)
-	if s.Subscription.Listen == "" && s.Subscription.Port == 0 {
+	if s.Subscription.SourceName == "" && s.Subscription.Interval == 0 && s.Subscription.DisabledResponse == "" {
 		s.Subscription = defaults.Subscription
 	}
 	fill(&s.Subscription.DisabledResponse, defaults.Subscription.DisabledResponse)

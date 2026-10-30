@@ -32,6 +32,7 @@ const menu: MenuOption[] = [
   link('manual-nodes', '手工节点'),
   link('remote-sources', '远端节点源'),
   link('templates', '订阅模板'),
+  link('sub-publish', '发布订阅包'),
   link('deps', '依赖'),
   link('history', '配置历史'),
   link('backup', '备份'),

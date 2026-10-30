@@ -7,9 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
-	"net/url"
 	"slices"
 	"sort"
 	"strconv"
@@ -21,6 +19,7 @@ import (
 	"github.com/eagle/proxystack-web/internal/domain"
 	"github.com/eagle/proxystack-web/internal/generator/sub"
 	"github.com/eagle/proxystack-web/internal/store/dbq"
+	"github.com/eagle/proxystack-web/internal/subscription"
 )
 
 // 节点导出文件的标识。
@@ -39,9 +38,11 @@ type NodesExport struct {
 
 // subSnapshot 是一次构建的订阅数据：当前配置加上各 stack 已应用版本渲染出的节点。
 type subSnapshot struct {
-	key   string
-	doc   *configdoc.Document
-	index sub.Index
+	key string
+	doc *configdoc.Document
+	// data 是全部用户和节点（含停用用户的节点，供预览）；发布订阅包时再去掉停用用户的节点。
+	data *subscription.Snapshot
+	view *subscription.View
 	// local 是本机 stack 节点（不含手工节点和远端节点），供节点导出使用。
 	local []sub.Node
 	// warnings 是构建时跳过的节点。
@@ -163,7 +164,6 @@ func (s *Service) buildSubscription(ctx context.Context) (*subSnapshot, error) {
 	})
 
 	nodes := append([]sub.Node{}, snapshot.local...)
-	sources := []string{"local"}
 	for index, manual := range doc.ManualNodes {
 		node, err := manual.SubNode(index)
 		if err != nil {
@@ -172,15 +172,11 @@ func (s *Service) buildSubscription(ctx context.Context) (*subSnapshot, error) {
 		}
 		nodes = append(nodes, node)
 	}
-	if len(doc.ManualNodes) > 0 {
-		sources = append(sources, "manual")
-	}
-	nodes, sources = s.mergeRemoteNodes(doc, remoteStates, nodes, sources, &snapshot.warnings)
-	index, err := sub.BuildIndex(nodes, sources, sub.Access{Type: "none"}, s.Now().UTC().Format(time.RFC3339))
-	if err != nil {
+	nodes = s.mergeRemoteNodes(doc, remoteStates, nodes, &snapshot.warnings)
+	snapshot.data = subscriptionData(doc, nodes, s.Now())
+	if snapshot.view, err = subscription.Merge(snapshot.data, nil); err != nil {
 		return nil, err
 	}
-	snapshot.index = index
 	for _, warning := range snapshot.warnings {
 		slog.Warn("subscription build", "warning", warning)
 	}
@@ -188,11 +184,11 @@ func (s *Service) buildSubscription(ctx context.Context) (*subSnapshot, error) {
 }
 
 // mergeRemoteNodes 合并远端节点源同步来的节点：只保留本机存在的用户的节点，
-// 与已有节点 tag 或同用户代理名重复的跳过。
-func (s *Service) mergeRemoteNodes(doc *configdoc.Document, states []dbq.RemoteSourceState, nodes []sub.Node, sources []string, warnings *[]string) ([]sub.Node, []string) {
-	tags, names := map[string]bool{}, map[string]bool{}
+// 与同用户已有节点代理名重复的跳过。tag 不参与判重，不同机器使用默认端口时 tag 相同是正常情况。
+func (s *Service) mergeRemoteNodes(doc *configdoc.Document, states []dbq.RemoteSourceState, nodes []sub.Node, warnings *[]string) []sub.Node {
+	names := map[string]bool{}
 	for _, node := range nodes {
-		tags[node.Tag], names[node.User+"\x00"+node.Remark] = true, true
+		names[node.User+"\x00"+node.Remark] = true
 	}
 	stateByID := map[int64]dbq.RemoteSourceState{}
 	for _, state := range states {
@@ -213,163 +209,39 @@ func (s *Service) mergeRemoteNodes(doc *configdoc.Document, states []dbq.RemoteS
 				continue
 			}
 			node.ID = "remote:" + source.Name + ":" + node.ID
-			if tags[node.Tag] || names[node.User+"\x00"+node.Remark] {
-				*warnings = append(*warnings, fmt.Sprintf("remote source %s: skipped duplicate node %s", source.Name, node.Remark))
+			if names[node.User+"\x00"+node.Remark] {
+				*warnings = append(*warnings, fmt.Sprintf("remote source %s: skipped node %q of user %s, the name is already used", source.Name, node.Remark, node.User))
 				continue
 			}
-			tags[node.Tag], names[node.User+"\x00"+node.Remark] = true, true
+			names[node.User+"\x00"+node.Remark] = true
 			nodes = append(nodes, node)
 		}
-		sources = append(sources, "remote:"+source.Name)
 	}
-	return nodes, sources
+	return nodes
 }
 
-// SubscriptionStatus 是订阅监听器的状态。
-type SubscriptionStatus struct {
-	Enabled   bool   `json:"enabled"`
-	Address   string `json:"address"`
-	Listening bool   `json:"listening"`
-	Error     string `json:"error"`
-}
-
-// ApplySubscriptionListener 让订阅监听器与当前设置一致。
-func (s *Service) ApplySubscriptionListener(ctx context.Context) {
-	if s.SubListener == nil {
-		return
-	}
-	doc, err := s.LoadConfig(ctx)
-	if err != nil {
-		return
-	}
+// subscriptionData 把配置中的用户和订阅设置连同节点组成本机的订阅数据。
+func subscriptionData(doc *configdoc.Document, nodes []sub.Node, now time.Time) *subscription.Snapshot {
 	settings := doc.Settings.Subscription
-	addr := net.JoinHostPort(settings.Listen, strconv.Itoa(settings.Port))
-	status := SubscriptionStatus{Enabled: settings.Enabled, Address: addr}
-	if err := s.SubListener.Apply(settings.Enabled, addr); err != nil {
-		status.Error = err.Error()
-		slog.Error("subscription listener", "addr", addr, "err", err)
-	} else {
-		status.Listening = settings.Enabled
+	data := &subscription.Snapshot{
+		Source: settings.SourceName, GeneratedAt: now.UTC(),
+		Settings: subscription.Settings{
+			PublicBaseURL: settings.PublicBaseURL, SurgeManaged: settings.SurgeManaged, Interval: settings.Interval,
+			Strict: settings.Strict, DisabledResponse: settings.DisabledResponse,
+		},
+		Templates: subscription.Templates{Clash: doc.Templates.Clash, Premium: doc.Templates.Premium, Surge: doc.Templates.Surge},
+		Users:     []subscription.User{},
+		Nodes:     nodes,
 	}
-	s.subs.mu.Lock()
-	s.subStatus = status
-	s.subs.mu.Unlock()
+	for _, user := range doc.Users {
+		data.Users = append(data.Users, subscription.User{
+			Name: user.Name, Token: user.SubToken, Enabled: user.Enabled, ExpireAt: user.ExpireAt, QuotaBytes: user.QuotaBytes,
+		})
+	}
+	return data
 }
 
-// SubscriptionListenerStatus 返回订阅监听器的状态。
-func (s *Service) SubscriptionListenerStatus() SubscriptionStatus {
-	s.subs.mu.Lock()
-	defer s.subs.mu.Unlock()
-	return s.subStatus
-}
-
-// SubscriptionResponse 是一次订阅请求的结果。
-type SubscriptionResponse struct {
-	Status  int
-	Body    []byte
-	Headers map[string]string
-	// Code 是错误时的 JSON 错误码（forbidden / not_found / template_error / index_unavailable）。
-	Code string
-}
-
-// ServeSubscription 渲染 token 对应用户的订阅。requestURL 用于未设置对外地址时的 Surge managed 首行。
-func (s *Service) ServeSubscription(ctx context.Context, token, format string, requestURL *url.URL) *SubscriptionResponse {
-	snapshot, err := s.subscription(ctx)
-	if err != nil {
-		slog.Error("build subscription", "err", err)
-		return &SubscriptionResponse{Status: http.StatusServiceUnavailable, Code: "index_unavailable"}
-	}
-	var user *configdoc.User
-	for index := range snapshot.doc.Users {
-		candidate := &snapshot.doc.Users[index]
-		if subtle.ConstantTimeCompare([]byte(candidate.SubToken), []byte(token)) == 1 {
-			user = candidate
-		}
-	}
-	if user == nil || token == "" {
-		return &SubscriptionResponse{Status: http.StatusForbidden, Code: "forbidden"}
-	}
-	settings := snapshot.doc.Settings.Subscription
-	if !user.Enabled || userExpired(user, s.Now()) {
-		if settings.DisabledResponse == configdoc.DisabledEmpty {
-			return &SubscriptionResponse{Status: http.StatusOK, Body: []byte{}, Headers: subscriptionHeaders(user, format, settings)}
-		}
-		return &SubscriptionResponse{Status: http.StatusNotFound, Code: "not_found"}
-	}
-	if len(sub.NodesForUser(snapshot.index, user.Name)) == 0 {
-		return &SubscriptionResponse{Status: http.StatusNotFound, Code: "not_found"}
-	}
-	managed := sub.SurgeManaged{Interval: settings.Interval, Strict: settings.Strict}
-	if format == sub.FormatSurge && settings.SurgeManaged {
-		managed.URL = s.subscriptionBaseURL(snapshot.doc, requestURL) + "/s/" + token + "/surge"
-	}
-	templates := snapshot.doc.Templates
-	override := map[string]string{sub.FormatClash: templates.Clash, sub.FormatPremium: templates.Premium, sub.FormatSurge: templates.Surge}[format]
-	body, err := sub.Render(format, snapshot.index, user.Name, override, managed)
-	if err != nil {
-		slog.Error("render subscription", "user", user.Name, "format", format, "err", err)
-		var templateErr sub.TemplateError
-		if errors.As(err, &templateErr) {
-			return &SubscriptionResponse{Status: http.StatusServiceUnavailable, Code: "template_error"}
-		}
-		return &SubscriptionResponse{Status: http.StatusNotFound, Code: "not_found"}
-	}
-	return &SubscriptionResponse{Status: http.StatusOK, Body: []byte(body), Headers: subscriptionHeaders(user, format, settings)}
-}
-
-func userExpired(user *configdoc.User, now time.Time) bool {
-	if user.ExpireAt == "" {
-		return false
-	}
-	expire, err := time.Parse(time.RFC3339, user.ExpireAt)
-	return err == nil && !now.Before(expire)
-}
-
-// subscriptionHeaders 返回客户端识别的响应头：文件名、更新间隔和额度信息。
-func subscriptionHeaders(user *configdoc.User, format string, settings configdoc.SubscriptionSettings) map[string]string {
-	extension := map[string]string{sub.FormatSurge: "conf"}[format]
-	if extension == "" {
-		extension = "yaml"
-	}
-	headers := map[string]string{
-		"Content-Type":        "text/plain; charset=utf-8",
-		"Content-Disposition": fmt.Sprintf("attachment; filename*=UTF-8''%s.%s", url.PathEscape(user.Name), extension),
-		"Cache-Control":       "no-store",
-	}
-	if settings.Interval > 0 {
-		hours := settings.Interval / 3600
-		if hours < 1 {
-			hours = 1
-		}
-		headers["Profile-Update-Interval"] = strconv.Itoa(hours)
-	}
-	info := []string{"upload=0", "download=0", "total=" + strconv.FormatInt(user.QuotaBytes, 10)}
-	if user.ExpireAt != "" {
-		if expire, err := time.Parse(time.RFC3339, user.ExpireAt); err == nil {
-			info = append(info, "expire="+strconv.FormatInt(expire.Unix(), 10))
-		}
-	}
-	headers["Subscription-Userinfo"] = strings.Join(info, "; ")
-	return headers
-}
-
-// subscriptionBaseURL 返回订阅链接的前缀：优先用设置的对外地址，其次用请求地址，最后用 http://<对外地址>:<端口>。
-func (s *Service) subscriptionBaseURL(doc *configdoc.Document, requestURL *url.URL) string {
-	settings := doc.Settings.Subscription
-	if settings.PublicBaseURL != "" {
-		return strings.TrimSuffix(settings.PublicBaseURL, "/")
-	}
-	if requestURL != nil && requestURL.Host != "" {
-		return requestURL.Scheme + "://" + requestURL.Host
-	}
-	host := doc.Settings.Basic.ExternalHost
-	if host == "" {
-		host = "127.0.0.1"
-	}
-	return "http://" + net.JoinHostPort(host, strconv.Itoa(settings.Port))
-}
-
-// SubscriptionLinks 是一个用户的三种订阅链接。
+// SubscriptionLinks 是一个用户的三种订阅链接。BaseURL 为空（未设置订阅端对外地址）时链接只有路径部分。
 type SubscriptionLinks struct {
 	BaseURL string            `json:"base_url"`
 	Links   map[string]string `json:"links"`
@@ -387,12 +259,12 @@ func (s *Service) UserSubscriptionLinks(ctx context.Context, id int64) (*Subscri
 		return nil, ErrNotFound
 	}
 	user := snapshot.doc.Users[index]
-	base := s.subscriptionBaseURL(snapshot.doc, nil)
+	base := snapshot.view.BaseURL(nil)
 	links := map[string]string{}
 	for _, format := range []string{sub.FormatClash, sub.FormatPremium, sub.FormatSurge} {
 		links[format] = base + "/s/" + user.SubToken + "/" + format
 	}
-	return &SubscriptionLinks{BaseURL: base, Links: links, Nodes: len(sub.NodesForUser(snapshot.index, user.Name))}, nil
+	return &SubscriptionLinks{BaseURL: base, Links: links, Nodes: len(sub.NodesForUser(snapshot.view.Index, user.Name))}, nil
 }
 
 // PreviewSubscription 用给定模板（为空时使用当前模板）渲染某个用户的订阅，供模板页和用户页预览。
@@ -405,18 +277,16 @@ func (s *Service) PreviewSubscription(ctx context.Context, userID int64, format 
 	if index < 0 {
 		return "", ErrNotFound
 	}
-	source := map[string]string{
-		sub.FormatClash: snapshot.doc.Templates.Clash, sub.FormatPremium: snapshot.doc.Templates.Premium, sub.FormatSurge: snapshot.doc.Templates.Surge,
-	}[format]
+	source := snapshot.view.Templates
+	template := map[string]string{sub.FormatClash: source.Clash, sub.FormatPremium: source.Premium, sub.FormatSurge: source.Surge}[format]
 	if override != nil {
-		source = *override
+		template = *override
 	}
-	settings := snapshot.doc.Settings.Subscription
-	managed := sub.SurgeManaged{Interval: settings.Interval, Strict: settings.Strict}
-	if settings.SurgeManaged {
-		managed.URL = s.subscriptionBaseURL(snapshot.doc, nil) + "/s/<token>/surge"
+	base := snapshot.view.BaseURL(nil)
+	if base == "" {
+		base = "http://<订阅端地址>"
 	}
-	text, err := sub.Render(format, snapshot.index, snapshot.doc.Users[index].Name, source, managed)
+	text, err := snapshot.view.Render(snapshot.doc.Users[index].Name, format, template, base+"/s/<token>/surge")
 	if err != nil {
 		return "", &FieldError{Field: "content", Message: err.Error()}
 	}
@@ -434,8 +304,8 @@ func (s *Service) ExportNodes(ctx context.Context, token string) (*NodesExport, 
 		return nil, false, nil
 	}
 	enabled := map[string]bool{}
-	for _, user := range snapshot.doc.Users {
-		enabled[user.Name] = user.Enabled && !userExpired(&user, s.Now())
+	for _, user := range snapshot.data.Users {
+		enabled[user.Name] = user.Enabled && !user.Expired(s.Now())
 	}
 	nodes := []sub.Node{}
 	for _, node := range snapshot.local {

@@ -43,15 +43,6 @@ type Service struct {
 	runtimeMu sync.Mutex
 	tasks     taskRegistry
 	subs      subCache
-
-	// SubListener 是订阅监听器，为 nil 时不启动（测试）。
-	SubListener SubListener
-	subStatus   SubscriptionStatus
-}
-
-// SubListener 按设置启动、重新绑定或停止订阅监听器。
-type SubListener interface {
-	Apply(enabled bool, addr string) error
 }
 
 // New 创建应用服务。

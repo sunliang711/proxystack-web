@@ -112,12 +112,6 @@ async function testProxy() {
   testing.value = false
   proxyTest.value = data ?? null
 }
-const subStatus = ref<Schemas['SubscriptionStatus'] | null>(null)
-async function loadSubStatus() {
-  subStatus.value = (await api.GET('/api/subscription/status')).data ?? null
-}
-onMounted(loadSubStatus)
-
 /** 订阅更新间隔：秒 ⇄ 小时/天。 */
 const intervalUnit = ref<3600 | 86400>(86400)
 const intervalValue = computed({
@@ -127,12 +121,8 @@ const intervalValue = computed({
   },
 })
 
-const exportURL = computed(() => {
-  if (!form.value) return ''
-  const sub = form.value.subscription
-  const base = sub.public_base_url || `http://${form.value.basic.external_host || '<对外地址>'}:${sub.port}`
-  return `${base.replace(/\/$/, '')}/export/nodes`
-})
+/** 节点导出接口挂在面板地址下，与面板共用端口和访问路径。 */
+const exportURL = new URL('export/nodes', document.baseURI).href
 
 async function revealSettings() {
   const { data } = await api.GET('/api/config/settings/secrets')
@@ -181,7 +171,6 @@ async function save() {
   errors.value = emptyErrors()
   settings.value = data!
   markClean()
-  loadSubStatus()
   message.success('已保存，配置变更将在下次应用时生效')
 }
 </script>
@@ -261,18 +250,13 @@ async function save() {
       </NCard>
 
       <NCard title="订阅" size="small" class="card">
-        <NAlert v-if="subStatus?.error" type="error" :bordered="false" style="margin-bottom: 12px">订阅监听 {{ subStatus.address }} 启动失败：{{ subStatus.error }}</NAlert>
-        <NAlert v-else-if="subStatus?.listening" type="success" :bordered="false" style="margin-bottom: 12px">订阅监听运行中：{{ subStatus.address }}</NAlert>
-        <NFormItem label="启用订阅监听" v-bind="f('subscription.enabled', '订阅端口与管理端口分开，可以对公网开放；保存后立即生效')">
-          <NSwitch v-model:value="form.subscription.enabled" />
+        <NAlert type="info" :bordered="false" style="margin-bottom: 12px">
+          订阅由单独部署的订阅端提供。这里的设置随订阅包下发，在「发布订阅包」页签发并拷贝到订阅端后生效。
+        </NAlert>
+        <NFormItem label="来源名" v-bind="f('subscription.source_name', '订阅端按来源名找到验签用的公钥；多台管理端向同一个订阅端发布时各用不同的来源名')">
+          <NInput v-model:value="form.subscription.source_name" placeholder="main" />
         </NFormItem>
-        <NFormItem label="监听地址" v-bind="f('subscription.listen')">
-          <NSelect v-model:value="form.subscription.listen" :options="['0.0.0.0', '127.0.0.1', '::'].map((v) => ({ label: v, value: v }))" filterable tag />
-        </NFormItem>
-        <NFormItem label="端口" v-bind="f('subscription.port')">
-          <NInputNumber v-model:value="form.subscription.port" :min="1" :max="65535" :show-button="false" />
-        </NFormItem>
-        <NFormItem label="对外地址" v-bind="f('subscription.public_base_url', '订阅链接和 Surge managed 首行使用的地址，例如 https://sub.example.com；为空时用 http://<对外地址>:<端口>')">
+        <NFormItem label="订阅端对外地址" v-bind="f('subscription.public_base_url', '订阅链接和 Surge managed 首行使用的地址，例如 https://sub.example.com；为空时订阅端用请求地址，面板上只显示链接路径')">
           <NInput v-model:value="form.subscription.public_base_url" placeholder="https://sub.example.com" />
         </NFormItem>
         <NFormItem label="Surge managed config" v-bind="f('subscription.surge_managed')">

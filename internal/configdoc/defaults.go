@@ -49,7 +49,7 @@ func DefaultSettings() Settings {
 		},
 		DownloadProxy: DownloadProxySettings{Mode: ProxyModeDirect, Listener: "socks", Protocol: "socks5", RemoteDNS: true},
 		Subscription: SubscriptionSettings{
-			Enabled: true, Listen: "0.0.0.0", Port: 9444, SurgeManaged: true, Interval: 86400, Strict: true,
+			SourceName: "main", SurgeManaged: true, Interval: 86400, Strict: true,
 			DisabledResponse: DisabledNotFound,
 		},
 	}

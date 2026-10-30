@@ -2,7 +2,6 @@ package configdoc
 
 import (
 	"fmt"
-	"net"
 	"net/url"
 	"strconv"
 
@@ -10,6 +9,7 @@ import (
 
 	"github.com/eagle/proxystack-web/internal/domain"
 	"github.com/eagle/proxystack-web/internal/generator/sub"
+	"github.com/eagle/proxystack-web/internal/subscription"
 )
 
 // SubNodeID 是手工节点在订阅中的节点 ID。
@@ -106,10 +106,9 @@ func validateSubscription(issues *Issues, doc *Document) {
 	if doc.Settings != nil {
 		settings := doc.Settings.Subscription
 		path := "settings.subscription"
-		if net.ParseIP(settings.Listen) == nil {
-			issues.add(path+".listen", "must be an IP address")
+		if !subscription.ValidSourceName(settings.SourceName) {
+			issues.add(path+".source_name", "must be 1-32 lowercase letters, digits, '_' or '-'")
 		}
-		checkPort(issues, path+".port", settings.Port)
 		if settings.PublicBaseURL != "" {
 			parsed, err := url.Parse(settings.PublicBaseURL)
 			if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.RawQuery != "" || parsed.Fragment != "" {
@@ -117,13 +116,6 @@ func validateSubscription(issues *Issues, doc *Document) {
 			}
 		}
 		checkEnum(issues, path+".disabled_response", settings.DisabledResponse, DisabledNotFound, DisabledEmpty)
-		if settings.Enabled {
-			for _, stack := range doc.Stacks {
-				if StackPorts(&stack)[settings.Port] {
-					issues.add(path+".port", "port is used by stack %s", stack.Name)
-				}
-			}
-		}
 		if doc.Settings.NodeExport.Enabled && len(doc.Settings.NodeExport.Token) < 16 {
 			issues.add("settings.node_export.token", "a token of at least 16 characters is required")
 		}

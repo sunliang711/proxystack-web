@@ -19,6 +19,7 @@ const router = createRouter({
         { path: 'users/:id', name: 'user', component: () => import('./views/UserDetailView.vue'), meta: { title: '用户详情' } },
         { path: 'manual-nodes', name: 'manual-nodes', component: () => import('./views/ManualNodesView.vue'), meta: { title: '手工节点' } },
         { path: 'remote-sources', name: 'remote-sources', component: () => import('./views/RemoteSourcesView.vue'), meta: { title: '远端节点源' } },
+        { path: 'sub-publish', name: 'sub-publish', component: () => import('./views/SubPublishView.vue'), meta: { title: '发布订阅包' } },
         { path: 'templates', name: 'templates', component: () => import('./views/TemplatesView.vue'), meta: { title: '订阅模板' } },
         { path: 'deps', name: 'deps', component: () => import('./views/DepsView.vue'), meta: { title: '依赖' } },
         { path: 'history', name: 'history', component: () => import('./views/HistoryView.vue'), meta: { title: '配置历史' } },

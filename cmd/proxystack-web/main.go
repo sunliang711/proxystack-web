@@ -1,4 +1,4 @@
-// proxystack-web 是代理栈管理服务：Web 管理端、订阅端、调度器和流量采集器。
+// proxystack-web 是代理栈管理服务：Web 管理端、调度器和流量采集器；sub 子命令是独立部署的订阅端。
 package main
 
 import (
@@ -46,7 +46,7 @@ func newRootCommand() *cobra.Command {
 	}
 	root.PersistentFlags().StringVar(&g.baseDir, "base-dir", defaultBase, "installation directory (env PSW_BASE_DIR)")
 	root.Flags().AddFlagSet(serve.Flags())
-	root.AddCommand(serve, newInitCommand(g), newAdminCommand(g), newInfoCommand(g), newOpenAPICommand())
+	root.AddCommand(serve, newInitCommand(g), newAdminCommand(g), newInfoCommand(g), newOpenAPICommand(), newSubCommand())
 	return root
 }
 

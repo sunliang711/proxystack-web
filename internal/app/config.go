@@ -156,10 +156,6 @@ func (s *Service) mutateConfig(ctx context.Context, actor Actor, change *ConfigC
 	}
 	// 手动暂停开关不进入待应用变更：无论改动来自哪里，保存后立即生效。
 	change.Notes = s.syncPauses(ctx, before, result)
-	// 订阅监听设置同样立即生效。
-	if before.Settings != nil && before.Settings.Subscription != result.Settings.Subscription {
-		s.ApplySubscriptionListener(ctx)
-	}
 	return result, nil
 }
 
@@ -179,9 +175,6 @@ func (s *Service) reservedPorts(ctx context.Context, q *dbq.Queries) []int {
 	var ports []int
 	if panel, err := store.GetPanelSettings(ctx, q); err == nil && panel.Port != 0 {
 		ports = append(ports, panel.Port)
-	}
-	if settings, err := store.LoadSettings(ctx, q); err == nil && settings.Subscription.Enabled {
-		ports = append(ports, settings.Subscription.Port)
 	}
 	return ports
 }

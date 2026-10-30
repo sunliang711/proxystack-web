@@ -93,6 +93,9 @@ func New(svc *app.Service, opts Options) *Server {
 	s.api = humachi.New(panel, NewConfig())
 	s.api.UseMiddleware(s.authMiddleware)
 	s.register(s.api)
+	if svc != nil {
+		panel.Get("/export/nodes", exportNodesHandler(svc))
+	}
 	panel.HandleFunc("/api/*", func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 	})

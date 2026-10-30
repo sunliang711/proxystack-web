@@ -673,6 +673,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sub-bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 订阅包发布状态 */
+        get: operations["getSubscriptionBundleStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sub-bundle/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 签发并下载订阅包（含全部用户的 token，记入审计日志） */
+        post: operations["publishSubscriptionBundle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sub-templates": {
         parameters: {
             query?: never;
@@ -702,23 +736,6 @@ export interface paths {
         put?: never;
         /** 用指定模板预览某个用户的订阅 */
         post: operations["previewTemplate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/subscription/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 订阅监听器状态 */
-        get: operations["getSubscriptionStatus"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -946,6 +963,27 @@ export interface components {
             external_host: string;
             /** @description 流量统计周期边界使用的时区 */
             timezone: string;
+        };
+        BundleStatus: {
+            build_warnings: string[];
+            fingerprint: string;
+            /** Format: int64 */
+            nodes: number;
+            /** @description 当前订阅内容与最近一次发布的不同 */
+            pending: boolean;
+            public_base_url: string;
+            public_key: string;
+            /** Format: date-time */
+            published_at: string;
+            published_by: string;
+            /**
+             * Format: int64
+             * @description 最近一次发布的序号，0 表示从未发布
+             */
+            sequence: number;
+            source: string;
+            /** Format: int64 */
+            users: number;
         };
         Change: {
             /** @enum {string} */
@@ -1547,25 +1585,17 @@ export interface components {
         SubscriptionSettings: {
             /** @enum {string} */
             disabled_response: "not_found" | "empty";
-            enabled: boolean;
             /**
              * Format: int64
              * @description Surge managed config 的更新间隔（秒）
              */
             interval: number;
-            listen: string;
-            /** Format: int64 */
-            port: number;
-            /** @description 订阅链接的对外地址，为空时用 http://<对外地址>:<端口> */
+            /** @description 订阅端的对外地址，用于订阅链接和 Surge managed 首行；为空时订阅端用请求地址 */
             public_base_url: string;
+            /** @description 本机在订阅端的来源名，订阅端按它找到验签用的公钥 */
+            source_name: string;
             strict: boolean;
             surge_managed: boolean;
-        };
-        SubscriptionStatus: {
-            address: string;
-            enabled: boolean;
-            error: string;
-            listening: boolean;
         };
         SyncInputBody: {
             /**
@@ -3203,6 +3233,66 @@ export interface operations {
             };
         };
     };
+    getSubscriptionBundleStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    publishSubscriptionBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     getTemplates: {
         parameters: {
             query?: never;
@@ -3285,35 +3375,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TextOutputBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    getSubscriptionStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SubscriptionStatus"];
                 };
             };
             /** @description Error */

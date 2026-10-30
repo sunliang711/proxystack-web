@@ -2,7 +2,11 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -69,8 +73,8 @@ type userPreviewInput struct {
 	Format string `query:"format" enum:"clash,premium,surge" default:"clash"`
 }
 
-type subscriptionStatusOutput struct {
-	Body app.SubscriptionStatus
+type bundleStatusOutput struct {
+	Body app.BundleStatus
 }
 
 func registerSubscription(api huma.API, s *Server) {
@@ -203,9 +207,25 @@ func registerSubscription(api huma.API, s *Server) {
 			out.Body.Text = text
 			return out, nil
 		})
-	huma.Register(api, reg(huma.Operation{OperationID: "getSubscriptionStatus", Method: http.MethodGet, Path: "/api/subscription/status", Summary: "订阅监听器状态"}),
-		func(ctx context.Context, _ *struct{}) (*subscriptionStatusOutput, error) {
-			return &subscriptionStatusOutput{Body: s.svc.SubscriptionListenerStatus()}, nil
+	huma.Register(api, reg(huma.Operation{OperationID: "getSubscriptionBundleStatus", Method: http.MethodGet, Path: "/api/sub-bundle", Summary: "订阅包发布状态"}),
+		func(ctx context.Context, _ *struct{}) (*bundleStatusOutput, error) {
+			status, err := s.svc.SubscriptionBundleStatus(ctx)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &bundleStatusOutput{Body: *status}, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "publishSubscriptionBundle", Method: http.MethodPost, Path: "/api/sub-bundle/publish", Summary: "签发并下载订阅包（含全部用户的 token，记入审计日志）"}),
+		func(ctx context.Context, _ *struct{}) (*exportOutput, error) {
+			bundle, err := s.svc.PublishSubscriptionBundle(ctx, actorFrom(ctx))
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &exportOutput{
+				ContentType:        "application/octet-stream",
+				ContentDisposition: fmt.Sprintf(`attachment; filename="%s"`, bundle.Filename),
+				Body:               bundle.Data,
+			}, nil
 		})
 	huma.Register(api, reg(huma.Operation{OperationID: "getSettingsSecrets", Method: http.MethodGet, Path: "/api/config/settings/secrets", Summary: "查看设置中的明文凭据（记入审计日志）"}),
 		func(ctx context.Context, _ *struct{}) (*settingsOutput, error) {
@@ -218,4 +238,31 @@ func registerSubscription(api huma.API, s *Server) {
 			}
 			return &settingsOutput{Body: *doc.Settings}, nil
 		})
+}
+
+// exportNodesHandler 是只读节点导出接口，供其他实例的远端节点源凭 Bearer token 拉取本机节点。不需要登录。
+func exportNodesHandler(svc *app.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeError := func(status int, code, message string) {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(status)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]string{"code": code, "message": message}})
+		}
+		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if !ok || token == "" {
+			writeError(http.StatusUnauthorized, "unauthorized", "a bearer token is required")
+			return
+		}
+		export, allowed, err := svc.ExportNodes(r.Context(), token)
+		switch {
+		case err != nil:
+			slog.Error("export nodes", "err", err)
+			writeError(http.StatusServiceUnavailable, "index_unavailable", "nodes are not available")
+		case !allowed:
+			writeError(http.StatusForbidden, "forbidden", "invalid token or node export is disabled")
+		default:
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			_ = json.NewEncoder(w).Encode(export)
+		}
+	}
 }

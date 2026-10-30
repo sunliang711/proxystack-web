@@ -120,10 +120,8 @@ const (
 
 // SubscriptionSettings 是订阅监听器的设置。
 type SubscriptionSettings struct {
-	Enabled          bool   `json:"enabled" yaml:"enabled"`
-	Listen           string `json:"listen" yaml:"listen"`
-	Port             int    `json:"port" yaml:"port" minimum:"1" maximum:"65535"`
-	PublicBaseURL    string `json:"public_base_url" yaml:"public_base_url,omitempty" doc:"订阅链接的对外地址，为空时用 http://<对外地址>:<端口>"`
+	SourceName       string `json:"source_name" yaml:"source_name" doc:"本机在订阅端的来源名，订阅端按它找到验签用的公钥"`
+	PublicBaseURL    string `json:"public_base_url" yaml:"public_base_url,omitempty" doc:"订阅端的对外地址，用于订阅链接和 Surge managed 首行；为空时订阅端用请求地址"`
 	SurgeManaged     bool   `json:"surge_managed" yaml:"surge_managed"`
 	Interval         int    `json:"interval" yaml:"interval" minimum:"0" doc:"Surge managed config 的更新间隔（秒）"`
 	Strict           bool   `json:"strict" yaml:"strict"`

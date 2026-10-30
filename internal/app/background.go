@@ -30,7 +30,6 @@ func (s *Service) StartBackground(ctx context.Context) error {
 		slog.Info("startup reconcile", "finding", finding)
 	}
 	go s.MonitorUnits(ctx, unitMonitorInterval)
-	s.ApplySubscriptionListener(ctx)
 	go func() {
 		ticker := time.NewTicker(remoteSyncInterval)
 		defer ticker.Stop()

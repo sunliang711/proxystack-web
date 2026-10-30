@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
-# proxystack-web 安装脚本：创建服务账号和目录、安装二进制、写入 unit 与 polkit 规则、初始化数据库并启动服务。
+# proxystack-web 安装脚本。按角色安装：
+#   panel  管理端：创建服务账号和目录、安装二进制、写入 unit 与 polkit 规则、初始化数据库并启动服务。
+#   sub    订阅端：独立的服务账号、目录和 unit，只通过管理端签发的订阅包获得数据；已安装时只升级二进制。
+#   all    两者装在同一台机器上，订阅端自动信任本机管理端的公钥。
 set -euo pipefail
 
 BASE=/opt/proxystack-web
 SERVICE_USER=proxystack-web
+SUB_BASE=/opt/proxystack-sub
+SUB_USER=proxystack-sub
 RELEASE_BASE=${PSW_RELEASE_BASE:-https://github.com/eagle/proxystack-web/releases/download}
+ROLE=panel
 VERSION=latest
 BINARY=""
 LISTEN=""
@@ -12,23 +18,43 @@ PORT=9443
 TLS=self-signed
 DOMAIN=""
 EMAIL=""
+SOURCE=main
+PUBLIC_KEY=""
+SUB_LISTEN=""
+SUB_PORT=""
+SUB_TLS_CERT=""
+SUB_TLS_KEY=""
 
 usage() {
     cat <<USAGE
 Usage: install.sh [options]
 
-  --version VERSION   release version to install (default: latest)
-  --binary FILE       install a local proxystack-web binary instead of downloading
-  --listen ADDR       panel listen address (default 0.0.0.0, or 127.0.0.1 with --tls proxy)
-  --port PORT         panel port (default 9443)
-  --tls MODE          self-signed | acme | proxy (default self-signed)
-  --domain DOMAIN     panel domain
-  --email EMAIL       ACME account email
+  --role ROLE           panel | sub | all (default: panel)
+  --version VERSION     release version to install (default: latest)
+  --binary FILE         install a local proxystack-web binary instead of downloading
+
+Panel options:
+  --listen ADDR         panel listen address (default 0.0.0.0, or 127.0.0.1 with --tls proxy)
+  --port PORT           panel port (default 9443)
+  --tls MODE            self-signed | acme | proxy (default self-signed)
+  --domain DOMAIN       panel domain
+  --email EMAIL         ACME account email
+
+Subscription server options:
+  --source NAME         the panel's source name (default: main)
+  --public-key KEY      the panel's subscription public key (ed25519:...), shown on its 发布订阅包 page
+  --sub-listen ADDR     listen address (default 0.0.0.0)
+  --sub-port PORT       listen port (default 9444)
+  --sub-tls-cert FILE   TLS certificate (readable by the $SUB_USER user)
+  --sub-tls-key FILE    TLS private key
+
+Running with --role sub on a machine that already has a subscription server upgrades its binary.
 USAGE
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --role) ROLE=$2; shift 2 ;;
         --version) VERSION=$2; shift 2 ;;
         --binary) BINARY=$2; shift 2 ;;
         --listen) LISTEN=$2; shift 2 ;;
@@ -36,6 +62,12 @@ while [[ $# -gt 0 ]]; do
         --tls) TLS=$2; shift 2 ;;
         --domain) DOMAIN=$2; shift 2 ;;
         --email) EMAIL=$2; shift 2 ;;
+        --source) SOURCE=$2; shift 2 ;;
+        --public-key) PUBLIC_KEY=$2; shift 2 ;;
+        --sub-listen) SUB_LISTEN=$2; shift 2 ;;
+        --sub-port) SUB_PORT=$2; shift 2 ;;
+        --sub-tls-cert) SUB_TLS_CERT=$2; shift 2 ;;
+        --sub-tls-key) SUB_TLS_KEY=$2; shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -44,12 +76,28 @@ done
 die() { echo "error: $*" >&2; exit 1; }
 log() { echo "==> $*"; }
 
+case "$ROLE" in
+    panel|sub|all) ;;
+    *) die "--role must be panel, sub or all" ;;
+esac
+
 [[ $(id -u) -eq 0 ]] || die "run as root"
 command -v systemctl >/dev/null || die "systemd is required"
 [[ -d /run/systemd/system ]] || die "systemd is not the running init system"
 SYSTEMD_VERSION=$(systemctl --version | awk 'NR==1 {print $2}')
 [[ ${SYSTEMD_VERSION:-0} -ge 226 ]] || die "systemd >= 226 is required (found ${SYSTEMD_VERSION})"
-[[ -e $BASE/data/proxystack.db ]] && die "$BASE is already initialized; use the panel to upgrade"
+
+SUB_UPGRADE=0
+if [[ $ROLE != sub ]]; then
+    [[ -e $BASE/data/proxystack.db ]] && die "$BASE is already initialized; use the panel to upgrade"
+fi
+if [[ $ROLE != panel && -e $SUB_BASE/config.yaml ]]; then
+    [[ $ROLE == all ]] && die "$SUB_BASE is already initialized"
+    SUB_UPGRADE=1
+fi
+if [[ $ROLE == sub && $SUB_UPGRADE -eq 0 && -z $PUBLIC_KEY ]]; then
+    die "--public-key is required (copy it from the panel's 发布订阅包 page)"
+fi
 
 case "$(uname -m)" in
     x86_64|amd64) ARCH=amd64 ;;
@@ -78,8 +126,12 @@ install_polkit() {
     systemctl reload dbus.service 2>/dev/null || systemctl reload dbus-broker.service 2>/dev/null || true
 }
 
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+
+# fetch_binary 把二进制准备到 $WORK/proxystack-web，管理端和订阅端各自安装一份。
 fetch_binary() {
-    local dest=$1
+    local dest=$WORK/proxystack-web
     if [[ -n $BINARY ]]; then
         install -m 0755 "$BINARY" "$dest"
         return
@@ -91,14 +143,11 @@ fetch_binary() {
         url_base="$RELEASE_BASE/$VERSION"
     fi
     local asset="proxystack-web-linux-$ARCH"
-    local tmp
-    tmp=$(mktemp -d)
-    trap 'rm -rf "$tmp"' RETURN
     log "downloading $asset ($VERSION)"
-    curl -fsSL -o "$tmp/$asset" "$url_base/$asset"
-    curl -fsSL -o "$tmp/$asset.sha256" "$url_base/$asset.sha256"
-    (cd "$tmp" && sha256sum -c "$asset.sha256" >/dev/null) || die "sha256 mismatch for $asset"
-    install -m 0755 "$tmp/$asset" "$dest"
+    curl -fsSL -o "$WORK/$asset" "$url_base/$asset"
+    curl -fsSL -o "$WORK/$asset.sha256" "$url_base/$asset.sha256"
+    (cd "$WORK" && sha256sum -c "$asset.sha256" >/dev/null) || die "sha256 mismatch for $asset"
+    install -m 0755 "$WORK/$asset" "$dest"
 }
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -115,43 +164,115 @@ asset_file() {
     fi
 }
 
-install_polkit
+create_account() {
+    local user=$1 home=$2
+    if ! id -u "$user" >/dev/null 2>&1; then
+        useradd --system --home-dir "$home" --no-create-home --shell /usr/sbin/nologin "$user"
+    fi
+}
 
-log "creating service account $SERVICE_USER"
-if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
-    useradd --system --home-dir "$BASE" --no-create-home --shell /usr/sbin/nologin "$SERVICE_USER"
+install_panel() {
+    install_polkit
+
+    log "creating service account $SERVICE_USER"
+    create_account "$SERVICE_USER" "$BASE"
+    getent group systemd-journal >/dev/null && usermod -a -G systemd-journal "$SERVICE_USER"
+
+    log "creating $BASE"
+    install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_USER" \
+        "$BASE" "$BASE/bin" "$BASE/geo" "$BASE/data" "$BASE/data/tls" \
+        "$BASE/runtime" "$BASE/runtime/generated" "$BASE/runtime/generated/xray" "$BASE/runtime/generated/mihomo" \
+        "$BASE/runtime/mihomo" "$BASE/backups" "$BASE/downloads"
+
+    install -m 0755 -o "$SERVICE_USER" -g "$SERVICE_USER" "$WORK/proxystack-web" "$BASE/bin/proxystack-web"
+    ln -sf "$BASE/bin/proxystack-web" /usr/local/bin/proxystack-web
+
+    log "writing systemd units and polkit rule"
+    asset_file systemd/proxystack-web.service /etc/systemd/system/proxystack-web.service
+    asset_file systemd/psw-xray@.service /etc/systemd/system/psw-xray@.service
+    asset_file systemd/psw-mihomo@.service /etc/systemd/system/psw-mihomo@.service
+    install -d -m 0755 /etc/polkit-1/rules.d
+    asset_file polkit/50-proxystack-web.rules /etc/polkit-1/rules.d/50-proxystack-web.rules
+    systemctl daemon-reload
+    systemctl restart polkit.service || die "polkit failed to start; check 'journalctl -u polkit'"
+    systemctl is-active --quiet polkit.service || die "polkit is not running; check 'journalctl -u polkit'"
+
+    log "initializing database"
+    local args=(--base-dir "$BASE" init --port "$PORT" --tls "$TLS")
+    [[ -n $LISTEN ]] && args+=(--listen "$LISTEN")
+    [[ -n $DOMAIN ]] && args+=(--domain "$DOMAIN")
+    [[ -n $EMAIL ]] && args+=(--email "$EMAIL")
+    PANEL_OUTPUT=$(runuser -u "$SERVICE_USER" -- "$BASE/bin/proxystack-web" "${args[@]}")
+
+    log "starting proxystack-web.service"
+    systemctl enable --now proxystack-web.service
+}
+
+install_sub() {
+    if [[ $SUB_UPGRADE -eq 1 ]]; then
+        # 卸载时保留配置和订阅包后重新安装也走这里，bin 目录和 unit 可能已不存在。
+        log "upgrading the subscription server binary"
+        create_account "$SUB_USER" "$SUB_BASE"
+        install -d -m 0750 -o "$SUB_USER" -g "$SUB_USER" "$SUB_BASE/bin"
+        install -m 0755 -o "$SUB_USER" -g "$SUB_USER" "$WORK/proxystack-web" "$SUB_BASE/bin/proxystack-web"
+        [[ -e /usr/local/bin/proxystack-web ]] || ln -s "$SUB_BASE/bin/proxystack-web" /usr/local/bin/proxystack-web
+        asset_file systemd/proxystack-sub.service /etc/systemd/system/proxystack-sub.service
+        systemctl daemon-reload
+        systemctl enable proxystack-sub.service
+        systemctl restart proxystack-sub.service
+        SUB_OUTPUT=$("$SUB_BASE/bin/proxystack-web" sub --dir "$SUB_BASE" status)
+        return
+    fi
+
+    log "creating service account $SUB_USER"
+    create_account "$SUB_USER" "$SUB_BASE"
+
+    log "creating $SUB_BASE"
+    install -d -m 0750 -o "$SUB_USER" -g "$SUB_USER" "$SUB_BASE" "$SUB_BASE/bin" "$SUB_BASE/data"
+    # 收件目录允许同组写入，便于把运维账号加入 proxystack-sub 组后直接放入订阅包。
+    install -d -m 2770 -o "$SUB_USER" -g "$SUB_USER" "$SUB_BASE/inbox"
+    install -m 0755 -o "$SUB_USER" -g "$SUB_USER" "$WORK/proxystack-web" "$SUB_BASE/bin/proxystack-web"
+    [[ -e /usr/local/bin/proxystack-web ]] || ln -s "$SUB_BASE/bin/proxystack-web" /usr/local/bin/proxystack-web
+
+    log "writing configuration"
+    local args=(sub --dir "$SUB_BASE" init --source "$SOURCE" --public-key "$PUBLIC_KEY")
+    [[ -n $SUB_LISTEN ]] && args+=(--listen "$SUB_LISTEN")
+    [[ -n $SUB_PORT ]] && args+=(--port "$SUB_PORT")
+    [[ -n $SUB_TLS_CERT ]] && args+=(--tls-cert "$SUB_TLS_CERT" --tls-key "$SUB_TLS_KEY")
+    runuser -u "$SUB_USER" -- "$SUB_BASE/bin/proxystack-web" "${args[@]}" >/dev/null
+
+    log "writing systemd unit"
+    asset_file systemd/proxystack-sub.service /etc/systemd/system/proxystack-sub.service
+    systemctl daemon-reload
+
+    log "starting proxystack-sub.service"
+    systemctl enable --now proxystack-sub.service
+    SUB_OUTPUT=$("$SUB_BASE/bin/proxystack-web" sub --dir "$SUB_BASE" status)
+}
+
+PANEL_OUTPUT=""
+SUB_OUTPUT=""
+fetch_binary
+if [[ $ROLE != sub ]]; then
+    install_panel
 fi
-getent group systemd-journal >/dev/null && usermod -a -G systemd-journal "$SERVICE_USER"
+if [[ $ROLE == all ]]; then
+    read -r SOURCE PUBLIC_KEY < <(runuser -u "$SERVICE_USER" -- "$BASE/bin/proxystack-web" --base-dir "$BASE" info --sub-key)
+fi
+if [[ $ROLE != panel ]]; then
+    install_sub
+fi
 
-log "creating $BASE"
-install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_USER" \
-    "$BASE" "$BASE/bin" "$BASE/geo" "$BASE/data" "$BASE/data/tls" \
-    "$BASE/runtime" "$BASE/runtime/generated" "$BASE/runtime/generated/xray" "$BASE/runtime/generated/mihomo" \
-    "$BASE/runtime/mihomo" "$BASE/backups" "$BASE/downloads"
-
-fetch_binary "$BASE/bin/proxystack-web"
-chown "$SERVICE_USER:$SERVICE_USER" "$BASE/bin/proxystack-web"
-ln -sf "$BASE/bin/proxystack-web" /usr/local/bin/proxystack-web
-
-log "writing systemd units and polkit rule"
-asset_file systemd/proxystack-web.service /etc/systemd/system/proxystack-web.service
-asset_file systemd/psw-xray@.service /etc/systemd/system/psw-xray@.service
-asset_file systemd/psw-mihomo@.service /etc/systemd/system/psw-mihomo@.service
-install -d -m 0755 /etc/polkit-1/rules.d
-asset_file polkit/50-proxystack-web.rules /etc/polkit-1/rules.d/50-proxystack-web.rules
-systemctl daemon-reload
-systemctl restart polkit.service || die "polkit failed to start; check 'journalctl -u polkit'"
-systemctl is-active --quiet polkit.service || die "polkit is not running; check 'journalctl -u polkit'"
-
-log "initializing database"
-INIT_ARGS=(--base-dir "$BASE" init --port "$PORT" --tls "$TLS")
-[[ -n $LISTEN ]] && INIT_ARGS+=(--listen "$LISTEN")
-[[ -n $DOMAIN ]] && INIT_ARGS+=(--domain "$DOMAIN")
-[[ -n $EMAIL ]] && INIT_ARGS+=(--email "$EMAIL")
-INIT_OUTPUT=$(runuser -u "$SERVICE_USER" -- "$BASE/bin/proxystack-web" "${INIT_ARGS[@]}")
-
-log "starting proxystack-web.service"
-systemctl enable --now proxystack-web.service
-
-echo
-echo "$INIT_OUTPUT"
+if [[ -n $PANEL_OUTPUT ]]; then
+    echo
+    echo "$PANEL_OUTPUT"
+fi
+if [[ -n $SUB_OUTPUT ]]; then
+    echo
+    echo "Subscription server ($SUB_BASE):"
+    echo "$SUB_OUTPUT"
+    echo
+    echo "Publish a bundle on the panel's 发布订阅包 page, copy it here, then run"
+    echo "  proxystack-web sub --dir $SUB_BASE import FILE"
+    echo "or drop it into $SUB_BASE/inbox/."
+fi
