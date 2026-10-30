@@ -1,0 +1,13 @@
+// 允许 proxystack-web 服务账号启停 psw-xray@*.service 和 psw-mihomo@*.service，不授予其他 unit 的权限。
+polkit.addRule(function (action, subject) {
+    if (action.id !== "org.freedesktop.systemd1.manage-units" || subject.user !== "proxystack-web") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    var unit = action.lookup("unit");
+    var verb = action.lookup("verb");
+    if (unit && /^psw-(xray|mihomo)@[A-Za-z0-9_][A-Za-z0-9_.-]*\.service$/.test(unit) &&
+        (verb === "start" || verb === "stop" || verb === "restart")) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

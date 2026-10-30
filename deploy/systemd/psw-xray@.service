@@ -1,0 +1,24 @@
+[Unit]
+Description=proxystack-web xray %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=proxystack-web
+Group=proxystack-web
+Environment=XRAY_LOCATION_ASSET=/opt/proxystack-web/geo
+ExecStart=/opt/proxystack-web/bin/xray run -config /opt/proxystack-web/runtime/generated/xray/%i.json
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=1048576
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadOnlyPaths=/opt/proxystack-web
+
+[Install]
+WantedBy=multi-user.target
