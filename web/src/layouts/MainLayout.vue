@@ -22,8 +22,20 @@ const link = (name: string, label: string): MenuOption => ({
   label: () => h(RouterLink, { to: { name } }, { default: () => label }),
 })
 
-const menu: MenuOption[] = [link('dashboard', '总览'), link('system', '系统')]
-const active = computed(() => String(route.name ?? ''))
+const menu: MenuOption[] = [
+  link('dashboard', '总览'),
+  link('stacks', 'Stack'),
+  link('users', '用户'),
+  link('history', '配置历史'),
+  link('backup', '备份'),
+  link('settings', '系统设置'),
+  link('system', '系统'),
+]
+const parents: Record<string, string> = { stack: 'stacks', user: 'users' }
+const active = computed(() => {
+  const name = String(route.name ?? '')
+  return parents[name] ?? name
+})
 const title = computed(() => String(route.meta.title ?? ''))
 
 const accountOptions = [

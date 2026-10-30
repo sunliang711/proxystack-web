@@ -10,7 +10,6 @@ import (
 	"github.com/eagle/proxystack-web/internal/generator/xray"
 	"github.com/eagle/proxystack-web/internal/testutil"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -276,7 +275,7 @@ func loadExampleStackSet(t *testing.T) domain.StackSet {
 	testutil.ChdirRepo(t)
 	globalConfig, err := testutil.LoadConfig("tests/fixtures/example-project/config.yaml")
 	require.NoError(t, err)
-	stackSet, err := testutil.LoadStacks(globalConfig, false)
+	stackSet, err := testutil.LoadStacks(globalConfig, "tests/fixtures/example-project/config.yaml", false)
 	require.NoError(t, err)
 	return stackSet
 }
@@ -336,14 +335,7 @@ clash:
 }
 
 func parseStack(data string) (domain.Stack, error) {
-	var stack domain.Stack
-	if err := yaml.Unmarshal([]byte(data), &stack); err != nil {
-		return domain.Stack{}, err
-	}
-	if err := stack.Validate(); err != nil {
-		return domain.Stack{}, err
-	}
-	return stack, nil
+	return testutil.ParseStack([]byte(data))
 }
 
 func inboundMatrixYAML() string {

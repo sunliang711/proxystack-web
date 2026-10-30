@@ -253,7 +253,7 @@ func renderXraySocks5Proxy(stackSet domain.StackSet, referenceGraph graph.Refere
 			pair("type", scalar("socks5")),
 			pair("server", scalar(domain.NormalizeInternalEndpointAddress(inbound.Listen))),
 			pair("port", intScalar(inbound.Port)),
-			pair("udp", boolScalar(inbound.UDP)),
+			pair("udp", boolScalar(inbound.UDPEnabled())),
 		}
 		if inbound.Auth != nil && inbound.Auth.Type == "password" {
 			pairs = append(pairs,

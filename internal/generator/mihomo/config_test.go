@@ -9,7 +9,6 @@ import (
 	"github.com/eagle/proxystack-web/internal/generator/mihomo"
 	"github.com/eagle/proxystack-web/internal/testutil"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 )
 
 // TestRenderMihomoExamplesMatchGolden 验证示例 stack 生成稳定 mihomo YAML。
@@ -146,7 +145,7 @@ func loadExampleStackSet(t *testing.T) domain.StackSet {
 	testutil.ChdirRepo(t)
 	globalConfig, err := testutil.LoadConfig("tests/fixtures/example-project/config.yaml")
 	require.NoError(t, err)
-	stackSet, err := testutil.LoadStacks(globalConfig, false)
+	stackSet, err := testutil.LoadStacks(globalConfig, "tests/fixtures/example-project/config.yaml", false)
 	require.NoError(t, err)
 	return stackSet
 }
@@ -161,9 +160,8 @@ func loadGlobalConfig(t *testing.T) domain.GlobalConfig {
 
 func parseStack(t *testing.T, content string) domain.Stack {
 	t.Helper()
-	var stack domain.Stack
-	require.NoError(t, yaml.Unmarshal([]byte(content), &stack))
-	require.NoError(t, stack.Validate())
+	stack, err := testutil.ParseStack([]byte(content))
+	require.NoError(t, err)
 	return stack
 }
 

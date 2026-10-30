@@ -57,6 +57,11 @@ type Server struct {
 	handler http.Handler
 }
 
+func init() {
+	// 响应中的列表总是输出 []，请求体也按非空列表校验，前端类型因此不含 null。
+	huma.DefaultArrayNullable = false
+}
+
 // NewConfig 返回 Huma 配置；OpenAPI 文档与交互文档不对外暴露。
 func NewConfig() huma.Config {
 	config := huma.DefaultConfig("proxystack-web", version.Version)
@@ -110,6 +115,7 @@ func OpenAPI() *huma.OpenAPI {
 func (s *Server) register(api huma.API) {
 	registerAuth(api, s)
 	registerSystem(api, s)
+	registerConfig(api, s)
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.handler.ServeHTTP(w, r) }
@@ -212,11 +218,24 @@ func securityHeaders(next http.Handler) http.Handler {
 // toHTTPError 把应用层错误映射为 HTTP 错误；未知错误只记录日志，不把细节返回给客户端。
 func toHTTPError(err error) error {
 	var fe *app.FieldError
+	var ve *app.ValidationError
 	switch {
 	case err == nil:
 		return nil
 	case errors.As(err, &fe):
 		return huma.Error422UnprocessableEntity("validation failed", &huma.ErrorDetail{Location: "body." + fe.Field, Message: fe.Message})
+	case errors.As(err, &ve):
+		details := make([]error, 0, len(ve.Issues))
+		for _, issue := range ve.Translate() {
+			location := ""
+			if issue.Field != "" {
+				location = "body." + issue.Field
+			}
+			details = append(details, &huma.ErrorDetail{Location: location, Message: issue.Message})
+		}
+		return huma.Error422UnprocessableEntity("validation failed", details...)
+	case errors.Is(err, app.ErrNotFound):
+		return huma.Error404NotFound(err.Error())
 	case errors.Is(err, app.ErrInvalidCredentials), errors.Is(err, app.ErrUnauthenticated):
 		return huma.Error401Unauthorized(err.Error())
 	case errors.Is(err, app.ErrAccountLocked):

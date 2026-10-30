@@ -158,7 +158,7 @@ clash:
 `), 0o644))
 	globalConfig, err := testutil.LoadConfig(filepath.Join(baseDir, "config.yaml"))
 	require.NoError(t, err)
-	stackSet, err := testutil.LoadStacks(globalConfig, false)
+	stackSet, err := testutil.LoadStacks(globalConfig, filepath.Join(baseDir, "config.yaml"), false)
 	require.NoError(t, err)
 
 	input, err := subgen.RenderSingleStackInputAt(stackSet, "edge", fixedGeneratedAt)
@@ -260,7 +260,7 @@ clash:
 `), 0o644))
 	globalConfig, err := testutil.LoadConfig(filepath.Join(baseDir, "config.yaml"))
 	require.NoError(t, err)
-	stackSet, err := testutil.LoadStacks(globalConfig, false)
+	stackSet, err := testutil.LoadStacks(globalConfig, filepath.Join(baseDir, "config.yaml"), false)
 	require.NoError(t, err)
 
 	input, err := subgen.RenderSingleStackInputAt(stackSet, "edge", fixedGeneratedAt)
@@ -350,7 +350,7 @@ func TestRenderStackInputUsesGenericUserRefs(t *testing.T) {
 // TestRenderStackInputRejectsDuplicateProxyName 验证订阅 input 生成阶段会拒绝同一 user 下重复节点名。
 func TestRenderStackInputRejectsDuplicateProxyName(t *testing.T) {
 	stackSet := domain.StackSet{
-		Config: domain.GlobalConfig{ExternalHost: "proxy.example.com", Subscription: domain.SubscriptionConfig{Source: "local"}},
+		Config: domain.GlobalConfig{ExternalHost: "proxy.example.com"},
 		Stacks: []domain.Stack{
 			{
 				Name:    "edge",
@@ -466,7 +466,7 @@ clash:
 `), 0o644))
 	globalConfig, err := testutil.LoadConfig(filepath.Join(baseDir, "config.yaml"))
 	require.NoError(t, err)
-	stackSet, err := testutil.LoadStacks(globalConfig, false)
+	stackSet, err := testutil.LoadStacks(globalConfig, filepath.Join(baseDir, "config.yaml"), false)
 	require.NoError(t, err)
 
 	input, err := subgen.RenderSingleStackInputAt(stackSet, "edge", fixedGeneratedAt)

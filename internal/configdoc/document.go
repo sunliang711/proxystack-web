@@ -1,0 +1,354 @@
+// Package configdoc 定义配置的规范文档：实体之间按名字引用，可序列化为 YAML/JSON。
+//
+// 同一份结构用于数据库组装后的内存模型、表单 API 的请求体、配置修订快照和导入导出文件。
+// 实体带有数据库 ID（导出时清空），引用一律写名字，改名时由本包同步改写引用方。
+package configdoc
+
+// 文件头常量。
+const (
+	Schema  = "proxystack-web.config"
+	Version = 1
+)
+
+// 三态取值：继承全局默认 / 开 / 关。
+const (
+	Inherit = "inherit"
+	On      = "on"
+	Off     = "off"
+)
+
+// 凭据处理方式。
+const (
+	SecretsPlain     = "plain"
+	SecretsEncrypted = "encrypted"
+	SecretsOmitted   = "omitted"
+)
+
+// Document 是完整或部分配置。
+type Document struct {
+	Schema     string      `json:"schema" yaml:"schema"`
+	Version    int         `json:"version" yaml:"version"`
+	ExportedAt string      `json:"exported_at,omitempty" yaml:"exported_at,omitempty"`
+	Scope      string      `json:"scope,omitempty" yaml:"scope,omitempty"`
+	Secrets    string      `json:"secrets,omitempty" yaml:"secrets,omitempty"`
+	Encryption *Encryption `json:"encryption,omitempty" yaml:"encryption,omitempty"`
+	Settings   *Settings   `json:"settings,omitempty" yaml:"settings,omitempty"`
+	Users      []User      `json:"users,omitempty" yaml:"users,omitempty"`
+	Stacks     []Stack     `json:"stacks,omitempty" yaml:"stacks,omitempty"`
+}
+
+// Encryption 描述口令加密参数。
+type Encryption struct {
+	KDF    string `json:"kdf" yaml:"kdf"`
+	Salt   string `json:"salt" yaml:"salt"`
+	Time   uint32 `json:"time" yaml:"time"`
+	Memory uint32 `json:"memory" yaml:"memory"`
+	Check  string `json:"check" yaml:"check"`
+}
+
+// Settings 是参与配置生成的全局设置。
+type Settings struct {
+	Basic     BasicSettings    `json:"basic" yaml:"basic"`
+	PortPools PortPools        `json:"port_pools" yaml:"port_pools"`
+	Defaults  DefaultsSettings `json:"defaults" yaml:"defaults"`
+	Security  SecuritySettings `json:"security" yaml:"security"`
+}
+
+// BasicSettings 是基本设置。
+type BasicSettings struct {
+	ExternalHost string `json:"external_host" yaml:"external_host" doc:"订阅节点默认 server，域名或 IP"`
+	Timezone     string `json:"timezone" yaml:"timezone" doc:"流量统计周期边界使用的时区"`
+}
+
+// PortRange 是闭区间端口池。
+type PortRange struct {
+	Start int `json:"start" yaml:"start" minimum:"1" maximum:"65535"`
+	End   int `json:"end" yaml:"end" minimum:"1" maximum:"65535"`
+}
+
+// PortPools 是各类端口的自动分配区间。
+type PortPools struct {
+	XrayInbound      PortRange `json:"xray_inbound" yaml:"xray_inbound"`
+	MihomoSocks      PortRange `json:"mihomo_socks" yaml:"mihomo_socks"`
+	MihomoHTTP       PortRange `json:"mihomo_http" yaml:"mihomo_http"`
+	XrayAPI          PortRange `json:"xray_api" yaml:"xray_api"`
+	MihomoController PortRange `json:"mihomo_controller" yaml:"mihomo_controller"`
+}
+
+// DefaultsSettings 是 stack 未覆盖时使用的默认值。
+type DefaultsSettings struct {
+	Mihomo MihomoDefaults `json:"mihomo" yaml:"mihomo"`
+	Xray   XrayDefaults   `json:"xray" yaml:"xray"`
+}
+
+// MihomoDefaults 是 mihomo 默认值。
+type MihomoDefaults struct {
+	Mode     string `json:"mode" yaml:"mode" enum:"Rule,Global,Direct"`
+	LogLevel string `json:"loglevel" yaml:"loglevel" enum:"debug,info,warning,error,silent"`
+}
+
+// XrayDefaults 是 xray 默认值。
+type XrayDefaults struct {
+	LogLevel    string   `json:"loglevel" yaml:"loglevel" enum:"debug,info,warning,error,none"`
+	APIEnabled  bool     `json:"api_enabled" yaml:"api_enabled"`
+	APIServices []string `json:"api_services" yaml:"api_services" enum:"HandlerService,StatsService"`
+	Stats       bool     `json:"stats" yaml:"stats"`
+	Policy      Policy   `json:"policy" yaml:"policy"`
+}
+
+// Policy 是 xray policy 默认值：level 0 的用户统计和 system 的入站/出站统计。
+type Policy struct {
+	Enabled               bool `json:"enabled" yaml:"enabled"`
+	StatsUserUplink       bool `json:"stats_user_uplink" yaml:"stats_user_uplink"`
+	StatsUserDownlink     bool `json:"stats_user_downlink" yaml:"stats_user_downlink"`
+	StatsInboundUplink    bool `json:"stats_inbound_uplink" yaml:"stats_inbound_uplink"`
+	StatsInboundDownlink  bool `json:"stats_inbound_downlink" yaml:"stats_inbound_downlink"`
+	StatsOutboundUplink   bool `json:"stats_outbound_uplink" yaml:"stats_outbound_uplink"`
+	StatsOutboundDownlink bool `json:"stats_outbound_downlink" yaml:"stats_outbound_downlink"`
+}
+
+// SecuritySettings 是安全校验开关。
+type SecuritySettings struct {
+	RequireAuthForPublicSocksHTTP bool `json:"require_auth_for_public_socks_http" yaml:"require_auth_for_public_socks_http"`
+	AllowNoAuthPublic             bool `json:"allow_noauth_public" yaml:"allow_noauth_public"`
+}
+
+// User 是订阅用户，自身即 default 档案。
+type User struct {
+	ID              int64     `json:"id,omitempty" yaml:"-"`
+	Name            string    `json:"name" yaml:"name"`
+	Enabled         bool      `json:"enabled" yaml:"enabled"`
+	UUID            string    `json:"uuid" yaml:"uuid"`
+	SSPassword      string    `json:"ss_password" yaml:"ss_password"`
+	Remark          string    `json:"remark" yaml:"remark,omitempty"`
+	DisplayTemplate string    `json:"display_template" yaml:"display_template,omitempty"`
+	Tag             string    `json:"tag" yaml:"tag,omitempty"`
+	SubToken        string    `json:"sub_token" yaml:"sub_token"`
+	QuotaBytes      int64     `json:"quota_bytes" yaml:"quota_bytes" minimum:"0"`
+	ResetMode       string    `json:"reset_mode" yaml:"reset_mode" enum:"none,monthly"`
+	ResetDay        int       `json:"reset_day" yaml:"reset_day" minimum:"0" maximum:"28"`
+	ExpireAt        string    `json:"expire_at" yaml:"expire_at,omitempty" doc:"RFC 3339 时间，空表示不过期"`
+	Note            string    `json:"note" yaml:"note,omitempty"`
+	Profiles        []Profile `json:"profiles" yaml:"profiles,omitempty"`
+}
+
+// Profile 是用户的额外凭据档案。
+type Profile struct {
+	ID              int64  `json:"id,omitempty" yaml:"-"`
+	Name            string `json:"name" yaml:"name"`
+	UUID            string `json:"uuid" yaml:"uuid"`
+	SSPassword      string `json:"ss_password" yaml:"ss_password"`
+	Remark          string `json:"remark" yaml:"remark,omitempty"`
+	DisplayTemplate string `json:"display_template" yaml:"display_template,omitempty"`
+	Tag             string `json:"tag" yaml:"tag,omitempty"`
+}
+
+// Stack 是一组 xray + mihomo 进程的配置。
+type Stack struct {
+	ID             int64    `json:"id,omitempty" yaml:"-"`
+	Name           string   `json:"name" yaml:"name"`
+	Enabled        bool     `json:"enabled" yaml:"enabled"`
+	DesiredRunning bool     `json:"desired_running" yaml:"desired_running"`
+	Role           string   `json:"role" yaml:"role" enum:"edge,auto"`
+	Labels         []string `json:"labels" yaml:"labels,omitempty"`
+	Xray           Xray     `json:"xray" yaml:"xray"`
+	Mihomo         Mihomo   `json:"mihomo" yaml:"mihomo"`
+}
+
+// Xray 是 stack 的 xray 部分。
+type Xray struct {
+	Enabled  bool      `json:"enabled" yaml:"enabled"`
+	LogLevel string    `json:"loglevel" yaml:"loglevel" enum:"inherit,debug,info,warning,error,none"`
+	API      string    `json:"api" yaml:"api" enum:"inherit,on,off"`
+	Stats    string    `json:"stats" yaml:"stats" enum:"inherit,on,off"`
+	Policy   string    `json:"policy" yaml:"policy" enum:"inherit,on,off"`
+	APIPort  int       `json:"api_port" yaml:"api_port" minimum:"1" maximum:"65535"`
+	Outbound Outbound  `json:"outbound" yaml:"outbound"`
+	Inbounds []Inbound `json:"inbounds" yaml:"inbounds"`
+}
+
+// Outbound 是 xray 唯一的出站。
+type Outbound struct {
+	Type          string `json:"type" yaml:"type" enum:"mihomo,socks5,http,direct" doc:"mihomo 表示转发到本 stack 的 mihomo socks 监听"`
+	Server        string `json:"server" yaml:"server,omitempty"`
+	Port          int    `json:"port" yaml:"port,omitempty" minimum:"0" maximum:"65535"`
+	Username      string `json:"username" yaml:"username,omitempty"`
+	Password      string `json:"password" yaml:"password,omitempty"`
+	PrivateDirect bool   `json:"private_direct" yaml:"private_direct,omitempty"`
+}
+
+// Inbound 是 xray 入站。
+type Inbound struct {
+	ID              int64             `json:"id,omitempty" yaml:"-"`
+	Name            string            `json:"name" yaml:"name"`
+	Protocol        string            `json:"protocol" yaml:"protocol" enum:"vmess,shadowsocks,socks5,http"`
+	Listen          string            `json:"listen" yaml:"listen"`
+	Port            int               `json:"port" yaml:"port" minimum:"1" maximum:"65535"`
+	Sub             bool              `json:"sub" yaml:"sub"`
+	UDP             bool              `json:"udp" yaml:"udp"`
+	Network         string            `json:"network" yaml:"network,omitempty" enum:",raw,ws,grpc"`
+	WSPath          string            `json:"ws_path" yaml:"ws_path,omitempty"`
+	WSHeaders       map[string]string `json:"ws_headers" yaml:"ws_headers,omitempty"`
+	GRPCServiceName string            `json:"grpc_service_name" yaml:"grpc_service_name,omitempty"`
+	Method          string            `json:"method" yaml:"method,omitempty"`
+	Password        string            `json:"password" yaml:"password,omitempty"`
+	AuthType        string            `json:"auth_type" yaml:"auth_type,omitempty" enum:",noauth,password"`
+	AuthUsername    string            `json:"auth_username" yaml:"auth_username,omitempty"`
+	AuthPassword    string            `json:"auth_password" yaml:"auth_password,omitempty"`
+	Users           []UserRef         `json:"users" yaml:"users,omitempty"`
+	Server          string            `json:"server" yaml:"server,omitempty"`
+	Remark          string            `json:"remark" yaml:"remark,omitempty"`
+	DisplayTemplate string            `json:"display_template" yaml:"display_template,omitempty"`
+	Region          string            `json:"region" yaml:"region,omitempty"`
+	Tag             string            `json:"tag" yaml:"tag,omitempty"`
+}
+
+// UserRef 是入站对用户档案的引用。
+type UserRef struct {
+	User            string `json:"user" yaml:"user"`
+	Profile         string `json:"profile" yaml:"profile,omitempty" doc:"空表示 default 档案"`
+	Remark          string `json:"remark" yaml:"remark,omitempty"`
+	DisplayTemplate string `json:"display_template" yaml:"display_template,omitempty"`
+	Tag             string `json:"tag" yaml:"tag,omitempty"`
+}
+
+// Mihomo 是 stack 的 mihomo 部分。
+type Mihomo struct {
+	Enabled          bool       `json:"enabled" yaml:"enabled"`
+	Mode             string     `json:"mode" yaml:"mode" enum:"inherit,Rule,Global,Direct"`
+	LogLevel         string     `json:"loglevel" yaml:"loglevel" enum:"inherit,debug,info,warning,error,silent"`
+	ControllerPort   int        `json:"controller_port" yaml:"controller_port" minimum:"1" maximum:"65535"`
+	ControllerSecret string     `json:"controller_secret" yaml:"controller_secret"`
+	Socks            Listener   `json:"socks" yaml:"socks"`
+	HTTP             Listener   `json:"http" yaml:"http"`
+	Upstreams        []Upstream `json:"upstreams" yaml:"upstreams"`
+	Groups           []Group    `json:"groups" yaml:"groups"`
+	Rules            Rules      `json:"rules" yaml:"rules"`
+}
+
+// 监听认证方式。
+const (
+	ListenerAuthInherit  = "inherit"
+	ListenerAuthNone     = "none"
+	ListenerAuthAccounts = "accounts"
+)
+
+// Listener 是 mihomo 本机监听。socks 监听总是启用，http 监听由 Enabled 控制。
+type Listener struct {
+	Enabled  bool              `json:"enabled" yaml:"enabled"`
+	Name     string            `json:"name" yaml:"name"`
+	Listen   string            `json:"listen" yaml:"listen"`
+	Port     int               `json:"port" yaml:"port" minimum:"0" maximum:"65535"`
+	Auth     string            `json:"auth" yaml:"auth" enum:"inherit,none,accounts"`
+	Accounts []ListenerAccount `json:"accounts" yaml:"accounts,omitempty"`
+}
+
+// ListenerAccount 是 mihomo 监听的认证账号。
+type ListenerAccount struct {
+	Username string `json:"username" yaml:"username"`
+	Password string `json:"password" yaml:"password"`
+}
+
+// Upstream 是 mihomo 上游代理。
+type Upstream struct {
+	ID      int64      `json:"id,omitempty" yaml:"-"`
+	Name    string     `json:"name" yaml:"name"`
+	Type    string     `json:"type" yaml:"type" enum:"raw,xray-socks5"`
+	Stack   string     `json:"stack" yaml:"stack,omitempty" doc:"type=xray-socks5 时引用的 stack"`
+	Inbound string     `json:"inbound" yaml:"inbound,omitempty" doc:"type=xray-socks5 时引用的 socks5 入站"`
+	Config  RawMapping `json:"config" yaml:"config,omitempty" doc:"type=raw 时的 mihomo 节点字段"`
+}
+
+// Group 是 mihomo 代理组。
+type Group struct {
+	ID       int64    `json:"id,omitempty" yaml:"-"`
+	Name     string   `json:"name" yaml:"name"`
+	Type     string   `json:"type" yaml:"type" enum:"select,url-test,load-balance,fallback"`
+	Proxies  []string `json:"proxies" yaml:"proxies"`
+	URL      string   `json:"url" yaml:"url,omitempty"`
+	Interval int      `json:"interval" yaml:"interval,omitempty" minimum:"0"`
+	Strategy string   `json:"strategy" yaml:"strategy,omitempty" enum:",consistent-hashing,round-robin,sticky-sessions"`
+}
+
+// Rules 是 mihomo 规则设置。
+type Rules struct {
+	Profile string `json:"profile" yaml:"profile" enum:"default"`
+	Final   string `json:"final" yaml:"final"`
+	Extra   []Rule `json:"extra" yaml:"extra,omitempty"`
+}
+
+// Rule 是一条附加规则。
+type Rule struct {
+	Type      string `json:"type" yaml:"type"`
+	Value     string `json:"value" yaml:"value"`
+	Target    string `json:"target" yaml:"target"`
+	NoResolve bool   `json:"no_resolve" yaml:"no_resolve,omitempty"`
+}
+
+// 内置策略名。
+const (
+	BuiltinDirect = "DIRECT"
+	BuiltinReject = "REJECT"
+)
+
+// UserByName 返回同名用户的下标，不存在时返回 -1。
+func (d *Document) UserByName(name string) int {
+	for index := range d.Users {
+		if d.Users[index].Name == name {
+			return index
+		}
+	}
+	return -1
+}
+
+// StackByName 返回同名 stack 的下标，不存在时返回 -1。
+func (d *Document) StackByName(name string) int {
+	for index := range d.Stacks {
+		if d.Stacks[index].Name == name {
+			return index
+		}
+	}
+	return -1
+}
+
+// UserByID 返回指定 ID 用户的下标，不存在时返回 -1。
+func (d *Document) UserByID(id int64) int {
+	for index := range d.Users {
+		if d.Users[index].ID == id {
+			return index
+		}
+	}
+	return -1
+}
+
+// StackByID 返回指定 ID stack 的下标，不存在时返回 -1。
+func (d *Document) StackByID(id int64) int {
+	for index := range d.Stacks {
+		if d.Stacks[index].ID == id {
+			return index
+		}
+	}
+	return -1
+}
+
+// InboundByName 返回 stack 内同名入站的下标，不存在时返回 -1。
+func (s *Stack) InboundByName(name string) int {
+	for index := range s.Xray.Inbounds {
+		if s.Xray.Inbounds[index].Name == name {
+			return index
+		}
+	}
+	return -1
+}
+
+// ProfileNames 返回用户全部档案名（含 default）。
+func (u *User) ProfileNames() []string {
+	names := []string{DefaultProfile}
+	for _, profile := range u.Profiles {
+		names = append(names, profile.Name)
+	}
+	return names
+}
+
+// DefaultProfile 是用户自身对应的档案名。
+const DefaultProfile = "default"

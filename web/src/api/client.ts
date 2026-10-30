@@ -44,3 +44,56 @@ export function fieldErrors(problem: ProblemDetail | undefined): Record<string, 
 export function problemMessage(problem: ProblemDetail | undefined, fallback = '请求失败'): string {
   return problem?.detail || problem?.title || fallback
 }
+
+/** 后端返回的凭据占位，保存时原样提交表示保持原值。 */
+export const MASKED = '••••••'
+
+/** 422 响应拆成字段错误（路径相对请求体）和无法定位到字段的错误。 */
+export interface FormErrors {
+  fields: Record<string, string>
+  global: string[]
+}
+
+export function splitProblem(problem: ProblemDetail | undefined, fallback = '保存失败'): FormErrors {
+  const out: FormErrors = { fields: {}, global: [] }
+  for (const e of problem?.errors ?? []) {
+    if (e.location?.startsWith('body.')) {
+      const path = e.location.slice(5)
+      out.fields[path] = out.fields[path] ? `${out.fields[path]}；${e.message ?? ''}` : (e.message ?? '')
+    } else if (e.message) {
+      out.global.push(e.message)
+    }
+  }
+  if (!problem?.errors?.length) {
+    out.global.push(problemMessage(problem, fallback))
+  }
+  return out
+}
+
+export function emptyErrors(): FormErrors {
+  return { fields: {}, global: [] }
+}
+
+/** NFormItem 的错误状态与提示。 */
+export function fieldState(errors: FormErrors, path: string, hint?: string) {
+  const message = errors.fields[path]
+  return {
+    validationStatus: message ? ('error' as const) : undefined,
+    feedback: message || hint,
+  }
+}
+
+/** 某个路径前缀下是否有错误（用于标签页和表格行标记）。 */
+export function hasErrorsUnder(errors: FormErrors, prefix: string): boolean {
+  return Object.keys(errors.fields).some((path) => path === prefix || path.startsWith(prefix + '.') || path.startsWith(prefix + '['))
+}
+
+/** 下载 Blob 为文件。 */
+export function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -14,15 +13,12 @@ import (
 )
 
 const (
-	defaultBaseDir           = "/opt/proxystack"
 	defaultXrayLogLevel      = "warning"
 	defaultClashLogLevel     = "info"
 	defaultClashMode         = "Rule"
 	defaultRuleProfile       = "default"
 	defaultXrayAPITag        = "api"
 	defaultXrayAPIListen     = "127.0.0.1:10085"
-	defaultInstallVersion    = "latest"
-	defaultInstallSource     = "auto"
 	defaultStackRole         = "edge"
 	defaultClashFinal        = "AllProxy"
 	defaultListenHost        = "0.0.0.0"
@@ -44,67 +40,10 @@ var shadowsocks2022KeyLengths = map[string]int{
 	"2022-blake3-chacha20-poly1305": 32,
 }
 
-// ConfigPaths 保存全局配置中的路径字段，所有相对路径均按运行时 base dir 解析。
-type ConfigPaths struct {
-	Bin       string `json:"bin" yaml:"bin" mapstructure:"bin"`
-	Geo       string `json:"geo" yaml:"geo" mapstructure:"geo"`
-	Stacks    string `json:"stacks" yaml:"stacks" mapstructure:"stacks"`
-	Runtime   string `json:"runtime" yaml:"runtime" mapstructure:"runtime"`
-	Generated string `json:"generated" yaml:"generated" mapstructure:"generated"`
-	Publish   string `json:"publish" yaml:"publish" mapstructure:"publish"`
-	Downloads string `json:"downloads" yaml:"downloads" mapstructure:"downloads"`
-	Sub       string `json:"sub" yaml:"sub" mapstructure:"sub"`
-}
-
-// DefaultConfigPaths 返回项目约定的默认目录结构。
-func DefaultConfigPaths() ConfigPaths {
-	return ConfigPaths{
-		Bin:       "bin",
-		Geo:       "geo",
-		Stacks:    "stacks",
-		Runtime:   "runtime",
-		Generated: "runtime/generated",
-		Publish:   "publish",
-		Downloads: "downloads",
-		Sub:       "sub",
-	}
-}
-
-// SubscriptionConfig 保存订阅来源配置。
-type SubscriptionConfig struct {
-	Source string `json:"source" yaml:"source" mapstructure:"source"`
-}
-
 // PortRange 表示一个闭区间端口池，支持 YAML 中的 start-end 字符串写法。
 type PortRange struct {
-	Start int `json:"start" yaml:"start" mapstructure:"start"`
-	End   int `json:"end" yaml:"end" mapstructure:"end"`
-}
-
-// UnmarshalYAML 支持端口范围从字符串或结构化对象两种格式加载。
-func (p *PortRange) UnmarshalYAML(value *yaml.Node) error {
-	if value.Kind == yaml.ScalarNode {
-		parts := strings.SplitN(value.Value, "-", 2)
-		if len(parts) != 2 {
-			return fmt.Errorf("port range must use start-end format")
-		}
-		start, err := strconv.Atoi(strings.TrimSpace(parts[0]))
-		if err != nil {
-			return fmt.Errorf("port range start must be an integer: %w", err)
-		}
-		end, err := strconv.Atoi(strings.TrimSpace(parts[1]))
-		if err != nil {
-			return fmt.Errorf("port range end must be an integer: %w", err)
-		}
-		p.Start = start
-		p.End = end
-		return p.Validate()
-	}
-	type raw PortRange
-	if err := value.Decode((*raw)(p)); err != nil {
-		return err
-	}
-	return p.Validate()
+	Start int `json:"start"`
+	End   int `json:"end"`
 }
 
 // Validate 校验端口范围边界和顺序。
@@ -143,11 +82,11 @@ func (p PortRange) Allocate(usedPorts map[int]bool, count int) ([]int, error) {
 
 // PortRanges 保存所有自动分配端口池。
 type PortRanges struct {
-	XrayInbound    PortRange `json:"xray_inbound" yaml:"xray_inbound" mapstructure:"xray_inbound"`
-	ClashSocks     PortRange `json:"clash_socks" yaml:"clash_socks" mapstructure:"clash_socks"`
-	ClashHTTP      PortRange `json:"clash_http" yaml:"clash_http" mapstructure:"clash_http"`
-	XrayAPIRange   PortRange `json:"xray_api_range" yaml:"xray_api_range" mapstructure:"xray_api_range"`
-	ClashControler PortRange `json:"clash_controller" yaml:"clash_controller" mapstructure:"clash_controller"`
+	XrayInbound    PortRange `json:"xray_inbound"`
+	ClashSocks     PortRange `json:"clash_socks"`
+	ClashHTTP      PortRange `json:"clash_http"`
+	XrayAPIRange   PortRange `json:"xray_api_range"`
+	ClashControler PortRange `json:"clash_controller"`
 }
 
 // Validate 校验所有端口池均为合法范围。
@@ -169,26 +108,17 @@ func (p PortRanges) Validate() error {
 
 // DefaultClashConfig 保存 mihomo 默认配置。
 type DefaultClashConfig struct {
-	Mode        string `json:"mode" yaml:"mode" mapstructure:"mode"`
-	LogLevel    string `json:"loglevel" yaml:"loglevel" mapstructure:"loglevel"`
-	RuleProfile string `json:"rule_profile" yaml:"rule_profile" mapstructure:"rule_profile"`
-}
-
-// UnmarshalYAML 在加载 mihomo 默认配置时补齐兼容默认值。
-func (d *DefaultClashConfig) UnmarshalYAML(value *yaml.Node) error {
-	*d = DefaultClashConfig{Mode: defaultClashMode, LogLevel: defaultClashLogLevel, RuleProfile: defaultRuleProfile}
-	type raw DefaultClashConfig
-	return value.Decode((*raw)(d))
+	Mode        string `json:"mode"`
+	LogLevel    string `json:"loglevel"`
+	RuleProfile string `json:"rule_profile"`
 }
 
 // XrayAPIConfig 保存 Xray API 配置，并记录 YAML 中显式写入的字段。
 type XrayAPIConfig struct {
-	Enabled  bool     `json:"enabled" yaml:"enabled" mapstructure:"enabled"`
-	Tag      string   `json:"tag" yaml:"tag" mapstructure:"tag"`
-	Listen   string   `json:"listen" yaml:"listen" mapstructure:"listen"`
-	Services []string `json:"services" yaml:"services" mapstructure:"services"`
-
-	fields map[string]bool `json:"-" yaml:"-"`
+	Enabled  bool     `json:"enabled"`
+	Tag      string   `json:"tag"`
+	Listen   string   `json:"listen"`
+	Services []string `json:"services"`
 }
 
 // DefaultXrayAPIConfig 返回 Xray API 默认配置。
@@ -199,14 +129,6 @@ func DefaultXrayAPIConfig() XrayAPIConfig {
 		Listen:   defaultXrayAPIListen,
 		Services: []string{"HandlerService", "StatsService"},
 	}
-}
-
-// UnmarshalYAML 在加载 API 配置时补齐默认值并保留显式字段集合。
-func (x *XrayAPIConfig) UnmarshalYAML(value *yaml.Node) error {
-	*x = DefaultXrayAPIConfig()
-	x.fields = yamlFields(value)
-	type raw XrayAPIConfig
-	return value.Decode((*raw)(x))
 }
 
 // HasService 判断 API 是否启用了指定服务。
@@ -221,57 +143,28 @@ func (x XrayAPIConfig) HasService(name string) bool {
 
 // XrayStatsConfig 保存 Xray stats 开关。
 type XrayStatsConfig struct {
-	Enabled bool `json:"enabled" yaml:"enabled" mapstructure:"enabled"`
-
-	fields map[string]bool `json:"-" yaml:"-"`
-}
-
-// UnmarshalYAML 在加载 stats 配置时补齐默认启用值。
-func (x *XrayStatsConfig) UnmarshalYAML(value *yaml.Node) error {
-	*x = XrayStatsConfig{Enabled: true, fields: yamlFields(value)}
-	type raw XrayStatsConfig
-	return value.Decode((*raw)(x))
+	Enabled bool `json:"enabled"`
 }
 
 // XrayPolicySystemConfig 保存 Xray system policy 统计开关。
 type XrayPolicySystemConfig struct {
-	StatsInboundUplink    *bool `json:"statsInboundUplink" yaml:"statsInboundUplink" mapstructure:"statsInboundUplink"`
-	StatsInboundDownlink  *bool `json:"statsInboundDownlink" yaml:"statsInboundDownlink" mapstructure:"statsInboundDownlink"`
-	StatsOutboundUplink   *bool `json:"statsOutboundUplink" yaml:"statsOutboundUplink" mapstructure:"statsOutboundUplink"`
-	StatsOutboundDownlink *bool `json:"statsOutboundDownlink" yaml:"statsOutboundDownlink" mapstructure:"statsOutboundDownlink"`
-
-	fields map[string]bool `json:"-" yaml:"-"`
-}
-
-// UnmarshalYAML 记录 system policy 中显式写入的统计字段。
-func (x *XrayPolicySystemConfig) UnmarshalYAML(value *yaml.Node) error {
-	*x = XrayPolicySystemConfig{fields: yamlFields(value)}
-	type raw XrayPolicySystemConfig
-	return value.Decode((*raw)(x))
+	StatsInboundUplink    *bool `json:"statsInboundUplink"`
+	StatsInboundDownlink  *bool `json:"statsInboundDownlink"`
+	StatsOutboundUplink   *bool `json:"statsOutboundUplink"`
+	StatsOutboundDownlink *bool `json:"statsOutboundDownlink"`
 }
 
 // XrayPolicyLevelConfig 保存 Xray level policy 用户统计开关。
 type XrayPolicyLevelConfig struct {
-	StatsUserUplink   *bool `json:"statsUserUplink" yaml:"statsUserUplink" mapstructure:"statsUserUplink"`
-	StatsUserDownlink *bool `json:"statsUserDownlink" yaml:"statsUserDownlink" mapstructure:"statsUserDownlink"`
-
-	fields map[string]bool `json:"-" yaml:"-"`
-}
-
-// UnmarshalYAML 记录 level policy 中显式写入的统计字段。
-func (x *XrayPolicyLevelConfig) UnmarshalYAML(value *yaml.Node) error {
-	*x = XrayPolicyLevelConfig{fields: yamlFields(value)}
-	type raw XrayPolicyLevelConfig
-	return value.Decode((*raw)(x))
+	StatsUserUplink   *bool `json:"statsUserUplink"`
+	StatsUserDownlink *bool `json:"statsUserDownlink"`
 }
 
 // XrayPolicyConfig 保存 Xray policy 配置。
 type XrayPolicyConfig struct {
-	Enabled bool                             `json:"enabled" yaml:"enabled" mapstructure:"enabled"`
-	Levels  map[string]XrayPolicyLevelConfig `json:"levels" yaml:"levels" mapstructure:"levels"`
-	System  XrayPolicySystemConfig           `json:"system" yaml:"system" mapstructure:"system"`
-
-	fields map[string]bool `json:"-" yaml:"-"`
+	Enabled bool                             `json:"enabled"`
+	Levels  map[string]XrayPolicyLevelConfig `json:"levels"`
+	System  XrayPolicySystemConfig           `json:"system"`
 }
 
 // DefaultXrayPolicyConfig 返回默认 Xray policy 配置。
@@ -289,45 +182,18 @@ func DefaultXrayPolicyConfig() XrayPolicyConfig {
 	}
 }
 
-// UnmarshalYAML 在加载 policy 配置时补齐默认 levels 并记录显式字段。
-func (x *XrayPolicyConfig) UnmarshalYAML(value *yaml.Node) error {
-	*x = DefaultXrayPolicyConfig()
-	x.fields = yamlFields(value)
-	type raw XrayPolicyConfig
-	return value.Decode((*raw)(x))
-}
-
 // DefaultXrayConfig 保存 xray 默认值。
 type DefaultXrayConfig struct {
-	LogLevel string           `json:"loglevel" yaml:"loglevel" mapstructure:"loglevel"`
-	API      XrayAPIConfig    `json:"api" yaml:"api" mapstructure:"api"`
-	Stats    XrayStatsConfig  `json:"stats" yaml:"stats" mapstructure:"stats"`
-	Policy   XrayPolicyConfig `json:"policy" yaml:"policy" mapstructure:"policy"`
-}
-
-// UnmarshalYAML 在加载 xray 默认配置时补齐默认值。
-func (d *DefaultXrayConfig) UnmarshalYAML(value *yaml.Node) error {
-	*d = DefaultXrayConfig{
-		LogLevel: defaultXrayLogLevel,
-		API:      DefaultXrayAPIConfig(),
-		Stats:    XrayStatsConfig{Enabled: true},
-		Policy:   DefaultXrayPolicyConfig(),
-	}
-	type raw DefaultXrayConfig
-	return value.Decode((*raw)(d))
+	LogLevel string           `json:"loglevel"`
+	API      XrayAPIConfig    `json:"api"`
+	Stats    XrayStatsConfig  `json:"stats"`
+	Policy   XrayPolicyConfig `json:"policy"`
 }
 
 // DefaultsConfig 保存全局默认值配置。
 type DefaultsConfig struct {
-	Clash DefaultClashConfig `json:"clash" yaml:"clash" mapstructure:"clash"`
-	Xray  DefaultXrayConfig  `json:"xray" yaml:"xray" mapstructure:"xray"`
-}
-
-// UnmarshalYAML 在加载全局默认值时补齐旧配置兼容默认。
-func (d *DefaultsConfig) UnmarshalYAML(value *yaml.Node) error {
-	*d = DefaultDefaultsConfig()
-	type raw DefaultsConfig
-	return value.Decode((*raw)(d))
+	Clash DefaultClashConfig `json:"clash"`
+	Xray  DefaultXrayConfig  `json:"xray"`
 }
 
 // DefaultDefaultsConfig 返回完整默认值配置。
@@ -349,125 +215,31 @@ func DefaultDefaultsConfig() DefaultsConfig {
 
 // SecurityConfig 保存安全校验开关。
 type SecurityConfig struct {
-	RequireAuthForPublicSocksHTTP bool `json:"require_auth_for_public_socks_http" yaml:"require_auth_for_public_socks_http" mapstructure:"require_auth_for_public_socks_http"`
-	AllowNoAuthPublic             bool `json:"allow_noauth_public" yaml:"allow_noauth_public" mapstructure:"allow_noauth_public"`
+	RequireAuthForPublicSocksHTTP bool `json:"require_auth_for_public_socks_http"`
+	AllowNoAuthPublic             bool `json:"allow_noauth_public"`
 }
 
-// UnmarshalYAML 在加载安全配置时补齐默认拒绝公开 noauth。
-func (s *SecurityConfig) UnmarshalYAML(value *yaml.Node) error {
-	*s = SecurityConfig{RequireAuthForPublicSocksHTTP: true}
-	type raw SecurityConfig
-	return value.Decode((*raw)(s))
+// DefaultSecurityConfig 返回默认安全开关：公开的 socks/http 入站必须带密码认证。
+func DefaultSecurityConfig() SecurityConfig {
+	return SecurityConfig{RequireAuthForPublicSocksHTTP: true}
 }
 
-// InstallToolConfig 保存单个托管文件的安装来源配置。
-type InstallToolConfig struct {
-	Version       string `json:"version" yaml:"version" mapstructure:"version"`
-	Source        string `json:"source" yaml:"source" mapstructure:"source"`
-	SHA256        string `json:"sha256" yaml:"sha256" mapstructure:"sha256"`
-	ArchiveMember string `json:"archive_member" yaml:"archive_member" mapstructure:"archive_member"`
-}
-
-// UnmarshalYAML 在加载安装配置时补齐默认版本和来源。
-func (i *InstallToolConfig) UnmarshalYAML(value *yaml.Node) error {
-	*i = InstallToolConfig{Version: defaultInstallVersion, Source: defaultInstallSource}
-	type raw InstallToolConfig
-	return value.Decode((*raw)(i))
-}
-
-// InstallConfig 保存所有托管目标的安装配置。
-type InstallConfig struct {
-	Mihomo InstallToolConfig `json:"mihomo" yaml:"mihomo" mapstructure:"mihomo"`
-	Xray   InstallToolConfig `json:"xray" yaml:"xray" mapstructure:"xray"`
-	Geo    InstallToolConfig `json:"geo" yaml:"geo" mapstructure:"geo"`
-}
-
-// UnmarshalYAML 在加载 install 配置时补齐每个目标的默认值。
-func (i *InstallConfig) UnmarshalYAML(value *yaml.Node) error {
-	defaultTool := InstallToolConfig{Version: defaultInstallVersion, Source: defaultInstallSource}
-	*i = InstallConfig{Mihomo: defaultTool, Xray: defaultTool, Geo: defaultTool}
-	type raw InstallConfig
-	return value.Decode((*raw)(i))
-}
-
-// GlobalConfig 对应 agent 的 config.yaml。
+// GlobalConfig 保存生成器需要的全局设置和全部订阅用户档案。
 type GlobalConfig struct {
-	Version      int                `json:"version" yaml:"version" mapstructure:"version"`
-	BaseDir      string             `json:"-" yaml:"-" mapstructure:"-"`
-	Paths        ConfigPaths        `json:"paths" yaml:"paths" mapstructure:"paths"`
-	ExternalHost string             `json:"external_host" yaml:"external_host" mapstructure:"external_host"`
-	Subscription SubscriptionConfig `json:"subscription" yaml:"subscription" mapstructure:"subscription"`
-	Users        []UserProfile      `json:"users" yaml:"users" mapstructure:"users"`
-	PortRanges   PortRanges         `json:"port_ranges" yaml:"port_ranges" mapstructure:"port_ranges"`
-	Defaults     DefaultsConfig     `json:"defaults" yaml:"defaults" mapstructure:"defaults"`
-	Security     SecurityConfig     `json:"security" yaml:"security" mapstructure:"security"`
-	Install      InstallConfig      `json:"install" yaml:"install" mapstructure:"install"`
-	ConfigPath   string             `json:"-" yaml:"-"`
-}
-
-// UnmarshalYAML 在加载全局配置时补齐默认路径、默认值和安全配置。
-func (g *GlobalConfig) UnmarshalYAML(value *yaml.Node) error {
-	*g = GlobalConfig{
-		Version:      1,
-		Paths:        DefaultConfigPaths(),
-		Subscription: SubscriptionConfig{Source: "local"},
-		Defaults:     DefaultDefaultsConfig(),
-		Security:     SecurityConfig{RequireAuthForPublicSocksHTTP: true},
-		Install: InstallConfig{
-			Mihomo: InstallToolConfig{Version: defaultInstallVersion, Source: defaultInstallSource},
-			Xray:   InstallToolConfig{Version: defaultInstallVersion, Source: defaultInstallSource},
-			Geo:    InstallToolConfig{Version: defaultInstallVersion, Source: defaultInstallSource},
-		},
-	}
-	type raw GlobalConfig
-	return value.Decode((*raw)(g))
-}
-
-// ResolvePath 将配置路径解析为绝对路径。
-func (g GlobalConfig) ResolvePath(pathValue string) string {
-	if filepath.IsAbs(pathValue) {
-		return filepath.Clean(pathValue)
-	}
-	return filepath.Clean(filepath.Join(g.BaseDir, pathValue))
-}
-
-// StacksDir 返回 stack 配置目录。
-func (g GlobalConfig) StacksDir() string {
-	return g.ResolvePath(g.Paths.Stacks)
+	ExternalHost string         `json:"external_host"`
+	Users        []UserProfile  `json:"users"`
+	PortRanges   PortRanges     `json:"port_ranges"`
+	Defaults     DefaultsConfig `json:"defaults"`
+	Security     SecurityConfig `json:"security"`
 }
 
 // Validate 校验全局配置字段和默认值枚举。
 func (g *GlobalConfig) Validate() error {
-	if g.Version != 1 {
-		return fmt.Errorf("version must be 1")
-	}
-	if g.BaseDir == "" {
-		g.BaseDir = defaultBaseDir
-	}
-	if !filepath.IsAbs(g.BaseDir) {
-		abs, err := filepath.Abs(g.BaseDir)
-		if err != nil {
-			return fmt.Errorf("base dir could not be resolved: %w", err)
-		}
-		g.BaseDir = abs
-	}
-	if g.Subscription.Source == "" {
-		g.Subscription.Source = "local"
-	}
-	if g.Subscription.Source != "local" {
-		return fmt.Errorf("subscription.source must be local")
-	}
 	if err := normalizeAndValidateUserProfiles(g.Users); err != nil {
 		return err
 	}
 	if err := g.PortRanges.Validate(); err != nil {
 		return err
-	}
-	if filepath.Clean(g.ResolvePath(g.Paths.Sub)) == filepath.Clean(g.ResolvePath(g.Paths.Runtime)) {
-		return fmt.Errorf("paths.sub must not equal paths.runtime")
-	}
-	if filepath.Clean(g.ResolvePath(g.Paths.Sub)) == filepath.Clean(g.ResolvePath(g.Paths.Stacks)) {
-		return fmt.Errorf("paths.sub must not equal paths.stacks")
 	}
 	if err := validateDefaultClash(g.Defaults.Clash); err != nil {
 		return err
@@ -480,16 +252,13 @@ func (g *GlobalConfig) Validate() error {
 
 // UserProfile 保存 config.yaml 中可被 stack 引用的全局订阅用户档案。
 type UserProfile struct {
-	User            string `json:"user" yaml:"user" mapstructure:"user"`
-	Profile         string `json:"profile" yaml:"profile" mapstructure:"profile"`
-	UUID            string `json:"uuid" yaml:"uuid" mapstructure:"uuid"`
-	Password        string `json:"password" yaml:"password" mapstructure:"password"`
-	Method          string `json:"method" yaml:"method" mapstructure:"method"`
-	Cipher          string `json:"cipher" yaml:"cipher" mapstructure:"cipher"`
-	Email           string `json:"email" yaml:"email" mapstructure:"email"`
-	Remark          string `json:"remark" yaml:"remark" mapstructure:"remark"`
-	DisplayTemplate string `json:"display_template" yaml:"display_template" mapstructure:"display_template"`
-	Tag             string `json:"tag" yaml:"tag" mapstructure:"tag"`
+	User            string `json:"user"`
+	Profile         string `json:"profile"`
+	UUID            string `json:"uuid"`
+	Password        string `json:"password"`
+	Remark          string `json:"remark"`
+	DisplayTemplate string `json:"display_template"`
+	Tag             string `json:"tag"`
 }
 
 // Validate 校验全局用户档案的唯一键和可选凭据格式。
@@ -538,9 +307,9 @@ func normalizeAndValidateUserProfiles(users []UserProfile) error {
 
 // InboundAuth 保存 socks/http inbound 鉴权配置。
 type InboundAuth struct {
-	Type     string `json:"type" yaml:"type" mapstructure:"type"`
-	Username string `json:"username" yaml:"username" mapstructure:"username"`
-	Password string `json:"password" yaml:"password" mapstructure:"password"`
+	Type     string `json:"type"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 // Validate 校验 password 模式必须同时配置用户名和密码。
@@ -556,39 +325,13 @@ func (a InboundAuth) Validate() error {
 
 // InboundUser 保存 vmess/shadowsocks 多用户凭据。
 type InboundUser struct {
-	User            string `json:"user" yaml:"user" mapstructure:"user"`
-	Profile         string `json:"profile" yaml:"profile" mapstructure:"profile"`
-	UUID            string `json:"uuid" yaml:"uuid" mapstructure:"uuid"`
-	Password        string `json:"password" yaml:"password" mapstructure:"password"`
-	Method          string `json:"method" yaml:"method" mapstructure:"method"`
-	Cipher          string `json:"cipher" yaml:"cipher" mapstructure:"cipher"`
-	Email           string `json:"email" yaml:"email" mapstructure:"email"`
-	Remark          string `json:"remark" yaml:"remark" mapstructure:"remark"`
-	DisplayTemplate string `json:"display_template" yaml:"display_template" mapstructure:"display_template"`
-	Tag             string `json:"tag" yaml:"tag" mapstructure:"tag"`
-
-	fields map[string]bool `json:"-" yaml:"-"`
-}
-
-// UnmarshalYAML 记录 users[] 中显式字段，用于拒绝不支持的 region 字段。
-func (u *InboundUser) UnmarshalYAML(value *yaml.Node) error {
-	u.fields = yamlFields(value)
-	type raw InboundUser
-	if err := value.Decode((*raw)(u)); err != nil {
-		return err
-	}
-	if u.fields["region"] {
-		return fmt.Errorf("users[].region is not supported; configure inbound.region instead")
-	}
-	return nil
-}
-
-// EmailOrUser 返回 Xray 用户统计 email，未配置时使用业务 user。
-func (u InboundUser) EmailOrUser() string {
-	if u.Email != "" {
-		return u.Email
-	}
-	return u.User
+	User            string `json:"user"`
+	Profile         string `json:"profile"`
+	UUID            string `json:"uuid"`
+	Password        string `json:"password"`
+	Remark          string `json:"remark"`
+	DisplayTemplate string `json:"display_template"`
+	Tag             string `json:"tag"`
 }
 
 // ProfileOrDefault 返回用户档案 profile，未配置时使用 default。
@@ -596,32 +339,13 @@ func (u InboundUser) ProfileOrDefault() string {
 	return NormalizeUserProfile(u.Profile)
 }
 
-// InboundUserRef 保存 stack inbound 对 config.yaml 用户档案的引用和少量覆盖字段。
+// InboundUserRef 保存 inbound 对用户档案的引用和展示字段覆盖。
 type InboundUserRef struct {
-	User            string `json:"user" yaml:"user" mapstructure:"user"`
-	Profile         string `json:"profile" yaml:"profile" mapstructure:"profile"`
-	UUID            string `json:"uuid" yaml:"uuid" mapstructure:"uuid"`
-	Password        string `json:"password" yaml:"password" mapstructure:"password"`
-	Method          string `json:"method" yaml:"method" mapstructure:"method"`
-	Cipher          string `json:"cipher" yaml:"cipher" mapstructure:"cipher"`
-	Email           string `json:"email" yaml:"email" mapstructure:"email"`
-	Remark          string `json:"remark" yaml:"remark" mapstructure:"remark"`
-	DisplayTemplate string `json:"display_template" yaml:"display_template" mapstructure:"display_template"`
-	Tag             string `json:"tag" yaml:"tag" mapstructure:"tag"`
-}
-
-// UnmarshalYAML 支持 user_refs 同时使用字符串简写和对象写法。
-func (r *InboundUserRef) UnmarshalYAML(value *yaml.Node) error {
-	if value.Kind == yaml.ScalarNode {
-		r.User = value.Value
-		r.Profile = DefaultUserProfile
-		return r.Validate()
-	}
-	type raw InboundUserRef
-	if err := value.Decode((*raw)(r)); err != nil {
-		return err
-	}
-	return r.Validate()
+	User            string `json:"user"`
+	Profile         string `json:"profile"`
+	Remark          string `json:"remark"`
+	DisplayTemplate string `json:"display_template"`
+	Tag             string `json:"tag"`
 }
 
 // Validate 校验 user_ref 的引用键和可选覆盖凭据格式。
@@ -630,13 +354,7 @@ func (r *InboundUserRef) Validate() error {
 	if err := ValidateIdentifier(r.User, "user ref"); err != nil {
 		return err
 	}
-	if err := ValidateIdentifier(r.Profile, "user ref profile"); err != nil {
-		return err
-	}
-	if r.UUID != "" && !uuidPattern.MatchString(r.UUID) {
-		return fmt.Errorf("uuid must be a valid UUID")
-	}
-	return nil
+	return ValidateIdentifier(r.Profile, "user ref profile")
 }
 
 // Key 返回 user_ref 指向的全局用户档案键。
@@ -646,63 +364,40 @@ func (r InboundUserRef) Key() string {
 
 // WebSocketOptions 保存 vmess websocket 传输参数。
 type WebSocketOptions struct {
-	Path    string            `json:"path,omitempty" yaml:"path" mapstructure:"path"`
-	Headers map[string]string `json:"headers,omitempty" yaml:"headers" mapstructure:"headers"`
+	Path    string            `json:"path,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
 }
 
 // GRPCOptions 保存 vmess grpc 传输参数。
 type GRPCOptions struct {
-	ServiceName string `json:"service_name,omitempty" yaml:"service_name" mapstructure:"service_name"`
-}
-
-// UnmarshalYAML 兼容常见 gRPC service name 字段写法。
-func (o *GRPCOptions) UnmarshalYAML(value *yaml.Node) error {
-	if value.Kind != yaml.MappingNode {
-		return fmt.Errorf("grpc_opts must be a mapping")
-	}
-	for index := 0; index+1 < len(value.Content); index += 2 {
-		key := value.Content[index].Value
-		if key != "service_name" && key != "grpc_service_name" && key != "serviceName" {
-			continue
-		}
-		o.ServiceName = value.Content[index+1].Value
-	}
-	return nil
+	ServiceName string `json:"service_name,omitempty"`
 }
 
 // Inbound 保存 xray inbound 配置。
 type Inbound struct {
-	Name            string            `json:"name" yaml:"name" mapstructure:"name"`
-	Protocol        string            `json:"protocol" yaml:"protocol" mapstructure:"protocol"`
-	Listen          string            `json:"listen" yaml:"listen" mapstructure:"listen"`
-	Port            int               `json:"port" yaml:"port" mapstructure:"port"`
-	UDP             bool              `json:"udp" yaml:"udp" mapstructure:"udp"`
-	Auth            *InboundAuth      `json:"auth" yaml:"auth" mapstructure:"auth"`
-	User            string            `json:"user" yaml:"user" mapstructure:"user"`
-	Server          string            `json:"server" yaml:"server" mapstructure:"server"`
-	Remark          string            `json:"remark" yaml:"remark" mapstructure:"remark"`
-	DisplayTemplate string            `json:"display_template" yaml:"display_template" mapstructure:"display_template"`
-	Region          string            `json:"region" yaml:"region" mapstructure:"region"`
-	Tag             string            `json:"tag" yaml:"tag" mapstructure:"tag"`
-	Sub             bool              `json:"sub" yaml:"sub" mapstructure:"sub"`
-	UUID            string            `json:"uuid" yaml:"uuid" mapstructure:"uuid"`
-	Users           []InboundUser     `json:"users" yaml:"users" mapstructure:"users"`
-	UserRefs        []InboundUserRef  `json:"user_refs" yaml:"user_refs" mapstructure:"user_refs"`
-	Network         string            `json:"network" yaml:"network" mapstructure:"network"`
-	Password        string            `json:"password" yaml:"password" mapstructure:"password"`
-	Method          string            `json:"method" yaml:"method" mapstructure:"method"`
-	Cipher          string            `json:"cipher" yaml:"cipher" mapstructure:"cipher"`
-	WSOpts          *WebSocketOptions `json:"ws_opts" yaml:"ws_opts" mapstructure:"ws_opts"`
-	GRPCOpts        *GRPCOptions      `json:"grpc_opts" yaml:"grpc_opts" mapstructure:"grpc_opts"`
+	Name            string            `json:"name"`
+	Protocol        string            `json:"protocol"`
+	Listen          string            `json:"listen"`
+	Port            int               `json:"port"`
+	UDP             *bool             `json:"udp"`
+	Auth            *InboundAuth      `json:"auth"`
+	User            string            `json:"user"`
+	Server          string            `json:"server"`
+	Remark          string            `json:"remark"`
+	DisplayTemplate string            `json:"display_template"`
+	Region          string            `json:"region"`
+	Tag             string            `json:"tag"`
+	Sub             bool              `json:"sub"`
+	Users           []InboundUser     `json:"users"`
+	UserRefs        []InboundUserRef  `json:"user_refs"`
+	Network         string            `json:"network"`
+	Password        string            `json:"password"`
+	Method          string            `json:"method"`
+	WSOpts          *WebSocketOptions `json:"ws_opts"`
+	GRPCOpts        *GRPCOptions      `json:"grpc_opts"`
 
-	fields map[string]bool `json:"-" yaml:"-"`
-}
-
-// UnmarshalYAML 在加载 inbound 时补齐默认监听地址并记录显式字段。
-func (i *Inbound) UnmarshalYAML(value *yaml.Node) error {
-	*i = Inbound{Listen: defaultListenHost, fields: yamlFields(value)}
-	type raw Inbound
-	return value.Decode((*raw)(i))
+	// FromUserRefs 标记 Users 由 UserRefs 展开而来，校验路径和提示按 user_refs 描述。
+	FromUserRefs bool `json:"-"`
 }
 
 // TagOrDefault 返回显式 tag 或协议端口名称组成的默认 tag。
@@ -715,10 +410,12 @@ func (i Inbound) TagOrDefault() string {
 
 // UDPConfigured 判断 inbound 是否显式配置了 udp 字段。
 func (i Inbound) UDPConfigured() bool {
-	if i.fields != nil {
-		return i.fields["udp"]
-	}
-	return i.UDP
+	return i.UDP != nil
+}
+
+// UDPEnabled 判断 inbound 是否开启 UDP。
+func (i Inbound) UDPEnabled() bool {
+	return i.UDP != nil && *i.UDP
 }
 
 // Validate 校验 inbound 的协议字段、凭据和订阅暴露约束。
@@ -731,9 +428,6 @@ func (i Inbound) Validate() error {
 	}
 	if err := ValidatePort(i.Port, "inbound port"); err != nil {
 		return err
-	}
-	if i.fields != nil && !i.fields["sub"] {
-		return fmt.Errorf("sub is required for inbound")
 	}
 	if i.Region != "" && !regionPattern.MatchString(i.Region) {
 		return fmt.Errorf("region must use two uppercase letters")
@@ -754,7 +448,7 @@ func (i Inbound) Validate() error {
 			return err
 		}
 	}
-	if len(i.Users) > 0 && i.fields != nil && i.fields["users"] && i.Protocol != "vmess" && i.Protocol != "shadowsocks" {
+	if len(i.Users) > 0 && !i.FromUserRefs && i.Protocol != "vmess" && i.Protocol != "shadowsocks" {
 		return fmt.Errorf("users is only supported for vmess or shadowsocks inbound")
 	}
 	switch i.Protocol {
@@ -777,9 +471,6 @@ func (i Inbound) Validate() error {
 
 // validateVmess 校验 vmess 多用户字段。
 func (i Inbound) validateVmess() error {
-	if i.UUID != "" {
-		return fmt.Errorf("uuid is not supported for vmess inbound; use user_refs instead")
-	}
 	if i.User != "" || (i.Remark != "" && !i.UsesUserRefs()) {
 		return fmt.Errorf("user and remark must be configured under vmess user_refs")
 	}
@@ -793,7 +484,6 @@ func (i Inbound) validateVmess() error {
 		return err
 	}
 	uuids := make([]string, 0, len(i.Users))
-	emails := make([]string, 0, len(i.Users))
 	tags := make([]string, 0, len(i.Users))
 	baseTag := i.TagOrDefault()
 	for _, user := range i.Users {
@@ -807,7 +497,6 @@ func (i Inbound) validateVmess() error {
 			return fmt.Errorf("uuid must be a valid UUID")
 		}
 		uuids = append(uuids, strings.ToLower(user.UUID))
-		emails = append(emails, user.EmailOrUser())
 		if user.Tag != "" {
 			tags = append(tags, user.Tag)
 		} else {
@@ -815,9 +504,6 @@ func (i Inbound) validateVmess() error {
 		}
 	}
 	if err := ensureUnique(uuids, "duplicate vmess uuid"); err != nil {
-		return err
-	}
-	if err := ensureUnique(emails, "duplicate vmess user email"); err != nil {
 		return err
 	}
 	return ensureUnique(tags, "duplicate vmess user tag")
@@ -828,9 +514,9 @@ func (i Inbound) validateShadowsocks() error {
 	if i.Password == "" {
 		return fmt.Errorf("password is required for shadowsocks inbound")
 	}
-	method := i.MethodOrCipher()
+	method := i.Method
 	if method == "" {
-		return fmt.Errorf("method or cipher is required for shadowsocks inbound")
+		return fmt.Errorf("method is required for shadowsocks inbound")
 	}
 	if err := i.validateShadowsocks2022Passwords(method); err != nil {
 		return err
@@ -844,7 +530,6 @@ func (i Inbound) validateShadowsocks() error {
 	if err := ensureUnique(userValues(i.Users, func(user InboundUser) string { return user.User }), "duplicate shadowsocks user"); err != nil {
 		return err
 	}
-	emails := make([]string, 0, len(i.Users))
 	tags := make([]string, 0, len(i.Users))
 	baseTag := i.TagOrDefault()
 	for _, user := range i.Users {
@@ -854,25 +539,18 @@ func (i Inbound) validateShadowsocks() error {
 		if user.Password == "" {
 			return fmt.Errorf("password is required for shadowsocks user")
 		}
-		if IsShadowsocks2022Method(method) && (user.Method != "" || user.Cipher != "") {
-			return fmt.Errorf("shadowsocks 2022 users must not set method or cipher")
-		}
-		emails = append(emails, user.EmailOrUser())
 		if user.Tag != "" {
 			tags = append(tags, user.Tag)
 		} else {
 			tags = append(tags, baseTag+":"+user.User)
 		}
 	}
-	if err := ensureUnique(emails, "duplicate shadowsocks user email"); err != nil {
-		return err
-	}
 	return ensureUnique(tags, "duplicate shadowsocks user tag")
 }
 
 // UsesUserRefs 判断 inbound 当前或展开前是否使用了 user_refs。
 func (i Inbound) UsesUserRefs() bool {
-	return len(i.UserRefs) > 0 || (i.fields != nil && i.fields["user_refs"])
+	return len(i.UserRefs) > 0 || i.FromUserRefs
 }
 
 // validateInboundUserRefs 校验单个 inbound 内 user_refs 的基本格式和重复引用。
@@ -885,14 +563,6 @@ func validateInboundUserRefs(refs []InboundUserRef) error {
 		keys = append(keys, refs[index].Key())
 	}
 	return ensureUnique(keys, "duplicate user_ref")
-}
-
-// MethodOrCipher 返回 shadowsocks method 字段，兼容旧配置中的 cipher。
-func (i Inbound) MethodOrCipher() string {
-	if i.Method != "" {
-		return i.Method
-	}
-	return i.Cipher
 }
 
 // validateShadowsocks2022Passwords 校验 SS2022 server/user PSK。
@@ -916,13 +586,13 @@ func (i Inbound) validateShadowsocks2022Passwords(method string) error {
 
 // XrayOutbound 保存 xray egress 配置。
 type XrayOutbound struct {
-	Type          string `json:"type" yaml:"type" mapstructure:"type"`
-	Ref           string `json:"ref" yaml:"ref" mapstructure:"ref"`
-	Server        string `json:"server" yaml:"server" mapstructure:"server"`
-	Port          int    `json:"port" yaml:"port" mapstructure:"port"`
-	Username      string `json:"username" yaml:"username" mapstructure:"username"`
-	Password      string `json:"password" yaml:"password" mapstructure:"password"`
-	PrivateDirect bool   `json:"private_direct" yaml:"private_direct" mapstructure:"private_direct"`
+	Type          string `json:"type"`
+	Ref           string `json:"ref"`
+	Server        string `json:"server"`
+	Port          int    `json:"port"`
+	Username      string `json:"username"`
+	Password      string `json:"password"`
+	PrivateDirect bool   `json:"private_direct"`
 }
 
 // Validate 校验 outbound 类型和对应目标字段。
@@ -947,20 +617,34 @@ func (x XrayOutbound) Validate() error {
 
 // XrayConfig 保存单个 stack 的 xray 配置。
 type XrayConfig struct {
-	Enabled  bool              `json:"enabled" yaml:"enabled" mapstructure:"enabled"`
-	LogLevel string            `json:"loglevel" yaml:"loglevel" mapstructure:"loglevel"`
-	Outbound XrayOutbound      `json:"outbound" yaml:"outbound" mapstructure:"outbound"`
-	Inbounds []Inbound         `json:"inbounds" yaml:"inbounds" mapstructure:"inbounds"`
-	API      *XrayAPIConfig    `json:"api" yaml:"api" mapstructure:"api"`
-	Stats    *XrayStatsConfig  `json:"stats" yaml:"stats" mapstructure:"stats"`
-	Policy   *XrayPolicyConfig `json:"policy" yaml:"policy" mapstructure:"policy"`
+	Enabled  bool                `json:"enabled"`
+	LogLevel string              `json:"loglevel"`
+	Outbound XrayOutbound        `json:"outbound"`
+	Inbounds []Inbound           `json:"inbounds"`
+	API      *XrayAPIOverride    `json:"api"`
+	Stats    *XrayStatsOverride  `json:"stats"`
+	Policy   *XrayPolicyOverride `json:"policy"`
 }
 
-// UnmarshalYAML 在加载 xray 时补齐 enabled 默认值。
-func (x *XrayConfig) UnmarshalYAML(value *yaml.Node) error {
-	*x = XrayConfig{Enabled: true}
-	type raw XrayConfig
-	return value.Decode((*raw)(x))
+// XrayAPIOverride 保存 stack 级 API 覆盖，nil 字段表示沿用全局默认值。
+type XrayAPIOverride struct {
+	Enabled  *bool    `json:"enabled,omitempty"`
+	Tag      *string  `json:"tag,omitempty"`
+	Listen   *string  `json:"listen,omitempty"`
+	Services []string `json:"services,omitempty"`
+}
+
+// XrayStatsOverride 保存 stack 级 stats 覆盖，nil 字段表示沿用全局默认值。
+type XrayStatsOverride struct {
+	Enabled *bool `json:"enabled,omitempty"`
+}
+
+// XrayPolicyOverride 保存 stack 级 policy 覆盖；Levels 为 nil、System 为 nil 时沿用全局默认值，
+// 非 nil 时逐个字段覆盖（字段本身为 nil 的保持默认）。
+type XrayPolicyOverride struct {
+	Enabled *bool                            `json:"enabled,omitempty"`
+	Levels  map[string]XrayPolicyLevelConfig `json:"levels,omitempty"`
+	System  *XrayPolicySystemConfig          `json:"system,omitempty"`
 }
 
 // Validate 校验 xray 配置和 inbound 唯一性。
@@ -969,7 +653,7 @@ func (x XrayConfig) Validate() error {
 		return fmt.Errorf("xray loglevel is invalid: %s", x.LogLevel)
 	}
 	if x.API != nil {
-		if err := validateAPIConfig(*x.API); err != nil {
+		if err := validateAPIConfig(mergeAPIOverride(DefaultXrayAPIConfig(), *x.API)); err != nil {
 			return err
 		}
 	}
@@ -991,8 +675,8 @@ func (x XrayConfig) Validate() error {
 
 // ClashController 保存 mihomo controller 配置。
 type ClashController struct {
-	Listen string `json:"listen" yaml:"listen" mapstructure:"listen"`
-	Secret string `json:"secret" yaml:"secret" mapstructure:"secret"`
+	Listen string `json:"listen"`
+	Secret string `json:"secret"`
 }
 
 // Validate 校验 controller 监听地址和密钥。
@@ -1008,8 +692,8 @@ func (c ClashController) Validate() error {
 
 // ClashListenerUser 保存 mihomo 高级 listener 认证用户。
 type ClashListenerUser struct {
-	Username string `json:"username" yaml:"username" mapstructure:"username"`
-	Password string `json:"password" yaml:"password" mapstructure:"password"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 // Validate 校验 listener 用户名和密码。
@@ -1025,17 +709,10 @@ func (c ClashListenerUser) Validate() error {
 
 // SocksListener 保存 mihomo socks listener 配置。
 type SocksListener struct {
-	Name   string              `json:"name" yaml:"name" mapstructure:"name"`
-	Listen string              `json:"listen" yaml:"listen" mapstructure:"listen"`
-	Port   int                 `json:"port" yaml:"port" mapstructure:"port"`
-	Users  []ClashListenerUser `json:"users" yaml:"users" mapstructure:"users"`
-}
-
-// UnmarshalYAML 在加载 socks listener 时补齐 loopback 默认监听地址。
-func (s *SocksListener) UnmarshalYAML(value *yaml.Node) error {
-	*s = SocksListener{Listen: defaultClashListenerHost}
-	type raw SocksListener
-	return value.Decode((*raw)(s))
+	Name   string              `json:"name"`
+	Listen string              `json:"listen"`
+	Port   int                 `json:"port"`
+	Users  []ClashListenerUser `json:"users"`
 }
 
 // Validate 校验 socks listener 名称、端口和认证用户。
@@ -1056,17 +733,10 @@ func (s SocksListener) Validate() error {
 
 // HTTPListener 保存 mihomo HTTP listener 配置。
 type HTTPListener struct {
-	Name   string              `json:"name" yaml:"name" mapstructure:"name"`
-	Listen string              `json:"listen" yaml:"listen" mapstructure:"listen"`
-	Port   int                 `json:"port" yaml:"port" mapstructure:"port"`
-	Users  []ClashListenerUser `json:"users" yaml:"users" mapstructure:"users"`
-}
-
-// UnmarshalYAML 在加载 HTTP listener 时补齐 loopback 默认监听地址。
-func (h *HTTPListener) UnmarshalYAML(value *yaml.Node) error {
-	*h = HTTPListener{Listen: defaultClashListenerHost}
-	type raw HTTPListener
-	return value.Decode((*raw)(h))
+	Name   string              `json:"name"`
+	Listen string              `json:"listen"`
+	Port   int                 `json:"port"`
+	Users  []ClashListenerUser `json:"users"`
 }
 
 // Validate 校验 HTTP listener 名称、端口和认证用户。
@@ -1087,25 +757,12 @@ func (h HTTPListener) Validate() error {
 
 // ClashListeners 保存 mihomo listener 集合，P0 只支持 socks 和 HTTP。
 type ClashListeners struct {
-	Socks []SocksListener `json:"socks" yaml:"socks" mapstructure:"socks"`
-	HTTP  []HTTPListener  `json:"http" yaml:"http" mapstructure:"http"`
-	Mixed any             `json:"mixed" yaml:"mixed,omitempty" mapstructure:"mixed"`
-
-	fields map[string]bool `json:"-" yaml:"-"`
-}
-
-// UnmarshalYAML 记录 mixed 字段是否出现，以便显式拒绝。
-func (c *ClashListeners) UnmarshalYAML(value *yaml.Node) error {
-	c.fields = yamlFields(value)
-	type raw ClashListeners
-	return value.Decode((*raw)(c))
+	Socks []SocksListener `json:"socks"`
+	HTTP  []HTTPListener  `json:"http"`
 }
 
 // Validate 校验 P0 listener 限制和内部唯一性。
 func (c ClashListeners) Validate() error {
-	if c.fields["mixed"] {
-		return fmt.Errorf("listeners.mixed is not supported in P0")
-	}
 	if len(c.Socks) > 1 {
 		return fmt.Errorf("only one socks listener is supported in P0")
 	}
@@ -1134,26 +791,32 @@ func (c ClashListeners) Validate() error {
 
 // ClashUpstream 保存 mihomo upstream/proxy 配置。
 type ClashUpstream struct {
-	Name   string         `json:"name" yaml:"name" mapstructure:"name"`
-	Type   string         `json:"type" yaml:"type" mapstructure:"type"`
-	Ref    string         `json:"ref" yaml:"ref" mapstructure:"ref"`
-	Config map[string]any `json:"config" yaml:"config" mapstructure:"config"`
+	Name   string         `json:"name"`
+	Type   string         `json:"type"`
+	Ref    string         `json:"ref"`
+	Config map[string]any `json:"config"`
 
-	configNode *yaml.Node `json:"-" yaml:"-"`
+	// configNode 保留 raw config 的原始字段顺序，避免生成 mihomo YAML 时 map 迭代导致 diff 抖动。
+	configNode *yaml.Node
 }
 
-// UnmarshalYAML 保留 raw config 的原始字段顺序，避免生成 mihomo YAML 时 map 迭代导致 diff 抖动。
-func (c *ClashUpstream) UnmarshalYAML(value *yaml.Node) error {
-	type raw ClashUpstream
-	if value.Kind == yaml.MappingNode {
-		for index := 0; index+1 < len(value.Content); index += 2 {
-			if value.Content[index].Value == "config" {
-				c.configNode = cloneYAMLNode(value.Content[index+1])
-				break
-			}
-		}
+// SetRawConfig 设置 raw upstream 的 mihomo 节点字段，保留字段顺序并同步解码出 Config。
+func (c *ClashUpstream) SetRawConfig(node *yaml.Node) error {
+	if node == nil {
+		c.configNode = nil
+		c.Config = nil
+		return nil
 	}
-	return value.Decode((*raw)(c))
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("raw upstream config must be a mapping")
+	}
+	config := map[string]any{}
+	if err := node.Decode(&config); err != nil {
+		return fmt.Errorf("raw upstream config is invalid: %w", err)
+	}
+	c.configNode = cloneYAMLNode(node)
+	c.Config = config
+	return nil
 }
 
 // ConfigNode 返回 raw upstream config 的有序 YAML 节点副本。
@@ -1178,12 +841,12 @@ func (c ClashUpstream) Validate() error {
 
 // ClashGroup 保存 mihomo proxy group 配置。
 type ClashGroup struct {
-	Name     string   `json:"name" yaml:"name" mapstructure:"name"`
-	Type     string   `json:"type" yaml:"type" mapstructure:"type"`
-	Proxies  []string `json:"proxies" yaml:"proxies" mapstructure:"proxies"`
-	URL      string   `json:"url" yaml:"url" mapstructure:"url"`
-	Interval int      `json:"interval" yaml:"interval" mapstructure:"interval"`
-	Strategy string   `json:"strategy" yaml:"strategy" mapstructure:"strategy"`
+	Name     string   `json:"name"`
+	Type     string   `json:"type"`
+	Proxies  []string `json:"proxies"`
+	URL      string   `json:"url"`
+	Interval int      `json:"interval"`
+	Strategy string   `json:"strategy"`
 }
 
 // Validate 校验 group 类型、引用列表和健康检查字段。
@@ -1210,35 +873,21 @@ func (c *ClashGroup) Validate() error {
 
 // ClashRules 保存 mihomo 规则配置。
 type ClashRules struct {
-	Profile string   `json:"profile" yaml:"profile" mapstructure:"profile"`
-	Final   string   `json:"final" yaml:"final" mapstructure:"final"`
-	Extra   []string `json:"extra" yaml:"extra" mapstructure:"extra"`
-}
-
-// UnmarshalYAML 在加载 rules 时补齐默认规则 profile 和 final。
-func (c *ClashRules) UnmarshalYAML(value *yaml.Node) error {
-	*c = ClashRules{Profile: defaultRuleProfile, Final: defaultClashFinal}
-	type raw ClashRules
-	return value.Decode((*raw)(c))
+	Profile string   `json:"profile"`
+	Final   string   `json:"final"`
+	Extra   []string `json:"extra"`
 }
 
 // ClashConfig 保存单个 stack 的 mihomo 配置。
 type ClashConfig struct {
-	Enabled    bool            `json:"enabled" yaml:"enabled" mapstructure:"enabled"`
-	Mode       string          `json:"mode" yaml:"mode" mapstructure:"mode"`
-	LogLevel   string          `json:"loglevel" yaml:"loglevel" mapstructure:"loglevel"`
-	Controller ClashController `json:"controller" yaml:"controller" mapstructure:"controller"`
-	Listeners  ClashListeners  `json:"listeners" yaml:"listeners" mapstructure:"listeners"`
-	Upstreams  []ClashUpstream `json:"upstreams" yaml:"upstreams" mapstructure:"upstreams"`
-	Groups     []ClashGroup    `json:"groups" yaml:"groups" mapstructure:"groups"`
-	Rules      ClashRules      `json:"rules" yaml:"rules" mapstructure:"rules"`
-}
-
-// UnmarshalYAML 在加载 clash 时补齐 enabled、mode 和 rules 默认值。
-func (c *ClashConfig) UnmarshalYAML(value *yaml.Node) error {
-	*c = ClashConfig{Enabled: true, Mode: defaultClashMode, Rules: ClashRules{Profile: defaultRuleProfile, Final: defaultClashFinal}}
-	type raw ClashConfig
-	return value.Decode((*raw)(c))
+	Enabled    bool            `json:"enabled"`
+	Mode       string          `json:"mode"`
+	LogLevel   string          `json:"loglevel"`
+	Controller ClashController `json:"controller"`
+	Listeners  ClashListeners  `json:"listeners"`
+	Upstreams  []ClashUpstream `json:"upstreams"`
+	Groups     []ClashGroup    `json:"groups"`
+	Rules      ClashRules      `json:"rules"`
 }
 
 // Validate 校验 mihomo 配置内部引用和字段约束。
@@ -1315,20 +964,13 @@ func (c *ClashConfig) Validate() error {
 
 // Stack 保存单个 stacks/<name>.yaml 配置。
 type Stack struct {
-	Name       string      `json:"name" yaml:"name" mapstructure:"name"`
-	Enabled    bool        `json:"enabled" yaml:"enabled" mapstructure:"enabled"`
-	Role       string      `json:"role" yaml:"role" mapstructure:"role"`
-	Labels     []string    `json:"labels" yaml:"labels" mapstructure:"labels"`
-	Xray       XrayConfig  `json:"xray" yaml:"xray" mapstructure:"xray"`
-	Clash      ClashConfig `json:"clash" yaml:"clash" mapstructure:"clash"`
-	SourcePath string      `json:"-" yaml:"-"`
-}
-
-// UnmarshalYAML 在加载 stack 时补齐 enabled 和 role 默认值。
-func (s *Stack) UnmarshalYAML(value *yaml.Node) error {
-	*s = Stack{Enabled: true, Role: defaultStackRole}
-	type raw Stack
-	return value.Decode((*raw)(s))
+	Name       string      `json:"name"`
+	Enabled    bool        `json:"enabled"`
+	Role       string      `json:"role"`
+	Labels     []string    `json:"labels"`
+	Xray       XrayConfig  `json:"xray"`
+	Clash      ClashConfig `json:"clash"`
+	SourcePath string      `json:"-"`
 }
 
 // Validate 校验 stack 文件内部配置。
@@ -1377,11 +1019,11 @@ func (d DisabledUserSet) Add(stack string, user string) {
 
 // StackSet 保存全局配置和所有 stack 的合并输入。
 type StackSet struct {
-	Config GlobalConfig `json:"config" yaml:"config"`
-	Stacks []Stack      `json:"stacks" yaml:"stacks"`
+	Config GlobalConfig `json:"config"`
+	Stacks []Stack      `json:"stacks"`
 
 	// DisabledUsers 是 runtime/disabled.json 的运行时覆盖，只影响 Xray 生成结果，不参与 manifest hash。
-	DisabledUsers DisabledUserSet `json:"-" yaml:"-"`
+	DisabledUsers DisabledUserSet `json:"-"`
 }
 
 // StackNames 返回所有 stack 名称，保持加载顺序。
@@ -1429,60 +1071,49 @@ func ResolveXrayAPIConfig(defaults DefaultXrayConfig, xray XrayConfig) XrayAPICo
 	if xray.API == nil {
 		return defaults.API
 	}
-	override := *xray.API
-	if override.fields == nil {
-		return override
-	}
-	merged := defaults.API
-	if override.fields["enabled"] {
-		merged.Enabled = override.Enabled
-	}
-	if override.fields["tag"] {
-		merged.Tag = override.Tag
-	}
-	if override.fields["listen"] {
-		merged.Listen = override.Listen
-	}
-	if override.fields["services"] {
-		merged.Services = append([]string(nil), override.Services...)
-	}
-	return merged
+	return mergeAPIOverride(defaults.API, *xray.API)
 }
 
 // ResolveXrayStatsConfig 合并全局 defaults.xray.stats 和 stack 级覆盖。
 func ResolveXrayStatsConfig(defaults DefaultXrayConfig, xray XrayConfig) XrayStatsConfig {
-	if xray.Stats == nil {
-		return defaults.Stats
-	}
-	override := *xray.Stats
-	if override.fields == nil {
-		return override
-	}
 	merged := defaults.Stats
-	if override.fields["enabled"] {
-		merged.Enabled = override.Enabled
+	if xray.Stats != nil && xray.Stats.Enabled != nil {
+		merged.Enabled = *xray.Stats.Enabled
 	}
 	return merged
 }
 
 // ResolveXrayPolicyConfig 合并全局 defaults.xray.policy 和 stack 级覆盖。
 func ResolveXrayPolicyConfig(defaults DefaultXrayConfig, xray XrayConfig) XrayPolicyConfig {
-	if xray.Policy == nil {
-		return defaults.Policy
-	}
-	override := *xray.Policy
-	if override.fields == nil {
-		return override
-	}
 	merged := defaults.Policy
-	if override.fields["enabled"] {
-		merged.Enabled = override.Enabled
+	if xray.Policy == nil {
+		return merged
 	}
-	if override.fields["levels"] {
-		merged.Levels = mergePolicyLevels(merged.Levels, override.Levels)
+	if xray.Policy.Enabled != nil {
+		merged.Enabled = *xray.Policy.Enabled
 	}
-	if override.fields["system"] {
-		merged.System = mergePolicySystem(merged.System, override.System)
+	if xray.Policy.Levels != nil {
+		merged.Levels = mergePolicyLevels(merged.Levels, xray.Policy.Levels)
+	}
+	if xray.Policy.System != nil {
+		merged.System = mergePolicySystem(merged.System, *xray.Policy.System)
+	}
+	return merged
+}
+
+func mergeAPIOverride(base XrayAPIConfig, override XrayAPIOverride) XrayAPIConfig {
+	merged := base
+	if override.Enabled != nil {
+		merged.Enabled = *override.Enabled
+	}
+	if override.Tag != nil {
+		merged.Tag = *override.Tag
+	}
+	if override.Listen != nil {
+		merged.Listen = *override.Listen
+	}
+	if override.Services != nil {
+		merged.Services = append([]string(nil), override.Services...)
 	}
 	return merged
 }
@@ -1708,14 +1339,10 @@ func mergePolicyLevels(defaults map[string]XrayPolicyLevelConfig, overrides map[
 	}
 	for level, override := range overrides {
 		current := merged[level]
-		if override.fields == nil {
-			merged[level] = override
-			continue
-		}
-		if override.fields["statsUserUplink"] {
+		if override.StatsUserUplink != nil {
 			current.StatsUserUplink = override.StatsUserUplink
 		}
-		if override.fields["statsUserDownlink"] {
+		if override.StatsUserDownlink != nil {
 			current.StatsUserDownlink = override.StatsUserDownlink
 		}
 		merged[level] = current
@@ -1724,34 +1351,20 @@ func mergePolicyLevels(defaults map[string]XrayPolicyLevelConfig, overrides map[
 }
 
 func mergePolicySystem(defaults XrayPolicySystemConfig, override XrayPolicySystemConfig) XrayPolicySystemConfig {
-	if override.fields == nil {
-		return override
-	}
 	merged := defaults
-	if override.fields["statsInboundUplink"] {
+	if override.StatsInboundUplink != nil {
 		merged.StatsInboundUplink = override.StatsInboundUplink
 	}
-	if override.fields["statsInboundDownlink"] {
+	if override.StatsInboundDownlink != nil {
 		merged.StatsInboundDownlink = override.StatsInboundDownlink
 	}
-	if override.fields["statsOutboundUplink"] {
+	if override.StatsOutboundUplink != nil {
 		merged.StatsOutboundUplink = override.StatsOutboundUplink
 	}
-	if override.fields["statsOutboundDownlink"] {
+	if override.StatsOutboundDownlink != nil {
 		merged.StatsOutboundDownlink = override.StatsOutboundDownlink
 	}
 	return merged
-}
-
-func yamlFields(value *yaml.Node) map[string]bool {
-	fields := make(map[string]bool)
-	if value == nil || value.Kind != yaml.MappingNode {
-		return fields
-	}
-	for index := 0; index+1 < len(value.Content); index += 2 {
-		fields[value.Content[index].Value] = true
-	}
-	return fields
 }
 
 func cloneYAMLNode(value *yaml.Node) *yaml.Node {

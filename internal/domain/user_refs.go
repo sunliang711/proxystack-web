@@ -32,14 +32,7 @@ func ResolveStackUserRefs(config GlobalConfig, stack Stack) (Stack, error) {
 		}
 		inbound.Users = users
 		inbound.UserRefs = nil
-		if inbound.fields == nil {
-			inbound.fields = map[string]bool{}
-			inbound.fields["sub"] = true
-			if inbound.UDP {
-				inbound.fields["udp"] = true
-			}
-		}
-		inbound.fields["user_refs"] = true
+		inbound.FromUserRefs = true
 		if err := inbound.Validate(); err != nil {
 			return Stack{}, fmt.Errorf("stacks.%s.xray.inbounds[%d]: %w", stack.Name, inboundIndex, err)
 		}
@@ -81,11 +74,8 @@ func mergeUserRef(profile UserProfile, ref InboundUserRef) InboundUser {
 	return InboundUser{
 		User:            ref.User,
 		Profile:         NormalizeUserProfile(ref.Profile),
-		UUID:            firstNonEmpty(ref.UUID, profile.UUID),
-		Password:        firstNonEmpty(ref.Password, profile.Password),
-		Method:          firstNonEmpty(ref.Method, profile.Method),
-		Cipher:          firstNonEmpty(ref.Cipher, profile.Cipher),
-		Email:           firstNonEmpty(ref.Email, profile.Email),
+		UUID:            profile.UUID,
+		Password:        profile.Password,
 		Remark:          firstNonEmpty(ref.Remark, profile.Remark),
 		DisplayTemplate: firstNonEmpty(ref.DisplayTemplate, profile.DisplayTemplate),
 		Tag:             firstNonEmpty(ref.Tag, profile.Tag),

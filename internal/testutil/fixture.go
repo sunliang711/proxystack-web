@@ -14,7 +14,8 @@ import (
 )
 
 // 本文件按参考项目的 YAML 布局（config.yaml + stacks/*.yaml）加载 golden 测试 fixture，
-// 只供测试使用：生产环境的配置来源是数据库。
+// 只供测试使用：生产环境的配置来源是数据库。参考项目的 YAML 写法（含默认值补齐、
+// 字符串端口区间、inline users、cipher 别名）在这里翻译成领域模型。
 
 // LoadConfig 读取 fixture 全局配置。
 func LoadConfig(path string) (domain.GlobalConfig, error) {
@@ -22,16 +23,31 @@ func LoadConfig(path string) (domain.GlobalConfig, error) {
 	if err != nil {
 		return domain.GlobalConfig{}, fmt.Errorf("Config file could not be read: %s (%w)", path, err)
 	}
-	var config domain.GlobalConfig
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	var raw legacyGlobal
+	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return domain.GlobalConfig{}, fmt.Errorf("Config file contains invalid YAML: %s\n%w", path, err)
 	}
-	config.BaseDir = filepath.Dir(path)
+	config := raw.toDomain()
 	if err := config.Validate(); err != nil {
 		return domain.GlobalConfig{}, err
 	}
-	config.ConfigPath = path
 	return config, nil
+}
+
+// ParseStack 按参考项目写法解析单个 stack YAML 并执行 stack 内校验。
+func ParseStack(data []byte) (domain.Stack, error) {
+	var raw legacyStack
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return domain.Stack{}, err
+	}
+	stack, err := raw.toDomain()
+	if err != nil {
+		return domain.Stack{}, err
+	}
+	if err := stack.Validate(); err != nil {
+		return domain.Stack{}, err
+	}
+	return stack, nil
 }
 
 // LoadStack 读取单个 fixture stack 并执行文件内校验。
@@ -40,13 +56,9 @@ func LoadStack(path string) (domain.Stack, error) {
 	if err != nil {
 		return domain.Stack{}, fmt.Errorf("Stack file could not be read: %s (%w)", path, err)
 	}
-	var stack domain.Stack
-	if err := yaml.Unmarshal(data, &stack); err != nil {
-		return domain.Stack{}, fmt.Errorf("Stack file contains invalid YAML: %s\n%w", path, err)
-	}
-	stack.SourcePath = path
-	if err := stack.Validate(); err != nil {
-		return domain.Stack{}, err
+	stack, err := ParseStack(data)
+	if err != nil {
+		return domain.Stack{}, fmt.Errorf("Stack file is invalid: %s\n%w", path, err)
 	}
 	expectedName := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 	if expectedName != stack.Name {
@@ -60,9 +72,9 @@ func LoadStack(path string) (domain.Stack, error) {
 	return stack, nil
 }
 
-// LoadStacks 读取 fixture 目录下全部 stack 并执行跨 stack 校验。
-func LoadStacks(config domain.GlobalConfig, checkSystemPorts bool) (domain.StackSet, error) {
-	stackPaths, err := filepath.Glob(filepath.Join(config.StacksDir(), "*.yaml"))
+// LoadStacks 读取 configPath 同级 stacks 目录下全部 stack 并执行跨 stack 校验。
+func LoadStacks(config domain.GlobalConfig, configPath string, checkSystemPorts bool) (domain.StackSet, error) {
+	stackPaths, err := filepath.Glob(filepath.Join(filepath.Dir(configPath), "stacks", "*.yaml"))
 	if err != nil {
 		return domain.StackSet{}, fmt.Errorf("invalid stacks glob: %w", err)
 	}
@@ -87,4 +99,13 @@ func LoadStacks(config domain.GlobalConfig, checkSystemPorts bool) (domain.Stack
 		return domain.StackSet{}, err
 	}
 	return stackSet, nil
+}
+
+// LoadFixtureStackSet 读取 config.yaml 及同级 stacks 目录，跳过系统端口占用检查。
+func LoadFixtureStackSet(configPath string) (domain.StackSet, error) {
+	config, err := LoadConfig(configPath)
+	if err != nil {
+		return domain.StackSet{}, err
+	}
+	return LoadStacks(config, configPath, false)
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/eagle/proxystack-web/internal/domain/validation"
 	"github.com/eagle/proxystack-web/internal/paths"
 	"github.com/eagle/proxystack-web/internal/store"
 )
@@ -15,11 +16,13 @@ type Service struct {
 	Store  *store.Store
 	Layout paths.Layout
 	Now    func() time.Time
+	// PortChecker 探测本机端口占用；为 nil 时不探测。
+	PortChecker validation.PortChecker
 }
 
 // New 创建应用服务。
 func New(st *store.Store, layout paths.Layout) *Service {
-	return &Service{Store: st, Layout: layout, Now: time.Now}
+	return &Service{Store: st, Layout: layout, Now: time.Now, PortChecker: validation.TCPPortChecker{}}
 }
 
 // 应用层错误，由 HTTP 层映射为状态码。

@@ -4,6 +4,10 @@
 
 package dbq
 
+import (
+	"database/sql"
+)
+
 type Admin struct {
 	ID                 int64  `json:"id"`
 	Username           string `json:"username"`
@@ -34,6 +38,83 @@ type AuditLog struct {
 	Summary  string `json:"summary"`
 }
 
+type ConfigRevision struct {
+	ID        int64  `json:"id"`
+	CreatedAt int64  `json:"created_at"`
+	Actor     string `json:"actor"`
+	Summary   string `json:"summary"`
+	Snapshot  string `json:"snapshot"`
+}
+
+type Inbound struct {
+	ID              int64  `json:"id"`
+	StackID         int64  `json:"stack_id"`
+	Position        int64  `json:"position"`
+	Name            string `json:"name"`
+	Protocol        string `json:"protocol"`
+	Listen          string `json:"listen"`
+	Port            int64  `json:"port"`
+	Sub             int64  `json:"sub"`
+	Udp             int64  `json:"udp"`
+	Network         string `json:"network"`
+	WsPath          string `json:"ws_path"`
+	WsHeaders       string `json:"ws_headers"`
+	GrpcServiceName string `json:"grpc_service_name"`
+	Method          string `json:"method"`
+	Password        string `json:"password"`
+	AuthType        string `json:"auth_type"`
+	AuthUsername    string `json:"auth_username"`
+	AuthPassword    string `json:"auth_password"`
+	Server          string `json:"server"`
+	Remark          string `json:"remark"`
+	DisplayTemplate string `json:"display_template"`
+	Region          string `json:"region"`
+	Tag             string `json:"tag"`
+}
+
+type InboundUserRef struct {
+	InboundID       int64         `json:"inbound_id"`
+	Position        int64         `json:"position"`
+	UserID          int64         `json:"user_id"`
+	ProfileID       sql.NullInt64 `json:"profile_id"`
+	Remark          string        `json:"remark"`
+	DisplayTemplate string        `json:"display_template"`
+	Tag             string        `json:"tag"`
+}
+
+type MihomoGroup struct {
+	ID       int64  `json:"id"`
+	StackID  int64  `json:"stack_id"`
+	Position int64  `json:"position"`
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Proxies  string `json:"proxies"`
+	Url      string `json:"url"`
+	Interval int64  `json:"interval"`
+	Strategy string `json:"strategy"`
+}
+
+type MihomoListener struct {
+	StackID  int64  `json:"stack_id"`
+	Kind     string `json:"kind"`
+	Enabled  int64  `json:"enabled"`
+	Name     string `json:"name"`
+	Listen   string `json:"listen"`
+	Port     int64  `json:"port"`
+	Auth     string `json:"auth"`
+	Accounts string `json:"accounts"`
+}
+
+type MihomoUpstream struct {
+	ID           int64         `json:"id"`
+	StackID      int64         `json:"stack_id"`
+	Position     int64         `json:"position"`
+	Name         string        `json:"name"`
+	Type         string        `json:"type"`
+	RefInboundID sql.NullInt64 `json:"ref_inbound_id"`
+	RawConfig    string        `json:"raw_config"`
+}
+
 type Session struct {
 	IDHash     string `json:"id_hash"`
 	AdminID    int64  `json:"admin_id"`
@@ -48,4 +129,64 @@ type Session struct {
 type Setting struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
+}
+
+type Stack struct {
+	ID                    int64  `json:"id"`
+	Position              int64  `json:"position"`
+	Name                  string `json:"name"`
+	Enabled               int64  `json:"enabled"`
+	DesiredRunning        int64  `json:"desired_running"`
+	Role                  string `json:"role"`
+	Labels                string `json:"labels"`
+	XrayEnabled           int64  `json:"xray_enabled"`
+	XrayLoglevel          string `json:"xray_loglevel"`
+	XrayApi               string `json:"xray_api"`
+	XrayStats             string `json:"xray_stats"`
+	XrayPolicy            string `json:"xray_policy"`
+	XrayApiPort           int64  `json:"xray_api_port"`
+	OutboundType          string `json:"outbound_type"`
+	OutboundServer        string `json:"outbound_server"`
+	OutboundPort          int64  `json:"outbound_port"`
+	OutboundUsername      string `json:"outbound_username"`
+	OutboundPassword      string `json:"outbound_password"`
+	OutboundPrivateDirect int64  `json:"outbound_private_direct"`
+	MihomoEnabled         int64  `json:"mihomo_enabled"`
+	MihomoMode            string `json:"mihomo_mode"`
+	MihomoLoglevel        string `json:"mihomo_loglevel"`
+	ControllerPort        int64  `json:"controller_port"`
+	ControllerSecret      string `json:"controller_secret"`
+	RuleProfile           string `json:"rule_profile"`
+	RuleFinal             string `json:"rule_final"`
+	RuleExtra             string `json:"rule_extra"`
+}
+
+type User struct {
+	ID              int64  `json:"id"`
+	Position        int64  `json:"position"`
+	Name            string `json:"name"`
+	Enabled         int64  `json:"enabled"`
+	Uuid            string `json:"uuid"`
+	SsPassword      string `json:"ss_password"`
+	Remark          string `json:"remark"`
+	DisplayTemplate string `json:"display_template"`
+	Tag             string `json:"tag"`
+	SubToken        string `json:"sub_token"`
+	QuotaBytes      int64  `json:"quota_bytes"`
+	ResetMode       string `json:"reset_mode"`
+	ResetDay        int64  `json:"reset_day"`
+	ExpireAt        string `json:"expire_at"`
+	Note            string `json:"note"`
+}
+
+type UserProfile struct {
+	ID              int64  `json:"id"`
+	UserID          int64  `json:"user_id"`
+	Position        int64  `json:"position"`
+	Name            string `json:"name"`
+	Uuid            string `json:"uuid"`
+	SsPassword      string `json:"ss_password"`
+	Remark          string `json:"remark"`
+	DisplayTemplate string `json:"display_template"`
+	Tag             string `json:"tag"`
 }

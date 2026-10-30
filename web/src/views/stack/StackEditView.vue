@@ -1,0 +1,375 @@
+<script setup lang="ts">
+import { computed, h, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import {
+  NBadge, NButton, NCard, NDynamicTags, NForm, NFormItem, NInput, NModal, NPopconfirm, NRadioButton, NRadioGroup,
+  NSelect, NSpace, NSpin, NSwitch, NTabPane, NTabs, NText, useDialog, useMessage,
+} from 'naive-ui'
+import {
+  api, emptyErrors, fieldState, MASKED, splitProblem, type FormErrors, type Schemas,
+} from '../../api/client'
+import ErrorList from '../../components/ErrorList.vue'
+import PortInput from '../../components/PortInput.vue'
+import SecretInput from '../../components/SecretInput.vue'
+import TriStateSelect from '../../components/TriStateSelect.vue'
+import { useDirty } from '../../composables/useDirty'
+import { randomString } from '../../util/generate'
+import { mihomoLogLevels, xrayLogLevels } from '../../util/options'
+import GroupsTab from './GroupsTab.vue'
+import InboundsTab from './InboundsTab.vue'
+import ListenerForm from './ListenerForm.vue'
+import PreviewTab from './PreviewTab.vue'
+import RulesTab from './RulesTab.vue'
+import UpstreamsTab from './UpstreamsTab.vue'
+import { stackPorts } from './ports'
+
+type Stack = Schemas['Stack']
+
+const route = useRoute()
+const router = useRouter()
+const message = useMessage()
+const dialog = useDialog()
+const id = computed(() => Number(route.params.id))
+const stack = ref<Stack | null>(null)
+const summaries = ref<Schemas['StackSummary'][]>([])
+const users = ref<Schemas['User'][]>([])
+const errors = ref<FormErrors>(emptyErrors())
+const saving = ref(false)
+const tab = ref(String(route.query.tab ?? 'basic'))
+/** 每次保存后递增，生成预览据此重新加载。 */
+const savedVersion = ref(0)
+const { dirty, markClean } = useDirty(stack)
+
+const f = (path: string, hint?: string) => fieldState(errors.value, path, hint)
+
+async function load() {
+  const [stackResult, listResult, userResult] = await Promise.all([
+    api.GET('/api/stacks/{id}', { params: { path: { id: id.value } } }),
+    api.GET('/api/stacks'),
+    api.GET('/api/users'),
+  ])
+  if (!stackResult.data) {
+    message.error('stack 不存在')
+    router.replace({ name: 'stacks' })
+    return
+  }
+  stack.value = stackResult.data
+  summaries.value = listResult.data?.stacks ?? []
+  users.value = userResult.data?.users ?? []
+  errors.value = emptyErrors()
+  markClean()
+}
+onMounted(load)
+watch(id, load)
+
+/** 取回明文凭据，只替换仍是占位的字段。 */
+async function reveal() {
+  const { data } = await api.GET('/api/stacks/{id}/secrets', { params: { path: { id: id.value } } })
+  const s = stack.value
+  if (!data || !s) return
+  const wasDirty = dirty.value
+  const keep = (current: string, plain: string) => (current === MASKED ? plain : current)
+  s.mihomo.controller_secret = keep(s.mihomo.controller_secret, data.mihomo.controller_secret)
+  s.xray.outbound.password = keep(s.xray.outbound.password, data.xray.outbound.password)
+  for (const inbound of s.xray.inbounds) {
+    const plain = data.xray.inbounds.find((i) => i.id === inbound.id)
+    if (plain) {
+      inbound.password = keep(inbound.password, plain.password)
+      inbound.auth_password = keep(inbound.auth_password, plain.auth_password)
+    }
+  }
+  for (const [listener, plain] of [[s.mihomo.socks, data.mihomo.socks], [s.mihomo.http, data.mihomo.http]] as const) {
+    for (const account of listener.accounts) {
+      const match = plain.accounts.find((a) => a.username === account.username)
+      if (match) account.password = keep(account.password, match.password)
+    }
+  }
+  if (!wasDirty) markClean()
+}
+
+async function save() {
+  if (!stack.value) return
+  saving.value = true
+  const { data, error } = await api.PUT('/api/stacks/{id}', { params: { path: { id: id.value } }, body: stack.value })
+  saving.value = false
+  if (error) {
+    errors.value = splitProblem(error)
+    const first = Object.keys(errors.value.fields)[0]
+    if (first) tab.value = tabFor(first)
+    return
+  }
+  stack.value = data!
+  errors.value = emptyErrors()
+  markClean()
+  savedVersion.value++
+  message.success('已保存，配置变更将在下次应用时生效')
+}
+
+function tabFor(path: string): string {
+  if (path.startsWith('xray.inbounds')) return 'inbounds'
+  if (path.startsWith('xray.outbound')) return 'outbound'
+  if (path.startsWith('xray')) return 'xray'
+  if (path.startsWith('mihomo.upstreams')) return 'upstreams'
+  if (path.startsWith('mihomo.groups')) return 'groups'
+  if (path.startsWith('mihomo.rules')) return 'rules'
+  if (path.startsWith('mihomo')) return 'mihomo'
+  return 'basic'
+}
+
+const tabErrors = computed(() => {
+  const out: Record<string, boolean> = {}
+  for (const path of Object.keys(errors.value.fields)) out[tabFor(path)] = true
+  return out
+})
+
+const tabLabel = (name: string, label: string) => () =>
+  tabErrors.value[name] ? h(NBadge, { dot: true, type: 'error', offset: [6, 0] }, () => label) : label
+
+const ports = computed(() => (stack.value ? stackPorts(stack.value) : []))
+
+// 克隆与删除
+const cloning = ref(false)
+const cloneName = ref('')
+const cloneErrors = ref<FormErrors>(emptyErrors())
+
+async function clone() {
+  const { data, error } = await api.POST('/api/stacks/{id}/clone', { params: { path: { id: id.value } }, body: { name: cloneName.value } })
+  if (error) {
+    cloneErrors.value = splitProblem(error, '克隆失败')
+    return
+  }
+  cloning.value = false
+  message.success('已克隆，端口已重新分配')
+  router.push({ name: 'stack', params: { id: data!.id } })
+}
+
+async function remove() {
+  const { error } = await api.DELETE('/api/stacks/{id}', { params: { path: { id: id.value } } })
+  if (error) {
+    errors.value = splitProblem(error, '删除失败')
+    return
+  }
+  markClean()
+  message.success('已删除')
+  router.replace({ name: 'stacks' })
+}
+
+// 成员
+const members = ref<string[]>([])
+watch(stack, (s) => {
+  if (s && !dirty.value) {
+    members.value = [...new Set(s.mihomo.upstreams.filter((u) => u.type === 'xray-socks5').map((u) => u.stack))].sort()
+  }
+}, { immediate: true })
+const memberOptions = computed(() =>
+  summaries.value
+    .filter((s) => s.id !== id.value && s.role === 'edge' && s.inbounds.some((i) => i.name === 'relay' && i.protocol === 'socks5'))
+    .map((s) => ({ label: s.name, value: s.name })),
+)
+
+async function saveMembers() {
+  const run = async () => {
+    const { data, error } = await api.PUT('/api/stacks/{id}/members', { params: { path: { id: id.value } }, body: { members: members.value } })
+    if (error) {
+      errors.value = splitProblem(error, '保存成员失败')
+      return
+    }
+    stack.value = data!
+    errors.value = emptyErrors()
+    markClean()
+    savedVersion.value++
+    message.success('成员已更新，上游和代理组已同步')
+  }
+  if (dirty.value) {
+    dialog.warning({
+      title: '放弃未保存的修改？',
+      content: '保存成员会重新载入 stack，其他标签页中未保存的修改将丢失。',
+      positiveText: '继续',
+      negativeText: '取消',
+      onPositiveClick: run,
+    })
+  } else {
+    run()
+  }
+}
+</script>
+
+<template>
+  <NSpin :show="!stack">
+    <template v-if="stack">
+      <NCard size="small" style="margin-bottom: 12px">
+        <NSpace justify="space-between" align="center">
+          <NSpace align="center">
+            <NText strong style="font-size: 16px">{{ stack.name }}</NText>
+            <NText v-if="dirty" type="warning">未保存</NText>
+          </NSpace>
+          <NSpace>
+            <NButton @click="(cloning = true), (cloneName = `${stack.name}-copy`), (cloneErrors = emptyErrors())">克隆</NButton>
+            <NPopconfirm @positive-click="remove">
+              <template #trigger><NButton type="error" ghost>删除</NButton></template>
+              删除 stack 的全部配置。被其他 stack 引用时无法删除。确定？
+            </NPopconfirm>
+            <NButton type="primary" :disabled="!dirty" :loading="saving" @click="save">保存</NButton>
+          </NSpace>
+        </NSpace>
+      </NCard>
+      <ErrorList :errors="errors.global" />
+
+      <NTabs v-model:value="tab" type="line" animated>
+        <NTabPane name="basic" :tab="tabLabel('basic', '基本')">
+          <NForm label-placement="left" label-width="110" style="max-width: 720px">
+            <NFormItem label="名称" required v-bind="f('name', '改名会同步更新其他 stack 中的引用')">
+              <NInput v-model:value="stack.name" />
+            </NFormItem>
+            <NFormItem label="启用" v-bind="f('enabled', '关闭时不生成配置、不参与对账')">
+              <NSwitch v-model:value="stack.enabled" />
+            </NFormItem>
+            <NFormItem label="期望运行" v-bind="f('desired_running')">
+              <NSwitch v-model:value="stack.desired_running" />
+            </NFormItem>
+            <NFormItem label="角色" v-bind="f('role')">
+              <NRadioGroup v-model:value="stack.role">
+                <NRadioButton value="edge">edge</NRadioButton>
+                <NRadioButton value="auto">auto</NRadioButton>
+              </NRadioGroup>
+            </NFormItem>
+            <NFormItem label="标签" v-bind="f('labels')">
+              <NDynamicTags v-model:value="stack.labels" />
+            </NFormItem>
+          </NForm>
+        </NTabPane>
+
+        <NTabPane name="xray" :tab="tabLabel('xray', 'Xray')">
+          <NForm label-placement="left" label-width="110" style="max-width: 720px">
+            <NFormItem label="启用" v-bind="f('xray.enabled')">
+              <NSwitch v-model:value="stack.xray.enabled" />
+            </NFormItem>
+            <NFormItem label="日志级别" v-bind="f('xray.loglevel')">
+              <NSelect
+                v-model:value="stack.xray.loglevel"
+                :options="[{ label: '继承全局', value: 'inherit' }, ...xrayLogLevels.map((v) => ({ label: v, value: v }))]"
+              />
+            </NFormItem>
+            <NFormItem label="API" v-bind="f('xray.api')"><TriStateSelect v-model:value="stack.xray.api" /></NFormItem>
+            <NFormItem label="stats" v-bind="f('xray.stats')"><TriStateSelect v-model:value="stack.xray.stats" /></NFormItem>
+            <NFormItem label="policy" v-bind="f('xray.policy')"><TriStateSelect v-model:value="stack.xray.policy" /></NFormItem>
+            <NFormItem label="API 端口" v-bind="f('xray.api_port', '监听 127.0.0.1')">
+              <PortInput v-model:value="stack.xray.api_port" pool="xray_api" :stack-id="stack.id" :exclude="ports" />
+            </NFormItem>
+          </NForm>
+        </NTabPane>
+
+        <NTabPane name="inbounds" :tab="tabLabel('inbounds', '入站')">
+          <InboundsTab :stack="stack" :users="users" :errors="errors" :reveal="reveal" />
+        </NTabPane>
+
+        <NTabPane name="outbound" :tab="tabLabel('outbound', '出站')">
+          <NForm label-placement="left" label-width="110" style="max-width: 720px">
+            <NFormItem label="类型" v-bind="f('xray.outbound.type')">
+              <NRadioGroup v-model:value="stack.xray.outbound.type">
+                <NRadioButton value="mihomo">本 stack Mihomo</NRadioButton>
+                <NRadioButton value="socks5">外部 SOCKS5</NRadioButton>
+                <NRadioButton value="http">外部 HTTP</NRadioButton>
+                <NRadioButton value="direct">直连</NRadioButton>
+              </NRadioGroup>
+            </NFormItem>
+            <NFormItem v-if="stack.xray.outbound.type === 'mihomo'" label="目标监听">
+              <NText>本 stack 的 Mihomo SOCKS 监听（{{ stack.mihomo.socks.listen }}:{{ stack.mihomo.socks.port }}）</NText>
+            </NFormItem>
+            <template v-if="stack.xray.outbound.type === 'socks5' || stack.xray.outbound.type === 'http'">
+              <NFormItem label="server" required v-bind="f('xray.outbound.server')">
+                <NInput v-model:value="stack.xray.outbound.server" />
+              </NFormItem>
+              <NFormItem label="port" required v-bind="f('xray.outbound.port')">
+                <NInput :value="String(stack.xray.outbound.port || '')" @update:value="(v) => (stack!.xray.outbound.port = Number(v) || 0)" />
+              </NFormItem>
+              <NFormItem label="username" v-bind="f('xray.outbound.username')">
+                <NInput v-model:value="stack.xray.outbound.username" />
+              </NFormItem>
+              <NFormItem label="password" v-bind="f('xray.outbound.password')">
+                <SecretInput v-model:value="stack.xray.outbound.password" :reveal="reveal" />
+              </NFormItem>
+              <NFormItem label="私网目标直连" v-bind="f('xray.outbound.private_direct')">
+                <NSwitch v-model:value="stack.xray.outbound.private_direct" />
+              </NFormItem>
+            </template>
+            <NText v-if="stack.xray.outbound.type !== 'mihomo' && stack.mihomo.enabled" depth="3">
+              出站不经过 Mihomo 时，可以在「Mihomo」标签关闭本 stack 的 Mihomo。
+            </NText>
+          </NForm>
+        </NTabPane>
+
+        <NTabPane name="mihomo" :tab="tabLabel('mihomo', 'Mihomo')">
+          <NForm label-placement="left" label-width="130" style="max-width: 760px">
+            <NFormItem label="启用" v-bind="f('mihomo.enabled')">
+              <NSwitch v-model:value="stack.mihomo.enabled" />
+            </NFormItem>
+            <NFormItem label="模式" v-bind="f('mihomo.mode')">
+              <NRadioGroup v-model:value="stack.mihomo.mode">
+                <NRadioButton value="inherit">继承全局</NRadioButton>
+                <NRadioButton value="Rule">Rule</NRadioButton>
+                <NRadioButton value="Global">Global</NRadioButton>
+                <NRadioButton value="Direct">Direct</NRadioButton>
+              </NRadioGroup>
+            </NFormItem>
+            <NFormItem label="日志级别" v-bind="f('mihomo.loglevel')">
+              <NSelect
+                v-model:value="stack.mihomo.loglevel"
+                :options="[{ label: '继承全局', value: 'inherit' }, ...mihomoLogLevels.map((v) => ({ label: v, value: v }))]"
+              />
+            </NFormItem>
+            <NFormItem label="controller 端口" v-bind="f('mihomo.controller_port', '监听 127.0.0.1')">
+              <PortInput v-model:value="stack.mihomo.controller_port" pool="mihomo_controller" :stack-id="stack.id" :exclude="ports" />
+            </NFormItem>
+            <NFormItem label="controller secret" required v-bind="f('mihomo.controller_secret')">
+              <SecretInput v-model:value="stack.mihomo.controller_secret" :generate="() => randomString(32)" :reveal="reveal" />
+            </NFormItem>
+            <ListenerForm title="SOCKS 监听" kind="socks" :listener="stack.mihomo.socks" :errors="errors" prefix="mihomo.socks" :stack-id="stack.id" :ports="ports" :reveal="reveal" />
+            <ListenerForm title="HTTP 监听" kind="http" :listener="stack.mihomo.http" :errors="errors" prefix="mihomo.http" :stack-id="stack.id" :ports="ports" :reveal="reveal" />
+          </NForm>
+        </NTabPane>
+
+        <NTabPane name="upstreams" :tab="tabLabel('upstreams', '上游')">
+          <UpstreamsTab :stack="stack" :summaries="summaries" :errors="errors" />
+        </NTabPane>
+
+        <NTabPane name="groups" :tab="tabLabel('groups', '代理组')">
+          <GroupsTab :stack="stack" :errors="errors" />
+        </NTabPane>
+
+        <NTabPane name="rules" :tab="tabLabel('rules', '规则')">
+          <RulesTab :stack="stack" :errors="errors" />
+        </NTabPane>
+
+        <NTabPane v-if="stack.role === 'auto'" name="members" tab="成员">
+          <NForm label-placement="top" style="max-width: 640px">
+            <NFormItem label="成员 stack" :feedback="'只列出带 relay SOCKS5 入站的 edge stack；保存后同步上游和代理组成员'">
+              <NSelect v-model:value="members" :options="memberOptions" multiple filterable />
+            </NFormItem>
+            <NButton type="primary" @click="saveMembers">保存成员</NButton>
+          </NForm>
+        </NTabPane>
+
+        <NTabPane name="preview" tab="生成预览">
+          <PreviewTab :stack-id="stack.id!" :dirty="dirty" :version="savedVersion" />
+        </NTabPane>
+      </NTabs>
+    </template>
+  </NSpin>
+
+  <NModal v-model:show="cloning" preset="card" title="克隆 stack" style="max-width: 480px">
+    <ErrorList :errors="cloneErrors.global" title="克隆失败" />
+    <NForm label-placement="left" label-width="80">
+      <NFormItem label="新名称" v-bind="fieldState(cloneErrors, 'name')">
+        <NInput v-model:value="cloneName" />
+      </NFormItem>
+    </NForm>
+    <NText depth="3">复制全部子项并重新分配端口，只改写指向源 stack 自身资源的引用。克隆的是已保存的配置。</NText>
+    <template #footer>
+      <NSpace justify="end">
+        <NButton @click="cloning = false">取消</NButton>
+        <NButton type="primary" :disabled="!cloneName" @click="clone">克隆</NButton>
+      </NSpace>
+    </template>
+  </NModal>
+</template>

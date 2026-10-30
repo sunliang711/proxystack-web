@@ -89,6 +89,265 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/config/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 导出配置文件 */
+        post: operations["exportConfig"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/config/import/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 执行导入 */
+        post: operations["applyImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/config/import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 导入预览 */
+        post: operations["previewImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/config/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取系统设置 */
+        get: operations["getSettings"];
+        /** 保存系统设置 */
+        put: operations["updateSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ports/allocate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 从端口池分配端口 */
+        post: operations["allocatePort"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ports/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 检查端口冲突与占用 */
+        get: operations["checkPort"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 配置历史 */
+        get: operations["listRevisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/revisions/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 比较两个版本 */
+        get: operations["diffRevisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/revisions/{id}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 回滚到指定版本 */
+        post: operations["rollbackRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stack 列表 */
+        get: operations["listStacks"];
+        put?: never;
+        /** 按模板新建 stack */
+        post: operations["createStack"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stack 详情 */
+        get: operations["getStack"];
+        /** 保存 stack */
+        put: operations["updateStack"];
+        post?: never;
+        /** 删除 stack */
+        delete: operations["deleteStack"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{id}/clone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 克隆 stack */
+        post: operations["cloneStack"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 设置 auto stack 成员 */
+        put: operations["setStackMembers"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 生成预览 */
+        get: operations["previewStack"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{id}/secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查看 stack 明文凭据（记入审计日志） */
+        get: operations["getStackSecrets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/info": {
         parameters: {
             query?: never;
@@ -98,6 +357,77 @@ export interface paths {
         };
         /** 系统信息 */
         get: operations["getSystemInfo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 用户列表 */
+        get: operations["listUsers"];
+        put?: never;
+        /** 新建用户 */
+        post: operations["createUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 用户详情 */
+        get: operations["getUser"];
+        /** 保存用户 */
+        put: operations["updateUser"];
+        post?: never;
+        /** 删除用户 */
+        delete: operations["deleteUser"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{id}/reset-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 重置订阅 token */
+        post: operations["resetUserToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{id}/secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查看用户明文凭据（记入审计日志） */
+        get: operations["getUserSecrets"];
         put?: never;
         post?: never;
         delete?: never;
@@ -117,9 +447,41 @@ export interface components {
             totp_enabled: boolean;
             username: string;
         };
+        AllocateInputBody: {
+            /** @description 表单中尚未保存但已使用的端口 */
+            exclude?: number[];
+            /** @enum {string} */
+            pool: "xray_inbound" | "xray_api" | "mihomo_socks" | "mihomo_http" | "mihomo_controller";
+        };
+        AllocateOutputBody: {
+            /** Format: int64 */
+            port: number;
+        };
+        BasicSettings: {
+            /** @description 订阅节点默认 server，域名或 IP */
+            external_host: string;
+            /** @description 流量统计周期边界使用的时区 */
+            timezone: string;
+        };
         ChangePasswordInputBody: {
             new_password: string;
             old_password: string;
+        };
+        CheckPortOutputBody: {
+            conflict_with: string;
+            in_use: boolean;
+        };
+        DefaultsSettings: {
+            mihomo: components["schemas"]["MihomoDefaults"];
+            xray: components["schemas"]["XrayDefaults"];
+        };
+        DiffEntry: {
+            /** @enum {string} */
+            change: "added" | "removed" | "modified";
+            fields: components["schemas"]["FieldChange"][];
+            /** @enum {string} */
+            kind: "settings" | "user" | "stack";
+            name: string;
         };
         ErrorDetail: {
             /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
@@ -136,7 +498,7 @@ export interface components {
              */
             detail?: string;
             /** @description Optional list of individual error details */
-            errors?: components["schemas"]["ErrorDetail"][] | null;
+            errors?: components["schemas"]["ErrorDetail"][];
             /**
              * Format: uri
              * @description A URI reference that identifies the specific occurrence of the problem.
@@ -162,18 +524,302 @@ export interface components {
              */
             type: string;
         };
+        ExportInputBody: {
+            /** @enum {string} */
+            format: "yaml" | "json" | "csv";
+            include_referenced_users?: boolean;
+            passphrase?: string;
+            /** Format: int64 */
+            revision_id?: number;
+            /** @enum {string} */
+            scope: "all" | "stacks" | "users";
+            /** @enum {string} */
+            secrets: "plain" | "encrypted" | "omitted";
+            stacks?: string[];
+            users?: string[];
+        };
+        FieldChange: {
+            new?: string;
+            old?: string;
+            path: string;
+        };
+        Group: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            interval: number;
+            name: string;
+            proxies: string[];
+            /** @enum {string} */
+            strategy: "" | "consistent-hashing" | "round-robin" | "sticky-sessions";
+            /** @enum {string} */
+            type: "select" | "url-test" | "load-balance" | "fallback";
+            url: string;
+        };
+        ImportBody: {
+            /** @enum {string} */
+            conflict: "skip" | "overwrite" | "rename";
+            content: string;
+            csv?: boolean;
+            exclude?: string[];
+            filename?: string;
+            /** @enum {string} */
+            mode: "merge" | "replace";
+            passphrase?: string;
+            /** @enum {string} */
+            ports: "keep" | "realloc-conflicts" | "realloc-all";
+        };
+        ImportEntry: {
+            /** @enum {string} */
+            action: "create" | "overwrite" | "skip" | "rename" | "excluded";
+            key: string;
+            /** @enum {string} */
+            kind: "settings" | "user" | "stack";
+            name: string;
+            new_name?: string;
+            port_changes: components["schemas"]["PortChange"][];
+            regenerated_secrets: boolean;
+        };
+        ImportIssue: {
+            field: string;
+            message: string;
+        };
+        ImportOutputBody: {
+            entries: components["schemas"]["ImportEntry"][];
+            issues: components["schemas"]["ImportIssue"][];
+            needs_passphrase: boolean;
+            scope: string;
+            secrets: string;
+            valid: boolean;
+        };
+        Inbound: {
+            auth_password: string;
+            /** @enum {string} */
+            auth_type: "" | "noauth" | "password";
+            auth_username: string;
+            display_template: string;
+            grpc_service_name: string;
+            /** Format: int64 */
+            id?: number;
+            listen: string;
+            method: string;
+            name: string;
+            /** @enum {string} */
+            network: "" | "raw" | "ws" | "grpc";
+            password: string;
+            /** Format: int64 */
+            port: number;
+            /** @enum {string} */
+            protocol: "vmess" | "shadowsocks" | "socks5" | "http";
+            region: string;
+            remark: string;
+            server: string;
+            sub: boolean;
+            tag: string;
+            udp: boolean;
+            users: components["schemas"]["UserRef"][];
+            ws_headers: {
+                [key: string]: string;
+            };
+            ws_path: string;
+        };
+        InboundSummary: {
+            /** Format: int64 */
+            id: number;
+            listen: string;
+            name: string;
+            /** Format: int64 */
+            port: number;
+            protocol: string;
+            sub: boolean;
+        };
+        Listener: {
+            accounts: components["schemas"]["ListenerAccount"][];
+            /** @enum {string} */
+            auth: "inherit" | "none" | "accounts";
+            enabled: boolean;
+            listen: string;
+            name: string;
+            /** Format: int64 */
+            port: number;
+        };
+        ListenerAccount: {
+            password: string;
+            username: string;
+        };
         LoginInputBody: {
             password: string;
             username: string;
+        };
+        Mihomo: {
+            /** Format: int64 */
+            controller_port: number;
+            controller_secret: string;
+            enabled: boolean;
+            groups: components["schemas"]["Group"][];
+            http: components["schemas"]["Listener"];
+            /** @enum {string} */
+            loglevel: "inherit" | "debug" | "info" | "warning" | "error" | "silent";
+            /** @enum {string} */
+            mode: "inherit" | "Rule" | "Global" | "Direct";
+            rules: components["schemas"]["Rules"];
+            socks: components["schemas"]["Listener"];
+            upstreams: components["schemas"]["Upstream"][];
+        };
+        MihomoDefaults: {
+            /** @enum {string} */
+            loglevel: "debug" | "info" | "warning" | "error" | "silent";
+            /** @enum {string} */
+            mode: "Rule" | "Global" | "Direct";
+        };
+        Outbound: {
+            password: string;
+            /** Format: int64 */
+            port: number;
+            private_direct: boolean;
+            server: string;
+            /**
+             * @description mihomo 表示转发到本 stack 的 mihomo socks 监听
+             * @enum {string}
+             */
+            type: "mihomo" | "socks5" | "http" | "direct";
+            username: string;
+        };
+        Policy: {
+            enabled: boolean;
+            stats_inbound_downlink: boolean;
+            stats_inbound_uplink: boolean;
+            stats_outbound_downlink: boolean;
+            stats_outbound_uplink: boolean;
+            stats_user_downlink: boolean;
+            stats_user_uplink: boolean;
+        };
+        PortChange: {
+            field: string;
+            /** Format: int64 */
+            from: number;
+            /** Format: int64 */
+            to: number;
+        };
+        PortPools: {
+            mihomo_controller: components["schemas"]["PortRange"];
+            mihomo_http: components["schemas"]["PortRange"];
+            mihomo_socks: components["schemas"]["PortRange"];
+            xray_api: components["schemas"]["PortRange"];
+            xray_inbound: components["schemas"]["PortRange"];
+        };
+        PortRange: {
+            /** Format: int64 */
+            end: number;
+            /** Format: int64 */
+            start: number;
+        };
+        PreviewOutputBody: {
+            errors: string[];
+            mihomo: string;
+            xray: string;
+        };
+        Profile: {
+            display_template: string;
+            /** Format: int64 */
+            id?: number;
+            name: string;
+            remark: string;
+            ss_password: string;
+            tag: string;
+            uuid: string;
         };
         ResetInputBody: {
             new_password: string;
             token: string;
         };
+        RevisionDiffOutputBody: {
+            entries: components["schemas"]["DiffEntry"][];
+        };
+        RevisionItem: {
+            actor: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int64 */
+            id: number;
+            summary: string;
+        };
+        RevisionListOutputBody: {
+            items: components["schemas"]["RevisionItem"][];
+            /** Format: int64 */
+            total: number;
+        };
+        Rule: {
+            no_resolve: boolean;
+            target: string;
+            type: string;
+            value: string;
+        };
+        Rules: {
+            extra: components["schemas"]["Rule"][];
+            final: string;
+            /** @enum {string} */
+            profile: "default";
+        };
+        SecuritySettings: {
+            allow_noauth_public: boolean;
+            require_auth_for_public_socks_http: boolean;
+        };
         SessionBody: {
             admin: components["schemas"]["AdminView"];
             /** @description 修改类请求需在 X-CSRF-Token 头中携带 */
             csrf_token: string;
+        };
+        Settings: {
+            basic: components["schemas"]["BasicSettings"];
+            defaults: components["schemas"]["DefaultsSettings"];
+            port_pools: components["schemas"]["PortPools"];
+            security: components["schemas"]["SecuritySettings"];
+        };
+        Stack: {
+            desired_running: boolean;
+            enabled: boolean;
+            /** Format: int64 */
+            id?: number;
+            labels: string[];
+            mihomo: components["schemas"]["Mihomo"];
+            name: string;
+            /** @enum {string} */
+            role: "edge" | "auto";
+            xray: components["schemas"]["Xray"];
+        };
+        StackCloneInputBody: {
+            name: string;
+        };
+        StackCreateInputBody: {
+            labels: string[];
+            members: string[];
+            name: string;
+            /** @enum {string} */
+            template: "pair" | "auto-url-test" | "load-balance";
+        };
+        StackListOutputBody: {
+            stacks: components["schemas"]["StackSummary"][];
+        };
+        StackMembersInputBody: {
+            members: string[];
+        };
+        StackSummary: {
+            desired_running: boolean;
+            enabled: boolean;
+            /** Format: int64 */
+            id: number;
+            inbounds: components["schemas"]["InboundSummary"][];
+            labels: string[];
+            /** @description 全部入站只监听本机回环地址 */
+            loopback: boolean;
+            members: string[];
+            mihomo_enabled: boolean;
+            mihomo_http: string;
+            mihomo_socks: string;
+            name: string;
+            role: string;
+            xray_enabled: boolean;
         };
         SystemInfo: {
             build_date: string;
@@ -185,6 +831,88 @@ export interface components {
             platform: string;
             tls_mode: string;
             version: string;
+        };
+        Upstream: {
+            /** @description type=raw 时的 mihomo 节点字段 */
+            config: {
+                [key: string]: unknown;
+            } | null;
+            /** Format: int64 */
+            id?: number;
+            /** @description type=xray-socks5 时引用的 socks5 入站 */
+            inbound: string;
+            name: string;
+            /** @description type=xray-socks5 时引用的 stack */
+            stack: string;
+            /** @enum {string} */
+            type: "raw" | "xray-socks5";
+        };
+        User: {
+            display_template: string;
+            enabled: boolean;
+            /** @description RFC 3339 时间，空表示不过期 */
+            expire_at: string;
+            /** Format: int64 */
+            id?: number;
+            name: string;
+            note: string;
+            profiles: components["schemas"]["Profile"][];
+            /** Format: int64 */
+            quota_bytes: number;
+            remark: string;
+            /** Format: int64 */
+            reset_day: number;
+            /** @enum {string} */
+            reset_mode: "none" | "monthly";
+            ss_password: string;
+            sub_token: string;
+            tag: string;
+            uuid: string;
+        };
+        UserDetail: {
+            references: components["schemas"]["UserReference"][];
+            user: components["schemas"]["User"];
+        };
+        UserListOutputBody: {
+            users: components["schemas"]["User"][];
+        };
+        UserRef: {
+            display_template: string;
+            /** @description 空表示 default 档案 */
+            profile: string;
+            remark: string;
+            tag: string;
+            user: string;
+        };
+        UserReference: {
+            inbound: string;
+            profile: string;
+            stack: string;
+            /** Format: int64 */
+            stack_id: number;
+        };
+        Xray: {
+            /** @enum {string} */
+            api: "inherit" | "on" | "off";
+            /** Format: int64 */
+            api_port: number;
+            enabled: boolean;
+            inbounds: components["schemas"]["Inbound"][];
+            /** @enum {string} */
+            loglevel: "inherit" | "debug" | "info" | "warning" | "error" | "none";
+            outbound: components["schemas"]["Outbound"];
+            /** @enum {string} */
+            policy: "inherit" | "on" | "off";
+            /** @enum {string} */
+            stats: "inherit" | "on" | "off";
+        };
+        XrayDefaults: {
+            api_enabled: boolean;
+            api_services: ("HandlerService" | "StatsService")[];
+            /** @enum {string} */
+            loglevel: "debug" | "info" | "warning" | "error" | "none";
+            policy: components["schemas"]["Policy"];
+            stats: boolean;
         };
     };
     responses: never;
@@ -348,6 +1076,617 @@ export interface operations {
             };
         };
     };
+    exportConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    applyImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    previewImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Settings"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Settings"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Settings"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    allocatePort: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AllocateInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AllocateOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    checkPort: {
+        parameters: {
+            query?: {
+                port?: number;
+                stack_id?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckPortOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listRevisions: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionListOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    diffRevisions: {
+        parameters: {
+            query?: {
+                from?: number;
+                /** @description 0 或省略表示当前配置 */
+                to?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionDiffOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    rollbackRevision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listStacks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StackListOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createStack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StackCreateInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Stack"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getStack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Stack"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateStack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Stack"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Stack"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteStack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    cloneStack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StackCloneInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Stack"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setStackMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StackMembersInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Stack"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    previewStack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getStackSecrets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Stack"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     getSystemInfo: {
         parameters: {
             query?: never;
@@ -364,6 +1703,225 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemInfo"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listUsers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserListOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["User"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDetail"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["User"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    resetUserToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getUserSecrets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
                 };
             };
             /** @description Error */

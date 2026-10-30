@@ -26,6 +26,64 @@
         ],
         "type": "object"
       },
+      "AllocateInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "exclude": {
+            "description": "表单中尚未保存但已使用的端口",
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "pool": {
+            "enum": [
+              "xray_inbound",
+              "xray_api",
+              "mihomo_socks",
+              "mihomo_http",
+              "mihomo_controller"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "pool"
+        ],
+        "type": "object"
+      },
+      "AllocateOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "port": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "port"
+        ],
+        "type": "object"
+      },
+      "BasicSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "external_host": {
+            "description": "订阅节点默认 server，域名或 IP",
+            "type": "string"
+          },
+          "timezone": {
+            "description": "流量统计周期边界使用的时区",
+            "type": "string"
+          }
+        },
+        "required": [
+          "external_host",
+          "timezone"
+        ],
+        "type": "object"
+      },
       "ChangePasswordInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -43,6 +101,75 @@
         "required": [
           "old_password",
           "new_password"
+        ],
+        "type": "object"
+      },
+      "CheckPortOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "conflict_with": {
+            "type": "string"
+          },
+          "in_use": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "conflict_with",
+          "in_use"
+        ],
+        "type": "object"
+      },
+      "DefaultsSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "mihomo": {
+            "$ref": "#/components/schemas/MihomoDefaults"
+          },
+          "xray": {
+            "$ref": "#/components/schemas/XrayDefaults"
+          }
+        },
+        "required": [
+          "mihomo",
+          "xray"
+        ],
+        "type": "object"
+      },
+      "DiffEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "change": {
+            "enum": [
+              "added",
+              "removed",
+              "modified"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/FieldChange"
+            },
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "settings",
+              "user",
+              "stack"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "change",
+          "fields"
         ],
         "type": "object"
       },
@@ -78,10 +205,7 @@
             "items": {
               "$ref": "#/components/schemas/ErrorDetail"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           },
           "instance": {
             "description": "A URI reference that identifies the specific occurrence of the problem.",
@@ -118,6 +242,506 @@
         },
         "type": "object"
       },
+      "ExportInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "enum": [
+              "yaml",
+              "json",
+              "csv"
+            ],
+            "type": "string"
+          },
+          "include_referenced_users": {
+            "type": "boolean"
+          },
+          "passphrase": {
+            "type": "string"
+          },
+          "revision_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "scope": {
+            "enum": [
+              "all",
+              "stacks",
+              "users"
+            ],
+            "type": "string"
+          },
+          "secrets": {
+            "enum": [
+              "plain",
+              "encrypted",
+              "omitted"
+            ],
+            "type": "string"
+          },
+          "stacks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "users": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "scope",
+          "format",
+          "secrets"
+        ],
+        "type": "object"
+      },
+      "FieldChange": {
+        "additionalProperties": false,
+        "properties": {
+          "new": {
+            "type": "string"
+          },
+          "old": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "Group": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "interval": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "proxies": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "strategy": {
+            "enum": [
+              "",
+              "consistent-hashing",
+              "round-robin",
+              "sticky-sessions"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "select",
+              "url-test",
+              "load-balance",
+              "fallback"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "proxies",
+          "url",
+          "interval",
+          "strategy"
+        ],
+        "type": "object"
+      },
+      "ImportBody": {
+        "additionalProperties": false,
+        "properties": {
+          "conflict": {
+            "enum": [
+              "skip",
+              "overwrite",
+              "rename"
+            ],
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "csv": {
+            "type": "boolean"
+          },
+          "exclude": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "merge",
+              "replace"
+            ],
+            "type": "string"
+          },
+          "passphrase": {
+            "type": "string"
+          },
+          "ports": {
+            "enum": [
+              "keep",
+              "realloc-conflicts",
+              "realloc-all"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "content",
+          "mode",
+          "conflict",
+          "ports"
+        ],
+        "type": "object"
+      },
+      "ImportEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "create",
+              "overwrite",
+              "skip",
+              "rename",
+              "excluded"
+            ],
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "settings",
+              "user",
+              "stack"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "new_name": {
+            "type": "string"
+          },
+          "port_changes": {
+            "items": {
+              "$ref": "#/components/schemas/PortChange"
+            },
+            "type": "array"
+          },
+          "regenerated_secrets": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "kind",
+          "name",
+          "action",
+          "port_changes",
+          "regenerated_secrets"
+        ],
+        "type": "object"
+      },
+      "ImportIssue": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ImportOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ImportEntry"
+            },
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/ImportIssue"
+            },
+            "type": "array"
+          },
+          "needs_passphrase": {
+            "type": "boolean"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "secrets": {
+            "type": "string"
+          },
+          "valid": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "scope",
+          "secrets",
+          "needs_passphrase",
+          "entries",
+          "issues",
+          "valid"
+        ],
+        "type": "object"
+      },
+      "Inbound": {
+        "additionalProperties": false,
+        "properties": {
+          "auth_password": {
+            "type": "string"
+          },
+          "auth_type": {
+            "enum": [
+              "",
+              "noauth",
+              "password"
+            ],
+            "type": "string"
+          },
+          "auth_username": {
+            "type": "string"
+          },
+          "display_template": {
+            "type": "string"
+          },
+          "grpc_service_name": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "listen": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "network": {
+            "enum": [
+              "",
+              "raw",
+              "ws",
+              "grpc"
+            ],
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "port": {
+            "format": "int64",
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "protocol": {
+            "enum": [
+              "vmess",
+              "shadowsocks",
+              "socks5",
+              "http"
+            ],
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "remark": {
+            "type": "string"
+          },
+          "server": {
+            "type": "string"
+          },
+          "sub": {
+            "type": "boolean"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "udp": {
+            "type": "boolean"
+          },
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/UserRef"
+            },
+            "type": "array"
+          },
+          "ws_headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "ws_path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "protocol",
+          "listen",
+          "port",
+          "sub",
+          "udp",
+          "network",
+          "ws_path",
+          "ws_headers",
+          "grpc_service_name",
+          "method",
+          "password",
+          "auth_type",
+          "auth_username",
+          "auth_password",
+          "users",
+          "server",
+          "remark",
+          "display_template",
+          "region",
+          "tag"
+        ],
+        "type": "object"
+      },
+      "InboundSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "listen": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "port": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "sub": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "protocol",
+          "listen",
+          "port",
+          "sub"
+        ],
+        "type": "object"
+      },
+      "Listener": {
+        "additionalProperties": false,
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/ListenerAccount"
+            },
+            "type": "array"
+          },
+          "auth": {
+            "enum": [
+              "inherit",
+              "none",
+              "accounts"
+            ],
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "listen": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "port": {
+            "format": "int64",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "name",
+          "listen",
+          "port",
+          "auth",
+          "accounts"
+        ],
+        "type": "object"
+      },
+      "ListenerAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "type": "object"
+      },
       "LoginInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -135,6 +759,314 @@
         "required": [
           "username",
           "password"
+        ],
+        "type": "object"
+      },
+      "Mihomo": {
+        "additionalProperties": false,
+        "properties": {
+          "controller_port": {
+            "format": "int64",
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "controller_secret": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/Group"
+            },
+            "type": "array"
+          },
+          "http": {
+            "$ref": "#/components/schemas/Listener"
+          },
+          "loglevel": {
+            "enum": [
+              "inherit",
+              "debug",
+              "info",
+              "warning",
+              "error",
+              "silent"
+            ],
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "inherit",
+              "Rule",
+              "Global",
+              "Direct"
+            ],
+            "type": "string"
+          },
+          "rules": {
+            "$ref": "#/components/schemas/Rules"
+          },
+          "socks": {
+            "$ref": "#/components/schemas/Listener"
+          },
+          "upstreams": {
+            "items": {
+              "$ref": "#/components/schemas/Upstream"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "mode",
+          "loglevel",
+          "controller_port",
+          "controller_secret",
+          "socks",
+          "http",
+          "upstreams",
+          "groups",
+          "rules"
+        ],
+        "type": "object"
+      },
+      "MihomoDefaults": {
+        "additionalProperties": false,
+        "properties": {
+          "loglevel": {
+            "enum": [
+              "debug",
+              "info",
+              "warning",
+              "error",
+              "silent"
+            ],
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "Rule",
+              "Global",
+              "Direct"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "loglevel"
+        ],
+        "type": "object"
+      },
+      "Outbound": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "port": {
+            "format": "int64",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "private_direct": {
+            "type": "boolean"
+          },
+          "server": {
+            "type": "string"
+          },
+          "type": {
+            "description": "mihomo 表示转发到本 stack 的 mihomo socks 监听",
+            "enum": [
+              "mihomo",
+              "socks5",
+              "http",
+              "direct"
+            ],
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "server",
+          "port",
+          "username",
+          "password",
+          "private_direct"
+        ],
+        "type": "object"
+      },
+      "Policy": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "stats_inbound_downlink": {
+            "type": "boolean"
+          },
+          "stats_inbound_uplink": {
+            "type": "boolean"
+          },
+          "stats_outbound_downlink": {
+            "type": "boolean"
+          },
+          "stats_outbound_uplink": {
+            "type": "boolean"
+          },
+          "stats_user_downlink": {
+            "type": "boolean"
+          },
+          "stats_user_uplink": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "stats_user_uplink",
+          "stats_user_downlink",
+          "stats_inbound_uplink",
+          "stats_inbound_downlink",
+          "stats_outbound_uplink",
+          "stats_outbound_downlink"
+        ],
+        "type": "object"
+      },
+      "PortChange": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "from": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "to": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "field",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "PortPools": {
+        "additionalProperties": false,
+        "properties": {
+          "mihomo_controller": {
+            "$ref": "#/components/schemas/PortRange"
+          },
+          "mihomo_http": {
+            "$ref": "#/components/schemas/PortRange"
+          },
+          "mihomo_socks": {
+            "$ref": "#/components/schemas/PortRange"
+          },
+          "xray_api": {
+            "$ref": "#/components/schemas/PortRange"
+          },
+          "xray_inbound": {
+            "$ref": "#/components/schemas/PortRange"
+          }
+        },
+        "required": [
+          "xray_inbound",
+          "mihomo_socks",
+          "mihomo_http",
+          "xray_api",
+          "mihomo_controller"
+        ],
+        "type": "object"
+      },
+      "PortRange": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "format": "int64",
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "start": {
+            "format": "int64",
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "type": "object"
+      },
+      "PreviewOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "mihomo": {
+            "type": "string"
+          },
+          "xray": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "xray",
+          "mihomo",
+          "errors"
+        ],
+        "type": "object"
+      },
+      "Profile": {
+        "additionalProperties": false,
+        "properties": {
+          "display_template": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "remark": {
+            "type": "string"
+          },
+          "ss_password": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "uuid": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "uuid",
+          "ss_password",
+          "remark",
+          "display_template",
+          "tag"
         ],
         "type": "object"
       },
@@ -158,6 +1090,133 @@
         ],
         "type": "object"
       },
+      "RevisionDiffOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/DiffEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "entries"
+        ],
+        "type": "object"
+      },
+      "RevisionItem": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "actor",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "RevisionListOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RevisionItem"
+            },
+            "type": "array"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "type": "object"
+      },
+      "Rule": {
+        "additionalProperties": false,
+        "properties": {
+          "no_resolve": {
+            "type": "boolean"
+          },
+          "target": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "value",
+          "target",
+          "no_resolve"
+        ],
+        "type": "object"
+      },
+      "Rules": {
+        "additionalProperties": false,
+        "properties": {
+          "extra": {
+            "items": {
+              "$ref": "#/components/schemas/Rule"
+            },
+            "type": "array"
+          },
+          "final": {
+            "type": "string"
+          },
+          "profile": {
+            "enum": [
+              "default"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile",
+          "final",
+          "extra"
+        ],
+        "type": "object"
+      },
+      "SecuritySettings": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_noauth_public": {
+            "type": "boolean"
+          },
+          "require_auth_for_public_socks_http": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "require_auth_for_public_socks_http",
+          "allow_noauth_public"
+        ],
+        "type": "object"
+      },
       "SessionBody": {
         "additionalProperties": false,
         "properties": {
@@ -172,6 +1231,225 @@
         "required": [
           "admin",
           "csrf_token"
+        ],
+        "type": "object"
+      },
+      "Settings": {
+        "additionalProperties": false,
+        "properties": {
+          "basic": {
+            "$ref": "#/components/schemas/BasicSettings"
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/DefaultsSettings"
+          },
+          "port_pools": {
+            "$ref": "#/components/schemas/PortPools"
+          },
+          "security": {
+            "$ref": "#/components/schemas/SecuritySettings"
+          }
+        },
+        "required": [
+          "basic",
+          "port_pools",
+          "defaults",
+          "security"
+        ],
+        "type": "object"
+      },
+      "Stack": {
+        "additionalProperties": false,
+        "properties": {
+          "desired_running": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "mihomo": {
+            "$ref": "#/components/schemas/Mihomo"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "edge",
+              "auto"
+            ],
+            "type": "string"
+          },
+          "xray": {
+            "$ref": "#/components/schemas/Xray"
+          }
+        },
+        "required": [
+          "name",
+          "enabled",
+          "desired_running",
+          "role",
+          "labels",
+          "xray",
+          "mihomo"
+        ],
+        "type": "object"
+      },
+      "StackCloneInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "StackCreateInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "members": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "template": {
+            "enum": [
+              "pair",
+              "auto-url-test",
+              "load-balance"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "template",
+          "name",
+          "labels",
+          "members"
+        ],
+        "type": "object"
+      },
+      "StackListOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "stacks": {
+            "items": {
+              "$ref": "#/components/schemas/StackSummary"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "stacks"
+        ],
+        "type": "object"
+      },
+      "StackMembersInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "members": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "members"
+        ],
+        "type": "object"
+      },
+      "StackSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "desired_running": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "inbounds": {
+            "items": {
+              "$ref": "#/components/schemas/InboundSummary"
+            },
+            "type": "array"
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "loopback": {
+            "description": "全部入站只监听本机回环地址",
+            "type": "boolean"
+          },
+          "members": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "mihomo_enabled": {
+            "type": "boolean"
+          },
+          "mihomo_http": {
+            "type": "string"
+          },
+          "mihomo_socks": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "xray_enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "enabled",
+          "desired_running",
+          "role",
+          "labels",
+          "xray_enabled",
+          "mihomo_enabled",
+          "inbounds",
+          "mihomo_socks",
+          "mihomo_http",
+          "members",
+          "loopback"
         ],
         "type": "object"
       },
@@ -215,6 +1493,329 @@
           "panel_url",
           "tls_mode",
           "dev_mode"
+        ],
+        "type": "object"
+      },
+      "Upstream": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "description": "type=raw 时的 mihomo 节点字段",
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "inbound": {
+            "description": "type=xray-socks5 时引用的 socks5 入站",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "stack": {
+            "description": "type=xray-socks5 时引用的 stack",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "raw",
+              "xray-socks5"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "stack",
+          "inbound",
+          "config"
+        ],
+        "type": "object"
+      },
+      "User": {
+        "additionalProperties": false,
+        "properties": {
+          "display_template": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "expire_at": {
+            "description": "RFC 3339 时间，空表示不过期",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/Profile"
+            },
+            "type": "array"
+          },
+          "quota_bytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "remark": {
+            "type": "string"
+          },
+          "reset_day": {
+            "format": "int64",
+            "maximum": 28,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "reset_mode": {
+            "enum": [
+              "none",
+              "monthly"
+            ],
+            "type": "string"
+          },
+          "ss_password": {
+            "type": "string"
+          },
+          "sub_token": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "uuid": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "enabled",
+          "uuid",
+          "ss_password",
+          "remark",
+          "display_template",
+          "tag",
+          "sub_token",
+          "quota_bytes",
+          "reset_mode",
+          "reset_day",
+          "expire_at",
+          "note",
+          "profiles"
+        ],
+        "type": "object"
+      },
+      "UserDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/UserReference"
+            },
+            "type": "array"
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "required": [
+          "user",
+          "references"
+        ],
+        "type": "object"
+      },
+      "UserListOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/User"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "users"
+        ],
+        "type": "object"
+      },
+      "UserRef": {
+        "additionalProperties": false,
+        "properties": {
+          "display_template": {
+            "type": "string"
+          },
+          "profile": {
+            "description": "空表示 default 档案",
+            "type": "string"
+          },
+          "remark": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "user": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "user",
+          "profile",
+          "remark",
+          "display_template",
+          "tag"
+        ],
+        "type": "object"
+      },
+      "UserReference": {
+        "additionalProperties": false,
+        "properties": {
+          "inbound": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "stack": {
+            "type": "string"
+          },
+          "stack_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stack_id",
+          "stack",
+          "inbound",
+          "profile"
+        ],
+        "type": "object"
+      },
+      "Xray": {
+        "additionalProperties": false,
+        "properties": {
+          "api": {
+            "enum": [
+              "inherit",
+              "on",
+              "off"
+            ],
+            "type": "string"
+          },
+          "api_port": {
+            "format": "int64",
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "inbounds": {
+            "items": {
+              "$ref": "#/components/schemas/Inbound"
+            },
+            "type": "array"
+          },
+          "loglevel": {
+            "enum": [
+              "inherit",
+              "debug",
+              "info",
+              "warning",
+              "error",
+              "none"
+            ],
+            "type": "string"
+          },
+          "outbound": {
+            "$ref": "#/components/schemas/Outbound"
+          },
+          "policy": {
+            "enum": [
+              "inherit",
+              "on",
+              "off"
+            ],
+            "type": "string"
+          },
+          "stats": {
+            "enum": [
+              "inherit",
+              "on",
+              "off"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "loglevel",
+          "api",
+          "stats",
+          "policy",
+          "api_port",
+          "outbound",
+          "inbounds"
+        ],
+        "type": "object"
+      },
+      "XrayDefaults": {
+        "additionalProperties": false,
+        "properties": {
+          "api_enabled": {
+            "type": "boolean"
+          },
+          "api_services": {
+            "items": {
+              "enum": [
+                "HandlerService",
+                "StatsService"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "loglevel": {
+            "enum": [
+              "debug",
+              "info",
+              "warning",
+              "error",
+              "none"
+            ],
+            "type": "string"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/Policy"
+          },
+          "stats": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "loglevel",
+          "api_enabled",
+          "api_services",
+          "stats",
+          "policy"
         ],
         "type": "object"
       }
@@ -426,6 +2027,928 @@
         ]
       }
     },
+    "/api/config/export": {
+      "post": {
+        "operationId": "exportConfig",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "contentEncoding": "base64",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "导出配置文件",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/config/import/apply": {
+      "post": {
+        "operationId": "applyImport",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "执行导入",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/config/import/preview": {
+      "post": {
+        "operationId": "previewImport",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "导入预览",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/config/settings": {
+      "get": {
+        "operationId": "getSettings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Settings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "读取系统设置",
+        "tags": [
+          "config"
+        ]
+      },
+      "put": {
+        "operationId": "updateSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Settings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Settings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "保存系统设置",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/ports/allocate": {
+      "post": {
+        "operationId": "allocatePort",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AllocateInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AllocateOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "从端口池分配端口",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/ports/check": {
+      "get": {
+        "operationId": "checkPort",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "port",
+            "schema": {
+              "format": "int64",
+              "maximum": 65535,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "stack_id",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckPortOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "检查端口冲突与占用",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/revisions": {
+      "get": {
+        "operationId": "listRevisions",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "format": "int64",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "default": 0,
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionListOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "配置历史",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/revisions/diff": {
+      "get": {
+        "operationId": "diffRevisions",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "0 或省略表示当前配置",
+            "explode": false,
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "description": "0 或省略表示当前配置",
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionDiffOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "比较两个版本",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/revisions/{id}/rollback": {
+      "post": {
+        "operationId": "rollbackRevision",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "回滚到指定版本",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/stacks": {
+      "get": {
+        "operationId": "listStacks",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackListOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Stack 列表",
+        "tags": [
+          "config"
+        ]
+      },
+      "post": {
+        "operationId": "createStack",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StackCreateInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stack"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "按模板新建 stack",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/stacks/{id}": {
+      "delete": {
+        "operationId": "deleteStack",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "删除 stack",
+        "tags": [
+          "config"
+        ]
+      },
+      "get": {
+        "operationId": "getStack",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stack"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Stack 详情",
+        "tags": [
+          "config"
+        ]
+      },
+      "put": {
+        "operationId": "updateStack",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Stack"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stack"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "保存 stack",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/stacks/{id}/clone": {
+      "post": {
+        "operationId": "cloneStack",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StackCloneInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stack"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "克隆 stack",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/stacks/{id}/members": {
+      "put": {
+        "operationId": "setStackMembers",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StackMembersInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stack"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "设置 auto stack 成员",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/stacks/{id}/preview": {
+      "get": {
+        "operationId": "previewStack",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "生成预览",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/stacks/{id}/secrets": {
+      "get": {
+        "operationId": "getStackSecrets",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stack"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "查看 stack 明文凭据（记入审计日志）",
+        "tags": [
+          "config"
+        ]
+      }
+    },
     "/api/system/info": {
       "get": {
         "operationId": "getSystemInfo",
@@ -459,6 +2982,320 @@
         "summary": "系统信息",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/api/users": {
+      "get": {
+        "operationId": "listUsers",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserListOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "用户列表",
+        "tags": [
+          "config"
+        ]
+      },
+      "post": {
+        "operationId": "createUser",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/User"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "新建用户",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/users/{id}": {
+      "delete": {
+        "operationId": "deleteUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "删除用户",
+        "tags": [
+          "config"
+        ]
+      },
+      "get": {
+        "operationId": "getUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDetail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "用户详情",
+        "tags": [
+          "config"
+        ]
+      },
+      "put": {
+        "operationId": "updateUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/User"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "保存用户",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/users/{id}/reset-token": {
+      "post": {
+        "operationId": "resetUserToken",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "重置订阅 token",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/users/{id}/secrets": {
+      "get": {
+        "operationId": "getUserSecrets",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "查看用户明文凭据（记入审计日志）",
+        "tags": [
+          "config"
         ]
       }
     }

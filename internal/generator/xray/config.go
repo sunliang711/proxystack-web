@@ -412,7 +412,7 @@ func enabledXrayStack(stackSet domain.StackSet, stackName string) (domain.Stack,
 func renderVmessInbound(inbound domain.Inbound) vmessInbound {
 	clients := make([]vmessClient, 0, len(inbound.Users))
 	for _, user := range inbound.Users {
-		clients = append(clients, vmessClient{ID: user.UUID, AlterID: 0, Email: user.EmailOrUser()})
+		clients = append(clients, vmessClient{ID: user.UUID, AlterID: 0, Email: user.User})
 	}
 	stream := streamSettings{Network: inbound.Network}
 	if inbound.WSOpts != nil {
@@ -438,11 +438,11 @@ func renderVmessInbound(inbound domain.Inbound) vmessInbound {
 
 func renderShadowsocksInbound(inbound domain.Inbound) shadowsocksInbound {
 	network := "tcp"
-	if inbound.UDP {
+	if inbound.UDPEnabled() {
 		network = "tcp,udp"
 	}
 	settings := shadowsocksSettings{
-		Method:   inbound.MethodOrCipher(),
+		Method:   inbound.Method,
 		Password: inbound.Password,
 		Network:  network,
 	}
@@ -451,10 +451,10 @@ func renderShadowsocksInbound(inbound domain.Inbound) shadowsocksInbound {
 		for _, user := range inbound.Users {
 			client := shadowsocksClient{
 				Password: user.Password,
-				Email:    user.EmailOrUser(),
+				Email:    user.User,
 			}
-			if !domain.IsShadowsocks2022Method(inbound.MethodOrCipher()) {
-				client.Method = firstNonEmpty(user.Method, user.Cipher, inbound.MethodOrCipher())
+			if !domain.IsShadowsocks2022Method(inbound.Method) {
+				client.Method = inbound.Method
 			}
 			settings.Clients = append(settings.Clients, client)
 		}
@@ -470,7 +470,7 @@ func renderShadowsocksInbound(inbound domain.Inbound) shadowsocksInbound {
 
 func renderSocksInbound(inbound domain.Inbound) (socksInbound, error) {
 	authType := inboundAuthType(inbound)
-	settings := socksSettings{Auth: authType, UDP: inbound.UDP}
+	settings := socksSettings{Auth: authType, UDP: inbound.UDPEnabled()}
 	if authType == "password" {
 		acct, err := inboundAccount(inbound)
 		if err != nil {

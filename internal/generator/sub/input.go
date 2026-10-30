@@ -163,7 +163,7 @@ func renderSingleInboundNode(stackSet domain.StackSet, stack domain.Stack, inbou
 	applyInboundUDP(&node, inbound)
 	switch inbound.Protocol {
 	case "shadowsocks":
-		method := inbound.MethodOrCipher()
+		method := inbound.Method
 		node.Method = method
 		node.Cipher = method
 		node.Password = inbound.Password
@@ -213,7 +213,7 @@ func renderShadowsocksUserNode(stackSet domain.StackSet, stack domain.Stack, inb
 	if tag == "" {
 		tag = inbound.TagOrDefault() + ":" + user.User
 	}
-	method := firstNonEmpty(user.Method, user.Cipher, inbound.MethodOrCipher())
+	method := inbound.Method
 	remark, err := subscriptionRemark(stack.Name, inbound, user.User, user.ProfileOrDefault(), firstNonEmpty(user.Remark, inbound.Remark), firstNonEmpty(user.DisplayTemplate, inbound.DisplayTemplate))
 	if err != nil {
 		return Node{}, err
@@ -271,7 +271,7 @@ func renderGenericUserNode(stackSet domain.StackSet, stack domain.Stack, inbound
 // applyInboundUDP 把显式 udp 配置原样传递给订阅节点。
 func applyInboundUDP(node *Node, inbound domain.Inbound) {
 	if inbound.UDPConfigured() {
-		node.UDP = boolPtr(inbound.UDP)
+		node.UDP = boolPtr(*inbound.UDP)
 	}
 }
 
@@ -323,7 +323,7 @@ func renderDisplayTemplate(templateText string, data map[string]any) (string, er
 }
 
 func shadowsocksNodePassword(inbound domain.Inbound, user domain.InboundUser) string {
-	if domain.IsShadowsocks2022Method(inbound.MethodOrCipher()) {
+	if domain.IsShadowsocks2022Method(inbound.Method) {
 		return inbound.Password + ":" + user.Password
 	}
 	return user.Password

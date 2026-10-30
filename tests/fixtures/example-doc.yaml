@@ -1,0 +1,197 @@
+# 参考项目示例工程（tests/fixtures/example-project）的等价配置文档。
+# auto.relay 在参考项目中用 inbound 级 user 字段，这里统一用 users 引用。
+schema: proxystack-web.config
+version: 1
+secrets: plain
+settings:
+  basic:
+    external_host: proxy.example.com
+    timezone: Asia/Shanghai
+  port_pools:
+    xray_inbound: {start: 4300, end: 4399}
+    mihomo_socks: {start: 7001, end: 7101}
+    mihomo_http: {start: 7201, end: 7301}
+    xray_api: {start: 10001, end: 10999}
+    mihomo_controller: {start: 19000, end: 19999}
+  defaults:
+    mihomo: {mode: Rule, loglevel: info}
+    xray:
+      loglevel: warning
+      api_enabled: true
+      api_services: [HandlerService, StatsService]
+      stats: true
+      policy:
+        enabled: true
+        stats_user_uplink: true
+        stats_user_downlink: true
+        stats_inbound_uplink: true
+        stats_inbound_downlink: true
+        stats_outbound_uplink: true
+        stats_outbound_downlink: true
+  security:
+    require_auth_for_public_socks_http: true
+    allow_noauth_public: false
+users:
+  - name: alice
+    enabled: true
+    uuid: 11111111-1111-4111-8111-111111111111
+    ss_password: demo-alice-password
+    sub_token: alice-token
+    quota_bytes: 0
+    reset_mode: none
+    reset_day: 0
+stacks:
+  - name: auto
+    enabled: true
+    desired_running: true
+    role: auto
+    labels: [auto]
+    xray:
+      enabled: true
+      loglevel: inherit
+      api: on
+      stats: on
+      policy: on
+      api_port: 10150
+      outbound: {type: mihomo}
+      inbounds:
+        - name: relay
+          protocol: socks5
+          listen: 0.0.0.0
+          port: 25001
+          sub: true
+          udp: true
+          auth_type: password
+          auth_username: auto
+          auth_password: demo-auto-relay-password
+          users: [{user: alice}]
+          remark: auto relay socks
+    mihomo:
+      enabled: true
+      mode: Rule
+      loglevel: inherit
+      controller_port: 19093
+      controller_secret: demo-auto-clash-api-secret
+      socks: {enabled: true, name: local, listen: 127.0.0.1, port: 17093, auth: inherit}
+      http: {enabled: true, name: local, listen: 127.0.0.1, port: 18093, auth: inherit}
+      upstreams:
+        - {name: usa1-local, type: xray-socks5, stack: usa1, inbound: relay}
+        - {name: usa2-local, type: xray-socks5, stack: usa2, inbound: relay}
+      groups:
+        - name: AutoProxy
+          type: url-test
+          proxies: [usa1-local, usa2-local]
+          url: http://www.gstatic.com/generate_204
+          interval: 120
+        - name: BalanceProxy
+          type: load-balance
+          proxies: [usa1-local, usa2-local]
+          url: http://www.gstatic.com/generate_204
+          interval: 120
+          strategy: consistent-hashing
+        - name: AllProxy
+          type: select
+          proxies: [AutoProxy, BalanceProxy, usa1-local, usa2-local, DIRECT]
+      rules: {profile: default, final: AllProxy}
+  - name: usa1
+    enabled: true
+    desired_running: true
+    role: edge
+    labels: [usa]
+    xray:
+      enabled: true
+      loglevel: inherit
+      api: on
+      stats: on
+      policy: on
+      api_port: 10091
+      outbound: {type: mihomo}
+      inbounds:
+        - name: relay
+          protocol: socks5
+          listen: 0.0.0.0
+          port: 24001
+          sub: true
+          udp: true
+          auth_type: password
+          auth_username: usa1
+          auth_password: demo-usa1-relay-password
+          users: [{user: alice}]
+          remark: usa1 relay socks
+        - name: vmess
+          protocol: vmess
+          listen: 0.0.0.0
+          port: 24101
+          sub: true
+          udp: true
+          network: raw
+          users: [{user: alice}]
+          remark: usa1 vmess
+    mihomo:
+      enabled: true
+      mode: Rule
+      loglevel: inherit
+      controller_port: 19091
+      controller_secret: demo-usa1-clash-api-secret
+      socks: {enabled: true, name: local, listen: 127.0.0.1, port: 17091, auth: inherit}
+      http: {enabled: true, name: local, listen: 127.0.0.1, port: 18091, auth: inherit}
+      upstreams:
+        - name: server-a
+          type: raw
+          config:
+            type: vmess
+            server: server-a.example.com
+            port: 443
+            uuid: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+            network: ws
+            tls: true
+            ws_opts:
+              path: /vmess
+      groups:
+        - {name: AllProxy, type: select, proxies: [server-a, DIRECT]}
+      rules: {profile: default, final: AllProxy}
+  - name: usa2
+    enabled: true
+    desired_running: true
+    role: edge
+    labels: [usa]
+    xray:
+      enabled: true
+      loglevel: inherit
+      api: on
+      stats: on
+      policy: on
+      api_port: 10092
+      outbound: {type: mihomo}
+      inbounds:
+        - name: relay
+          protocol: socks5
+          listen: 0.0.0.0
+          port: 24002
+          sub: true
+          udp: true
+          auth_type: password
+          auth_username: usa2
+          auth_password: demo-usa2-relay-password
+          users: [{user: alice}]
+          remark: usa2 relay socks
+    mihomo:
+      enabled: true
+      mode: Rule
+      loglevel: inherit
+      controller_port: 19092
+      controller_secret: demo-usa2-clash-api-secret
+      socks: {enabled: true, name: local, listen: 127.0.0.1, port: 17092, auth: inherit}
+      http: {enabled: true, name: local, listen: 127.0.0.1, port: 18092, auth: inherit}
+      upstreams:
+        - name: server-b
+          type: raw
+          config:
+            type: shadowsocks
+            server: server-b.example.com
+            port: 8388
+            cipher: aes-256-gcm
+            password: demo-server-b-password
+      groups:
+        - {name: AllProxy, type: select, proxies: [server-b, DIRECT]}
+      rules: {profile: default, final: AllProxy}

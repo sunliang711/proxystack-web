@@ -85,7 +85,7 @@ func loadExampleStackSet(t *testing.T) domain.StackSet {
 	testutil.ChdirRepo(t)
 	globalConfig, err := testutil.LoadConfig("tests/fixtures/example-project/config.yaml")
 	require.NoError(t, err)
-	stackSet, err := testutil.LoadStacks(globalConfig, false)
+	stackSet, err := testutil.LoadStacks(globalConfig, "tests/fixtures/example-project/config.yaml", false)
 	require.NoError(t, err)
 	return stackSet
 }
