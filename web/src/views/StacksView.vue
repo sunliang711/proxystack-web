@@ -8,12 +8,14 @@ import {
 import { InformationCircleOutline, RefreshOutline } from '@vicons/ionicons5'
 import { api, emptyErrors, fieldState, splitProblem, type FormErrors, type Schemas } from '../api/client'
 import EgressCell from '../components/EgressCell.vue'
+import FlowDiagram from '../components/FlowDiagram.vue'
 import ErrorList from '../components/ErrorList.vue'
 import ExportDialog from '../components/ExportDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
 import UnitStatus from '../components/UnitStatus.vue'
 import { useEgress } from '../composables/useEgress'
 import { runtime } from '../runtime'
+import { stackTopology, type FlowNode } from '../util/flow'
 
 type Summary = Schemas['StackSummary']
 
@@ -33,6 +35,27 @@ async function load() {
 }
 
 onMounted(load)
+
+// 流量拓扑：展开状态记在浏览器里。
+const topology = computed(() => stackTopology(stacks.value))
+const showTopology = ref(readTopologyPreference())
+function readTopologyPreference(): boolean {
+  try {
+    return localStorage.getItem('psw-stack-topology') !== 'hidden'
+  } catch {
+    return true
+  }
+}
+watch(showTopology, (show) => {
+  try {
+    localStorage.setItem('psw-stack-topology', show ? 'shown' : 'hidden')
+  } catch {
+    // 存不下时只在本次会话生效。
+  }
+})
+function openStack(node: FlowNode) {
+  if (node.stackId) router.push({ name: 'stack', params: { id: node.stackId } })
+}
 
 // 出口 IP：列表里出现还没有结果的 stack 时查询，结果在本次打开面板期间保留。
 const egress = useEgress()
@@ -73,11 +96,11 @@ const columns: DataTableColumns<Summary> = [
         '出口 IP',
         h(NTooltip, null, {
           trigger: () => h(NIcon, { size: 14, style: 'opacity: 0.5; cursor: help' }, () => h(InformationCircleOutline)),
-          default: () => '经该 stack 的 mihomo 访问 ipinfo.io 查询 IPv4 出口。进入页面时自动检测一次，之后点「刷新出口 IP」或行内的刷新按钮重新检测。',
+          default: () => '经该 stack 的 mihomo 同时查询 IPv4 和 IPv6 出口（IPv4 优先用 ipinfo.io），查不到的显示 -。进入页面时自动检测一次，之后点「刷新出口 IP」或行内的刷新按钮重新检测。',
         }),
       ]),
     key: 'egress',
-    minWidth: 220,
+    minWidth: 300,
     render: (row) =>
       h(EgressCell, {
         state: egress.states[row.id],
@@ -177,6 +200,19 @@ async function create() {
 </script>
 
 <template>
+  <NCard title="流量拓扑" size="small" style="margin-bottom: 12px">
+    <template #header-extra>
+      <NButton text size="small" @click="showTopology = !showTopology">{{ showTopology ? '收起' : '展开' }}</NButton>
+    </template>
+    <template v-if="showTopology">
+      <NText depth="3" style="display: block; margin-bottom: 8px; font-size: 13px">
+        客户端经订阅连到各 stack；stack 之间的箭头表示上游引用（例如自动测速 stack 经成员的 relay 入站转发），最后经上游节点或直连到达互联网。点击 stack 打开编辑页，悬停突出相连的路径。
+      </NText>
+      <FlowDiagram v-if="topology.nodes.length" :nodes="topology.nodes" :edges="topology.edges" :columns="topology.columns" @select="openStack" />
+      <NText v-else-if="!loading" depth="3">还没有 stack。</NText>
+    </template>
+  </NCard>
+
   <NCard>
     <template #header>
       <NSpace justify="end">
@@ -195,7 +231,7 @@ async function create() {
       :data="stacks"
       :loading="loading"
       :row-key="rowKey"
-      :scroll-x="1360"
+      :scroll-x="1440"
       class="pre-line"
     />
   </NCard>

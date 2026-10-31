@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -71,19 +73,37 @@ type InboundSummary struct {
 
 // StackSummary 是 stack 列表的一行。
 type StackSummary struct {
-	ID             int64            `json:"id"`
-	Name           string           `json:"name"`
-	Enabled        bool             `json:"enabled"`
-	DesiredRunning bool             `json:"desired_running"`
-	Role           string           `json:"role"`
-	Labels         []string         `json:"labels"`
-	XrayEnabled    bool             `json:"xray_enabled"`
-	MihomoEnabled  bool             `json:"mihomo_enabled"`
-	Inbounds       []InboundSummary `json:"inbounds"`
-	MihomoSocks    string           `json:"mihomo_socks"`
-	MihomoHTTP     string           `json:"mihomo_http"`
-	Members        []string         `json:"members"`
-	Loopback       bool             `json:"loopback" doc:"全部入站只监听本机回环地址"`
+	ID             int64             `json:"id"`
+	Name           string            `json:"name"`
+	Enabled        bool              `json:"enabled"`
+	DesiredRunning bool              `json:"desired_running"`
+	Role           string            `json:"role"`
+	Labels         []string          `json:"labels"`
+	XrayEnabled    bool              `json:"xray_enabled"`
+	MihomoEnabled  bool              `json:"mihomo_enabled"`
+	Inbounds       []InboundSummary  `json:"inbounds"`
+	MihomoSocks    string            `json:"mihomo_socks"`
+	MihomoHTTP     string            `json:"mihomo_http"`
+	Members        []string          `json:"members"`
+	Loopback       bool              `json:"loopback" doc:"全部入站只监听本机回环地址"`
+	Outbound       OutboundSummary   `json:"outbound"`
+	Upstreams      []UpstreamSummary `json:"upstreams"`
+}
+
+// OutboundSummary 是 xray 出站的去向，用于列表页的流量图示。
+type OutboundSummary struct {
+	Type   string `json:"type" enum:"mihomo,socks5,http,direct"`
+	Target string `json:"target" doc:"外部代理的 server:port，其他类型为空"`
+}
+
+// UpstreamSummary 是 mihomo 上游的去向：外部节点给出协议和地址，引用其他 stack 时给出 stack 和入站名。
+type UpstreamSummary struct {
+	Name     string `json:"name"`
+	Type     string `json:"type" enum:"raw,xray-socks5"`
+	Stack    string `json:"stack"`
+	Inbound  string `json:"inbound"`
+	Protocol string `json:"protocol"`
+	Server   string `json:"server"`
 }
 
 type stackListOutput struct {
@@ -559,11 +579,36 @@ func (s *Server) loadStack(ctx context.Context, id int64) (*configdoc.Stack, err
 	return &doc.Stacks[index], nil
 }
 
+// rawEndpoint 从外部节点的 mihomo 字段中取出协议和 server:port。
+func rawEndpoint(config configdoc.RawMapping) (protocol, server string) {
+	var fields map[string]any
+	if config.Node == nil || config.Node.Decode(&fields) != nil {
+		return "", ""
+	}
+	protocol, _ = fields["type"].(string)
+	host, _ := fields["server"].(string)
+	if host != "" {
+		server = net.JoinHostPort(host, fmt.Sprint(fields["port"]))
+	}
+	return protocol, server
+}
+
 func summarizeStack(stack configdoc.Stack) StackSummary {
 	summary := StackSummary{
 		ID: stack.ID, Name: stack.Name, Enabled: stack.Enabled, DesiredRunning: stack.DesiredRunning, Role: stack.Role,
 		Labels: stack.Labels, XrayEnabled: stack.Xray.Enabled, MihomoEnabled: stack.Mihomo.Enabled,
 		Inbounds: []InboundSummary{}, Members: configdoc.Members(&stack), Loopback: true,
+		Outbound: OutboundSummary{Type: stack.Xray.Outbound.Type}, Upstreams: []UpstreamSummary{},
+	}
+	if stack.Xray.Outbound.Type == "socks5" || stack.Xray.Outbound.Type == "http" {
+		summary.Outbound.Target = net.JoinHostPort(stack.Xray.Outbound.Server, strconv.Itoa(stack.Xray.Outbound.Port))
+	}
+	for _, upstream := range stack.Mihomo.Upstreams {
+		item := UpstreamSummary{Name: upstream.Name, Type: upstream.Type, Stack: upstream.Stack, Inbound: upstream.Inbound}
+		if upstream.Type == "raw" {
+			item.Protocol, item.Server = rawEndpoint(upstream.Config)
+		}
+		summary.Upstreams = append(summary.Upstreams, item)
 	}
 	for _, inbound := range stack.Xray.Inbounds {
 		summary.Inbounds = append(summary.Inbounds, InboundSummary{

@@ -2178,6 +2178,29 @@
         ],
         "type": "object"
       },
+      "OutboundSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "description": "外部代理的 server:port，其他类型为空",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "mihomo",
+              "socks5",
+              "http",
+              "direct"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "target"
+        ],
+        "type": "object"
+      },
       "PanelListen": {
         "additionalProperties": false,
         "properties": {
@@ -3230,8 +3253,17 @@
           "name": {
             "type": "string"
           },
+          "outbound": {
+            "$ref": "#/components/schemas/OutboundSummary"
+          },
           "role": {
             "type": "string"
+          },
+          "upstreams": {
+            "items": {
+              "$ref": "#/components/schemas/UpstreamSummary"
+            },
+            "type": "array"
           },
           "xray_enabled": {
             "type": "boolean"
@@ -3250,7 +3282,9 @@
           "mihomo_socks",
           "mihomo_http",
           "members",
-          "loopback"
+          "loopback",
+          "outbound",
+          "upstreams"
         ],
         "type": "object"
       },
@@ -3903,6 +3937,42 @@
           "stack",
           "inbound",
           "config"
+        ],
+        "type": "object"
+      },
+      "UpstreamSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "inbound": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "server": {
+            "type": "string"
+          },
+          "stack": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "raw",
+              "xray-socks5"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "stack",
+          "inbound",
+          "protocol",
+          "server"
         ],
         "type": "object"
       },

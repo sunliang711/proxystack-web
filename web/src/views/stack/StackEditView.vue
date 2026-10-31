@@ -23,6 +23,7 @@ import RulesTab from './RulesTab.vue'
 import UpstreamsTab from './UpstreamsTab.vue'
 import LogsTab from './LogsTab.vue'
 import DiagnosticsTab from './DiagnosticsTab.vue'
+import FlowTab from './FlowTab.vue'
 import TaskDialog from '../../components/TaskDialog.vue'
 import UnitStatus from '../../components/UnitStatus.vue'
 import { refreshPending } from '../../runtime'
@@ -259,6 +260,10 @@ async function saveMembers() {
               <NDynamicTags v-model:value="stack.labels" />
             </NFormItem>
           </NForm>
+        </NTabPane>
+
+        <NTabPane name="flow" tab="流量图示">
+          <FlowTab :stack="stack" :summaries="summaries" />
         </NTabPane>
 
         <NTabPane name="xray" :tab="tabLabel('xray', 'Xray')">

@@ -4,10 +4,11 @@ import { runtime } from '../runtime'
 
 type Egress = Schemas['EgressResult']
 
-/** 一个 stack 的出口查询状态。 */
+/** 一个 stack 的出口查询状态，IPv4 和 IPv6 同时查询。 */
 export interface EgressState {
   status: 'loading' | 'ok' | 'empty' | 'stopped' | 'error'
-  info?: Egress
+  v4?: Egress
+  v6?: Egress
   error?: string
   /** 查询完成的时间戳（毫秒）。 */
   at?: number
@@ -36,7 +37,7 @@ async function query(stack: StackRef) {
   }
   states[stack.id] = { ...states[stack.id], status: 'loading' }
   const { data, error } = await api.GET('/api/stacks/{id}/egress', {
-    params: { path: { id: stack.id }, query: { family: 'ipv4', timeout: 6 } },
+    params: { path: { id: stack.id }, query: { family: 'all', timeout: 6 } },
   })
   const at = Date.now()
   if (error) {
@@ -46,13 +47,16 @@ async function query(stack: StackRef) {
     states[stack.id] = stopped ? { status: 'stopped', at } : { status: 'error', error: reason, at }
     return
   }
-  const info = data?.[0]
-  if (!info?.ip) {
-    const reasons = info?.sources.filter((source) => source.error).map((source) => `${source.url}：${source.error}`) ?? []
-    states[stack.id] = { status: 'empty', info, error: reasons.join('\n') || '数据源没有返回地址', at }
+  const v4 = data?.find((result) => result.family === 'ipv4')
+  const v6 = data?.find((result) => result.family === 'ipv6')
+  if (!v4?.ip && !v6?.ip) {
+    const reasons = [...(v4?.sources ?? []), ...(v6?.sources ?? [])]
+      .filter((source) => source.error)
+      .map((source) => `${source.url}：${source.error}`)
+    states[stack.id] = { status: 'empty', v4, v6, error: reasons.join('\n') || '数据源没有返回地址', at }
     return
   }
-  states[stack.id] = { status: 'ok', info, at }
+  states[stack.id] = { status: 'ok', v4, v6, at }
 }
 
 async function queryAll(stacks: StackRef[]) {

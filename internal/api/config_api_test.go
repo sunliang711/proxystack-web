@@ -60,6 +60,19 @@ func TestConfigCRUDAndValidation(t *testing.T) {
 	autoID := int64(auto["id"].(float64))
 	edgeID := int64(edge["id"].(float64))
 
+	// 列表摘要带出站去向和上游引用，供流量图示使用。
+	var autoSummary map[string]any
+	for _, item := range h.mustDo(http.MethodGet, "/api/stacks", nil, http.StatusOK)["stacks"].([]any) {
+		if item.(map[string]any)["name"] == "auto" {
+			autoSummary = item.(map[string]any)
+		}
+	}
+	require.Equal(t, "mihomo", autoSummary["outbound"].(map[string]any)["type"])
+	upstream := autoSummary["upstreams"].([]any)[0].(map[string]any)
+	require.Equal(t, "xray-socks5", upstream["type"])
+	require.Equal(t, "edge1", upstream["stack"])
+	require.Equal(t, "relay", upstream["inbound"])
+
 	// 保存时与其他 stack 端口冲突：错误定位到请求体里的字段。
 	stack := h.mustDo(http.MethodGet, fmt.Sprintf("/api/stacks/%d", edgeID), nil, http.StatusOK)
 	other := h.mustDo(http.MethodGet, fmt.Sprintf("/api/stacks/%d", autoID), nil, http.StatusOK)

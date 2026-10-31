@@ -2076,6 +2076,12 @@ export interface components {
             type: "mihomo" | "socks5" | "http" | "direct";
             username: string;
         };
+        OutboundSummary: {
+            /** @description 外部代理的 server:port，其他类型为空 */
+            target: string;
+            /** @enum {string} */
+            type: "mihomo" | "socks5" | "http" | "direct";
+        };
         PanelListen: {
             listen: string;
             /** Format: int64 */
@@ -2350,7 +2356,9 @@ export interface components {
             mihomo_http: string;
             mihomo_socks: string;
             name: string;
+            outbound: components["schemas"]["OutboundSummary"];
             role: string;
+            upstreams: components["schemas"]["UpstreamSummary"][];
             xray_enabled: boolean;
         };
         SubscriptionLinks: {
@@ -2532,6 +2540,15 @@ export interface components {
             inbound: string;
             name: string;
             /** @description type=xray-socks5 时引用的 stack */
+            stack: string;
+            /** @enum {string} */
+            type: "raw" | "xray-socks5";
+        };
+        UpstreamSummary: {
+            inbound: string;
+            name: string;
+            protocol: string;
+            server: string;
             stack: string;
             /** @enum {string} */
             type: "raw" | "xray-socks5";
