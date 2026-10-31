@@ -1955,6 +1955,9 @@ export interface components {
             };
             /** Format: int64 */
             up: number;
+            users: {
+                [key: string]: components["schemas"]["UserLivePoint"];
+            };
         };
         LogEntry: {
             message: string;
@@ -2325,6 +2328,14 @@ export interface components {
             /** @enum {string} */
             template: "pair" | "auto-url-test" | "load-balance";
         };
+        StackDailyUsage: {
+            daily: components["schemas"]["DayUsage"][];
+            recent: components["schemas"]["Bytes"];
+            stack: string;
+            /** Format: int64 */
+            stack_id: number;
+            today: components["schemas"]["Bytes"];
+        };
         StackListOutputBody: {
             stacks: components["schemas"]["StackSummary"][];
         };
@@ -2341,6 +2352,14 @@ export interface components {
             drift: boolean;
             name: string;
             units: components["schemas"]["UnitView"][];
+        };
+        StackSeries: {
+            down: number[];
+            label: string;
+            /** Format: int64 */
+            stack_id: number;
+            subject: string;
+            up: number[];
         };
         StackSummary: {
             desired_running: boolean;
@@ -2360,6 +2379,13 @@ export interface components {
             role: string;
             upstreams: components["schemas"]["UpstreamSummary"][];
             xray_enabled: boolean;
+        };
+        StackTraffic: {
+            month: components["schemas"]["Bytes"];
+            stack: string;
+            /** Format: int64 */
+            stack_id: number;
+            today: components["schemas"]["Bytes"];
         };
         SubscriptionLinks: {
             base_url: string;
@@ -2472,6 +2498,7 @@ export interface components {
             totp_code: string;
         };
         TrafficOverview: {
+            by_stack: components["schemas"]["StackTraffic"][];
             enabled: boolean;
             /** Format: int64 */
             failed_notifications: number;
@@ -2483,8 +2510,10 @@ export interface components {
         };
         TrafficResult: {
             buckets: string[];
+            by_stack: components["schemas"]["StackSeries"][];
             series: components["schemas"]["TrafficSeries"][];
             timezone: string;
+            total: components["schemas"]["Bytes"];
         };
         TrafficSeries: {
             down: number[];
@@ -2590,6 +2619,15 @@ export interface components {
         UserListOutputBody: {
             users: components["schemas"]["User"][];
         };
+        UserLivePoint: {
+            /** Format: int64 */
+            down: number;
+            stacks: {
+                [key: string]: components["schemas"]["Bytes"];
+            };
+            /** Format: int64 */
+            up: number;
+        };
         UserRef: {
             display_template: string;
             /** @description 空表示 default 档案 */
@@ -2616,6 +2654,7 @@ export interface components {
         };
         UserUsage: {
             auto_pauses: components["schemas"]["AutoPause"][];
+            by_stack: components["schemas"]["StackDailyUsage"][];
             daily: components["schemas"]["DayUsage"][];
             exempt: boolean;
             /** Format: date-time */
@@ -5195,6 +5234,7 @@ export interface operations {
     exportTraffic: {
         parameters: {
             query?: {
+                group_by?: "subject" | "stack";
                 level?: "hour" | "day" | "month" | "year";
                 scope?: "user" | "inbound" | "outbound";
                 /** @description 开始时间（Unix 秒） */
@@ -5236,7 +5276,10 @@ export interface operations {
     };
     getTrafficOverview: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 用户 ID，0 表示全部流量 */
+                user_id?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5266,6 +5309,7 @@ export interface operations {
     queryTraffic: {
         parameters: {
             query?: {
+                group_by?: "subject" | "stack";
                 level?: "hour" | "day" | "month" | "year";
                 scope?: "user" | "inbound" | "outbound";
                 /** @description 开始时间（Unix 秒） */

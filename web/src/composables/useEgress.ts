@@ -3,6 +3,7 @@ import { api, problemMessage, type Schemas } from '../api/client'
 import { runtime } from '../runtime'
 
 type Egress = Schemas['EgressResult']
+type FamilyKey = 'v4' | 'v6'
 
 /** 一个 stack 的出口查询状态，IPv4 和 IPv6 同时查询。 */
 export interface EgressState {
@@ -10,7 +11,9 @@ export interface EgressState {
   v4?: Egress
   v6?: Egress
   error?: string
-  /** 查询完成的时间戳（毫秒）。 */
+  loading?: Record<FamilyKey, boolean>
+  errors?: Partial<Record<FamilyKey, string>>
+  /** 最近一次返回查询结果的时间戳（毫秒）。 */
   at?: number
 }
 
@@ -23,6 +26,7 @@ interface StackRef {
 const states = reactive<Record<number, EgressState>>({})
 
 const CONCURRENCY = 4
+const inFlight = new Map<number, Promise<void>>()
 
 /** mihomo 是否在运行；运行状态还没推送到时返回 undefined。 */
 function mihomoRunning(name: string): boolean | undefined {
@@ -30,33 +34,60 @@ function mihomoRunning(name: string): boolean | undefined {
   return unit ? unit.active === 'active' : undefined
 }
 
-async function query(stack: StackRef) {
+async function runQuery(stack: StackRef) {
   if (mihomoRunning(stack.name) === false) {
     states[stack.id] = { status: 'stopped', at: Date.now() }
     return
   }
-  states[stack.id] = { ...states[stack.id], status: 'loading' }
-  const { data, error } = await api.GET('/api/stacks/{id}/egress', {
-    params: { path: { id: stack.id }, query: { family: 'all', timeout: 6 } },
-  })
-  const at = Date.now()
-  if (error) {
-    const reason = error.errors?.[0]?.message ?? problemMessage(error)
-    // 运行状态推送到之前就发出的查询，由后端的「not running」判定 mihomo 没在运行。
-    const stopped = mihomoRunning(stack.name) === false || reason.endsWith('is not running')
-    states[stack.id] = stopped ? { status: 'stopped', at } : { status: 'error', error: reason, at }
-    return
+  states[stack.id] = { ...states[stack.id], status: 'loading', loading: { v4: true, v6: true }, errors: {}, error: undefined }
+  const state = states[stack.id]!
+  let stopped = false
+
+  async function queryFamily(key: FamilyKey, family: 'ipv4' | 'ipv6') {
+    try {
+      const { data, error } = await api.GET('/api/stacks/{id}/egress', {
+        params: { path: { id: stack.id }, query: { family, timeout: 6 } },
+      })
+      if (error) {
+        const reason = error.errors?.[0]?.message ?? problemMessage(error)
+        // 运行状态推送到之前就发出的查询，由后端的「not running」判定 mihomo 没在运行。
+        stopped ||= mihomoRunning(stack.name) === false || reason.endsWith('is not running')
+        state.errors![key] = reason
+        state[key] = undefined
+      } else {
+        state[key] = data?.find((result) => result.family === family)
+      }
+    } catch (error) {
+      state.errors![key] = error instanceof Error ? error.message : '网络请求失败'
+      state[key] = undefined
+    } finally {
+      // 每个地址族独立更新；刷新失败时清掉它的旧地址，不影响另一项已经返回的结果。
+      state.loading![key] = false
+      state.at = Date.now()
+    }
   }
-  const v4 = data?.find((result) => result.family === 'ipv4')
-  const v6 = data?.find((result) => result.family === 'ipv6')
-  if (!v4?.ip && !v6?.ip) {
-    const reasons = [...(v4?.sources ?? []), ...(v6?.sources ?? [])]
+
+  await Promise.all([queryFamily('v4', 'ipv4'), queryFamily('v6', 'ipv6')])
+  if (stopped || mihomoRunning(stack.name) === false) {
+    states[stack.id] = { status: 'stopped', at: state.at }
+  } else if (state.v4?.ip || state.v6?.ip) {
+    state.status = 'ok'
+  } else {
+    const reasons = [state.errors?.v4, state.errors?.v6, ...[...(state.v4?.sources ?? []), ...(state.v6?.sources ?? [])]
       .filter((source) => source.error)
-      .map((source) => `${source.url}：${source.error}`)
-    states[stack.id] = { status: 'empty', v4, v6, error: reasons.join('\n') || '数据源没有返回地址', at }
-    return
+      .map((source) => `${source.url}：${source.error}`)].filter(Boolean)
+    state.status = state.errors?.v4 || state.errors?.v6 ? 'error' : 'empty'
+    state.error = reasons.join('\n') || '数据源没有返回地址'
   }
-  states[stack.id] = { status: 'ok', v4, v6, at }
+}
+
+function query(stack: StackRef): Promise<void> {
+  const current = inFlight.get(stack.id)
+  if (current) return current
+  // 多个入口刷新同一个 stack 时复用查询，避免重复请求或旧结果覆盖新结果。
+  const request = runQuery(stack).finally(() => inFlight.delete(stack.id))
+  inFlight.set(stack.id, request)
+  return request
 }
 
 async function queryAll(stacks: StackRef[]) {

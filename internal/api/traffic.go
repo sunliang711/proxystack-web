@@ -14,11 +14,16 @@ import (
 	"proxystack-web/internal/configdoc"
 )
 
+type trafficOverviewInput struct {
+	UserID int64 `query:"user_id" minimum:"0" doc:"用户 ID，0 表示全部流量"`
+}
+
 type trafficOverviewOutput struct {
 	Body app.TrafficOverview
 }
 
 type trafficQueryInput struct {
+	GroupBy  string `query:"group_by" enum:"subject,stack" default:"subject"`
 	Level    string `query:"level" enum:"hour,day,month,year" default:"day"`
 	Scope    string `query:"scope" enum:"user,inbound,outbound" default:"user"`
 	From     int64  `query:"from" doc:"开始时间（Unix 秒）"`
@@ -28,7 +33,7 @@ type trafficQueryInput struct {
 }
 
 func (in *trafficQueryInput) query() (app.TrafficQuery, error) {
-	query := app.TrafficQuery{Level: in.Level, Scope: in.Scope, From: time.Unix(in.From, 0), To: time.Unix(in.To, 0)}
+	query := app.TrafficQuery{Level: in.Level, Scope: in.Scope, From: time.Unix(in.From, 0), To: time.Unix(in.To, 0), GroupBy: in.GroupBy}
 	if in.Stacks != "" {
 		for _, item := range strings.Split(in.Stacks, ",") {
 			id, err := strconv.ParseInt(item, 10, 64)
@@ -94,8 +99,8 @@ func registerTraffic(api huma.API, s *Server) {
 	}
 
 	huma.Register(api, reg(huma.Operation{OperationID: "getTrafficOverview", Method: http.MethodGet, Path: "/api/traffic/overview", Summary: "流量总览"}),
-		func(ctx context.Context, _ *struct{}) (*trafficOverviewOutput, error) {
-			overview, err := s.svc.TrafficOverviewData(ctx)
+		func(ctx context.Context, in *trafficOverviewInput) (*trafficOverviewOutput, error) {
+			overview, err := s.svc.TrafficOverviewData(ctx, in.UserID)
 			if err != nil {
 				return nil, toHTTPError(err)
 			}

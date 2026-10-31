@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build && touch dist/.keep",
     "gen:api": "cd .. && go run ./cmd/proxystack-web openapi > web/openapi.json && cd web && openapi-typescript openapi.json -o src/api/schema.d.ts",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "test:egress": "node --test tests/egress.test.mjs"
   },
   "dependencies": {
     "@codemirror/lang-json": "^6.0.2",

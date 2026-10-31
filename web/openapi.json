@@ -1706,13 +1706,20 @@
           "up": {
             "format": "int64",
             "type": "integer"
+          },
+          "users": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/UserLivePoint"
+            },
+            "type": "object"
           }
         },
         "required": [
           "at",
           "up",
           "down",
-          "stacks"
+          "stacks",
+          "users"
         ],
         "type": "object"
       },
@@ -3138,6 +3145,38 @@
         ],
         "type": "object"
       },
+      "StackDailyUsage": {
+        "additionalProperties": false,
+        "properties": {
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/DayUsage"
+            },
+            "type": "array"
+          },
+          "recent": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "stack": {
+            "type": "string"
+          },
+          "stack_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "today": {
+            "$ref": "#/components/schemas/Bytes"
+          }
+        },
+        "required": [
+          "stack_id",
+          "stack",
+          "today",
+          "recent",
+          "daily"
+        ],
+        "type": "object"
+      },
       "StackListOutputBody": {
         "additionalProperties": false,
         "properties": {
@@ -3203,6 +3242,43 @@
           "applied_at",
           "drift",
           "units"
+        ],
+        "type": "object"
+      },
+      "StackSeries": {
+        "additionalProperties": false,
+        "properties": {
+          "down": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "stack_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "up": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "stack_id",
+          "subject",
+          "label",
+          "up",
+          "down"
         ],
         "type": "object"
       },
@@ -3285,6 +3361,31 @@
           "loopback",
           "outbound",
           "upstreams"
+        ],
+        "type": "object"
+      },
+      "StackTraffic": {
+        "additionalProperties": false,
+        "properties": {
+          "month": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "stack": {
+            "type": "string"
+          },
+          "stack_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "today": {
+            "$ref": "#/components/schemas/Bytes"
+          }
+        },
+        "required": [
+          "stack_id",
+          "stack",
+          "today",
+          "month"
         ],
         "type": "object"
       },
@@ -3669,6 +3770,12 @@
       "TrafficOverview": {
         "additionalProperties": false,
         "properties": {
+          "by_stack": {
+            "items": {
+              "$ref": "#/components/schemas/StackTraffic"
+            },
+            "type": "array"
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -3708,6 +3815,7 @@
           "top_users",
           "live",
           "stacks",
+          "by_stack",
           "failed_notifications"
         ],
         "type": "object"
@@ -3722,6 +3830,12 @@
             },
             "type": "array"
           },
+          "by_stack": {
+            "items": {
+              "$ref": "#/components/schemas/StackSeries"
+            },
+            "type": "array"
+          },
           "series": {
             "items": {
               "$ref": "#/components/schemas/TrafficSeries"
@@ -3730,12 +3844,17 @@
           },
           "timezone": {
             "type": "string"
+          },
+          "total": {
+            "$ref": "#/components/schemas/Bytes"
           }
         },
         "required": [
           "timezone",
           "buckets",
-          "series"
+          "series",
+          "total",
+          "by_stack"
         ],
         "type": "object"
       },
@@ -4110,6 +4229,31 @@
         ],
         "type": "object"
       },
+      "UserLivePoint": {
+        "additionalProperties": false,
+        "properties": {
+          "down": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "stacks": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Bytes"
+            },
+            "type": "object"
+          },
+          "up": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stacks",
+          "up",
+          "down"
+        ],
+        "type": "object"
+      },
       "UserRef": {
         "additionalProperties": false,
         "properties": {
@@ -4200,6 +4344,12 @@
             },
             "type": "array"
           },
+          "by_stack": {
+            "items": {
+              "$ref": "#/components/schemas/StackDailyUsage"
+            },
+            "type": "array"
+          },
           "daily": {
             "items": {
               "$ref": "#/components/schemas/DayUsage"
@@ -4236,7 +4386,8 @@
           "next_reset",
           "exempt",
           "auto_pauses",
-          "daily"
+          "daily",
+          "by_stack"
         ],
         "type": "object"
       },
@@ -8148,6 +8299,19 @@
           {
             "explode": false,
             "in": "query",
+            "name": "group_by",
+            "schema": {
+              "default": "subject",
+              "enum": [
+                "subject",
+                "stack"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
             "name": "level",
             "schema": {
               "default": "day",
@@ -8266,6 +8430,20 @@
     "/api/traffic/overview": {
       "get": {
         "operationId": "getTrafficOverview",
+        "parameters": [
+          {
+            "description": "用户 ID，0 表示全部流量",
+            "explode": false,
+            "in": "query",
+            "name": "user_id",
+            "schema": {
+              "description": "用户 ID，0 表示全部流量",
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -8303,6 +8481,19 @@
       "get": {
         "operationId": "queryTraffic",
         "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "group_by",
+            "schema": {
+              "default": "subject",
+              "enum": [
+                "subject",
+                "stack"
+              ],
+              "type": "string"
+            }
+          },
           {
             "explode": false,
             "in": "query",

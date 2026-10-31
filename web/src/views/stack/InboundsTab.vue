@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, h, ref } from 'vue'
 import {
-  NButton, NCollapse, NCollapseItem, NDataTable, NDrawer, NDrawerContent, NDynamicInput, NForm, NFormItem, NInput,
+  NAlert, NButton, NCollapse, NCollapseItem, NDataTable, NDrawer, NDrawerContent, NDynamicInput, NForm, NFormItem, NInput,
   NPopconfirm, NRadioButton, NRadioGroup, NSelect, NSpace, NSwitch, NTag, NText, type DataTableColumns,
 } from 'naive-ui'
 import { fieldState, hasErrorsUnder, type FormErrors, type Schemas } from '../../api/client'
@@ -129,6 +129,10 @@ const showUsers = computed(() => isUserProtocol.value || (isAuthProtocol.value &
 </script>
 
 <template>
+  <NAlert type="info" :bordered="false" title="地区与订阅用户" style="margin-bottom: 12px">
+    点击入站的「编辑」可设置用户列表；将「进入订阅」设为「是」后，还可设置地区（region）。
+    region 用于 Surge / Premium Clash 的地区分组（如 US 美国、DE 德国），用户列表决定哪些用户能在订阅中看到该节点。修改后请保存并应用 Stack。
+  </NAlert>
   <NSpace justify="end" style="margin-bottom: 8px">
     <NButton type="primary" @click="open(stack.xray.inbounds.length)">添加入站</NButton>
   </NSpace>

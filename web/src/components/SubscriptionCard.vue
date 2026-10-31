@@ -1,68 +1,126 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { NAlert, NButton, NCard, NFormItem, NInputGroup, NInput, NModal, NQrCode, NRadioButton, NRadioGroup, NSpace, NText, useMessage } from 'naive-ui'
+import { NAlert, NButton, NCard, NCollapse, NCollapseItem, NFormItem, NInputGroup, NInput, NModal, NQrCode, NRadioButton, NRadioGroup, NSpace, NSpin, NText, useMessage } from 'naive-ui'
 import { api, problemMessage, type Schemas } from '../api/client'
 import CodeEditor from './CodeEditor.vue'
 
-const props = defineProps<{ userId: number }>()
+const props = defineProps<{ userId: number; linksOnly?: boolean }>()
 const message = useMessage()
 const links = ref<Schemas['SubscriptionLinks'] | null>(null)
 const qr = ref<string | null>(null)
+const linksLoading = ref(false)
+const expanded = ref<string[]>([])
+const previewLoading = ref(false)
 const format = ref<'clash' | 'premium' | 'surge'>('clash')
 const preview = ref('')
 const previewError = ref('')
 const labels = { clash: 'Clash', premium: 'Premium Clash', surge: 'Surge' } as const
 
 async function showLinks() {
-  const { data, error } = await api.GET('/api/users/{id}/subscription', { params: { path: { id: props.userId } } })
-  if (error) {
-    message.error(problemMessage(error))
-    return
+  const userId = props.userId
+  linksLoading.value = true
+  try {
+    const { data, error } = await api.GET('/api/users/{id}/subscription', { params: { path: { id: userId } } })
+    if (userId !== props.userId) return
+    if (error) {
+      message.error(problemMessage(error))
+      return
+    }
+    links.value = data ?? null
+  } catch {
+    if (userId === props.userId) message.error('订阅链接加载失败，请重试')
+  } finally {
+    if (userId === props.userId) linksLoading.value = false
   }
-  links.value = data ?? null
 }
 
 async function copy(text: string) {
   try {
-    await navigator.clipboard.writeText(text)
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      // HTTP 面板没有 Clipboard API，使用当前弹窗中的临时文本框兼容复制。
+      const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      const input = document.createElement('textarea')
+      input.value = text
+      input.readOnly = true
+      input.style.cssText = 'position: fixed; opacity: 0; pointer-events: none'
+      ;(focused?.closest('[role="dialog"]') ?? document.body).appendChild(input)
+      try {
+        input.select()
+        if (!document.execCommand('copy')) throw new Error('Copy failed')
+      } finally {
+        input.remove()
+        focused?.focus({ preventScroll: true })
+      }
+    }
     message.success('已复制')
   } catch {
     message.error('复制失败：浏览器不允许访问剪贴板')
   }
 }
 
-async function loadPreview() {
-  const { data, error } = await api.GET('/api/users/{id}/subscription/preview', {
-    params: { path: { id: props.userId }, query: { format: format.value } },
-  })
-  // 有字段说明时直接显示说明（例如用户为什么没有节点），否则显示通用错误。
-  previewError.value = error ? (error.errors?.map((e) => e.message).join('；') || problemMessage(error)) : ''
-  preview.value = data?.text ?? ''
+async function loadPreview(signal: AbortSignal) {
+  previewLoading.value = true
+  previewError.value = ''
+  preview.value = ''
+  try {
+    const { data, error } = await api.GET('/api/users/{id}/subscription/preview', {
+      params: { path: { id: props.userId }, query: { format: format.value } }, signal,
+    })
+    if (signal.aborted) return
+    // 有字段说明时直接显示说明（例如用户为什么没有节点），否则显示通用错误。
+    previewError.value = error ? (error.errors?.map((e) => e.message).join('；') || problemMessage(error)) : ''
+    preview.value = data?.text ?? ''
+  } catch {
+    if (!signal.aborted) previewError.value = '订阅预览加载失败，请收起后重新展开'
+  } finally {
+    if (!signal.aborted) previewLoading.value = false
+  }
 }
-watch([format, () => props.userId], loadPreview, { immediate: true })
+watch(() => props.userId, () => {
+  links.value = null
+  qr.value = null
+  expanded.value = []
+  if (props.linksOnly) showLinks()
+}, { immediate: true })
+watch([format, () => props.userId, expanded], (_, __, onCleanup) => {
+  if (props.linksOnly || !expanded.value.includes('preview')) return
+  // 默认折叠且不请求预览；收起或切换格式时取消旧请求，避免覆盖新结果。
+  const controller = new AbortController()
+  onCleanup(() => controller.abort())
+  loadPreview(controller.signal)
+})
 </script>
 
 <template>
-  <NCard title="订阅" size="small" style="margin-bottom: 12px">
+  <NCard :title="linksOnly ? undefined : '订阅'" size="small" :bordered="!linksOnly" :content-style="linksOnly ? 'padding: 0' : undefined" :style="linksOnly ? undefined : 'margin-bottom: 12px'">
     <NSpace vertical style="width: 100%">
       <NText depth="3">订阅只包含已应用的 stack 节点、该用户的手工节点和远端节点源同步来的节点；改动在下一次发布订阅包并导入订阅端后生效。</NText>
-      <NButton v-if="!links" size="small" @click="showLinks">显示订阅链接</NButton>
+      <NButton v-if="!links" size="small" :loading="linksLoading" @click="showLinks">显示订阅链接</NButton>
       <template v-else>
         <NText>当前 {{ links.nodes }} 个节点</NText>
         <NAlert v-if="!links.base_url" type="warning" :bordered="false">未设置订阅端对外地址（系统设置 → 订阅），下面只显示链接路径，使用时在前面加上订阅端地址。</NAlert>
         <NFormItem v-for="(label, key) in labels" :key="key" :label="label" label-placement="left" label-width="110" :show-feedback="false">
           <NInputGroup>
-            <NInput :value="links.links[key]" readonly />
-            <NButton @click="copy(links.links[key])">复制</NButton>
-            <NButton @click="qr = links.links[key]">二维码</NButton>
+            <NInput :value="links.links[key]" :input-props="{ 'aria-label': `${label} 订阅链接` }" readonly />
+            <NButton :aria-label="`复制 ${label} 订阅链接`" @click="copy(links.links[key])">复制</NButton>
+            <NButton :aria-label="`显示 ${label} 订阅二维码`" @click="qr = links.links[key]">二维码</NButton>
           </NInputGroup>
         </NFormItem>
       </template>
-      <NRadioGroup v-model:value="format" size="small">
-        <NRadioButton v-for="(label, key) in labels" :key="key" :value="key">预览 {{ label }}</NRadioButton>
-      </NRadioGroup>
-      <NAlert v-if="previewError" type="warning" :bordered="false">{{ previewError }}</NAlert>
-      <CodeEditor v-else :value="preview" :language="format === 'surge' ? 'text' : 'yaml'" readonly min-height="240px" />
+      <NCollapse v-if="!linksOnly" v-model:expanded-names="expanded">
+        <NCollapseItem title="订阅预览" name="preview">
+          <NSpace vertical>
+            <NRadioGroup v-model:value="format" size="small">
+              <NRadioButton v-for="(label, key) in labels" :key="key" :value="key">预览 {{ label }}</NRadioButton>
+            </NRadioGroup>
+            <NSpin v-if="previewLoading" size="small" description="正在加载预览" />
+            <NAlert v-else-if="previewError" type="warning" :bordered="false">{{ previewError }}</NAlert>
+            <CodeEditor v-else :value="preview" :language="format === 'surge' ? 'text' : 'yaml'" readonly min-height="240px" />
+          </NSpace>
+        </NCollapseItem>
+      </NCollapse>
     </NSpace>
   </NCard>
   <NModal :show="!!qr" preset="card" title="订阅二维码" style="max-width: 360px" @update:show="(v) => !v && (qr = null)">

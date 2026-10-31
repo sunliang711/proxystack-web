@@ -2,13 +2,14 @@
 import { computed, h, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import {
-  NButton, NCard, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NPopconfirm, NSelect, NSpace, NTag, useMessage,
+  NButton, NCard, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NModal, NPopconfirm, NSelect, NSpace, NTag, useMessage,
   type DataTableColumns,
 } from 'naive-ui'
 import { api, emptyErrors, fieldState, problemMessage, splitProblem, type FormErrors, type Schemas } from '../api/client'
 import ErrorList from '../components/ErrorList.vue'
 import ExportDialog from '../components/ExportDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
+import SubscriptionCard from '../components/SubscriptionCard.vue'
 import { formatBytes } from '../util/format'
 
 type User = Schemas['User']
@@ -28,6 +29,7 @@ const draft = ref({ name: '', remark: '' })
 const errors = ref<FormErrors>(emptyErrors())
 const showImport = ref(false)
 const showExport = ref(false)
+const subscriptionUser = ref<User | null>(null)
 
 async function load() {
   loading.value = true
@@ -79,7 +81,7 @@ const columns: DataTableColumns<User> = [
   {
     title: '状态',
     key: 'enabled',
-    width: 130,
+    width: 100,
     render: (row) => {
       const pauses = autoPauses(row)
       if (row.enabled && pauses.length) {
@@ -91,10 +93,16 @@ const columns: DataTableColumns<User> = [
   { title: '备注', key: 'remark' },
   { title: '今日用量', key: 'today', render: (row) => used(usage.value[row.id ?? 0]?.today) },
   { title: '本周期用量', key: 'period', render: (row) => used(usage.value[row.id ?? 0]?.period) },
-  { title: '额度', key: 'quota_bytes', render: (row) => (row.quota_bytes ? formatBytes(row.quota_bytes) : '不限') },
-  { title: '重置', key: 'reset_mode', render: (row) => (row.reset_mode === 'monthly' ? `每月 ${row.reset_day} 日` : '不重置') },
+  { title: '额度', key: 'quota_bytes', width: 90, render: (row) => (row.quota_bytes ? formatBytes(row.quota_bytes) : '不限') },
+  { title: '重置', key: 'reset_mode', width: 100, render: (row) => (row.reset_mode === 'monthly' ? `每月 ${row.reset_day} 日` : '不重置') },
   { title: '到期', key: 'expire_at', render: (row) => (row.expire_at ? new Date(row.expire_at).toLocaleString() : '—') },
-  { title: '档案', key: 'profiles', width: 70, render: (row) => String(row.profiles.length + 1) },
+  { title: '档案', key: 'profiles', width: 60, align: 'center', render: (row) => String(row.profiles.length + 1) },
+  {
+    title: '订阅',
+    key: 'subscription',
+    width: 100,
+    render: (row) => h(NButton, { text: true, type: 'primary', size: 'small', 'aria-label': `查看 ${row.name} 的订阅`, onClick: () => { subscriptionUser.value = row } }, { default: () => '查看链接' }),
+  },
 ]
 
 const rowKey = (row: User) => row.name
@@ -161,6 +169,10 @@ async function create() {
       </template>
     </NDrawerContent>
   </NDrawer>
+
+  <NModal :show="!!subscriptionUser" preset="card" :title="`${subscriptionUser?.name ?? ''} 的订阅`" style="width: 780px; max-width: calc(100vw - 32px)" @update:show="(show) => !show && (subscriptionUser = null)">
+    <SubscriptionCard v-if="subscriptionUser" :key="subscriptionUser.id" :user-id="subscriptionUser.id!" links-only />
+  </NModal>
 
   <ImportDialog v-model:show="showImport" scope="users" allow-csv @done="load" />
   <ExportDialog v-model:show="showExport" scope="users" :users="selectedNames" allow-csv />

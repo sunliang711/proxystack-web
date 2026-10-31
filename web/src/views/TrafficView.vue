@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import {
-  NButton, NCard, NDataTable, NDatePicker, NEmpty, NRadioButton, NRadioGroup, NSelect, NSpace, useMessage,
+  NButton, NCard, NDataTable, NDatePicker, NEmpty, NGrid, NGridItem, NRadioButton, NRadioGroup, NSelect, NSpace, NStatistic, NText, useMessage,
   type DataTableColumns,
 } from 'naive-ui'
 import { api, problemMessage, saveBlob, type Schemas } from '../api/client'
@@ -16,7 +16,8 @@ type Series = Schemas['TrafficSeries']
 const DAY = 86400_000
 const message = useMessage()
 const level = ref<Level>('day')
-const scope = ref<Scope>('user')
+const scope = ref<Scope>('inbound')
+const groupBy = ref<'stack' | 'subject'>('stack')
 const range = ref<[number, number]>(defaultRange('day'))
 const stacks = ref<number[]>([])
 const subjects = ref<string[]>([])
@@ -33,17 +34,21 @@ function defaultRange(next: Level): [number, number] {
 
 function params() {
   return {
-    level: level.value, scope: scope.value,
+    level: level.value, scope: scope.value, group_by: groupBy.value,
     from: Math.floor(range.value[0] / 1000), to: Math.ceil(range.value[1] / 1000) + 3600,
     stacks: stacks.value.join(','), subjects: subjects.value.join(','),
   }
 }
 
+let loadVersion = 0
 async function load() {
+  const version = ++loadVersion
   loading.value = true
   const { data, error } = await api.GET('/api/traffic/query', { params: { query: params() } })
+  if (version !== loadVersion) return
   loading.value = false
   if (error) {
+    result.value = null
     message.error(problemMessage(error))
     return
   }
@@ -69,7 +74,8 @@ watch(scope, () => {
   slots.clear()
   loadSubjects()
 })
-watch([level, scope, range, stacks, subjects], load)
+watch(groupBy, () => slots.clear())
+watch([level, scope, groupBy, range, stacks, subjects], load)
 
 /** 颜色跟随对象而不是排名：对象首次出现时占一个槽位，筛选后保持不变。放不下的并入「其他」。 */
 const MAX_SLOTS = 7
@@ -109,7 +115,7 @@ const labels = computed(() => {
 })
 
 const columns: DataTableColumns<Series> = [
-  { title: '对象', key: 'label' },
+  { title: () => groupBy.value === 'stack' ? 'Stack' : '对象', key: 'label' },
   { title: '上行', key: 'up', render: (row) => formatBytes(row.up.reduce((a, b) => a + b, 0)) },
   { title: '下行', key: 'down', render: (row) => formatBytes(row.down.reduce((a, b) => a + b, 0)) },
   {
@@ -147,15 +153,27 @@ async function exportCSV() {
         </NRadioGroup>
         <NDatePicker v-model:value="range" type="daterange" size="small" :clearable="false" />
         <NSelect v-model:value="stacks" :options="stackOptions" multiple clearable size="small" placeholder="全部 stack" style="min-width: 160px" />
-        <NSelect v-model:value="subjects" :options="subjectOptions" multiple clearable filterable size="small" placeholder="全部对象" style="min-width: 160px" />
+        <NSelect v-model:value="subjects" :options="subjectOptions" multiple clearable filterable size="small" :placeholder="scope === 'user' ? '全部用户（可指定）' : '全部对象'" style="min-width: 160px" />
         <NButton size="small" @click="exportCSV">导出 CSV</NButton>
       </NSpace>
     </NCard>
+    <NText depth="3">当前{{ scope === 'user' ? '按用户计数' : scope === 'inbound' ? '按入站计数' : '按出站计数' }}；总和与下方 Stack 明细使用相同筛选条件。切换「用户」可指定用户；共享账号流量可能无法归属到用户。</NText>
+    <NGrid cols="1 s:3" responsive="screen" :x-gap="12" :y-gap="12">
+      <NGridItem><NCard size="small"><NStatistic label="所选范围合计" :value="formatBytes((result?.total.up ?? 0) + (result?.total.down ?? 0))" /></NCard></NGridItem>
+      <NGridItem><NCard size="small"><NStatistic label="上行合计" :value="formatBytes(result?.total.up ?? 0)" /></NCard></NGridItem>
+      <NGridItem><NCard size="small"><NStatistic label="下行合计" :value="formatBytes(result?.total.down ?? 0)" /></NCard></NGridItem>
+    </NGrid>
     <NCard title="流量趋势" size="small">
+      <template #header-extra>
+        <NRadioGroup v-model:value="groupBy" size="small">
+          <NRadioButton value="stack">按 Stack</NRadioButton>
+          <NRadioButton value="subject">按{{ scope === 'user' ? '用户' : scope === 'inbound' ? '入站' : '出站' }}</NRadioButton>
+        </NRadioGroup>
+      </template>
       <TrafficChart v-if="result?.buckets.length" kind="bar" :labels="labels" :series="chartSeries" :format="formatBytes" height="320px" />
       <NEmpty v-else description="所选范围内没有数据" />
     </NCard>
-    <NCard title="明细" size="small">
+    <NCard :title="groupBy === 'stack' ? '各 Stack 流量明细' : '对象流量明细'" size="small">
       <NDataTable :columns="columns" :data="result?.series ?? []" :loading="loading" :row-key="(row: Series) => row.subject" :pagination="{ pageSize: 20 }" size="small" />
     </NCard>
   </NSpace>

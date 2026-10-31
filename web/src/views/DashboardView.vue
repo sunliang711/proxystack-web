@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { NAlert, NCard, NEmpty, NGrid, NGridItem, NSpace, NStatistic, NTable, NTag, NText } from 'naive-ui'
-import { api, type Schemas } from '../api/client'
+import { NAlert, NButton, NCard, NEmpty, NGrid, NGridItem, NSelect, NSpace, NStatistic, NTable, NTag, NText, useMessage } from 'naive-ui'
+import { api, problemMessage, type Schemas } from '../api/client'
 import TrafficChart from '../components/TrafficChart.vue'
 import { onTrafficEvent } from '../runtime'
 import { formatBytes, formatRate } from '../util/format'
@@ -16,13 +16,30 @@ const REFRESH = 30_000
 
 const overview = ref<Schemas['TrafficOverview'] | null>(null)
 const live = ref<Schemas['LivePoint'][]>([])
+const userId = ref<number | null>(null)
+const users = ref<Schemas['User'][]>([])
+const loading = ref(false)
+const message = useMessage()
+let loadVersion = 0
 
 async function load() {
-  const { data } = await api.GET('/api/traffic/overview')
-  if (!data) return
+  const version = ++loadVersion
+  loading.value = true
+  const { data, error } = await api.GET('/api/traffic/overview', { params: { query: { user_id: userId.value ?? 0 } } })
+  if (version !== loadVersion) return
+  loading.value = false
+  if (!data) {
+    message.error(problemMessage(error))
+    return
+  }
   overview.value = data
   live.value = data.live
 }
+
+watch(userId, () => {
+  overview.value = null
+  load()
+})
 
 const stopEvents = onTrafficEvent((point) => {
   const cutoff = Date.now() - LIVE_WINDOW
@@ -30,6 +47,7 @@ const stopEvents = onTrafficEvent((point) => {
 })
 let timer: number | undefined
 onMounted(() => {
+  api.GET('/api/users').then(({ data }) => { users.value = data?.users ?? [] })
   load()
   timer = window.setInterval(load, REFRESH)
 })
@@ -38,11 +56,15 @@ onUnmounted(() => {
   window.clearInterval(timer)
 })
 
-const latest = computed(() => live.value[live.value.length - 1])
+function selectedPoint(point: Schemas['LivePoint']) {
+  return userId.value ? point.users?.[userId.value] ?? { up: 0, down: 0, stacks: {} } : point
+}
+const filteredLive = computed(() => live.value.map(selectedPoint))
+const latest = computed(() => filteredLive.value[filteredLive.value.length - 1])
 const labels = computed(() => live.value.map((point) => new Date(point.at).toLocaleTimeString('zh-CN', { hour12: false })))
 const rateSeries = computed(() => [
-  { name: '上行', data: live.value.map((point) => point.up), slot: 0 },
-  { name: '下行', data: live.value.map((point) => point.down), slot: 1 },
+  { name: '上行', data: filteredLive.value.map((point) => point.up), slot: 0 },
+  { name: '下行', data: filteredLive.value.map((point) => point.down), slot: 1 },
 ])
 const total = (bytes: { up: number; down: number }) => bytes.up + bytes.down
 const peak = computed(() => Math.max(1, ...(overview.value?.top_users ?? []).map(total)))
@@ -50,7 +72,15 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
 </script>
 
 <template>
-  <NSpace v-if="overview" vertical :size="12">
+  <NSpace vertical :size="12">
+    <NCard title="流量统计" size="small">
+      <NSpace align="center">
+        <NSelect v-model:value="userId" :options="users.map((user) => ({ label: user.name, value: user.id! }))" clearable filterable placeholder="全部流量（可指定用户）" style="width: 260px" />
+        <NButton size="small" :loading="loading" @click="load">刷新</NButton>
+        <NText depth="3">{{ userId ? '当前只统计所选用户及其档案的流量。' : '全部流量按各 Stack 的入站计数汇总。' }}</NText>
+      </NSpace>
+    </NCard>
+    <template v-if="overview">
     <NAlert v-if="!overview.enabled" type="info" :bordered="false">流量监控未开启，可以在「系统设置 → 流量」中开启。</NAlert>
     <NAlert v-if="overview.failed_notifications" type="error" :bordered="false">
       有 {{ overview.failed_notifications }} 封通知发送失败，请查看<RouterLink :to="{ name: 'notifications' }">通知记录</RouterLink>。
@@ -71,7 +101,24 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
       </NEmpty>
     </NCard>
 
-    <NCard title="本月用量排行" size="small">
+    <NCard title="各 Stack 用量" size="small">
+      <NEmpty v-if="!overview.by_stack.length" description="还没有 Stack 流量数据" />
+      <NTable v-else :bordered="false" size="small" :single-line="false">
+        <thead><tr><th>Stack</th><th>今日上行 / 下行</th><th>今日合计</th><th>本月上行 / 下行</th><th>本月合计</th><th>当前上行 / 下行</th></tr></thead>
+        <tbody>
+          <tr v-for="stack in overview.by_stack" :key="stack.stack_id">
+            <td>{{ stack.stack }}</td>
+            <td>{{ formatBytes(stack.today.up) }} / {{ formatBytes(stack.today.down) }}</td>
+            <td>{{ formatBytes(total(stack.today)) }}</td>
+            <td>{{ formatBytes(stack.month.up) }} / {{ formatBytes(stack.month.down) }}</td>
+            <td>{{ formatBytes(total(stack.month)) }}</td>
+            <td>{{ formatRate(latest?.stacks[stack.stack]?.up ?? 0) }} / {{ formatRate(latest?.stacks[stack.stack]?.down ?? 0) }}</td>
+          </tr>
+        </tbody>
+      </NTable>
+    </NCard>
+
+    <NCard :title="userId ? '所选用户本月用量' : '本月用量排行'" size="small">
       <NEmpty v-if="!overview.top_users.length" description="本月还没有用量">
         <template #extra><RouterLink :to="{ name: 'users' }">查看用户用量</RouterLink></template>
       </NEmpty>
@@ -100,6 +147,7 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
         </NTag>
       </NSpace>
     </NCard>
+    </template>
   </NSpace>
 </template>
 

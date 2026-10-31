@@ -45,6 +45,7 @@ type LivePoint struct {
 	Up     int64                    `json:"up"`
 	Down   int64                    `json:"down"`
 	Stacks map[string]traffic.Bytes `json:"stacks"`
+	Users  map[int64]UserLivePoint  `json:"users"`
 }
 
 type collectTarget struct {
@@ -189,7 +190,7 @@ func (s *Service) collectTraffic(ctx context.Context) {
 		return
 	}
 	now := s.Now()
-	point := LivePoint{At: now, Stacks: map[string]traffic.Bytes{}}
+	point := LivePoint{At: now, Stacks: map[string]traffic.Bytes{}, Users: map[int64]UserLivePoint{}}
 	var total traffic.Bytes
 	statuses := map[int64]CollectStatus{}
 	deltas := []traffic.Delta{}
@@ -209,6 +210,15 @@ func (s *Service) collectTraffic(ctx context.Context) {
 			delta := traffic.Parse(target.stackID, stats, func(id int64) bool { return known[id] })
 			deltas = append(deltas, delta)
 			point.Stacks[target.name] = delta.Stack
+			for id, bytes := range delta.Users {
+				user := point.Users[id]
+				if user.Stacks == nil {
+					user.Stacks = map[string]traffic.Bytes{}
+				}
+				user.Bytes.Add(bytes)
+				user.Stacks[target.name] = bytes
+				point.Users[id] = user
+			}
 			total.Add(delta.Stack)
 		}
 		statuses[target.stackID] = status
@@ -237,6 +247,13 @@ func (s *Service) collectTraffic(ctx context.Context) {
 			point.Up, point.Down = total.Up/elapsed, total.Down/elapsed
 			for name, bytes := range point.Stacks {
 				point.Stacks[name] = traffic.Bytes{Up: bytes.Up / elapsed, Down: bytes.Down / elapsed}
+			}
+			for id, user := range point.Users {
+				user.Up, user.Down = user.Up/elapsed, user.Down/elapsed
+				for name, bytes := range user.Stacks {
+					user.Stacks[name] = traffic.Bytes{Up: bytes.Up / elapsed, Down: bytes.Down / elapsed}
+				}
+				point.Users[id] = user
 			}
 			s.traffic.live = append(s.traffic.live, point)
 			s.Events.Publish(events.Event{Type: "traffic", Data: point})
@@ -411,6 +428,7 @@ type TrafficOverview struct {
 	TopUsers []UserTraffic   `json:"top_users"`
 	Live     []LivePoint     `json:"live"`
 	Stacks   []CollectStatus `json:"stacks"`
+	ByStack  []StackTraffic  `json:"by_stack"`
 	// FailedNotifications 是发送失败的通知数。
 	FailedNotifications int64 `json:"failed_notifications"`
 }
@@ -423,84 +441,8 @@ type UserTraffic struct {
 }
 
 // TrafficOverviewData 汇总今日、本月合计和用量排行，并合并内存中尚未落库的部分。
-func (s *Service) TrafficOverviewData(ctx context.Context) (*TrafficOverview, error) {
-	settings, err := s.loadSettings(ctx)
-	if err != nil {
-		return nil, err
-	}
-	now, loc := s.Now(), location(settings)
-	out := &TrafficOverview{Enabled: settings.Traffic.Enabled, TopUsers: []UserTraffic{}, Live: []LivePoint{}, Stacks: []CollectStatus{}}
-	end := now.Add(time.Hour).Unix()
-	sum := func(level string, from time.Time) (traffic.Bytes, error) {
-		var total traffic.Bytes
-		rows, err := s.Store.QueryTraffic(ctx, level, traffic.ScopeInbound, from.Unix(), end, nil)
-		for _, row := range rows {
-			total.Add(traffic.Bytes{Up: row.Up, Down: row.Down})
-		}
-		return total, err
-	}
-	if out.Today, err = sum(store.LevelDay, traffic.DayStart(now, loc)); err != nil {
-		return nil, err
-	}
-	if out.Month, err = sum(store.LevelMonth, traffic.MonthStart(now, loc)); err != nil {
-		return nil, err
-	}
-	rows, err := s.Store.QueryTraffic(ctx, store.LevelMonth, traffic.ScopeUser, traffic.MonthStart(now, loc).Unix(), end, nil)
-	if err != nil {
-		return nil, err
-	}
-	totals := map[int64]traffic.Bytes{}
-	for _, row := range rows {
-		if id, ok := traffic.SubjectUser(row.Subject); ok {
-			value := totals[id]
-			value.Add(traffic.Bytes{Up: row.Up, Down: row.Down})
-			totals[id] = value
-		}
-	}
-	s.traffic.mu.Lock()
-	for key, bytes := range s.traffic.pending {
-		if key.Scope == traffic.ScopeInbound {
-			out.Today.Add(bytes)
-			out.Month.Add(bytes)
-		}
-	}
-	for id, bytes := range s.traffic.users {
-		value := totals[id]
-		value.Add(bytes)
-		totals[id] = value
-	}
-	out.Live = append(out.Live, s.traffic.live...)
-	for _, status := range s.traffic.statuses {
-		out.Stacks = append(out.Stacks, status)
-	}
-	s.traffic.mu.Unlock()
-	sort.Slice(out.Stacks, func(i, j int) bool { return out.Stacks[i].Stack < out.Stacks[j].Stack })
-
-	var names map[int64]string
-	err = s.Store.InTx(ctx, func(q *dbq.Queries) error {
-		if names, err = userNames(ctx, q); err != nil {
-			return err
-		}
-		out.FailedNotifications, err = q.CountFailedNotifications(ctx)
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-	for id, bytes := range totals {
-		out.TopUsers = append(out.TopUsers, UserTraffic{ID: id, Name: subjectName(names, id), Bytes: bytes})
-	}
-	sort.Slice(out.TopUsers, func(i, j int) bool {
-		a, b := out.TopUsers[i], out.TopUsers[j]
-		if a.Total() != b.Total() {
-			return a.Total() > b.Total()
-		}
-		return a.ID < b.ID
-	})
-	if len(out.TopUsers) > topUsers {
-		out.TopUsers = out.TopUsers[:topUsers]
-	}
-	return out, nil
+func (s *Service) TrafficOverviewData(ctx context.Context, userID int64) (*TrafficOverview, error) {
+	return s.trafficOverview(ctx, userID)
 }
 
 func userNames(ctx context.Context, q *dbq.Queries) (map[int64]string, error) {
@@ -528,6 +470,7 @@ type TrafficQuery struct {
 	To       time.Time
 	Stacks   []int64
 	Subjects []string
+	GroupBy  string // subject / stack
 }
 
 // TrafficSeries 是一个对象的按时间序列，Up/Down 与 Buckets 一一对应。
@@ -545,6 +488,8 @@ type TrafficResult struct {
 	Timezone string          `json:"timezone"`
 	Buckets  []time.Time     `json:"buckets"`
 	Series   []TrafficSeries `json:"series"`
+	Total    traffic.Bytes   `json:"total"`
+	ByStack  []StackSeries   `json:"by_stack"`
 }
 
 // QueryTraffic 查询流量明细。用户维度把档案合并到所属用户；年粒度由月明细聚合。
@@ -562,9 +507,12 @@ func (s *Service) QueryTraffic(ctx context.Context, query TrafficQuery) (*Traffi
 	if err != nil {
 		return nil, err
 	}
-	var names map[int64]string
+	var names, stacks map[int64]string
 	err = s.Store.InTx(ctx, func(q *dbq.Queries) (err error) {
-		names, err = userNames(ctx, q)
+		if names, err = userNames(ctx, q); err != nil {
+			return err
+		}
+		stacks, err = stackNames(ctx, q)
 		return err
 	})
 	if err != nil {
@@ -578,6 +526,7 @@ func (s *Service) QueryTraffic(ctx context.Context, query TrafficQuery) (*Traffi
 	cells := map[cell]traffic.Bytes{}
 	buckets := map[int64]bool{}
 	subjects := map[string]bool{}
+	stackCells := map[int64]map[int64]traffic.Bytes{}
 	for _, row := range rows {
 		subject := row.Subject
 		if query.Scope == traffic.ScopeUser {
@@ -593,6 +542,12 @@ func (s *Service) QueryTraffic(ctx context.Context, query TrafficQuery) (*Traffi
 			local := time.Unix(bucket, 0).In(loc)
 			bucket = time.Date(local.Year(), 1, 1, 0, 0, 0, 0, loc).Unix()
 		}
+		if stackCells[row.StackID] == nil {
+			stackCells[row.StackID] = map[int64]traffic.Bytes{}
+		}
+		stackValue := stackCells[row.StackID][bucket]
+		stackValue.Add(traffic.Bytes{Up: row.Up, Down: row.Down})
+		stackCells[row.StackID][bucket] = stackValue
 		key := cell{strconv.FormatInt(bucket, 10), subject}
 		value := cells[key]
 		value.Add(traffic.Bytes{Up: row.Up, Down: row.Down})
@@ -604,7 +559,7 @@ func (s *Service) QueryTraffic(ctx context.Context, query TrafficQuery) (*Traffi
 		ordered = append(ordered, bucket)
 	}
 	slices.Sort(ordered)
-	result := &TrafficResult{Timezone: loc.String(), Buckets: make([]time.Time, 0, len(ordered)), Series: []TrafficSeries{}}
+	result := &TrafficResult{Timezone: loc.String(), Buckets: make([]time.Time, 0, len(ordered)), Series: []TrafficSeries{}, ByStack: []StackSeries{}}
 	for _, bucket := range ordered {
 		result.Buckets = append(result.Buckets, time.Unix(bucket, 0))
 	}
@@ -616,6 +571,29 @@ func (s *Service) QueryTraffic(ctx context.Context, query TrafficQuery) (*Traffi
 			series.Bytes.Add(value)
 		}
 		result.Series = append(result.Series, series)
+	}
+	for id, cells := range stackCells {
+		series := TrafficSeries{Subject: strconv.FormatInt(id, 10), Label: stackName(stacks, id), Up: make([]int64, len(ordered)), Down: make([]int64, len(ordered))}
+		for index, bucket := range ordered {
+			value := cells[bucket]
+			series.Up[index], series.Down[index] = value.Up, value.Down
+			series.Bytes.Add(value)
+		}
+		result.Total.Add(series.Bytes)
+		result.ByStack = append(result.ByStack, StackSeries{StackID: id, TrafficSeries: series})
+	}
+	sort.Slice(result.ByStack, func(i, j int) bool {
+		a, b := result.ByStack[i], result.ByStack[j]
+		if a.Total() != b.Total() {
+			return a.Total() > b.Total()
+		}
+		return a.StackID < b.StackID
+	})
+	if query.GroupBy == "stack" {
+		result.Series = make([]TrafficSeries, 0, len(result.ByStack))
+		for _, stack := range result.ByStack {
+			result.Series = append(result.Series, stack.TrafficSeries)
+		}
 	}
 	sort.Slice(result.Series, func(i, j int) bool {
 		a, b := result.Series[i], result.Series[j]
@@ -659,6 +637,12 @@ func (s *Service) TrafficSubjects(ctx context.Context, scope string) ([]TrafficS
 	if err != nil {
 		return nil, err
 	}
+	// 无历史流量的用户也可筛选，用零用量明确反馈，而不是让用户在选项中消失。
+	if scope == traffic.ScopeUser {
+		for id := range names {
+			subjects = append(subjects, strconv.FormatInt(id, 10))
+		}
+	}
 	out := []TrafficSubject{}
 	seen := map[string]bool{}
 	for _, subject := range subjects {
@@ -672,6 +656,12 @@ func (s *Service) TrafficSubjects(ctx context.Context, scope string) ([]TrafficS
 			out = append(out, TrafficSubject{Subject: subject, Label: subjectLabel(scope, subject, names)})
 		}
 	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Label != out[j].Label {
+			return out[i].Label < out[j].Label
+		}
+		return out[i].Subject < out[j].Subject
+	})
 	return out, nil
 }
 
@@ -698,9 +688,10 @@ type UserUsage struct {
 	PeriodStart time.Time `json:"period_start"`
 	NextReset   time.Time `json:"next_reset"`
 	// Exempt 表示当天已解除每日暂停，不再按每日阈值暂停。
-	Exempt     bool        `json:"exempt"`
-	AutoPauses []AutoPause `json:"auto_pauses"`
-	Daily      []DayUsage  `json:"daily"`
+	Exempt     bool              `json:"exempt"`
+	AutoPauses []AutoPause       `json:"auto_pauses"`
+	Daily      []DayUsage        `json:"daily"`
+	ByStack    []StackDailyUsage `json:"by_stack"`
 }
 
 // UsersUsage 返回全部用户的今日用量、本周期用量和自动暂停，不含日用量趋势。
@@ -732,7 +723,7 @@ func (s *Service) UsersUsage(ctx context.Context) ([]UserUsage, error) {
 		}
 		out = make([]UserUsage, 0, len(users))
 		for _, user := range users {
-			item := UserUsage{UserID: user.ID, AutoPauses: []AutoPause{}, Daily: []DayUsage{}}
+			item := UserUsage{UserID: user.ID, AutoPauses: []AutoPause{}, Daily: []DayUsage{}, ByStack: []StackDailyUsage{}}
 			period := traffic.PeriodStart(now, loc, user.ResetMode, int(user.ResetDay))
 			if period != 0 {
 				item.PeriodStart = time.Unix(period, 0)
@@ -808,6 +799,9 @@ func (s *Service) UserUsageDetail(ctx context.Context, id int64) (*UserUsage, er
 	for offset := dailySeriesDays - 1; offset >= 0; offset-- {
 		day := traffic.Day(now.AddDate(0, 0, -offset), loc)
 		item.Daily = append(item.Daily, DayUsage{Day: day, Bytes: byDay[day]})
+	}
+	if item.ByStack, err = s.userStackDaily(ctx, id, now, loc); err != nil {
+		return nil, err
 	}
 	return &item, nil
 }

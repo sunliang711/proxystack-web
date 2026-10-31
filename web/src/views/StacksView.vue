@@ -8,6 +8,8 @@ import {
 import { InformationCircleOutline, RefreshOutline } from '@vicons/ionicons5'
 import { api, emptyErrors, fieldState, splitProblem, type FormErrors, type Schemas } from '../api/client'
 import EgressCell from '../components/EgressCell.vue'
+import InboundSummary from '../components/InboundSummary.vue'
+import MihomoSummary from '../components/MihomoSummary.vue'
 import FlowDiagram from '../components/FlowDiagram.vue'
 import ErrorList from '../components/ErrorList.vue'
 import ExportDialog from '../components/ExportDialog.vue'
@@ -96,7 +98,7 @@ const columns: DataTableColumns<Summary> = [
         '出口 IP',
         h(NTooltip, null, {
           trigger: () => h(NIcon, { size: 14, style: 'opacity: 0.5; cursor: help' }, () => h(InformationCircleOutline)),
-          default: () => '经该 stack 的 mihomo 同时查询 IPv4 和 IPv6 出口（IPv4 优先用 ipinfo.io），查不到的显示 -。进入页面时自动检测一次，之后点「刷新出口 IP」或行内的刷新按钮重新检测。',
+          default: () => '经该 stack 的 mihomo 并发查询 IPv4 和 IPv6 出口（IPv4 优先用 ipinfo.io），哪个先完成就先显示；另一项继续检测，失败原因可悬停查看。进入页面时自动检测一次，之后点「刷新出口 IP」或行内的刷新按钮重新检测。',
         }),
       ]),
     key: 'egress',
@@ -113,16 +115,13 @@ const columns: DataTableColumns<Summary> = [
     title: 'Xray 入站',
     key: 'inbounds',
     minWidth: 190,
-    render: (row) =>
-      row.xray_enabled
-        ? row.inbounds.map((inbound) => `${inbound.name} ${inbound.protocol} ${inbound.listen}:${inbound.port}`).join('\n')
-        : '未启用',
+    render: (row) => h(InboundSummary, { stack: row }),
   },
   {
     title: 'Mihomo',
     key: 'mihomo',
     minWidth: 140,
-    render: (row) => (row.mihomo_enabled ? [row.mihomo_socks, row.mihomo_http].filter(Boolean).join('\n') : '未启用'),
+    render: (row) => h(MihomoSummary, { stack: row }),
   },
   {
     title: '标记',

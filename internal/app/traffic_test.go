@@ -150,7 +150,7 @@ func TestTrafficCollectsAndAggregates(t *testing.T) {
 	h.api.AddStats(usa1API, xrayapi.Stat{Name: "inbound>>>vmess:24101:vmess>>>traffic>>>downlink", Value: 5},
 		xrayapi.Stat{Name: "user>>>u1>>>traffic>>>downlink", Value: 5})
 	h.svc.TrafficTick(ctx)
-	overview, err := h.svc.TrafficOverviewData(ctx)
+	overview, err := h.svc.TrafficOverviewData(ctx, 0)
 	require.NoError(t, err)
 	require.EqualValues(t, 335, overview.Today.Total())
 	require.EqualValues(t, 335, overview.Month.Total())
@@ -359,7 +359,7 @@ func TestNotificationDeliveryRetries(t *testing.T) {
 			require.Equal(t, app.NotifyFailed, items[0].Status)
 		}
 	}
-	overview, err := h.svc.TrafficOverviewData(ctx)
+	overview, err := h.svc.TrafficOverviewData(ctx, 0)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, overview.FailedNotifications)
 

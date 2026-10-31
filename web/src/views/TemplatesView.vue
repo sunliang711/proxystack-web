@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { NAlert, NButton, NCard, NGrid, NGridItem, NPopconfirm, NSelect, NSpace, NTab, NTabs, NTag, NText, useMessage } from 'naive-ui'
-import { api, splitProblem, type Schemas } from '../api/client'
+import { api, saveBlob, splitProblem, type Schemas } from '../api/client'
 import CodeEditor from '../components/CodeEditor.vue'
 
 type Format = 'clash' | 'premium' | 'surge'
@@ -20,6 +20,8 @@ const userId = ref<number | null>(null)
 const preview = ref('')
 const previewError = ref('')
 const saving = ref(false)
+const previewing = ref(false)
+let previewVersion = 0
 
 async function load() {
   const [templates, userList] = await Promise.all([api.GET('/api/sub-templates'), api.GET('/api/users')])
@@ -35,9 +37,13 @@ const dirty = computed(() => !!view.value && JSON.stringify(drafts.value) !== JS
 
 async function runPreview() {
   if (!userId.value) return
+  const version = previewVersion
+  previewing.value = true
   const { data, error } = await api.POST('/api/sub-templates/preview', {
     body: { format: format.value, user_id: userId.value, content: drafts.value[format.value] },
   })
+  if (version !== previewVersion) return
+  previewing.value = false
   if (error) {
     preview.value = ''
     previewError.value = [...splitProblem(error).global, ...Object.values(splitProblem(error).fields)].join('；')
@@ -49,8 +55,25 @@ async function runPreview() {
 let timer: ReturnType<typeof setTimeout> | undefined
 watch([format, userId, () => drafts.value[format.value]], () => {
   clearTimeout(timer)
+  previewVersion++
+  preview.value = ''
+  previewError.value = ''
+  previewing.value = !!userId.value
   timer = setTimeout(runPreview, 400)
 })
+
+onUnmounted(() => {
+  clearTimeout(timer)
+  previewVersion++
+})
+
+function downloadPreview() {
+  if (!preview.value || previewing.value || previewError.value) return
+  const name = users.value.find((user) => user.id === userId.value)?.name ?? 'user'
+  const extension = format.value === 'surge' ? 'conf' : 'yaml'
+  const type = format.value === 'surge' ? 'text/plain;charset=utf-8' : 'application/yaml;charset=utf-8'
+  saveBlob(new Blob([preview.value], { type }), `${name}-${format.value}.${extension}`)
+}
 
 async function save() {
   saving.value = true
@@ -93,6 +116,7 @@ async function save() {
         <NSpace align="center" style="margin-bottom: 8px">
           <span>预览用户</span>
           <NSelect v-model:value="userId" :options="users.map((u) => ({ label: u.name, value: u.id! }))" style="width: 180px" />
+          <NButton size="small" :loading="previewing" :disabled="!preview || !!previewError || previewing" @click="downloadPreview">下载到文件</NButton>
         </NSpace>
         <NAlert v-if="previewError" type="error" :bordered="false" style="margin-bottom: 8px">{{ previewError }}</NAlert>
         <CodeEditor :value="preview" :language="format === 'surge' ? 'text' : 'yaml'" readonly min-height="520px" />

@@ -262,7 +262,7 @@ async function saveMembers() {
           </NForm>
         </NTabPane>
 
-        <NTabPane name="flow" tab="流量图示">
+        <NTabPane name="flow" tab="流量拓扑">
           <FlowTab :stack="stack" :summaries="summaries" />
         </NTabPane>
 
