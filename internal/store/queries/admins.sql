@@ -21,7 +21,20 @@ SET password_hash = ?, must_change_password = ?, failed_logins = 0, locked_until
 WHERE id = ?;
 
 -- name: ClearAdminTOTP :exec
-UPDATE admins SET totp_secret = '', updated_at = ? WHERE id = ?;
+UPDATE admins SET totp_secret = '', totp_pending_secret = '', totp_last_step = 0, updated_at = ? WHERE id = ?;
+
+-- name: SetAdminTOTPPending :exec
+UPDATE admins SET totp_pending_secret = ?, updated_at = ? WHERE id = ?;
+
+-- name: EnableAdminTOTP :exec
+UPDATE admins
+SET totp_secret = totp_pending_secret, totp_pending_secret = '', totp_last_step = ?, updated_at = ?
+WHERE id = ?;
+
+-- Accepts a TOTP step only if it is newer than the last accepted one, so a code cannot be replayed
+-- even by two concurrent requests.
+-- name: AdvanceTOTPStep :execrows
+UPDATE admins SET totp_last_step = sqlc.arg(step) WHERE id = sqlc.arg(id) AND totp_last_step < sqlc.arg(step);
 
 -- name: RecordLoginFailure :exec
 UPDATE admins SET failed_logins = failed_logins + 1, locked_until = ? WHERE id = ?;
@@ -33,5 +46,6 @@ UPDATE admins SET failed_logins = 0, locked_until = 0 WHERE id = ?;
 DELETE FROM admins;
 
 -- name: RestoreAdmin :exec
-INSERT INTO admins (id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO admins (id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at,
+                    totp_pending_secret, totp_last_step)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);

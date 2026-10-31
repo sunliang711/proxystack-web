@@ -7,7 +7,7 @@ LDFLAGS := -s -w \
 	-X proxystack-web/internal/version.Date=$(DATE)
 NPM ?= npm
 
-.PHONY: all web gen build test dist dev-init dev-serve clean
+.PHONY: all web gen build test e2e dist dev-init dev-serve clean
 
 all: web build
 
@@ -25,6 +25,10 @@ build:
 test:
 	go test ./...
 	cd web && $(NPM) run typecheck
+
+# 端到端测试：在 Debian 12 和 Ubuntu 24.04 的 systemd 容器中安装并跑完整流程（需要 Docker 和外网）。
+e2e: web
+	tests/e2e/run.sh
 
 # 发布产物：裸二进制供 install.sh 和面板自更新下载，tar.gz 带 deploy 目录用于离线安装。
 dist: web

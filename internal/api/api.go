@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -193,14 +194,17 @@ func clientIP(remoteAddr string) string {
 	return host
 }
 
-// forwardedFor 在反向代理模式下，仅当直连方为回环地址时采用 X-Forwarded-For 的首个地址。
+// forwardedFor 在反向代理模式下，仅当直连方为回环地址时采用 X-Forwarded-For 的最后一个地址：
+// 它是本机 nginx 写入的对端地址。前面的地址来自客户端自带的请求头，可以伪造，
+// 不能用于审计和登录限速。
 func forwardedFor(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if ip := net.ParseIP(clientIP(r.RemoteAddr)); ip != nil && ip.IsLoopback() {
-			if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-				first := strings.TrimSpace(strings.Split(xff, ",")[0])
-				if net.ParseIP(first) != nil {
-					r.RemoteAddr = net.JoinHostPort(first, "0")
+			if values := r.Header.Values("X-Forwarded-For"); len(values) > 0 {
+				hops := strings.Split(values[len(values)-1], ",")
+				last := strings.TrimSpace(hops[len(hops)-1])
+				if net.ParseIP(last) != nil {
+					r.RemoteAddr = net.JoinHostPort(last, "0")
 				}
 			}
 		}
@@ -223,9 +227,17 @@ func securityHeaders(next http.Handler) http.Handler {
 func toHTTPError(err error) error {
 	var fe *app.FieldError
 	var ve *app.ValidationError
+	var tooMany *app.TooManyAttemptsError
 	switch {
 	case err == nil:
 		return nil
+	case errors.Is(err, app.ErrTOTPRequired), errors.Is(err, app.ErrInvalidTOTP):
+		// 两步验证失败按认证失败处理，字段位置让前端显示验证码输入框。
+		errors.As(err, &fe)
+		return huma.Error401Unauthorized(fe.Message, &huma.ErrorDetail{Location: "body." + fe.Field, Message: fe.Message})
+	case errors.As(err, &tooMany):
+		seconds := max(int(tooMany.RetryAfter.Seconds()), 1)
+		return huma.ErrorWithHeaders(huma.Error429TooManyRequests(err.Error()), http.Header{"Retry-After": {strconv.Itoa(seconds)}})
 	case errors.As(err, &fe):
 		return huma.Error422UnprocessableEntity("validation failed", &huma.ErrorDetail{Location: "body." + fe.Field, Message: fe.Message})
 	case errors.As(err, &ve):

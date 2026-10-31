@@ -9,8 +9,27 @@ import (
 	"context"
 )
 
+const advanceTOTPStep = `-- name: AdvanceTOTPStep :execrows
+UPDATE admins SET totp_last_step = ?1 WHERE id = ?2 AND totp_last_step < ?1
+`
+
+type AdvanceTOTPStepParams struct {
+	Step int64 `json:"step"`
+	ID   int64 `json:"id"`
+}
+
+// Accepts a TOTP step only if it is newer than the last accepted one, so a code cannot be replayed
+// even by two concurrent requests.
+func (q *Queries) AdvanceTOTPStep(ctx context.Context, arg AdvanceTOTPStepParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, advanceTOTPStep, arg.Step, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const clearAdminTOTP = `-- name: ClearAdminTOTP :exec
-UPDATE admins SET totp_secret = '', updated_at = ? WHERE id = ?
+UPDATE admins SET totp_secret = '', totp_pending_secret = '', totp_last_step = 0, updated_at = ? WHERE id = ?
 `
 
 type ClearAdminTOTPParams struct {
@@ -37,7 +56,7 @@ func (q *Queries) CountAdmins(ctx context.Context) (int64, error) {
 const createAdmin = `-- name: CreateAdmin :one
 INSERT INTO admins (username, password_hash, must_change_password, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?)
-RETURNING id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at
+RETURNING id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at, totp_pending_secret, totp_last_step
 `
 
 type CreateAdminParams struct {
@@ -67,6 +86,8 @@ func (q *Queries) CreateAdmin(ctx context.Context, arg CreateAdminParams) (Admin
 		&i.LockedUntil,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TotpPendingSecret,
+		&i.TotpLastStep,
 	)
 	return i, err
 }
@@ -80,8 +101,25 @@ func (q *Queries) DeleteAllAdmins(ctx context.Context) error {
 	return err
 }
 
+const enableAdminTOTP = `-- name: EnableAdminTOTP :exec
+UPDATE admins
+SET totp_secret = totp_pending_secret, totp_pending_secret = '', totp_last_step = ?, updated_at = ?
+WHERE id = ?
+`
+
+type EnableAdminTOTPParams struct {
+	TotpLastStep int64 `json:"totp_last_step"`
+	UpdatedAt    int64 `json:"updated_at"`
+	ID           int64 `json:"id"`
+}
+
+func (q *Queries) EnableAdminTOTP(ctx context.Context, arg EnableAdminTOTPParams) error {
+	_, err := q.db.ExecContext(ctx, enableAdminTOTP, arg.TotpLastStep, arg.UpdatedAt, arg.ID)
+	return err
+}
+
 const getAdminByID = `-- name: GetAdminByID :one
-SELECT id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at FROM admins WHERE id = ?
+SELECT id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at, totp_pending_secret, totp_last_step FROM admins WHERE id = ?
 `
 
 func (q *Queries) GetAdminByID(ctx context.Context, id int64) (Admin, error) {
@@ -97,12 +135,14 @@ func (q *Queries) GetAdminByID(ctx context.Context, id int64) (Admin, error) {
 		&i.LockedUntil,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TotpPendingSecret,
+		&i.TotpLastStep,
 	)
 	return i, err
 }
 
 const getAdminByUsername = `-- name: GetAdminByUsername :one
-SELECT id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at FROM admins WHERE username = ?
+SELECT id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at, totp_pending_secret, totp_last_step FROM admins WHERE username = ?
 `
 
 func (q *Queries) GetAdminByUsername(ctx context.Context, username string) (Admin, error) {
@@ -118,12 +158,14 @@ func (q *Queries) GetAdminByUsername(ctx context.Context, username string) (Admi
 		&i.LockedUntil,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TotpPendingSecret,
+		&i.TotpLastStep,
 	)
 	return i, err
 }
 
 const listAdmins = `-- name: ListAdmins :many
-SELECT id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at FROM admins ORDER BY id
+SELECT id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at, totp_pending_secret, totp_last_step FROM admins ORDER BY id
 `
 
 func (q *Queries) ListAdmins(ctx context.Context) ([]Admin, error) {
@@ -145,6 +187,8 @@ func (q *Queries) ListAdmins(ctx context.Context) ([]Admin, error) {
 			&i.LockedUntil,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.TotpPendingSecret,
+			&i.TotpLastStep,
 		); err != nil {
 			return nil, err
 		}
@@ -183,8 +227,9 @@ func (q *Queries) ResetLoginFailures(ctx context.Context, id int64) error {
 }
 
 const restoreAdmin = `-- name: RestoreAdmin :exec
-INSERT INTO admins (id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO admins (id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at,
+                    totp_pending_secret, totp_last_step)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type RestoreAdminParams struct {
@@ -197,6 +242,8 @@ type RestoreAdminParams struct {
 	LockedUntil        int64  `json:"locked_until"`
 	CreatedAt          int64  `json:"created_at"`
 	UpdatedAt          int64  `json:"updated_at"`
+	TotpPendingSecret  string `json:"totp_pending_secret"`
+	TotpLastStep       int64  `json:"totp_last_step"`
 }
 
 func (q *Queries) RestoreAdmin(ctx context.Context, arg RestoreAdminParams) error {
@@ -210,6 +257,8 @@ func (q *Queries) RestoreAdmin(ctx context.Context, arg RestoreAdminParams) erro
 		arg.LockedUntil,
 		arg.CreatedAt,
 		arg.UpdatedAt,
+		arg.TotpPendingSecret,
+		arg.TotpLastStep,
 	)
 	return err
 }
@@ -234,5 +283,20 @@ func (q *Queries) SetAdminPassword(ctx context.Context, arg SetAdminPasswordPara
 		arg.UpdatedAt,
 		arg.ID,
 	)
+	return err
+}
+
+const setAdminTOTPPending = `-- name: SetAdminTOTPPending :exec
+UPDATE admins SET totp_pending_secret = ?, updated_at = ? WHERE id = ?
+`
+
+type SetAdminTOTPPendingParams struct {
+	TotpPendingSecret string `json:"totp_pending_secret"`
+	UpdatedAt         int64  `json:"updated_at"`
+	ID                int64  `json:"id"`
+}
+
+func (q *Queries) SetAdminTOTPPending(ctx context.Context, arg SetAdminTOTPPendingParams) error {
+	_, err := q.db.ExecContext(ctx, setAdminTOTPPending, arg.TotpPendingSecret, arg.UpdatedAt, arg.ID)
 	return err
 }

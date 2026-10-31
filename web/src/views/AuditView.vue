@@ -23,6 +23,7 @@ const actions = [
   { label: '备份与恢复', value: 'backup.' },
   { label: '定时任务', value: 'job.' },
   { label: '登录', value: 'auth.' },
+  { label: '管理员账号', value: 'admin.' },
 ]
 
 async function load() {

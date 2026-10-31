@@ -1720,6 +1720,11 @@
             "minLength": 1,
             "type": "string"
           },
+          "totp_code": {
+            "description": "开启两步验证后必填",
+            "maxLength": 16,
+            "type": "string"
+          },
           "username": {
             "maxLength": 64,
             "minLength": 1,
@@ -3352,6 +3357,24 @@
         ],
         "type": "object"
       },
+      "TOTPSetup": {
+        "additionalProperties": false,
+        "properties": {
+          "secret": {
+            "description": "Base32 密钥，无法扫码时手工输入",
+            "type": "string"
+          },
+          "uri": {
+            "description": "otpauth 地址，前端渲染为二维码",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret",
+          "uri"
+        ],
+        "type": "object"
+      },
       "Task": {
         "additionalProperties": false,
         "properties": {
@@ -3542,6 +3565,40 @@
         },
         "required": [
           "text"
+        ],
+        "type": "object"
+      },
+      "TotpDisableInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "totp_code": {
+            "maxLength": 16,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "password",
+          "totp_code"
+        ],
+        "type": "object"
+      },
+      "TotpEnableInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "totp_code": {
+            "maxLength": 16,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "totp_code"
         ],
         "type": "object"
       },
@@ -4493,6 +4550,120 @@
           }
         ],
         "summary": "当前会话",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/totp/disable": {
+      "post": {
+        "operationId": "disableTOTP",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TotpDisableInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "关闭两步验证",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/totp/enable": {
+      "post": {
+        "operationId": "enableTOTP",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TotpEnableInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "用验证码确认并开启两步验证",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/totp/setup": {
+      "post": {
+        "operationId": "beginTOTP",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TOTPSetup"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "生成两步验证密钥（待确认）",
         "tags": [
           "auth"
         ]

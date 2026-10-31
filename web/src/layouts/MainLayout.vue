@@ -149,12 +149,15 @@ onBeforeUnmount(disconnectEvents)
 router.afterEach(() => refreshPending())
 
 const accountOptions = [
+  { key: 'security', label: '账号安全' },
   { key: 'password', label: '修改密码' },
   { key: 'logout', label: '退出登录' },
 ]
 
 async function onAccount(key: string) {
-  if (key === 'password') {
+  if (key === 'security') {
+    router.push({ name: 'security' })
+  } else if (key === 'password') {
     router.push({ name: 'change-password' })
   } else if (key === 'logout') {
     await logout()

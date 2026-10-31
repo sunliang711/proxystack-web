@@ -48,6 +48,7 @@ type Service struct {
 	traffic   trafficState
 	autoPause autoPauseState
 	scheduler schedulerState
+	guard     loginGuard
 	// background 跟踪退出前要收尾的后台循环。
 	background sync.WaitGroup
 
@@ -73,6 +74,10 @@ var (
 	ErrAccountLocked      = errors.New("account is temporarily locked after repeated failures")
 	ErrUnauthenticated    = errors.New("not logged in")
 	ErrInvalidResetToken  = errors.New("reset link is invalid, expired or already used")
+	// ErrTOTPRequired 表示密码正确但账号开启了两步验证，需要再提交验证码。
+	ErrTOTPRequired = &FieldError{Field: "totp_code", Message: "two-factor code required"}
+	// ErrInvalidTOTP 表示两步验证码错误或已被使用。
+	ErrInvalidTOTP = &FieldError{Field: "totp_code", Message: "two-factor code is incorrect or already used"}
 )
 
 // FieldError 是可以定位到具体字段的校验错误。

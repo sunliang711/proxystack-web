@@ -18,6 +18,8 @@ type Admin struct {
 	LockedUntil        int64  `json:"locked_until"`
 	CreatedAt          int64  `json:"created_at"`
 	UpdatedAt          int64  `json:"updated_at"`
+	TotpPendingSecret  string `json:"totp_pending_secret"`
+	TotpLastStep       int64  `json:"totp_last_step"`
 }
 
 type AdminResetToken struct {

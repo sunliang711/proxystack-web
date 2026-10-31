@@ -16,6 +16,8 @@ const (
 	ActionPasswordChange  = "admin.password_change"
 	ActionPasswordReset   = "admin.password_reset"
 	ActionResetLinkCreate = "admin.reset_link_create"
+	ActionTOTPEnable      = "admin.totp_enable"
+	ActionTOTPDisable     = "admin.totp_disable"
 	ActionInit            = "system.init"
 )
 

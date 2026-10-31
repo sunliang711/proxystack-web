@@ -26,6 +26,24 @@ type loginInput struct {
 	Body           struct {
 		Username string `json:"username" minLength:"1" maxLength:"64"`
 		Password string `json:"password" minLength:"1" maxLength:"256"`
+		TOTPCode string `json:"totp_code,omitempty" maxLength:"16" required:"false" doc:"开启两步验证后必填"`
+	}
+}
+
+type totpSetupOutput struct {
+	Body app.TOTPSetup
+}
+
+type totpEnableInput struct {
+	Body struct {
+		TOTPCode string `json:"totp_code" minLength:"1" maxLength:"16"`
+	}
+}
+
+type totpDisableInput struct {
+	Body struct {
+		Password string `json:"password" minLength:"1" maxLength:"256"`
+		TOTPCode string `json:"totp_code" minLength:"1" maxLength:"16"`
 	}
 }
 
@@ -77,7 +95,7 @@ func registerAuth(api huma.API, s *Server) {
 		Summary:     "管理员登录",
 		Tags:        []string{"auth"},
 	}, func(ctx context.Context, in *loginInput) (*sessionOutput, error) {
-		sess, err := s.svc.Login(ctx, in.Body.Username, in.Body.Password, metaFrom(ctx))
+		sess, err := s.svc.Login(ctx, in.Body.Username, in.Body.Password, in.Body.TOTPCode, metaFrom(ctx))
 		if err != nil {
 			return nil, toHTTPError(err)
 		}
@@ -125,6 +143,42 @@ func registerAuth(api huma.API, s *Server) {
 	}), func(ctx context.Context, in *changePasswordInput) (*struct{}, error) {
 		err := s.svc.ChangePassword(ctx, sessionFrom(ctx), in.Body.OldPassword, in.Body.NewPassword, metaFrom(ctx))
 		return nil, toHTTPError(err)
+	})
+
+	huma.Register(api, secured(huma.Operation{
+		OperationID: "beginTOTP",
+		Method:      http.MethodPost,
+		Path:        "/api/auth/totp/setup",
+		Summary:     "生成两步验证密钥（待确认）",
+		Tags:        []string{"auth"},
+	}), func(ctx context.Context, _ *struct{}) (*totpSetupOutput, error) {
+		setup, err := s.svc.BeginTOTP(ctx, sessionFrom(ctx))
+		if err != nil {
+			return nil, toHTTPError(err)
+		}
+		return &totpSetupOutput{Body: *setup}, nil
+	})
+
+	huma.Register(api, secured(huma.Operation{
+		OperationID:   "enableTOTP",
+		Method:        http.MethodPost,
+		Path:          "/api/auth/totp/enable",
+		Summary:       "用验证码确认并开启两步验证",
+		Tags:          []string{"auth"},
+		DefaultStatus: http.StatusNoContent,
+	}), func(ctx context.Context, in *totpEnableInput) (*struct{}, error) {
+		return nil, toHTTPError(s.svc.EnableTOTP(ctx, sessionFrom(ctx), in.Body.TOTPCode, metaFrom(ctx)))
+	})
+
+	huma.Register(api, secured(huma.Operation{
+		OperationID:   "disableTOTP",
+		Method:        http.MethodPost,
+		Path:          "/api/auth/totp/disable",
+		Summary:       "关闭两步验证",
+		Tags:          []string{"auth"},
+		DefaultStatus: http.StatusNoContent,
+	}), func(ctx context.Context, in *totpDisableInput) (*struct{}, error) {
+		return nil, toHTTPError(s.svc.DisableTOTP(ctx, sessionFrom(ctx), in.Body.Password, in.Body.TOTPCode, metaFrom(ctx)))
 	})
 
 	huma.Register(api, huma.Operation{
