@@ -330,6 +330,7 @@ async function onAccount(key: string) {
 .brand-text {
   display: flex;
   flex-direction: column;
+  gap: 4px;
   line-height: 1.2;
   min-width: 0;
 }

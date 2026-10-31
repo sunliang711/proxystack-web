@@ -10,10 +10,17 @@ let runtime
 let egress
 let originalGet
 const originalDocument = globalThis.document
+const originalStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+const cachedValues = new Map()
+const storage = {
+  getItem: (key) => cachedValues.get(key) ?? null,
+  setItem: (key, value) => cachedValues.set(key, value),
+}
 
 before(async () => {
   // 通过现有 Vite 加载真实 composable，仅替换 HTTP 边界，不增加测试框架。
   globalThis.document = { baseURI: 'http://localhost/' }
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, writable: true, value: storage })
   server = await createServer({ configFile: false, server: { middlewareMode: true }, logLevel: 'silent' })
   ;({ api } = await server.ssrLoadModule('/src/api/client.ts'))
   ;({ runtime } = await server.ssrLoadModule('/src/runtime.ts'))
@@ -26,12 +33,16 @@ afterEach(() => {
   for (const id of Object.keys(egress.states)) delete egress.states[id]
   runtime.stacks = {}
   api.GET = originalGet
+  cachedValues.clear()
+  globalThis.localStorage = storage
 })
 
 after(async () => {
   await server?.close()
   if (originalDocument === undefined) delete globalThis.document
   else globalThis.document = originalDocument
+  if (originalStorage === undefined) delete globalThis.localStorage
+  else Object.defineProperty(globalThis, 'localStorage', originalStorage)
 })
 
 function controlledRequests() {
@@ -143,4 +154,102 @@ test('后端报告服务停止时结束加载并显示停止状态', async () =>
   await done
   assert.equal(egress.states[21].status, 'stopped')
   assert.equal(egress.refreshing.value, false)
+})
+
+test('首次查询写入本地缓存，清空内存后再次进入不请求后端', async () => {
+  const stack = { id: 30, name: 'edge30' }
+  const requests = controlledRequests()
+  const done = egress.ensure([stack])
+  assert.equal(requests.length, 2)
+  for (const request of requests) request.resolve(result(request.family, request.family === 'ipv4' ? '203.0.113.30' : '2001:db8::30'))
+  await done
+  const at = egress.states[30].at
+  assert.equal(cachedValues.size, 1)
+  delete egress.states[30]
+  await egress.ensure([stack])
+  assert.equal(requests.length, 2)
+  assert.equal(egress.states[30].v4.ip, '203.0.113.30')
+  assert.equal(egress.states[30].v6.ip, '2001:db8::30')
+  assert.equal(egress.states[30].at, at)
+  assert.equal(egress.states[30].loading, undefined)
+  assert.equal(egress.refreshing.value, false)
+})
+
+test('手动单行和批量刷新均覆盖缓存，新 Stack 单独查询', async () => {
+  const stack = { id: 31, name: 'edge31' }
+  let address = '203.0.113.31'
+  let calls = 0
+  api.GET = async (_path, { params }) => {
+    calls++
+    return result(params.query.family, params.query.family === 'ipv4' ? address : '')
+  }
+  await egress.ensure([stack])
+  address = '203.0.113.32'
+  await egress.refreshOne(stack)
+  delete egress.states[31]
+  await egress.ensure([stack])
+  assert.equal(calls, 4)
+  assert.equal(egress.states[31].v4.ip, address)
+  address = '203.0.113.33'
+  await egress.refresh([stack])
+  delete egress.states[31]
+  await egress.ensure([stack, { id: 32, name: 'edge32' }])
+  assert.equal(calls, 8)
+  assert.equal(egress.states[31].v4.ip, address)
+  assert.equal(egress.states[32].v4.ip, address)
+})
+
+test('同一个 ID 的 Stack 名称变化后不复用旧本地缓存', async () => {
+  api.GET = async (_path, { params }) => result(params.query.family, '203.0.113.34')
+  await egress.ensure([{ id: 34, name: 'old' }])
+  delete egress.states[34]
+  const requests = controlledRequests()
+  const done = egress.ensure([{ id: 34, name: 'new' }])
+  assert.equal(requests.length, 2)
+  for (const request of requests) request.resolve(result(request.family, ''))
+  await done
+})
+
+for (const cached of ['{broken', JSON.stringify({ status: 'loading', at: 1 }), JSON.stringify({ status: 'ok', at: 1, v4: { family: 'ipv4', ip: '203.0.113.1' } })]) {
+  test(`无效缓存降级为重新查询：${cached}`, async () => {
+    cachedValues.set('psw-egress:v1:/:35:edge35', cached)
+    const requests = controlledRequests()
+    const done = egress.ensure([{ id: 35, name: 'edge35' }])
+    assert.equal(requests.length, 2)
+    for (const request of requests) request.resolve(result(request.family, ''))
+    await done
+    assert.equal(egress.states[35].status, 'empty')
+  })
+}
+
+test('存储不可用时仍可查询并复用内存结果', async () => {
+  globalThis.localStorage = {
+    getItem: () => { throw new Error('Storage unavailable') },
+    setItem: () => { throw new Error('Storage unavailable') },
+  }
+  const stack = { id: 36, name: 'edge36' }
+  const requests = controlledRequests()
+  const done = egress.ensure([stack])
+  for (const request of requests) request.resolve(result(request.family, '203.0.113.36'))
+  await done
+  await egress.ensure([stack])
+  assert.equal(requests.length, 2)
+  assert.equal(egress.states[36].status, 'ok')
+})
+
+test('刷新失败后缓存新状态，重新进入不会显示旧地址或自动重试', async () => {
+  const stack = { id: 37, name: 'edge37' }
+  api.GET = async (_path, { params }) => result(params.query.family, '203.0.113.37')
+  await egress.ensure([stack])
+  const requests = controlledRequests()
+  const done = egress.refreshOne(stack)
+  for (const request of requests) request.reject(new Error('Network unavailable'))
+  await done
+  delete egress.states[37]
+  await egress.ensure([stack])
+  assert.equal(requests.length, 2)
+  assert.equal(egress.states[37].status, 'error')
+  assert.equal(egress.states[37].v4, undefined)
+  assert.equal(egress.states[37].v6, undefined)
+  assert.equal(egress.states[37].errors.v4, 'Network unavailable')
 })

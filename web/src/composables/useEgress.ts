@@ -1,5 +1,5 @@
 import { computed, reactive } from 'vue'
-import { api, problemMessage, type Schemas } from '../api/client'
+import { api, panelBase, problemMessage, type Schemas } from '../api/client'
 import { runtime } from '../runtime'
 
 type Egress = Schemas['EgressResult']
@@ -22,11 +22,50 @@ interface StackRef {
   name: string
 }
 
-// 结果在本次打开面板期间保留：切换页面再回来不会重复查询，刷新浏览器后重新查询。
+// 查询结果同时保存在内存和浏览器本地，刷新页面后也可复用，由手动刷新更新。
 const states = reactive<Record<number, EgressState>>({})
 
 const CONCURRENCY = 4
 const inFlight = new Map<number, Promise<void>>()
+
+function cacheKey(stack: StackRef): string {
+  // 同源下的不同面板、不同 stack 分别缓存，名称变化时重新查询。
+  return `psw-egress:v1:${panelBase}:${stack.id}:${encodeURIComponent(stack.name)}`
+}
+
+function validResult(result: Egress | undefined, family: 'ipv4' | 'ipv6'): boolean {
+  return result === undefined || !!result && result.family === family
+    && ['ip', 'region', 'city', 'country', 'org'].every((key) => typeof result[key as keyof Egress] === 'string')
+    && Array.isArray(result.sources)
+    && result.sources.every((source) => source && ['ip', 'region', 'city', 'country', 'org', 'url', 'error']
+      .every((key) => typeof source[key as keyof typeof source] === 'string'))
+}
+
+function readCache(stack: StackRef): EgressState | undefined {
+  try {
+    const state = JSON.parse(localStorage.getItem(cacheKey(stack)) ?? 'null') as EgressState | null
+    if (!state || !['ok', 'empty', 'stopped', 'error'].includes(state.status)
+      || typeof state.at !== 'number' || !Number.isFinite(state.at)
+      || !validResult(state.v4, 'ipv4') || !validResult(state.v6, 'ipv6')
+      || (state.error !== undefined && typeof state.error !== 'string')
+      || (state.errors !== undefined && (!state.errors || typeof state.errors !== 'object'
+        || Object.values(state.errors).some((error) => typeof error !== 'string')))) return
+    // 只恢复已完成的结果，不恢复加载状态。
+    return { status: state.status, v4: state.v4, v6: state.v6, error: state.error, errors: state.errors, at: state.at }
+  } catch {
+    // 缓存损坏或浏览器禁用存储时正常查询。
+    return
+  }
+}
+
+function writeCache(stack: StackRef) {
+  try {
+    const { loading, ...state } = states[stack.id]!
+    localStorage.setItem(cacheKey(stack), JSON.stringify(state))
+  } catch {
+    // 浏览器禁用存储或空间不足时仍保留内存中的查询结果。
+  }
+}
 
 /** mihomo 是否在运行；运行状态还没推送到时返回 undefined。 */
 function mihomoRunning(name: string): boolean | undefined {
@@ -85,7 +124,7 @@ function query(stack: StackRef): Promise<void> {
   const current = inFlight.get(stack.id)
   if (current) return current
   // 多个入口刷新同一个 stack 时复用查询，避免重复请求或旧结果覆盖新结果。
-  const request = runQuery(stack).finally(() => inFlight.delete(stack.id))
+  const request = runQuery(stack).then(() => writeCache(stack)).finally(() => inFlight.delete(stack.id))
   inFlight.set(stack.id, request)
   return request
 }
@@ -100,13 +139,19 @@ async function queryAll(stacks: StackRef[]) {
   await Promise.all(workers)
 }
 
-/** Stack 列表的出口 IP：ensure 只查询还没有结果的 stack，refresh 全部重新查询。 */
+/** Stack 列表的出口 IP：ensure 优先读取本地缓存，refresh 重新查询并更新缓存。 */
 export function useEgress() {
   const refreshing = computed(() => Object.values(states).some((state) => state.status === 'loading'))
   return {
     states,
     refreshing,
-    ensure: (stacks: StackRef[]) => queryAll(stacks.filter((stack) => !states[stack.id])),
+    ensure: (stacks: StackRef[]) => queryAll(stacks.filter((stack) => {
+      if (!states[stack.id]) {
+        const cached = readCache(stack)
+        if (cached) states[stack.id] = cached
+      }
+      return !states[stack.id]
+    })),
     refresh: (stacks: StackRef[]) => queryAll(stacks),
     refreshOne: (stack: StackRef) => query(stack),
   }

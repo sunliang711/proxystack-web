@@ -59,7 +59,7 @@ function openStack(node: FlowNode) {
   if (node.stackId) router.push({ name: 'stack', params: { id: node.stackId } })
 }
 
-// 出口 IP：列表里出现还没有结果的 stack 时查询，结果在本次打开面板期间保留。
+// 出口 IP：优先读取浏览器本地缓存，没有缓存时查询，手动刷新后更新缓存。
 const egress = useEgress()
 const egressTargets = computed(() => stacks.value.filter((stack) => stack.mihomo_enabled))
 watch(egressTargets, (targets) => egress.ensure(targets))
@@ -98,7 +98,7 @@ const columns: DataTableColumns<Summary> = [
         '出口 IP',
         h(NTooltip, null, {
           trigger: () => h(NIcon, { size: 14, style: 'opacity: 0.5; cursor: help' }, () => h(InformationCircleOutline)),
-          default: () => '经该 stack 的 mihomo 并发查询 IPv4 和 IPv6 出口（IPv4 优先用 ipinfo.io），哪个先完成就先显示；另一项继续检测，失败原因可悬停查看。进入页面时自动检测一次，之后点「刷新出口 IP」或行内的刷新按钮重新检测。',
+          default: () => '经该 stack 的 mihomo 并发查询 IPv4 和 IPv6 出口（IPv4 优先用 ipinfo.io），哪个先完成就先显示；另一项继续检测，失败原因可悬停查看。首次查询后保存在当前浏览器，进入页面或刷新页面时优先使用缓存；点「刷新出口 IP」或行内的刷新按钮重新检测并更新缓存。',
         }),
       ]),
     key: 'egress',

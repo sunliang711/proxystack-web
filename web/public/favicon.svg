@@ -1,15 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#36ad6a"/>
-      <stop offset="0.55" stop-color="#18a058"/>
-      <stop offset="1" stop-color="#0c7a43"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
-  <g transform="translate(12 12) scale(0.078125)" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="40">
-    <path d="M434.8 137.65l-149.36-68.1c-16.19-7.4-42.69-7.4-58.88 0L77.3 137.65c-17.6 8-17.6 21.09 0 29.09l148 67.5c16.89 7.7 44.69 7.7 61.58 0l148-67.5c17.52-8 17.52-21.1-.08-29.09z"/>
-    <path d="M160 308.52l-82.7 37.11c-17.6 8-17.6 21.1 0 29.1l148 67.5c16.89 7.69 44.69 7.69 61.58 0l148-67.5c17.6-8 17.6-21.1 0-29.1l-79.94-38.47"/>
-    <path d="M160 204.48l-82.8 37.16c-17.6 8-17.6 21.1 0 29.1l148 67.49c16.89 7.7 44.69 7.7 61.58 0l148-67.49c17.7-8 17.7-21.1.1-29.1L352 204.48"/>
-  </g>
+  <title>流量分支</title>
+  <rect width="64" height="64" rx="16" fill="#172B36"/>
+  <path d="M15 32h13l12-12h9" fill="none" stroke="#F0FAFF" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m28 32 12 12h9" fill="none" stroke="#59E0B3" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="15" cy="32" r="6" fill="#F0FAFF"/>
+  <circle cx="49" cy="20" r="6" fill="#F0FAFF"/>
+  <circle cx="49" cy="44" r="6" fill="#59E0B3"/>
 </svg>
