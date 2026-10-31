@@ -1,12 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { NAlert, NButton, NCard, NGrid, NGridItem, NPopconfirm, NSelect, NSpace, NTabPane, NTabs, NTag, NText, useMessage } from 'naive-ui'
+import { NAlert, NButton, NCard, NGrid, NGridItem, NPopconfirm, NSelect, NSpace, NTab, NTabs, NTag, NText, useMessage } from 'naive-ui'
 import { api, splitProblem, type Schemas } from '../api/client'
 import CodeEditor from '../components/CodeEditor.vue'
 
 type Format = 'clash' | 'premium' | 'surge'
 const message = useMessage()
 const format = ref<Format>('clash')
+// 只切换模板，不需要标签页内容区，用 NTab 让标签文字作为插槽渲染。
+const formats: { value: Format; label: string }[] = [
+  { value: 'clash', label: 'Clash' },
+  { value: 'premium', label: 'Premium Clash' },
+  { value: 'surge', label: 'Surge' },
+]
 const view = ref<Schemas['TemplatesView'] | null>(null)
 const drafts = ref<Record<Format, string>>({ clash: '', premium: '', surge: '' })
 const users = ref<Schemas['User'][]>([])
@@ -68,7 +74,7 @@ async function save() {
       </NSpace>
     </template>
     <NTabs v-model:value="format" type="line">
-      <NTabPane v-for="item in (['clash', 'premium', 'surge'] as Format[])" :key="item" :name="item" :tab="{ clash: 'Clash', premium: 'Premium Clash', surge: 'Surge' }[item]" />
+      <NTab v-for="item in formats" :key="item.value" :name="item.value">{{ item.label }}</NTab>
     </NTabs>
     <NGrid v-if="view" :cols="2" :x-gap="12" responsive="screen" item-responsive>
       <NGridItem span="2 l:1">
