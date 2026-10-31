@@ -18,9 +18,11 @@ const components = ref<Dep[]>([])
 const loading = ref(true)
 const checking = ref(false)
 const taskId = ref<number | null>(null)
+const restore = ref<Schemas['RestoreStatus'] | null>(null)
 const titles: Record<string, string> = { xray: 'Xray', mihomo: 'Mihomo', geo: 'Geo 数据' }
 
 async function load() {
+  restore.value = (await api.GET('/api/backup/restore/status')).data ?? null
   const { data } = await api.GET('/api/deps')
   components.value = data?.components ?? []
   loading.value = false
@@ -97,6 +99,18 @@ async function install() {
   dialog.value = null
 }
 
+async function installSource(component: Component) {
+  const { data, error } = await api.POST('/api/deps/{component}/install', {
+    params: { path: { component } },
+    body: { version: restore.value?.deps[component] ?? 'latest', restart: 'sequential' },
+  })
+  if (error) {
+    message.error(problemMessage(error, '安装失败'))
+    return
+  }
+  taskId.value = data!.task_id
+}
+
 async function rollback(component: Component) {
   const { data, error } = await api.POST('/api/deps/{component}/rollback', {
     params: { path: { component } },
@@ -133,6 +147,17 @@ function onFile({ file }: { file: UploadFileInfo }) {
 
 <template>
   <NSpin :show="loading">
+    <NAlert v-if="restore?.pending" type="warning" :bordered="false" title="恢复尚未完成" style="margin-bottom: 12px">
+      <template v-if="restore.missing.length">
+        安装缺失的依赖后自动重新生成配置并启动 stack。源实例的版本：
+        <NSpace style="margin-top: 8px">
+          <NButton v-for="component in restore.missing" :key="component" size="small" @click="installSource(component as Component)">
+            安装 {{ component }} {{ restore.deps[component] ?? 'latest' }}
+          </NButton>
+        </NSpace>
+      </template>
+      <template v-else>依赖已就绪，正在重新生成配置。</template>
+    </NAlert>
     <NSpace justify="space-between" align="center" style="margin-bottom: 12px">
       <NText depth="3">安装和升级走系统设置中的下载代理；新版本先在暂存目录验证能接受当前全部配置，再替换并逐个重启使用它的服务，失败时自动回滚。</NText>
       <NButton :loading="checking" @click="checkUpdates">检查更新</NButton>

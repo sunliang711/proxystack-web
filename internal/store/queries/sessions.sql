@@ -32,3 +32,6 @@ UPDATE admin_reset_tokens SET used_at = ? WHERE token_hash = ? AND used_at = 0;
 
 -- name: DeleteAdminSessionsExcept :exec
 DELETE FROM sessions WHERE admin_id = ? AND id_hash != ?;
+
+-- name: DeleteAllSessions :exec
+DELETE FROM sessions;

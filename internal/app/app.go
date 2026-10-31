@@ -47,6 +47,7 @@ type Service struct {
 	subs      subCache
 	traffic   trafficState
 	autoPause autoPauseState
+	scheduler schedulerState
 	// background 跟踪退出前要收尾的后台循环。
 	background sync.WaitGroup
 

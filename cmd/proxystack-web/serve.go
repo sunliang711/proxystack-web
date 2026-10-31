@@ -45,6 +45,12 @@ func runServe(ctx context.Context, g *globalFlags, dev bool) error {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	layout := g.layout()
+	// 恢复迁移包时数据库在这里替换到位：此时还没有任何连接打开它。
+	if restored, err := app.ApplyPendingRestore(layout); err != nil {
+		return fmt.Errorf("apply pending restore: %w", err)
+	} else if restored {
+		slog.Info("database replaced from the migration package")
+	}
 	if _, err := os.Stat(layout.DBPath()); err != nil {
 		return app.ErrNotInitialized
 	}

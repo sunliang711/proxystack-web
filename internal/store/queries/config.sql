@@ -135,3 +135,6 @@ SELECT * FROM config_revisions WHERE id = ?;
 
 -- name: LatestConfigRevisionID :one
 SELECT coalesce(max(id), 0) FROM config_revisions;
+
+-- name: StopAllStacks :exec
+UPDATE stacks SET desired_running = 0;

@@ -69,7 +69,6 @@ type trafficState struct {
 	targets   []collectTarget
 
 	lastMinute time.Time
-	lastPrune  time.Time
 }
 
 // location 返回设置的时区；无效时使用 UTC。
@@ -334,7 +333,7 @@ func (s *Service) pendingUsers() map[int64]traffic.Bytes {
 	return out
 }
 
-// TrafficTick 执行一轮采集和判定：每次都采集并判定自动暂停，跨分钟时落库和汇总，每小时清理过期明细。
+// TrafficTick 执行一轮采集和判定：每次都采集并判定自动暂停，跨分钟时落库和汇总。
 func (s *Service) TrafficTick(ctx context.Context) {
 	settings, err := s.loadSettings(ctx)
 	if err != nil {
@@ -352,10 +351,6 @@ func (s *Service) TrafficTick(ctx context.Context) {
 		}
 	}
 	s.evaluateAutoPause(ctx)
-	if now.Sub(s.traffic.lastPrune) >= time.Hour {
-		s.traffic.lastPrune = now
-		s.pruneTraffic(ctx, settings, now)
-	}
 }
 
 // PruneNow 立即清理过期明细。

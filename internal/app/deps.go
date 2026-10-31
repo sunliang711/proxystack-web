@@ -385,6 +385,10 @@ func (s *Service) InstallDep(ctx context.Context, actor Actor, req InstallReques
 				Summary: fmt.Sprintf("%s %s：%s", req.Component, record.Version, record.Result),
 			})
 		})
+		if err == nil {
+			// 恢复后可能正等着这个依赖。
+			s.resumeAfterRestore(ctx)
+		}
 		return err
 	})
 }

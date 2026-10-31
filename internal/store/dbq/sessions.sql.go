@@ -84,6 +84,15 @@ func (q *Queries) DeleteAdminSessionsExcept(ctx context.Context, arg DeleteAdmin
 	return err
 }
 
+const deleteAllSessions = `-- name: DeleteAllSessions :exec
+DELETE FROM sessions
+`
+
+func (q *Queries) DeleteAllSessions(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAllSessions)
+	return err
+}
+
 const deleteExpiredSessions = `-- name: DeleteExpiredSessions :exec
 DELETE FROM sessions WHERE expires_at <= ?
 `

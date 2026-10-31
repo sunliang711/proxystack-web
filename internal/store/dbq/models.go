@@ -104,6 +104,25 @@ type InboundUserRef struct {
 	Tag             string        `json:"tag"`
 }
 
+type Job struct {
+	ID       int64  `json:"id"`
+	Kind     string `json:"kind"`
+	Schedule string `json:"schedule"`
+	Enabled  int64  `json:"enabled"`
+	Timeout  int64  `json:"timeout"`
+	Params   string `json:"params"`
+}
+
+type JobRun struct {
+	ID         int64  `json:"id"`
+	JobID      int64  `json:"job_id"`
+	StartedAt  int64  `json:"started_at"`
+	FinishedAt int64  `json:"finished_at"`
+	Status     string `json:"status"`
+	TriggerBy  string `json:"trigger_by"`
+	Log        string `json:"log"`
+}
+
 type ManualNode struct {
 	ID       int64  `json:"id"`
 	UserID   int64  `json:"user_id"`

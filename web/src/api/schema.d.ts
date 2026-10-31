@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 审计日志 */
+        get: operations["listAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/login": {
         parameters: {
             query?: never;
@@ -83,6 +100,125 @@ export interface paths {
         get: operations["getSession"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/backup/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 在后台生成迁移包 */
+        post: operations["exportPackage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/backup/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 备份文件 */
+        get: operations["listBackups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/backup/files/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 删除备份文件 */
+        delete: operations["deleteBackup"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/backup/files/{name}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 下载备份文件（含全部凭据，记入审计日志） */
+        get: operations["downloadBackup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/backup/restore/execute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 执行恢复：替换数据库并重启管理服务 */
+        post: operations["executeRestore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/backup/restore/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 恢复后的收尾状态 */
+        get: operations["getRestoreStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/backup/restore/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 上传迁移包并预览 */
+        post: operations["uploadRestore"];
         delete?: never;
         options?: never;
         head?: never;
@@ -303,6 +439,108 @@ export interface paths {
         };
         /** 运行状态与作业进度事件流 */
         get: operations["events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/health-checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 健康检查 */
+        get: operations["getHealthChecks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 定时任务 */
+        get: operations["listJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 校验计划并返回未来 5 次执行时间 */
+        post: operations["previewSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 修改定时任务 */
+        put: operations["updateJob"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 立即执行定时任务 */
+        post: operations["runJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 定时任务的执行记录 */
+        get: operations["listJobRuns"];
         put?: never;
         post?: never;
         delete?: never;
@@ -673,6 +911,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stacks/{id}/delay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 测试 stack 中代理的延迟 */
+        post: operations["testStackDelay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{id}/egress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 经 stack 的 mihomo 查询出口 IP */
+        get: operations["getStackEgress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stacks/{id}/members": {
         parameters: {
             query?: never;
@@ -699,6 +971,23 @@ export interface paths {
         };
         /** 生成预览 */
         get: operations["previewStack"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{id}/proxies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** stack 中可以测速的代理 */
+        get: operations["listStackProxies"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1128,6 +1417,22 @@ export interface components {
             /** @description 为空时应用全部 stack */
             stacks?: string[];
         };
+        AuditEntry: {
+            action: string;
+            actor: string;
+            /** Format: date-time */
+            at: string;
+            /** Format: int64 */
+            id: number;
+            object: string;
+            source_ip: string;
+            summary: string;
+        };
+        AuditPage: {
+            items: components["schemas"]["AuditEntry"][];
+            /** Format: int64 */
+            total: number;
+        };
         AutoPause: {
             /** @enum {string} */
             reason: "daily" | "quota" | "expired";
@@ -1135,6 +1440,15 @@ export interface components {
             resume_at: string;
             /** Format: date-time */
             since: string;
+        };
+        BackupFile: {
+            /** @enum {string} */
+            kind: "snapshot" | "package";
+            /** Format: date-time */
+            modified_at: string;
+            name: string;
+            /** Format: int64 */
+            size: number;
         };
         BasicSettings: {
             /** @description 订阅节点默认 server，域名或 IP */
@@ -1203,6 +1517,26 @@ export interface components {
         DefaultsSettings: {
             mihomo: components["schemas"]["MihomoDefaults"];
             xray: components["schemas"]["XrayDefaults"];
+        };
+        DelayInputBody: {
+            /** @description 为空时测试全部 */
+            names: string[];
+            /**
+             * Format: int64
+             * @description 秒
+             */
+            timeout?: number;
+            /** @description 为空时使用默认测速地址 */
+            url?: string;
+        };
+        DelayResult: {
+            /**
+             * Format: int64
+             * @description 毫秒，失败时为 0
+             */
+            delay: number;
+            error: string;
+            name: string;
         };
         DepInstall: {
             actor: string;
@@ -1289,6 +1623,19 @@ export interface components {
             stack: string;
             username: string;
         };
+        EgressResult: {
+            /** @enum {string} */
+            family: "ipv4" | "ipv6";
+            ip: string;
+            region: string;
+            sources: components["schemas"]["EgressSource"][];
+        };
+        EgressSource: {
+            error: string;
+            ip: string;
+            region: string;
+            url: string;
+        };
         ErrorDetail: {
             /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
             location?: string;
@@ -1345,6 +1692,12 @@ export interface components {
             stacks?: string[];
             users?: string[];
         };
+        ExportRequest: {
+            include_tls?: boolean;
+            passphrase?: string;
+            plain?: boolean;
+            snapshot?: string;
+        };
         FieldChange: {
             new?: string;
             old?: string;
@@ -1362,6 +1715,14 @@ export interface components {
             /** @enum {string} */
             type: "select" | "url-test" | "load-balance" | "fallback";
             url: string;
+        };
+        HealthCheck: {
+            detail: string;
+            group: string;
+            hint: string;
+            /** @enum {string} */
+            status: "ok" | "warn" | "fail";
+            title: string;
         };
         ImportBody: {
             /** @enum {string} */
@@ -1445,6 +1806,49 @@ export interface components {
             restart: "sequential" | "all" | "none";
             /** @description 为空时按依赖源设置安装 */
             version?: string;
+        };
+        JobParams: {
+            /**
+             * Format: int64
+             * @description 数据库备份保留份数
+             */
+            keep?: number;
+        };
+        JobRun: {
+            /** Format: date-time */
+            finished_at: string;
+            /** Format: int64 */
+            id: number;
+            log: string;
+            /** Format: date-time */
+            started_at: string;
+            /** @enum {string} */
+            status: "running" | "succeeded" | "failed" | "skipped" | "timeout";
+            /** @enum {string} */
+            trigger: "schedule" | "manual";
+        };
+        JobUpdate: {
+            enabled: boolean;
+            params: components["schemas"]["JobParams"];
+            schedule: string;
+            /** Format: int64 */
+            timeout: number;
+        };
+        JobView: {
+            default_schedule: string;
+            description: string;
+            enabled: boolean;
+            has_keep: boolean;
+            /** Format: int64 */
+            id: number;
+            kind: string;
+            last_run?: components["schemas"]["JobRun"];
+            name: string;
+            next_runs: string[];
+            params: components["schemas"]["JobParams"];
+            schedule: string;
+            /** Format: int64 */
+            timeout: number;
         };
         Listener: {
             accounts: components["schemas"]["ListenerAccount"][];
@@ -1647,6 +2051,10 @@ export interface components {
             tag: string;
             uuid: string;
         };
+        Proxy: {
+            name: string;
+            type: string;
+        };
         ProxyTestResult: {
             /** @description 失败类型：proxy_connect、proxy_auth、timeout、tls、upstream、network、config */
             kind: string;
@@ -1699,6 +2107,38 @@ export interface components {
             new_password: string;
             token: string;
         };
+        RestoreOptions: {
+            external_host?: string;
+            keep_admins?: boolean;
+            keep_panel?: boolean;
+            start_proxies?: boolean;
+        };
+        RestorePreview: {
+            app_version: string;
+            counts: {
+                [key: string]: number;
+            };
+            deps: {
+                [key: string]: string;
+            };
+            /** Format: date-time */
+            exported_at: string;
+            external_host: string;
+            has_tls: boolean;
+            hostname: string;
+            port_conflicts: string[];
+            /** Format: date-time */
+            traffic_from: string;
+            /** Format: date-time */
+            traffic_to: string;
+        };
+        RestoreStatus: {
+            deps: {
+                [key: string]: string;
+            };
+            missing: string[];
+            pending: boolean;
+        };
         RevisionDiffOutputBody: {
             entries: components["schemas"]["DiffEntry"][];
         };
@@ -1736,6 +2176,9 @@ export interface components {
         };
         RuntimeStatusOutputBody: {
             stacks: components["schemas"]["StackRuntime"][];
+        };
+        SchedulePreviewInputBody: {
+            schedule: string;
         };
         SecuritySettings: {
             allow_noauth_public: boolean;
@@ -2095,6 +2538,41 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listAudit: {
+        parameters: {
+            query?: {
+                /** @description 动作前缀，例如 user 或 config.user */
+                action?: string;
+                actor?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPage"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     login: {
         parameters: {
             query?: never;
@@ -2235,6 +2713,227 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    exportPackage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskIDOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listBackups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupFile"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteBackup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    downloadBackup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    executeRestore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreOptions"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getRestoreStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    uploadRestore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description filename of the file being uploaded
+                     */
+                    filename?: string;
+                    /** @description general purpose name for multipart form value */
+                    name?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestorePreview"];
                 };
             };
             /** @description Error */
@@ -2722,6 +3421,190 @@ export interface operations {
                         /** @description The retry time in milliseconds. */
                         retry?: number;
                     })[];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getHealthChecks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthCheck"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listJobs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobView"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    previewSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchedulePreviewInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobUpdate"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    runJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listJobRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRun"][];
                 };
             };
             /** @description Error */
@@ -3560,6 +4443,76 @@ export interface operations {
             };
         };
     };
+    testStackDelay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DelayInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DelayResult"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getStackEgress: {
+        parameters: {
+            query?: {
+                family?: "all" | "ipv4" | "ipv6";
+                /** @description 单个数据源的超时（秒） */
+                timeout?: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EgressResult"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     setStackMembers: {
         parameters: {
             query?: never;
@@ -3613,6 +4566,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PreviewOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listStackProxies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Proxy"][];
                 };
             };
             /** @description Error */

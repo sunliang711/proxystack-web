@@ -79,6 +79,64 @@
         },
         "type": "object"
       },
+      "AuditEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "actor": {
+            "type": "string"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "object": {
+            "type": "string"
+          },
+          "source_ip": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "at",
+          "actor",
+          "source_ip",
+          "action",
+          "object",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "AuditPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEntry"
+            },
+            "type": "array"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "items"
+        ],
+        "type": "object"
+      },
       "AutoPause": {
         "additionalProperties": false,
         "properties": {
@@ -103,6 +161,36 @@
           "reason",
           "since",
           "resume_at"
+        ],
+        "type": "object"
+      },
+      "BackupFile": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "snapshot",
+              "package"
+            ],
+            "type": "string"
+          },
+          "modified_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "size",
+          "modified_at",
+          "kind"
         ],
         "type": "object"
       },
@@ -333,6 +421,55 @@
         "required": [
           "mihomo",
           "xray"
+        ],
+        "type": "object"
+      },
+      "DelayInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "names": {
+            "description": "为空时测试全部",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "timeout": {
+            "description": "秒",
+            "format": "int64",
+            "maximum": 60,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "url": {
+            "description": "为空时使用默认测速地址",
+            "type": "string"
+          }
+        },
+        "required": [
+          "names"
+        ],
+        "type": "object"
+      },
+      "DelayResult": {
+        "additionalProperties": false,
+        "properties": {
+          "delay": {
+            "description": "毫秒，失败时为 0",
+            "format": "int64",
+            "type": "integer"
+          },
+          "error": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "delay",
+          "error"
         ],
         "type": "object"
       },
@@ -664,6 +801,61 @@
         ],
         "type": "object"
       },
+      "EgressResult": {
+        "additionalProperties": false,
+        "properties": {
+          "family": {
+            "enum": [
+              "ipv4",
+              "ipv6"
+            ],
+            "type": "string"
+          },
+          "ip": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/EgressSource"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "family",
+          "ip",
+          "region",
+          "sources"
+        ],
+        "type": "object"
+      },
+      "EgressSource": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "ip": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "ip",
+          "region",
+          "error"
+        ],
+        "type": "object"
+      },
       "ErrorDetail": {
         "additionalProperties": false,
         "properties": {
@@ -799,6 +991,24 @@
         ],
         "type": "object"
       },
+      "ExportRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "include_tls": {
+            "type": "boolean"
+          },
+          "passphrase": {
+            "type": "string"
+          },
+          "plain": {
+            "type": "boolean"
+          },
+          "snapshot": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "FieldChange": {
         "additionalProperties": false,
         "properties": {
@@ -867,6 +1077,39 @@
           "url",
           "interval",
           "strategy"
+        ],
+        "type": "object"
+      },
+      "HealthCheck": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "group": {
+            "type": "string"
+          },
+          "hint": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "warn",
+              "fail"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "group",
+          "title",
+          "status",
+          "detail",
+          "hint"
         ],
         "type": "object"
       },
@@ -1204,6 +1447,151 @@
         },
         "required": [
           "restart"
+        ],
+        "type": "object"
+      },
+      "JobParams": {
+        "additionalProperties": false,
+        "properties": {
+          "keep": {
+            "description": "数据库备份保留份数",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "JobRun": {
+        "additionalProperties": false,
+        "properties": {
+          "finished_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "log": {
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "succeeded",
+              "failed",
+              "skipped",
+              "timeout"
+            ],
+            "type": "string"
+          },
+          "trigger": {
+            "enum": [
+              "schedule",
+              "manual"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "started_at",
+          "finished_at",
+          "status",
+          "trigger",
+          "log"
+        ],
+        "type": "object"
+      },
+      "JobUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "params": {
+            "$ref": "#/components/schemas/JobParams"
+          },
+          "schedule": {
+            "type": "string"
+          },
+          "timeout": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schedule",
+          "enabled",
+          "timeout",
+          "params"
+        ],
+        "type": "object"
+      },
+      "JobView": {
+        "additionalProperties": false,
+        "properties": {
+          "default_schedule": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "has_keep": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "last_run": {
+            "$ref": "#/components/schemas/JobRun"
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_runs": {
+            "items": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "params": {
+            "$ref": "#/components/schemas/JobParams"
+          },
+          "schedule": {
+            "type": "string"
+          },
+          "timeout": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "description",
+          "schedule",
+          "default_schedule",
+          "enabled",
+          "timeout",
+          "params",
+          "has_keep",
+          "next_runs"
         ],
         "type": "object"
       },
@@ -1981,6 +2369,22 @@
         ],
         "type": "object"
       },
+      "Proxy": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type"
+        ],
+        "type": "object"
+      },
       "ProxyTestResult": {
         "additionalProperties": false,
         "properties": {
@@ -2173,6 +2577,111 @@
         ],
         "type": "object"
       },
+      "RestoreOptions": {
+        "additionalProperties": false,
+        "properties": {
+          "external_host": {
+            "type": "string"
+          },
+          "keep_admins": {
+            "type": "boolean"
+          },
+          "keep_panel": {
+            "type": "boolean"
+          },
+          "start_proxies": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "RestorePreview": {
+        "additionalProperties": false,
+        "properties": {
+          "app_version": {
+            "type": "string"
+          },
+          "counts": {
+            "additionalProperties": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "deps": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "exported_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "external_host": {
+            "type": "string"
+          },
+          "has_tls": {
+            "type": "boolean"
+          },
+          "hostname": {
+            "type": "string"
+          },
+          "port_conflicts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "traffic_from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "traffic_to": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hostname",
+          "exported_at",
+          "app_version",
+          "external_host",
+          "counts",
+          "traffic_from",
+          "traffic_to",
+          "deps",
+          "has_tls",
+          "port_conflicts"
+        ],
+        "type": "object"
+      },
+      "RestoreStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "deps": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "pending": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "pending",
+          "deps",
+          "missing"
+        ],
+        "type": "object"
+      },
       "RevisionDiffOutputBody": {
         "additionalProperties": false,
         "properties": {
@@ -2328,6 +2837,18 @@
         },
         "required": [
           "stacks"
+        ],
+        "type": "object"
+      },
+      "SchedulePreviewInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "schedule": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schedule"
         ],
         "type": "object"
       },
@@ -3657,6 +4178,84 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/audit": {
+      "get": {
+        "operationId": "listAudit",
+        "parameters": [
+          {
+            "description": "动作前缀，例如 user 或 config.user",
+            "explode": false,
+            "in": "query",
+            "name": "action",
+            "schema": {
+              "description": "动作前缀，例如 user 或 config.user",
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "actor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "format": "int64",
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditPage"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "审计日志",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
     "/api/auth/login": {
       "post": {
         "operationId": "login",
@@ -3847,6 +4446,302 @@
         "summary": "当前会话",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/backup/export": {
+      "post": {
+        "operationId": "exportPackage",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskIDOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "在后台生成迁移包",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/backup/files": {
+      "get": {
+        "operationId": "listBackups",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BackupFile"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "备份文件",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/backup/files/{name}": {
+      "delete": {
+        "operationId": "deleteBackup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "删除备份文件",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/backup/files/{name}/download": {
+      "get": {
+        "operationId": "downloadBackup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "下载备份文件（含全部凭据，记入审计日志）",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/backup/restore/execute": {
+      "post": {
+        "operationId": "executeRestore",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreOptions"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "执行恢复：替换数据库并重启管理服务",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/backup/restore/status": {
+      "get": {
+        "operationId": "getRestoreStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestoreStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "恢复后的收尾状态",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/backup/restore/upload": {
+      "post": {
+        "operationId": "uploadRestore",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "filename": {
+                    "contentMediaType": "application/octet-stream",
+                    "description": "filename of the file being uploaded",
+                    "format": "binary",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "general purpose name for multipart form value",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestorePreview"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "上传迁移包并预览",
+        "tags": [
+          "ops"
         ]
       }
     },
@@ -4624,6 +5519,274 @@
         "summary": "运行状态与作业进度事件流",
         "tags": [
           "runtime"
+        ]
+      }
+    },
+    "/api/health-checks": {
+      "get": {
+        "operationId": "getHealthChecks",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HealthCheck"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "健康检查",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/jobs": {
+      "get": {
+        "operationId": "listJobs",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobView"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "定时任务",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/jobs/preview": {
+      "post": {
+        "operationId": "previewSchedule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchedulePreviewInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "校验计划并返回未来 5 次执行时间",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/jobs/{id}": {
+      "put": {
+        "operationId": "updateJob",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "修改定时任务",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/jobs/{id}/run": {
+      "post": {
+        "operationId": "runJob",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "立即执行定时任务",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/jobs/{id}/runs": {
+      "get": {
+        "operationId": "listJobRuns",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobRun"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "定时任务的执行记录",
+        "tags": [
+          "ops"
         ]
       }
     },
@@ -5873,6 +7036,144 @@
         ]
       }
     },
+    "/api/stacks/{id}/delay": {
+      "post": {
+        "operationId": "testStackDelay",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DelayInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DelayResult"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "测试 stack 中代理的延迟",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/stacks/{id}/egress": {
+      "get": {
+        "operationId": "getStackEgress",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "family",
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "ipv4",
+                "ipv6"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "单个数据源的超时（秒）",
+            "explode": false,
+            "in": "query",
+            "name": "timeout",
+            "schema": {
+              "default": 8,
+              "description": "单个数据源的超时（秒）",
+              "format": "int64",
+              "maximum": 60,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EgressResult"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "经 stack 的 mihomo 查询出口 IP",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
     "/api/stacks/{id}/members": {
       "put": {
         "operationId": "setStackMembers",
@@ -5974,6 +7275,56 @@
         "summary": "生成预览",
         "tags": [
           "config"
+        ]
+      }
+    },
+    "/api/stacks/{id}/proxies": {
+      "get": {
+        "operationId": "listStackProxies",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Proxy"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "stack 中可以测速的代理",
+        "tags": [
+          "ops"
         ]
       }
     },

@@ -71,6 +71,15 @@ func (q *Queries) CreateAdmin(ctx context.Context, arg CreateAdminParams) (Admin
 	return i, err
 }
 
+const deleteAllAdmins = `-- name: DeleteAllAdmins :exec
+DELETE FROM admins
+`
+
+func (q *Queries) DeleteAllAdmins(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAllAdmins)
+	return err
+}
+
 const getAdminByID = `-- name: GetAdminByID :one
 SELECT id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at FROM admins WHERE id = ?
 `
@@ -170,6 +179,38 @@ UPDATE admins SET failed_logins = 0, locked_until = 0 WHERE id = ?
 
 func (q *Queries) ResetLoginFailures(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, resetLoginFailures, id)
+	return err
+}
+
+const restoreAdmin = `-- name: RestoreAdmin :exec
+INSERT INTO admins (id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type RestoreAdminParams struct {
+	ID                 int64  `json:"id"`
+	Username           string `json:"username"`
+	PasswordHash       string `json:"password_hash"`
+	MustChangePassword int64  `json:"must_change_password"`
+	TotpSecret         string `json:"totp_secret"`
+	FailedLogins       int64  `json:"failed_logins"`
+	LockedUntil        int64  `json:"locked_until"`
+	CreatedAt          int64  `json:"created_at"`
+	UpdatedAt          int64  `json:"updated_at"`
+}
+
+func (q *Queries) RestoreAdmin(ctx context.Context, arg RestoreAdminParams) error {
+	_, err := q.db.ExecContext(ctx, restoreAdmin,
+		arg.ID,
+		arg.Username,
+		arg.PasswordHash,
+		arg.MustChangePassword,
+		arg.TotpSecret,
+		arg.FailedLogins,
+		arg.LockedUntil,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
 	return err
 }
 

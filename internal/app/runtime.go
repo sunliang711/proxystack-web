@@ -566,39 +566,11 @@ func (s *Service) syncDisabled(ctx context.Context, current *configdoc.Document,
 		if len(paused) == 0 && len(resumed) == 0 {
 			continue
 		}
-		snapshot, ok := snapshots[row.RevisionID]
-		if !ok {
-			var err error
-			if snapshot, err = s.RevisionSnapshot(ctx, row.RevisionID); err != nil {
-				notes = append(notes, fmt.Sprintf("%s：读取已应用版本失败：%v", row.StackName, err))
-				continue
-			}
-			snapshots[row.RevisionID] = snapshot
-		}
-		overlay := snapshot.Clone()
-		for index := range overlay.Users {
-			if currentIndex := current.UserByName(overlay.Users[index].Name); currentIndex >= 0 {
-				overlay.Users[index].Enabled = current.Users[currentIndex].Enabled
-				overlay.Users[index].PausedStacks = current.Users[currentIndex].PausedStacks
-			} else {
-				overlay.Users[index].Enabled = false
-			}
-		}
-		rendered, err := runtime.Render(overlay, auto)
+		rendered, _, err := s.rewriteApplied(ctx, row, current, auto, snapshots)
 		if err != nil {
-			notes = append(notes, fmt.Sprintf("%s：重新生成失败：%v", row.StackName, err))
+			notes = append(notes, fmt.Sprintf("%s：%v", row.StackName, err))
 			continue
 		}
-		files := rendered.Files[row.StackName]
-		if err := s.disk().Write(row.StackName, files); err != nil {
-			notes = append(notes, fmt.Sprintf("%s：写入生成物失败：%v", row.StackName, err))
-			continue
-		}
-		_ = s.Store.InTx(ctx, func(q *dbq.Queries) error {
-			return q.UpdateAppliedHashes(ctx, dbq.UpdateAppliedHashesParams{
-				XraySha: runtime.Hash(files.Xray), MihomoSha: runtime.Hash(files.Mihomo), StackName: row.StackName,
-			})
-		})
 		notes = append(notes, s.hotToggle(ctx, rendered.Set, row.StackName, paused, resumed)...)
 		if disconnect && len(paused) > 0 {
 			unit := units.Name(units.Xray, row.StackName)
@@ -611,6 +583,43 @@ func (s *Service) syncDisabled(ctx context.Context, current *configdoc.Document,
 	}
 	s.publishUnitStates(ctx)
 	return notes
+}
+
+// rewriteApplied 按「已应用版本 + 当前暂停状态」重新渲染并写入一个 stack 的生成物。
+func (s *Service) rewriteApplied(ctx context.Context, row dbq.AppliedState, current *configdoc.Document, auto domain.DisabledUserSet, snapshots map[int64]*configdoc.Document) (*runtime.Rendered, runtime.Files, error) {
+	snapshot, ok := snapshots[row.RevisionID]
+	if !ok {
+		var err error
+		if snapshot, err = s.RevisionSnapshot(ctx, row.RevisionID); err != nil {
+			return nil, runtime.Files{}, fmt.Errorf("读取已应用版本失败：%w", err)
+		}
+		snapshots[row.RevisionID] = snapshot
+	}
+	overlay := snapshot.Clone()
+	for index := range overlay.Users {
+		if currentIndex := current.UserByName(overlay.Users[index].Name); currentIndex >= 0 {
+			overlay.Users[index].Enabled = current.Users[currentIndex].Enabled
+			overlay.Users[index].PausedStacks = current.Users[currentIndex].PausedStacks
+		} else {
+			overlay.Users[index].Enabled = false
+		}
+	}
+	rendered, err := runtime.Render(overlay, auto)
+	if err != nil {
+		return nil, runtime.Files{}, fmt.Errorf("重新生成失败：%w", err)
+	}
+	files := rendered.Files[row.StackName]
+	if err := s.disk().Write(row.StackName, files); err != nil {
+		return nil, runtime.Files{}, fmt.Errorf("写入生成物失败：%w", err)
+	}
+	if err := s.Store.InTx(ctx, func(q *dbq.Queries) error {
+		return q.UpdateAppliedHashes(ctx, dbq.UpdateAppliedHashesParams{
+			XraySha: runtime.Hash(files.Xray), MihomoSha: runtime.Hash(files.Mihomo), StackName: row.StackName,
+		})
+	}); err != nil {
+		return nil, runtime.Files{}, err
+	}
+	return rendered, files, nil
 }
 
 // hotToggle 对运行中的 xray 实例逐个入站移除或加回用户。

@@ -9,6 +9,24 @@ import (
 	"context"
 )
 
+const countAuditLogs = `-- name: CountAuditLogs :one
+SELECT count(*) FROM audit_logs
+WHERE (?1 = '' OR action LIKE ?1 || '%')
+  AND (?2 = '' OR actor = ?2)
+`
+
+type CountAuditLogsParams struct {
+	Action interface{} `json:"action"`
+	Actor  interface{} `json:"actor"`
+}
+
+func (q *Queries) CountAuditLogs(ctx context.Context, arg CountAuditLogsParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countAuditLogs, arg.Action, arg.Actor)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const insertAuditLog = `-- name: InsertAuditLog :exec
 INSERT INTO audit_logs (at, actor, source_ip, action, object, summary)
 VALUES (?, ?, ?, ?, ?, ?)
@@ -46,6 +64,56 @@ type ListAuditLogsParams struct {
 
 func (q *Queries) ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([]AuditLog, error) {
 	rows, err := q.db.QueryContext(ctx, listAuditLogs, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AuditLog
+	for rows.Next() {
+		var i AuditLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.At,
+			&i.Actor,
+			&i.SourceIp,
+			&i.Action,
+			&i.Object,
+			&i.Summary,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchAuditLogs = `-- name: SearchAuditLogs :many
+SELECT id, at, actor, source_ip, "action", object, summary FROM audit_logs
+WHERE (?1 = '' OR action LIKE ?1 || '%')
+  AND (?2 = '' OR actor = ?2)
+ORDER BY id DESC LIMIT ?4 OFFSET ?3
+`
+
+type SearchAuditLogsParams struct {
+	Action    interface{} `json:"action"`
+	Actor     interface{} `json:"actor"`
+	RowOffset int64       `json:"row_offset"`
+	RowLimit  int64       `json:"row_limit"`
+}
+
+func (q *Queries) SearchAuditLogs(ctx context.Context, arg SearchAuditLogsParams) ([]AuditLog, error) {
+	rows, err := q.db.QueryContext(ctx, searchAuditLogs,
+		arg.Action,
+		arg.Actor,
+		arg.RowOffset,
+		arg.RowLimit,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -28,3 +28,10 @@ UPDATE admins SET failed_logins = failed_logins + 1, locked_until = ? WHERE id =
 
 -- name: ResetLoginFailures :exec
 UPDATE admins SET failed_logins = 0, locked_until = 0 WHERE id = ?;
+
+-- name: DeleteAllAdmins :exec
+DELETE FROM admins;
+
+-- name: RestoreAdmin :exec
+INSERT INTO admins (id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);

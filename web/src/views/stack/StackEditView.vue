@@ -22,6 +22,7 @@ import PreviewTab from './PreviewTab.vue'
 import RulesTab from './RulesTab.vue'
 import UpstreamsTab from './UpstreamsTab.vue'
 import LogsTab from './LogsTab.vue'
+import DiagnosticsTab from './DiagnosticsTab.vue'
 import TaskDialog from '../../components/TaskDialog.vue'
 import UnitStatus from '../../components/UnitStatus.vue'
 import { refreshPending } from '../../runtime'
@@ -371,6 +372,9 @@ async function saveMembers() {
           </NForm>
         </NTabPane>
 
+        <NTabPane name="diagnostics" tab="诊断" display-directive="if">
+          <DiagnosticsTab :stack-id="id" />
+        </NTabPane>
         <NTabPane name="logs" tab="日志" display-directive="if">
           <LogsTab :stack="stack.name" />
         </NTabPane>

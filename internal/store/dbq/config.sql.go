@@ -787,6 +787,15 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
+const stopAllStacks = `-- name: StopAllStacks :exec
+UPDATE stacks SET desired_running = 0
+`
+
+func (q *Queries) StopAllStacks(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, stopAllStacks)
+	return err
+}
+
 const upsertStack = `-- name: UpsertStack :one
 INSERT INTO stacks (id, position, name, enabled, desired_running, role, labels,
                     xray_enabled, xray_loglevel, xray_api, xray_stats, xray_policy, xray_api_port,

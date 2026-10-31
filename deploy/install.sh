@@ -18,6 +18,7 @@ PORT=9443
 TLS=self-signed
 DOMAIN=""
 EMAIL=""
+RESTORE=""
 SOURCE=main
 PUBLIC_KEY=""
 SUB_LISTEN=""
@@ -39,6 +40,7 @@ Panel options:
   --tls MODE            self-signed | acme | proxy (default self-signed)
   --domain DOMAIN       panel domain
   --email EMAIL         ACME account email
+  --restore FILE        initialize from a migration package instead of generating a new admin password
 
 Subscription server options:
   --source NAME         the panel's source name (default: main)
@@ -62,6 +64,7 @@ while [[ $# -gt 0 ]]; do
         --tls) TLS=$2; shift 2 ;;
         --domain) DOMAIN=$2; shift 2 ;;
         --email) EMAIL=$2; shift 2 ;;
+        --restore) RESTORE=$2; shift 2 ;;
         --source) SOURCE=$2; shift 2 ;;
         --public-key) PUBLIC_KEY=$2; shift 2 ;;
         --sub-listen) SUB_LISTEN=$2; shift 2 ;;
@@ -94,6 +97,10 @@ fi
 if [[ $ROLE != panel && -e $SUB_BASE/config.yaml ]]; then
     [[ $ROLE == all ]] && die "$SUB_BASE is already initialized"
     SUB_UPGRADE=1
+fi
+if [[ -n $RESTORE ]]; then
+    [[ $ROLE != sub ]] || die "--restore applies to the panel"
+    [[ -r $RESTORE ]] || die "cannot read $RESTORE"
 fi
 if [[ $ROLE == sub && $SUB_UPGRADE -eq 0 && -z $PUBLIC_KEY ]]; then
     die "--public-key is required (copy it from the panel's 发布订阅包 page)"
@@ -171,6 +178,28 @@ create_account() {
     fi
 }
 
+# restore_panel 用迁移包初始化数据库：口令从终端读取（不回显），未加密的迁移包不需要口令。
+# 不生成初始管理员密码，恢复后使用源实例的管理员账号登录。
+restore_panel() {
+    log "restoring from $RESTORE"
+    local package="$BASE/backups/restore$$.pswbak"
+    install -m 0640 -o "$SERVICE_USER" -g "$SERVICE_USER" "$RESTORE" "$package"
+    local args=(--base-dir "$BASE" restore --fresh "$package")
+    if [[ $(head -c 21 "$package") == age-encryption.org/v1 ]]; then
+        local passphrase
+        if [[ -t 0 ]]; then
+            read -rsp "Passphrase: " passphrase
+            echo
+        else
+            read -r passphrase
+        fi
+        PANEL_OUTPUT=$(printf '%s\n' "$passphrase" | runuser -u "$SERVICE_USER" -- "$BASE/bin/proxystack-web" "${args[@]}") || { rm -f "$package"; die "restore failed"; }
+    else
+        PANEL_OUTPUT=$(runuser -u "$SERVICE_USER" -- "$BASE/bin/proxystack-web" "${args[@]}" --encrypted=false </dev/null) || { rm -f "$package"; die "restore failed"; }
+    fi
+    rm -f "$package"
+}
+
 install_panel() {
     install_polkit
 
@@ -197,12 +226,16 @@ install_panel() {
     systemctl restart polkit.service || die "polkit failed to start; check 'journalctl -u polkit'"
     systemctl is-active --quiet polkit.service || die "polkit is not running; check 'journalctl -u polkit'"
 
-    log "initializing database"
-    local args=(--base-dir "$BASE" init --port "$PORT" --tls "$TLS")
-    [[ -n $LISTEN ]] && args+=(--listen "$LISTEN")
-    [[ -n $DOMAIN ]] && args+=(--domain "$DOMAIN")
-    [[ -n $EMAIL ]] && args+=(--email "$EMAIL")
-    PANEL_OUTPUT=$(runuser -u "$SERVICE_USER" -- "$BASE/bin/proxystack-web" "${args[@]}")
+    if [[ -n $RESTORE ]]; then
+        restore_panel
+    else
+        log "initializing database"
+        local args=(--base-dir "$BASE" init --port "$PORT" --tls "$TLS")
+        [[ -n $LISTEN ]] && args+=(--listen "$LISTEN")
+        [[ -n $DOMAIN ]] && args+=(--domain "$DOMAIN")
+        [[ -n $EMAIL ]] && args+=(--email "$EMAIL")
+        PANEL_OUTPUT=$(runuser -u "$SERVICE_USER" -- "$BASE/bin/proxystack-web" "${args[@]}")
+    fi
 
     log "starting proxystack-web.service"
     systemctl enable --now proxystack-web.service

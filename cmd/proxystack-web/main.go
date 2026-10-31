@@ -47,7 +47,7 @@ func newRootCommand() *cobra.Command {
 	}
 	root.PersistentFlags().StringVar(&g.baseDir, "base-dir", defaultBase, "installation directory (env PSW_BASE_DIR)")
 	root.Flags().AddFlagSet(serve.Flags())
-	root.AddCommand(serve, newInitCommand(g), newAdminCommand(g), newInfoCommand(g), newOpenAPICommand(), newSubCommand())
+	root.AddCommand(serve, newInitCommand(g), newAdminCommand(g), newInfoCommand(g), newOpenAPICommand(), newSubCommand(), newBackupCommand(g), newRestoreCommand(g))
 	return root
 }
 

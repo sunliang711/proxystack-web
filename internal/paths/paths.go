@@ -25,6 +25,12 @@ func (l Layout) GeneratedDir() string { return filepath.Join(l.RuntimeDir(), "ge
 func (l Layout) BackupsDir() string   { return filepath.Join(l.Base, "backups") }
 func (l Layout) DownloadsDir() string { return filepath.Join(l.Base, "downloads") }
 
+// RestoreStagingDir 存放已上传、尚未执行的迁移包内容。
+func (l Layout) RestoreStagingDir() string { return filepath.Join(l.DataDir(), "restore-staging") }
+
+// RestorePendingDir 存放等待下次启动时替换到位的数据库和证书。
+func (l Layout) RestorePendingDir() string { return filepath.Join(l.DataDir(), "restore-pending") }
+
 // GeneratedXray 返回某个 stack 的 xray 生成物路径。
 func (l Layout) GeneratedXray(stack string) string {
 	return filepath.Join(l.GeneratedDir(), "xray", stack+".json")
