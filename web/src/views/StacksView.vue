@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, h, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import {
-  NAlert, NButton, NCard, NDataTable, NDynamicTags, NForm, NFormItem, NGrid, NGridItem, NInput, NModal, NRadio,
-  NRadioGroup, NSelect, NSpace, NStep, NSteps, NTag, NText, useMessage, type DataTableColumns,
+  NAlert, NButton, NCard, NDataTable, NDynamicTags, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NModal, NRadio,
+  NRadioGroup, NSelect, NSpace, NStep, NSteps, NTag, NText, NTooltip, useMessage, type DataTableColumns,
 } from 'naive-ui'
+import { InformationCircleOutline, RefreshOutline } from '@vicons/ionicons5'
 import { api, emptyErrors, fieldState, splitProblem, type FormErrors, type Schemas } from '../api/client'
+import EgressCell from '../components/EgressCell.vue'
 import ErrorList from '../components/ErrorList.vue'
 import ExportDialog from '../components/ExportDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
 import UnitStatus from '../components/UnitStatus.vue'
+import { useEgress } from '../composables/useEgress'
+import { runtime } from '../runtime'
 
 type Summary = Schemas['StackSummary']
 
@@ -27,13 +31,29 @@ async function load() {
   stacks.value = data?.stacks ?? []
   loading.value = false
 }
+
 onMounted(load)
+
+// 出口 IP：列表里出现还没有结果的 stack 时查询，结果在本次打开面板期间保留。
+const egress = useEgress()
+const egressTargets = computed(() => stacks.value.filter((stack) => stack.mihomo_enabled))
+watch(egressTargets, (targets) => egress.ensure(targets))
+// mihomo 从停止变为运行后自动重新检测。
+watch(
+  () => egressTargets.value.filter((stack) => egress.states[stack.id]?.status === 'stopped' && mihomoActive(stack.name)),
+  (started) => started.forEach((stack) => egress.refreshOne(stack)),
+)
+
+function mihomoActive(name: string): boolean {
+  return runtime.stacks[name]?.units.some((unit) => unit.unit.includes('mihomo') && unit.active === 'active') ?? false
+}
 
 const columns: DataTableColumns<Summary> = [
   { type: 'selection' },
   {
     title: '名称',
     key: 'name',
+    minWidth: 120,
     render: (row) => h(RouterLink, { to: { name: 'stack', params: { id: row.id } } }, { default: () => row.name }),
   },
   {
@@ -47,10 +67,29 @@ const columns: DataTableColumns<Summary> = [
       ]),
   },
   { title: '运行', key: 'runtime', render: (row) => h(UnitStatus, { stack: row.name, actions: true }) },
+  {
+    title: () =>
+      h(NSpace, { size: 4, align: 'center', wrap: false }, () => [
+        '出口 IP',
+        h(NTooltip, null, {
+          trigger: () => h(NIcon, { size: 14, style: 'opacity: 0.5; cursor: help' }, () => h(InformationCircleOutline)),
+          default: () => '经该 stack 的 mihomo 访问 ipinfo.io 查询 IPv4 出口。进入页面时自动检测一次，之后点「刷新出口 IP」或行内的刷新按钮重新检测。',
+        }),
+      ]),
+    key: 'egress',
+    minWidth: 220,
+    render: (row) =>
+      h(EgressCell, {
+        state: egress.states[row.id],
+        mihomoEnabled: row.mihomo_enabled,
+        onRefresh: () => egress.refreshOne(row),
+      }),
+  },
   { title: '角色', key: 'role', width: 70 },
   {
     title: 'Xray 入站',
     key: 'inbounds',
+    minWidth: 190,
     render: (row) =>
       row.xray_enabled
         ? row.inbounds.map((inbound) => `${inbound.name} ${inbound.protocol} ${inbound.listen}:${inbound.port}`).join('\n')
@@ -59,11 +98,13 @@ const columns: DataTableColumns<Summary> = [
   {
     title: 'Mihomo',
     key: 'mihomo',
+    minWidth: 140,
     render: (row) => (row.mihomo_enabled ? [row.mihomo_socks, row.mihomo_http].filter(Boolean).join('\n') : '未启用'),
   },
   {
     title: '标记',
     key: 'labels',
+    minWidth: 120,
     render: (row) =>
       h(NSpace, { size: 4 }, () => [
         ...row.labels.map((label) => h(NTag, { size: 'small', bordered: false }, () => label)),
@@ -139,6 +180,10 @@ async function create() {
   <NCard>
     <template #header>
       <NSpace justify="end">
+        <NButton :loading="egress.refreshing.value" :disabled="!egressTargets.length" @click="egress.refresh(egressTargets)">
+          <template #icon><NIcon><RefreshOutline /></NIcon></template>
+          刷新出口 IP
+        </NButton>
         <NButton @click="showImport = true">导入</NButton>
         <NButton :disabled="!checked.length" @click="showExport = true">导出所选</NButton>
         <NButton type="primary" @click="openWizard">新建</NButton>
@@ -150,6 +195,7 @@ async function create() {
       :data="stacks"
       :loading="loading"
       :row-key="rowKey"
+      :scroll-x="1360"
       class="pre-line"
     />
   </NCard>

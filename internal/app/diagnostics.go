@@ -33,51 +33,74 @@ const (
 
 var ipCandidate = regexp.MustCompile(`[0-9A-Fa-f:.]+`)
 
+// EgressInfo 是从数据源响应中解析出的出口信息，数据源不提供的字段留空。
+type EgressInfo struct {
+	IP      string `json:"ip"`
+	Region  string `json:"region" doc:"国家、地区和城市，空格分隔"`
+	City    string `json:"city"`
+	Country string `json:"country" doc:"两位国家代码"`
+	Org     string `json:"org" doc:"ASN 与运营商，例如 AS13335 Cloudflare, Inc."`
+}
+
 // EgressSource 是一个数据源的查询结果。
 type EgressSource struct {
-	URL    string `json:"url"`
-	IP     string `json:"ip"`
-	Region string `json:"region"`
-	Error  string `json:"error"`
+	URL string `json:"url"`
+	EgressInfo
+	Error string `json:"error"`
 }
 
 // EgressResult 是一个地址族的出口 IP。
 type EgressResult struct {
-	Family  string         `json:"family" enum:"ipv4,ipv6"`
-	IP      string         `json:"ip"`
-	Region  string         `json:"region"`
+	Family string `json:"family" enum:"ipv4,ipv6"`
+	EgressInfo
 	Sources []EgressSource `json:"sources"`
 }
 
-// parseEgress 从数据源的响应中取出 IP 和地区：JSON 响应按字段读取，纯文本响应取第一个合法地址。
-func parseEgress(body []byte) (ip, region string) {
+var countryCode = regexp.MustCompile(`^[A-Z]{2}$`)
+
+// parseEgress 从数据源的响应中取出出口信息：JSON 响应按字段读取，纯文本响应取第一个合法地址。
+func parseEgress(body []byte) EgressInfo {
+	var info EgressInfo
 	var object map[string]any
 	if json.Unmarshal(body, &object) == nil {
-		for _, key := range []string{"ip", "ip_addr", "ip_address"} {
-			if value, ok := object[key].(string); ok && value != "" {
-				ip = value
-				break
+		field := func(keys ...string) string {
+			for _, key := range keys {
+				if value, ok := object[key].(string); ok && value != "" {
+					return value
+				}
 			}
+			return ""
 		}
+		info.IP = field("ip", "ip_addr", "ip_address")
 		parts := []string{}
 		for _, key := range []string{"country", "region", "city"} {
-			if value, ok := object[key].(string); ok && value != "" {
+			if value := field(key); value != "" {
 				parts = append(parts, value)
 			}
 		}
-		return ip, strings.Join(parts, " ")
+		info.Region = strings.Join(parts, " ")
+		info.City = field("city")
+		if code := strings.ToUpper(field("country_iso", "country")); countryCode.MatchString(code) {
+			info.Country = code
+		}
+		info.Org = field("org")
+		if info.Org == "" {
+			// ifconfig.co 把 ASN 和运营商分成两个字段。
+			info.Org = strings.TrimSpace(field("asn") + " " + field("asn_org"))
+		}
+		return info
 	}
 	text := string(body)
 	for _, candidate := range ipCandidate.FindAllString(text, -1) {
 		if _, err := netip.ParseAddr(candidate); err == nil {
-			ip = candidate
+			info.IP = candidate
 			break
 		}
 	}
 	if _, after, ok := strings.Cut(text, "来自于："); ok {
-		region = strings.TrimSpace(after)
+		info.Region = strings.TrimSpace(after)
 	}
-	return ip, region
+	return info
 }
 
 func matchesFamily(ip, family string) bool {
@@ -145,14 +168,14 @@ func queryEgress(ctx context.Context, fetcher deps.Fetcher, family string, timeo
 		case err != nil:
 			item.Error = err.Error()
 		default:
-			item.IP, item.Region = parseEgress(body)
+			item.EgressInfo = parseEgress(body)
 			if !matchesFamily(item.IP, family) {
-				item.IP, item.Region, item.Error = "", "", "响应中没有该地址族的地址"
+				item.EgressInfo, item.Error = EgressInfo{}, "响应中没有该地址族的地址"
 			}
 		}
 		result.Sources = append(result.Sources, item)
 		if item.IP != "" {
-			result.IP, result.Region = item.IP, item.Region
+			result.EgressInfo = item.EgressInfo
 			break
 		}
 	}

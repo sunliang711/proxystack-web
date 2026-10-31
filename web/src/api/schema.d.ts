@@ -1694,15 +1694,27 @@ export interface components {
             username: string;
         };
         EgressResult: {
+            city: string;
+            /** @description 两位国家代码 */
+            country: string;
             /** @enum {string} */
             family: "ipv4" | "ipv6";
             ip: string;
+            /** @description ASN 与运营商，例如 AS13335 Cloudflare, Inc. */
+            org: string;
+            /** @description 国家、地区和城市，空格分隔 */
             region: string;
             sources: components["schemas"]["EgressSource"][];
         };
         EgressSource: {
+            city: string;
+            /** @description 两位国家代码 */
+            country: string;
             error: string;
             ip: string;
+            /** @description ASN 与运营商，例如 AS13335 Cloudflare, Inc. */
+            org: string;
+            /** @description 国家、地区和城市，空格分隔 */
             region: string;
             url: string;
         };

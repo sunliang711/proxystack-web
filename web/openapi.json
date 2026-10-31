@@ -809,6 +809,13 @@
       "EgressResult": {
         "additionalProperties": false,
         "properties": {
+          "city": {
+            "type": "string"
+          },
+          "country": {
+            "description": "两位国家代码",
+            "type": "string"
+          },
           "family": {
             "enum": [
               "ipv4",
@@ -819,7 +826,12 @@
           "ip": {
             "type": "string"
           },
+          "org": {
+            "description": "ASN 与运营商，例如 AS13335 Cloudflare, Inc.",
+            "type": "string"
+          },
           "region": {
+            "description": "国家、地区和城市，空格分隔",
             "type": "string"
           },
           "sources": {
@@ -831,22 +843,37 @@
         },
         "required": [
           "family",
+          "sources",
           "ip",
           "region",
-          "sources"
+          "city",
+          "country",
+          "org"
         ],
         "type": "object"
       },
       "EgressSource": {
         "additionalProperties": false,
         "properties": {
+          "city": {
+            "type": "string"
+          },
+          "country": {
+            "description": "两位国家代码",
+            "type": "string"
+          },
           "error": {
             "type": "string"
           },
           "ip": {
             "type": "string"
           },
+          "org": {
+            "description": "ASN 与运营商，例如 AS13335 Cloudflare, Inc.",
+            "type": "string"
+          },
           "region": {
+            "description": "国家、地区和城市，空格分隔",
             "type": "string"
           },
           "url": {
@@ -855,9 +882,12 @@
         },
         "required": [
           "url",
+          "error",
           "ip",
           "region",
-          "error"
+          "city",
+          "country",
+          "org"
         ],
         "type": "object"
       },
