@@ -87,7 +87,8 @@ func TestApplyWritesFilesAndStartsUnitsInDependencyOrder(t *testing.T) {
 	require.NoError(t, err)
 	written, err := os.ReadFile(h.svc.Layout.GeneratedXray("usa1"))
 	require.NoError(t, err)
-	require.Equal(t, string(golden), string(written))
+	// 除了 email 按用户 ID 生成，生成物与参考项目逐字节一致。
+	require.Equal(t, string(golden), strings.ReplaceAll(string(written), `"email": "u1"`, `"email": "alice"`))
 
 	position := func(call string) int {
 		for index, c := range h.units.Calls {
@@ -133,7 +134,7 @@ func TestPauseTakesEffectWithoutApply(t *testing.T) {
 	result, err := h.svc.SetUserPause(ctx, h.actor, alice.ID, true, []string{"usa1"})
 	require.NoError(t, err)
 	require.Empty(t, result.Notes)
-	require.Contains(t, strings.Join(h.api.Calls, "\n"), "rmu 127.0.0.1:10091 vmess:24101:vmess alice")
+	require.Contains(t, strings.Join(h.api.Calls, "\n"), "rmu 127.0.0.1:10091 vmess:24101:vmess u1")
 
 	written, err := os.ReadFile(h.svc.Layout.GeneratedXray("usa1"))
 	require.NoError(t, err)

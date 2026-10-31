@@ -74,6 +74,7 @@ func mergeUserRef(profile UserProfile, ref InboundUserRef) InboundUser {
 	return InboundUser{
 		User:            ref.User,
 		Profile:         NormalizeUserProfile(ref.Profile),
+		Email:           profile.Email,
 		UUID:            profile.UUID,
 		Password:        profile.Password,
 		Remark:          firstNonEmpty(ref.Remark, profile.Remark),

@@ -40,6 +40,7 @@ func secretFields(doc *Document) []secretField {
 	if doc.Settings != nil {
 		fields = append(fields,
 			secretField{&doc.Settings.DownloadProxy.Password, nil},
+			secretField{&doc.Settings.Notify.Password, nil},
 			secretField{&doc.Settings.NodeExport.Token, RandomToken},
 		)
 	}

@@ -110,6 +110,8 @@ type Settings struct {
 	DownloadProxy DownloadProxySettings `json:"download_proxy" yaml:"download_proxy"`
 	Subscription  SubscriptionSettings  `json:"subscription" yaml:"subscription"`
 	NodeExport    NodeExportSettings    `json:"node_export" yaml:"node_export"`
+	Traffic       TrafficSettings       `json:"traffic" yaml:"traffic"`
+	Notify        NotifySettings        `json:"notify" yaml:"notify"`
 }
 
 // 用户被停用或已到期时订阅的返回方式。
@@ -126,6 +128,60 @@ type SubscriptionSettings struct {
 	Interval         int    `json:"interval" yaml:"interval" minimum:"0" doc:"Surge managed config 的更新间隔（秒）"`
 	Strict           bool   `json:"strict" yaml:"strict"`
 	DisabledResponse string `json:"disabled_response" yaml:"disabled_response" enum:"not_found,empty"`
+}
+
+// 达到每日阈值后的动作。
+const (
+	DailyActionPause  = "pause"
+	DailyActionNotify = "notify"
+)
+
+// TrafficSettings 是流量监控设置。
+type TrafficSettings struct {
+	Enabled bool `json:"enabled" yaml:"enabled"`
+	// Interval 是采集间隔（秒）。
+	Interval int `json:"interval" yaml:"interval" enum:"5,10,30"`
+	// 各级明细的保留天数，0 表示永久保留。
+	RetentionMinuteDays int `json:"retention_minute_days" yaml:"retention_minute_days" minimum:"0"`
+	RetentionHourDays   int `json:"retention_hour_days" yaml:"retention_hour_days" minimum:"0"`
+	RetentionDayDays    int `json:"retention_day_days" yaml:"retention_day_days" minimum:"0"`
+	RetentionMonthDays  int `json:"retention_month_days" yaml:"retention_month_days" minimum:"0"`
+	// DisconnectOnPause 为真时自动暂停后重启受影响的 xray，切断已建立的连接。
+	DisconnectOnPause bool `json:"disconnect_on_pause" yaml:"disconnect_on_pause"`
+}
+
+// 邮件加密方式。
+const (
+	SMTPSecurityNone     = "none"
+	SMTPSecuritySTARTTLS = "starttls"
+	SMTPSecurityTLS      = "tls"
+)
+
+// 通知事件。
+const (
+	EventDailyLimit   = "daily_limit"
+	EventDailyWarning = "daily_warning"
+	EventQuotaLimit   = "quota_limit"
+	EventQuotaWarning = "quota_warning"
+	EventExpired      = "expired"
+	EventExpiring     = "expiring"
+)
+
+// NotifySettings 是邮件通知设置。
+type NotifySettings struct {
+	Enabled  bool     `json:"enabled" yaml:"enabled"`
+	Host     string   `json:"host" yaml:"host,omitempty"`
+	Port     int      `json:"port" yaml:"port,omitempty" minimum:"0" maximum:"65535"`
+	Security string   `json:"security" yaml:"security,omitempty" enum:"none,starttls,tls"`
+	Username string   `json:"username" yaml:"username,omitempty"`
+	Password string   `json:"password" yaml:"password,omitempty"`
+	From     string   `json:"from" yaml:"from,omitempty"`
+	To       []string `json:"to" yaml:"to,omitempty"`
+	// Events 是要发送邮件的事件。
+	Events []string `json:"events" yaml:"events,omitempty"`
+	// WarnPercent 是用量预警比例，ExpireDays 是到期提醒提前天数。
+	WarnPercent int `json:"warn_percent" yaml:"warn_percent" minimum:"1" maximum:"100"`
+	ExpireDays  int `json:"expire_days" yaml:"expire_days" minimum:"1"`
 }
 
 // NodeExportSettings 是只读节点导出接口：其他实例凭 token 拉取本机节点。
@@ -236,21 +292,24 @@ type SecuritySettings struct {
 
 // User 是订阅用户，自身即 default 档案。
 type User struct {
-	ID              int64     `json:"id,omitempty" yaml:"-"`
-	Name            string    `json:"name" yaml:"name"`
-	Enabled         bool      `json:"enabled" yaml:"enabled"`
-	UUID            string    `json:"uuid" yaml:"uuid"`
-	SSPassword      string    `json:"ss_password" yaml:"ss_password"`
-	Remark          string    `json:"remark" yaml:"remark,omitempty"`
-	DisplayTemplate string    `json:"display_template" yaml:"display_template,omitempty"`
-	Tag             string    `json:"tag" yaml:"tag,omitempty"`
-	SubToken        string    `json:"sub_token" yaml:"sub_token"`
-	QuotaBytes      int64     `json:"quota_bytes" yaml:"quota_bytes" minimum:"0"`
-	ResetMode       string    `json:"reset_mode" yaml:"reset_mode" enum:"none,monthly"`
-	ResetDay        int       `json:"reset_day" yaml:"reset_day" minimum:"0" maximum:"28"`
-	ExpireAt        string    `json:"expire_at" yaml:"expire_at,omitempty" doc:"RFC 3339 时间，空表示不过期"`
-	Note            string    `json:"note" yaml:"note,omitempty"`
-	Profiles        []Profile `json:"profiles" yaml:"profiles,omitempty"`
+	ID              int64  `json:"id,omitempty" yaml:"-"`
+	Name            string `json:"name" yaml:"name"`
+	Enabled         bool   `json:"enabled" yaml:"enabled"`
+	UUID            string `json:"uuid" yaml:"uuid"`
+	SSPassword      string `json:"ss_password" yaml:"ss_password"`
+	Remark          string `json:"remark" yaml:"remark,omitempty"`
+	DisplayTemplate string `json:"display_template" yaml:"display_template,omitempty"`
+	Tag             string `json:"tag" yaml:"tag,omitempty"`
+	SubToken        string `json:"sub_token" yaml:"sub_token"`
+	QuotaBytes      int64  `json:"quota_bytes" yaml:"quota_bytes" minimum:"0"`
+	// DailyLimitBytes 是每日用量阈值（上下行合计，按设置时区的自然日统计），0 表示不限。
+	DailyLimitBytes  int64     `json:"daily_limit_bytes" yaml:"daily_limit_bytes,omitempty" minimum:"0" required:"false"`
+	DailyLimitAction string    `json:"daily_limit_action" yaml:"daily_limit_action,omitempty" enum:"pause,notify" required:"false" doc:"达到每日阈值后：pause 暂停并通知，notify 只通知"`
+	ResetMode        string    `json:"reset_mode" yaml:"reset_mode" enum:"none,monthly"`
+	ResetDay         int       `json:"reset_day" yaml:"reset_day" minimum:"0" maximum:"28"`
+	ExpireAt         string    `json:"expire_at" yaml:"expire_at,omitempty" doc:"RFC 3339 时间，空表示不过期"`
+	Note             string    `json:"note" yaml:"note,omitempty"`
+	Profiles         []Profile `json:"profiles" yaml:"profiles,omitempty"`
 	// PausedStacks 是手动暂停该用户的 stack；Enabled 为 false 时在全部 stack 上暂停。
 	PausedStacks []string `json:"paused_stacks" yaml:"paused_stacks,omitempty" required:"false"`
 }

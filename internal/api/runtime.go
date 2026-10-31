@@ -165,7 +165,7 @@ func registerRuntime(api huma.API, s *Server) {
 		})
 
 	sse.Register(api, reg(huma.Operation{OperationID: "events", Method: http.MethodGet, Path: "/api/events", Summary: "运行状态与作业进度事件流"}),
-		map[string]any{"runtime": RuntimeEvent{}, "task": app.TaskEvent{}},
+		map[string]any{"runtime": RuntimeEvent{}, "task": app.TaskEvent{}, "traffic": app.LivePoint{}},
 		func(ctx context.Context, _ *struct{}, send sse.Sender) {
 			events, cancel := s.svc.Events.Subscribe()
 			defer cancel()
@@ -191,6 +191,8 @@ func registerRuntime(api huma.API, s *Server) {
 					case []app.StackRuntime:
 						err = send.Data(RuntimeEvent{Stacks: data})
 					case app.TaskEvent:
+						err = send.Data(data)
+					case app.LivePoint:
 						err = send.Data(data)
 					}
 					if err != nil {

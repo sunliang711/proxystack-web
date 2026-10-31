@@ -27,6 +27,7 @@ const link = (name: string, label: string): MenuOption => ({
 
 const menu: MenuOption[] = [
   link('dashboard', '总览'),
+  link('traffic', '流量明细'),
   link('stacks', 'Stack'),
   link('users', '用户'),
   link('manual-nodes', '手工节点'),
@@ -34,6 +35,7 @@ const menu: MenuOption[] = [
   link('templates', '订阅模板'),
   link('sub-publish', '发布订阅包'),
   link('deps', '依赖'),
+  link('notifications', '通知记录'),
   link('history', '配置历史'),
   link('backup', '备份'),
   link('settings', '系统设置'),

@@ -144,6 +144,21 @@ type MihomoUpstream struct {
 	RawConfig    string        `json:"raw_config"`
 }
 
+type Notification struct {
+	ID            int64  `json:"id"`
+	At            int64  `json:"at"`
+	Event         string `json:"event"`
+	UserID        int64  `json:"user_id"`
+	UserName      string `json:"user_name"`
+	DedupKey      string `json:"dedup_key"`
+	Subject       string `json:"subject"`
+	Body          string `json:"body"`
+	Status        string `json:"status"`
+	Error         string `json:"error"`
+	Attempts      int64  `json:"attempts"`
+	NextAttemptAt int64  `json:"next_attempt_at"`
+}
+
 type RemoteSource struct {
 	ID       int64  `json:"id"`
 	Position int64  `json:"position"`
@@ -224,22 +239,74 @@ type Task struct {
 	Error      string `json:"error"`
 }
 
+type TrafficDay struct {
+	BucketStart int64  `json:"bucket_start"`
+	StackID     int64  `json:"stack_id"`
+	Scope       string `json:"scope"`
+	Subject     string `json:"subject"`
+	Up          int64  `json:"up"`
+	Down        int64  `json:"down"`
+}
+
+type TrafficHour struct {
+	BucketStart int64  `json:"bucket_start"`
+	StackID     int64  `json:"stack_id"`
+	Scope       string `json:"scope"`
+	Subject     string `json:"subject"`
+	Up          int64  `json:"up"`
+	Down        int64  `json:"down"`
+}
+
+type TrafficMinute struct {
+	BucketStart int64  `json:"bucket_start"`
+	StackID     int64  `json:"stack_id"`
+	Scope       string `json:"scope"`
+	Subject     string `json:"subject"`
+	Up          int64  `json:"up"`
+	Down        int64  `json:"down"`
+}
+
+type TrafficMonth struct {
+	BucketStart int64  `json:"bucket_start"`
+	StackID     int64  `json:"stack_id"`
+	Scope       string `json:"scope"`
+	Subject     string `json:"subject"`
+	Up          int64  `json:"up"`
+	Down        int64  `json:"down"`
+}
+
 type User struct {
-	ID              int64  `json:"id"`
-	Position        int64  `json:"position"`
-	Name            string `json:"name"`
-	Enabled         int64  `json:"enabled"`
-	Uuid            string `json:"uuid"`
-	SsPassword      string `json:"ss_password"`
-	Remark          string `json:"remark"`
-	DisplayTemplate string `json:"display_template"`
-	Tag             string `json:"tag"`
-	SubToken        string `json:"sub_token"`
-	QuotaBytes      int64  `json:"quota_bytes"`
-	ResetMode       string `json:"reset_mode"`
-	ResetDay        int64  `json:"reset_day"`
-	ExpireAt        string `json:"expire_at"`
-	Note            string `json:"note"`
+	ID               int64  `json:"id"`
+	Position         int64  `json:"position"`
+	Name             string `json:"name"`
+	Enabled          int64  `json:"enabled"`
+	Uuid             string `json:"uuid"`
+	SsPassword       string `json:"ss_password"`
+	Remark           string `json:"remark"`
+	DisplayTemplate  string `json:"display_template"`
+	Tag              string `json:"tag"`
+	SubToken         string `json:"sub_token"`
+	QuotaBytes       int64  `json:"quota_bytes"`
+	ResetMode        string `json:"reset_mode"`
+	ResetDay         int64  `json:"reset_day"`
+	ExpireAt         string `json:"expire_at"`
+	Note             string `json:"note"`
+	DailyLimitBytes  int64  `json:"daily_limit_bytes"`
+	DailyLimitAction string `json:"daily_limit_action"`
+}
+
+type UserAutoPause struct {
+	UserID int64  `json:"user_id"`
+	Reason string `json:"reason"`
+	Since  int64  `json:"since"`
+}
+
+type UserDailyUsage struct {
+	UserID int64  `json:"user_id"`
+	Day    string `json:"day"`
+	Up     int64  `json:"up"`
+	Down   int64  `json:"down"`
+	Exempt int64  `json:"exempt"`
 }
 
 type UserPausedStack struct {
@@ -257,4 +324,11 @@ type UserProfile struct {
 	Remark          string `json:"remark"`
 	DisplayTemplate string `json:"display_template"`
 	Tag             string `json:"tag"`
+}
+
+type UserUsage struct {
+	UserID      int64 `json:"user_id"`
+	PeriodStart int64 `json:"period_start"`
+	Up          int64 `json:"up"`
+	Down        int64 `json:"down"`
 }

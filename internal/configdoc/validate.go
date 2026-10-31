@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/mail"
 	"net/url"
 	"regexp"
 	"slices"
@@ -194,6 +195,7 @@ func validateSettings(issues *Issues, doc *Document, settings Settings) {
 			issues.add("settings.basic.timezone", "unknown time zone")
 		}
 	}
+	validateTrafficNotify(issues, settings)
 	pools := map[string]PortRange{
 		"xray_inbound":      settings.PortPools.XrayInbound,
 		"mihomo_socks":      settings.PortPools.MihomoSocks,
@@ -295,6 +297,10 @@ func validateUsers(issues *Issues, doc *Document) {
 		if user.QuotaBytes < 0 {
 			issues.add(path+".quota_bytes", "must not be negative")
 		}
+		if user.DailyLimitBytes < 0 {
+			issues.add(path+".daily_limit_bytes", "must not be negative")
+		}
+		checkEnum(issues, path+".daily_limit_action", user.DailyLimitAction, DailyActionPause, DailyActionNotify)
 		switch user.ResetMode {
 		case "none":
 		case "monthly":
@@ -695,5 +701,64 @@ func mustRoundTrip(in, out any) {
 	}
 	if err := json.Unmarshal(data, out); err != nil {
 		panic(err)
+	}
+}
+
+// validateTrafficNotify 校验流量监控和邮件通知设置。邮件未启用时不要求服务器和收发件人。
+func validateTrafficNotify(issues *Issues, settings Settings) {
+	traffic := settings.Traffic
+	if traffic.Interval != 5 && traffic.Interval != 10 && traffic.Interval != 30 {
+		issues.add("settings.traffic.interval", "must be 5, 10 or 30 seconds")
+	}
+	// 上一级汇总从下一级重算，下一级至少要保留一个完整的上级周期（0 表示永久保留）。
+	for field, retention := range map[string]struct{ days, minimum int }{
+		"retention_minute_days": {traffic.RetentionMinuteDays, 2},
+		"retention_hour_days":   {traffic.RetentionHourDays, 3},
+		"retention_day_days":    {traffic.RetentionDayDays, 62},
+		"retention_month_days":  {traffic.RetentionMonthDays, 0},
+	} {
+		if retention.days < 0 || (retention.days != 0 && retention.days < retention.minimum) {
+			issues.add("settings.traffic."+field, "must be 0 (keep forever) or at least %d days", retention.minimum)
+		}
+	}
+	notify := settings.Notify
+	checkEnum(issues, "settings.notify.security", notify.Security, SMTPSecurityNone, SMTPSecuritySTARTTLS, SMTPSecurityTLS)
+	if notify.WarnPercent < 1 || notify.WarnPercent > 100 {
+		issues.add("settings.notify.warn_percent", "must be between 1 and 100")
+	}
+	if notify.ExpireDays < 1 {
+		issues.add("settings.notify.expire_days", "must be at least 1")
+	}
+	for index, event := range notify.Events {
+		checkEnum(issues, fmt.Sprintf("settings.notify.events[%d]", index), event,
+			EventDailyLimit, EventDailyWarning, EventQuotaLimit, EventQuotaWarning, EventExpired, EventExpiring)
+	}
+	if notify.From != "" {
+		if _, err := mail.ParseAddress(notify.From); err != nil {
+			issues.add("settings.notify.from", "must be an email address")
+		}
+	}
+	for index, address := range notify.To {
+		if _, err := mail.ParseAddress(address); err != nil {
+			issues.add(fmt.Sprintf("settings.notify.to[%d]", index), "must be an email address")
+		}
+	}
+	if !notify.Enabled {
+		return
+	}
+	if notify.Host == "" {
+		issues.add("settings.notify.host", "is required when notifications are enabled")
+	}
+	if notify.Port < 1 {
+		issues.add("settings.notify.port", "is required when notifications are enabled")
+	}
+	if notify.From == "" {
+		issues.add("settings.notify.from", "is required when notifications are enabled")
+	}
+	if len(notify.To) == 0 {
+		issues.add("settings.notify.to", "at least one recipient is required when notifications are enabled")
+	}
+	if (notify.Username == "") != (notify.Password == "") {
+		issues.add("settings.notify.password", "username and password must be set together")
 	}
 }

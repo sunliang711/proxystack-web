@@ -156,6 +156,8 @@ func (s *Service) mutateConfig(ctx context.Context, actor Actor, change *ConfigC
 	}
 	// 手动暂停开关不进入待应用变更：无论改动来自哪里，保存后立即生效。
 	change.Notes = s.syncPauses(ctx, before, result)
+	// 阈值、额度或到期时间可能改了：立刻重新判定，不等下一轮采集。
+	s.evaluateAutoPause(ctx)
 	return result, nil
 }
 

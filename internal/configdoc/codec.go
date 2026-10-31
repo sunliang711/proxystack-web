@@ -119,6 +119,18 @@ func (s *Settings) Normalize() {
 		s.Subscription = defaults.Subscription
 	}
 	fill(&s.Subscription.DisabledResponse, defaults.Subscription.DisabledResponse)
+	if s.Traffic.Interval == 0 {
+		s.Traffic = defaults.Traffic
+	}
+	if s.Notify.WarnPercent == 0 {
+		s.Notify = defaults.Notify
+	}
+	if s.Notify.To == nil {
+		s.Notify.To = []string{}
+	}
+	if s.Notify.Events == nil {
+		s.Notify.Events = []string{}
+	}
 	if s.DownloadProxy.Mode == "" {
 		s.DownloadProxy = defaults.DownloadProxy
 	}
@@ -136,6 +148,9 @@ func (u *User) Normalize() {
 	}
 	if u.ResetMode == "" {
 		u.ResetMode = "none"
+	}
+	if u.DailyLimitAction == "" {
+		u.DailyLimitAction = DailyActionPause
 	}
 }
 

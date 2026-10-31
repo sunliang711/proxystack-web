@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	_ "time/tzdata" // 流量统计周期按设置时区计算，最小化系统可能没有时区数据。
 
 	"github.com/spf13/cobra"
 

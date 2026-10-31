@@ -13,6 +13,8 @@ const router = createRouter({
       component: () => import('./layouts/MainLayout.vue'),
       children: [
         { path: '', name: 'dashboard', component: () => import('./views/DashboardView.vue'), meta: { title: '总览' } },
+        { path: 'traffic', name: 'traffic', component: () => import('./views/TrafficView.vue'), meta: { title: '流量明细' } },
+        { path: 'notifications', name: 'notifications', component: () => import('./views/NotificationsView.vue'), meta: { title: '通知记录' } },
         { path: 'stacks', name: 'stacks', component: () => import('./views/StacksView.vue'), meta: { title: 'Stack' } },
         { path: 'stacks/:id', name: 'stack', component: () => import('./views/stack/StackEditView.vue'), meta: { title: 'Stack 编辑' } },
         { path: 'users', name: 'users', component: () => import('./views/UsersView.vue'), meta: { title: '用户' } },

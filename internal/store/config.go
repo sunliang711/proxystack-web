@@ -19,6 +19,8 @@ const (
 	SettingProxy     = "download_proxy"
 	SettingSub       = "subscription"
 	SettingExport    = "node_export"
+	SettingTraffic   = "traffic"
+	SettingNotify    = "notify"
 )
 
 // LoadSettings 读取全局设置，缺失的分组使用默认值。
@@ -33,6 +35,8 @@ func LoadSettings(ctx context.Context, q *dbq.Queries) (configdoc.Settings, erro
 		SettingProxy:     &settings.DownloadProxy,
 		SettingSub:       &settings.Subscription,
 		SettingExport:    &settings.NodeExport,
+		SettingTraffic:   &settings.Traffic,
+		SettingNotify:    &settings.Notify,
 	}
 	for key, target := range groups {
 		if err := GetJSON(ctx, q, key, target); err != nil && err != ErrNotFound {
@@ -53,6 +57,8 @@ func SaveSettings(ctx context.Context, q *dbq.Queries, settings configdoc.Settin
 		SettingProxy:     settings.DownloadProxy,
 		SettingSub:       settings.Subscription,
 		SettingExport:    settings.NodeExport,
+		SettingTraffic:   settings.Traffic,
+		SettingNotify:    settings.Notify,
 	}
 	for key, value := range groups {
 		if err := PutJSON(ctx, q, key, value); err != nil {
@@ -87,7 +93,8 @@ func LoadDocument(ctx context.Context, q *dbq.Queries) (*configdoc.Document, err
 		doc.Users = append(doc.Users, configdoc.User{
 			ID: row.ID, Name: row.Name, Enabled: row.Enabled != 0, UUID: row.Uuid, SSPassword: row.SsPassword,
 			Remark: row.Remark, DisplayTemplate: row.DisplayTemplate, Tag: row.Tag, SubToken: row.SubToken,
-			QuotaBytes: row.QuotaBytes, ResetMode: row.ResetMode, ResetDay: int(row.ResetDay),
+			QuotaBytes: row.QuotaBytes, DailyLimitBytes: row.DailyLimitBytes, DailyLimitAction: row.DailyLimitAction,
+			ResetMode: row.ResetMode, ResetDay: int(row.ResetDay),
 			ExpireAt: row.ExpireAt, Note: row.Note, Profiles: []configdoc.Profile{},
 		})
 	}
@@ -389,7 +396,8 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 		id, err := q.UpsertUser(ctx, dbq.UpsertUserParams{
 			NULLIF: user.ID, Position: int64(index), Name: user.Name, Enabled: boolInt(user.Enabled),
 			Uuid: user.UUID, SsPassword: user.SSPassword, Remark: user.Remark, DisplayTemplate: user.DisplayTemplate,
-			Tag: user.Tag, SubToken: user.SubToken, QuotaBytes: user.QuotaBytes, ResetMode: user.ResetMode,
+			Tag: user.Tag, SubToken: user.SubToken, QuotaBytes: user.QuotaBytes, DailyLimitBytes: user.DailyLimitBytes,
+			DailyLimitAction: user.DailyLimitAction, ResetMode: user.ResetMode,
 			ResetDay: int64(user.ResetDay), ExpireAt: user.ExpireAt, Note: user.Note,
 		})
 		if err != nil {

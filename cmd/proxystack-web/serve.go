@@ -70,7 +70,13 @@ func runServe(ctx context.Context, g *globalFlags, dev bool) error {
 		return err
 	}
 	defer svc.Units.Close()
-	if err := svc.StartBackground(ctx); err != nil {
+	// 后台循环在退出时最后落库一次，必须等它结束再关闭数据库（自更新重启时 ctx 不会被信号取消，这里单独取消）。
+	backgroundCtx, stopBackground := context.WithCancel(ctx)
+	defer func() {
+		stopBackground()
+		svc.WaitBackground()
+	}()
+	if err := svc.StartBackground(backgroundCtx); err != nil {
 		return err
 	}
 	restartCh := make(chan struct{}, 1)
@@ -141,7 +147,8 @@ func setupRuntime(ctx context.Context, svc *app.Service, dev bool) error {
 		}
 		return nil
 	}
-	manager, err := units.NewSystemd(ctx)
+	// 连接不随 ctx 断开：退出时后台循环还要最后读一次 unit 状态，由 Units.Close 负责关闭。
+	manager, err := units.NewSystemd(context.WithoutCancel(ctx))
 	if err != nil {
 		return err
 	}

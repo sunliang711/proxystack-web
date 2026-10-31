@@ -24,12 +24,14 @@ func unmask(value *string, old string, found bool) {
 func MaskSettings(settings *Settings) {
 	mask(&settings.DownloadProxy.Password)
 	mask(&settings.NodeExport.Token)
+	mask(&settings.Notify.Password)
 }
 
 // UnmaskSettings 把仍为占位的设置凭据恢复为原值。
 func UnmaskSettings(settings *Settings, old *Settings) {
 	unmask(&settings.DownloadProxy.Password, old.DownloadProxy.Password, true)
 	unmask(&settings.NodeExport.Token, old.NodeExport.Token, true)
+	unmask(&settings.Notify.Password, old.Notify.Password, true)
 }
 
 // MaskManualNode 遮蔽手工节点的凭据字段。

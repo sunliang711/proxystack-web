@@ -38,11 +38,6 @@ func componentOf(node string) string {
 	return node
 }
 
-// autoPaused 返回自动暂停（每日阈值、额度、到期）的用户集合。
-func (s *Service) autoPaused(ctx context.Context) domain.DisabledUserSet {
-	return domain.DisabledUserSet{}
-}
-
 func (s *Service) disk() runtime.Disk { return runtime.Disk{Layout: s.Layout} }
 
 // PendingView 是待应用变更：当前配置渲染出的生成物与磁盘上生成物的差异。
@@ -140,6 +135,8 @@ func (s *Service) Apply(ctx context.Context, actor Actor, only []string) (int64,
 }
 
 func (s *Service) apply(ctx context.Context, actor Actor, only []string, logf Logf) error {
+	// 重启前补采：xray 重启后计数清零。放在写生成物之前，API 端口变化时仍能读到运行中的实例。
+	s.collectTraffic(ctx)
 	doc, revision, err := s.loadWithRevision(ctx)
 	if err != nil {
 		return err
@@ -418,6 +415,7 @@ func (s *Service) RuntimeStatus(ctx context.Context) ([]StackRuntime, error) {
 func (s *Service) UnitAction(ctx context.Context, actor Actor, stack, component, action string) error {
 	s.runtimeMu.Lock()
 	defer s.runtimeMu.Unlock()
+	s.collectTraffic(ctx)
 	files, err := s.disk().Read(stack)
 	if err != nil {
 		return err
@@ -535,15 +533,23 @@ func (s *Service) MonitorUnits(ctx context.Context, interval time.Duration) {
 	}
 }
 
-// syncPauses 让手动暂停当场生效：对已应用的 stack，按「已应用版本 + 新的暂停状态」重写生成物，
-// 并通过 HandlerService 热增删用户。返回需要提示管理员的情况。
+// syncPauses 让手动暂停当场生效：比较保存前后的暂停状态（含自动暂停），让生成物和运行中的 xray 跟上。
+// 返回需要提示管理员的情况。
 func (s *Service) syncPauses(ctx context.Context, before, after *configdoc.Document) []string {
-	oldSet, newSet := configdoc.DisabledUsers(before), configdoc.DisabledUsers(after)
+	auto := s.autoPaused(ctx)
+	return s.syncDisabled(ctx, after, unionDisabled(configdoc.DisabledUsers(before), auto), unionDisabled(configdoc.DisabledUsers(after), auto), false)
+}
+
+// syncDisabled 对已应用的 stack，按「已应用版本 + 新的暂停状态」重写生成物，并通过 HandlerService 热增删用户。
+// disconnect 为真时，有用户被暂停的 xray 重启一次，切断已建立的连接。
+func (s *Service) syncDisabled(ctx context.Context, current *configdoc.Document, oldSet, newSet domain.DisabledUserSet, disconnect bool) []string {
 	if equalDisabled(oldSet, newSet) {
 		return nil
 	}
 	s.runtimeMu.Lock()
 	defer s.runtimeMu.Unlock()
+	// 热增删用户前补采一次，暂停前的用量不丢失。
+	s.collectTraffic(ctx)
 	var applied []dbq.AppliedState
 	if err := s.Store.InTx(ctx, func(q *dbq.Queries) error {
 		var err error
@@ -554,6 +560,7 @@ func (s *Service) syncPauses(ctx context.Context, before, after *configdoc.Docum
 	}
 	var notes []string
 	snapshots := map[int64]*configdoc.Document{}
+	auto := s.autoPaused(ctx)
 	for _, row := range applied {
 		paused, resumed := toggled(oldSet, newSet, row.StackName)
 		if len(paused) == 0 && len(resumed) == 0 {
@@ -570,14 +577,14 @@ func (s *Service) syncPauses(ctx context.Context, before, after *configdoc.Docum
 		}
 		overlay := snapshot.Clone()
 		for index := range overlay.Users {
-			if current := after.UserByName(overlay.Users[index].Name); current >= 0 {
-				overlay.Users[index].Enabled = after.Users[current].Enabled
-				overlay.Users[index].PausedStacks = after.Users[current].PausedStacks
+			if currentIndex := current.UserByName(overlay.Users[index].Name); currentIndex >= 0 {
+				overlay.Users[index].Enabled = current.Users[currentIndex].Enabled
+				overlay.Users[index].PausedStacks = current.Users[currentIndex].PausedStacks
 			} else {
 				overlay.Users[index].Enabled = false
 			}
 		}
-		rendered, err := runtime.Render(overlay, s.autoPaused(ctx))
+		rendered, err := runtime.Render(overlay, auto)
 		if err != nil {
 			notes = append(notes, fmt.Sprintf("%s：重新生成失败：%v", row.StackName, err))
 			continue
@@ -593,6 +600,14 @@ func (s *Service) syncPauses(ctx context.Context, before, after *configdoc.Docum
 			})
 		})
 		notes = append(notes, s.hotToggle(ctx, rendered.Set, row.StackName, paused, resumed)...)
+		if disconnect && len(paused) > 0 {
+			unit := units.Name(units.Xray, row.StackName)
+			if states, err := s.Units.States(ctx, []string{unit}); err == nil && states[unit].Running() {
+				if err := s.Units.Restart(ctx, unit); err != nil {
+					notes = append(notes, fmt.Sprintf("stack %s 重启 xray 失败：%v", row.StackName, err))
+				}
+			}
+		}
 	}
 	s.publishUnitStates(ctx)
 	return notes
@@ -626,7 +641,7 @@ func (s *Service) hotToggle(ctx context.Context, set domain.StackSet, stackName 
 		for _, user := range inbound.Users {
 			switch {
 			case slices.Contains(paused, user.User):
-				if err := s.XrayAPI.RemoveUser(ctx, api.Listen, inbound.TagOrDefault(), user.User); err != nil {
+				if err := s.XrayAPI.RemoveUser(ctx, api.Listen, inbound.TagOrDefault(), user.StatsEmail()); err != nil {
 					notes = append(notes, fmt.Sprintf("stack %s 移除用户 %s 失败，重启该 stack 后生效：%v", stackName, user.User, err))
 				}
 			case slices.Contains(resumed, user.User):

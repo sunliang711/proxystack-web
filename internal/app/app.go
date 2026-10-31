@@ -2,6 +2,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/eagle/proxystack-web/internal/domain/validation"
 	"github.com/eagle/proxystack-web/internal/events"
+	"github.com/eagle/proxystack-web/internal/notify"
 	"github.com/eagle/proxystack-web/internal/paths"
 	"github.com/eagle/proxystack-web/internal/runtime"
 	"github.com/eagle/proxystack-web/internal/store"
@@ -43,6 +45,13 @@ type Service struct {
 	runtimeMu sync.Mutex
 	tasks     taskRegistry
 	subs      subCache
+	traffic   trafficState
+	autoPause autoPauseState
+	// background 跟踪退出前要收尾的后台循环。
+	background sync.WaitGroup
+
+	// SendMail 发送邮件，为 nil 时通过 SMTP 发送（测试替换）。
+	SendMail func(ctx context.Context, config notify.Config, subject, body string) error
 }
 
 // New 创建应用服务。

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import {
-  NButton, NCard, NCheckbox, NCheckboxGroup, NCollapse, NCollapseItem, NForm, NFormItem, NGrid, NFormItemGi,
+  NButton, NCard, NCheckbox, NCheckboxGroup, NCollapse, NCollapseItem, NDynamicTags, NForm, NFormItem, NGrid, NFormItemGi,
   NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NSwitch, NTimePicker, NAlert,
   useDialog, useMessage,
 } from 'naive-ui'
-import { api, emptyErrors, fieldState, MASKED, splitProblem, type FormErrors, type Schemas } from '../api/client'
+import { api, emptyErrors, fieldState, MASKED, problemMessage, splitProblem, type FormErrors, type Schemas } from '../api/client'
 import { randomString } from '../util/generate'
 import SecretInput from '../components/SecretInput.vue'
 import ErrorList from '../components/ErrorList.vue'
@@ -120,6 +120,25 @@ const intervalValue = computed({
     if (form.value) form.value.subscription.interval = Math.round(value * intervalUnit.value)
   },
 })
+
+const notifyEvents = [
+  { value: 'daily_limit', label: '每日阈值触发' },
+  { value: 'daily_warning', label: '每日用量预警' },
+  { value: 'quota_limit', label: '月度额度超限' },
+  { value: 'quota_warning', label: '额度预警' },
+  { value: 'expired', label: '到期暂停' },
+  { value: 'expiring', label: '即将到期' },
+]
+const testingMail = ref(false)
+const mailResult = ref('')
+async function testMail() {
+  if (!form.value) return
+  testingMail.value = true
+  mailResult.value = ''
+  const { data, error } = await api.POST('/api/notifications/test', { body: form.value.notify })
+  testingMail.value = false
+  mailResult.value = error ? problemMessage(error) : data?.error || 'ok'
+}
 
 /** 节点导出接口挂在面板地址下，与面板共用端口和访问路径。 */
 const exportURL = new URL('export/nodes', document.baseURI).href
@@ -291,6 +310,86 @@ async function save() {
             <NText code>{{ exportURL }}</NText>
           </NFormItem>
         </template>
+      </NCard>
+
+      <NCard title="流量" size="small" class="card">
+        <NFormItem label="启用流量监控" v-bind="f('traffic.enabled', '开启后所有 stack 强制启用 stats 和用户级计数，生成物变化需要应用')">
+          <NSwitch v-model:value="form.traffic.enabled" />
+        </NFormItem>
+        <NFormItem label="采集间隔" v-bind="f('traffic.interval')">
+          <NRadioGroup v-model:value="form.traffic.interval">
+            <NRadioButton :value="5">5 秒</NRadioButton>
+            <NRadioButton :value="10">10 秒</NRadioButton>
+            <NRadioButton :value="30">30 秒</NRadioButton>
+          </NRadioGroup>
+        </NFormItem>
+        <NFormItem label="分钟明细保留" v-bind="f('traffic.retention_minute_days', '天，0 表示永久；至少 2 天')">
+          <NInputNumber v-model:value="form.traffic.retention_minute_days" :min="0" />
+        </NFormItem>
+        <NFormItem label="小时明细保留" v-bind="f('traffic.retention_hour_days', '天，0 表示永久；至少 3 天')">
+          <NInputNumber v-model:value="form.traffic.retention_hour_days" :min="0" />
+        </NFormItem>
+        <NFormItem label="日明细保留" v-bind="f('traffic.retention_day_days', '天，0 表示永久；至少 62 天')">
+          <NInputNumber v-model:value="form.traffic.retention_day_days" :min="0" />
+        </NFormItem>
+        <NFormItem label="月明细保留" v-bind="f('traffic.retention_month_days', '天，0 表示永久')">
+          <NInputNumber v-model:value="form.traffic.retention_month_days" :min="0" />
+        </NFormItem>
+        <NFormItem label="暂停时断开现有连接" v-bind="f('traffic.disconnect_on_pause', '自动暂停后重启受影响的 xray 以切断已建立的连接，其他用户的连接会被短暂中断')">
+          <NSwitch v-model:value="form.traffic.disconnect_on_pause" />
+        </NFormItem>
+      </NCard>
+
+      <NCard title="通知" size="small" class="card">
+        <NFormItem label="启用邮件通知" v-bind="f('notify.enabled', '未启用时事件只记录在「通知记录」页')">
+          <NSwitch v-model:value="form.notify.enabled" />
+        </NFormItem>
+        <NFormItem label="SMTP 服务器" v-bind="f('notify.host')">
+          <NInput v-model:value="form.notify.host" placeholder="smtp.example.com" />
+        </NFormItem>
+        <NFormItem label="端口" v-bind="f('notify.port')">
+          <NInputNumber v-model:value="form.notify.port" :min="1" :max="65535" :show-button="false" />
+        </NFormItem>
+        <NFormItem label="加密方式" v-bind="f('notify.security')">
+          <NRadioGroup v-model:value="form.notify.security">
+            <NRadioButton value="none">无</NRadioButton>
+            <NRadioButton value="starttls">STARTTLS</NRadioButton>
+            <NRadioButton value="tls">TLS</NRadioButton>
+          </NRadioGroup>
+        </NFormItem>
+        <NFormItem label="用户名" v-bind="f('notify.username', '可留空（不认证）；未加密的连接不能使用密码认证')">
+          <NInput v-model:value="form.notify.username" />
+        </NFormItem>
+        <NFormItem label="密码" v-bind="f('notify.password')">
+          <SecretInput v-model:value="form.notify.password" :reveal="revealSettings" />
+        </NFormItem>
+        <NFormItem label="发件人" v-bind="f('notify.from', '邮箱地址，可带显示名')">
+          <NInput v-model:value="form.notify.from" placeholder="proxystack &lt;panel@example.com&gt;" />
+        </NFormItem>
+        <NFormItem label="收件人" v-bind="f('notify.to')">
+          <NDynamicTags v-model:value="form.notify.to" />
+        </NFormItem>
+        <NFormItem label="通知事件" v-bind="f('notify.events')">
+          <NCheckboxGroup v-model:value="form.notify.events">
+            <NSpace>
+              <NCheckbox v-for="event in notifyEvents" :key="event.value" :value="event.value" :label="event.label" />
+            </NSpace>
+          </NCheckboxGroup>
+        </NFormItem>
+        <NFormItem label="用量预警比例" v-bind="f('notify.warn_percent', '%')">
+          <NInputNumber v-model:value="form.notify.warn_percent" :min="1" :max="100" />
+        </NFormItem>
+        <NFormItem label="到期提前提醒" v-bind="f('notify.expire_days', '天')">
+          <NInputNumber v-model:value="form.notify.expire_days" :min="1" />
+        </NFormItem>
+        <NFormItem label="测试">
+          <NSpace vertical>
+            <NButton :loading="testingMail" @click="testMail">发送测试邮件</NButton>
+            <NAlert v-if="mailResult" :type="mailResult === 'ok' ? 'success' : 'error'" :bordered="false">
+              {{ mailResult === 'ok' ? '已发送，请检查收件箱' : mailResult }}
+            </NAlert>
+          </NSpace>
+        </NFormItem>
       </NCard>
 
       <NCard title="依赖源" size="small" class="card">

@@ -86,10 +86,25 @@ func compileGlobal(settings Settings, users []User) domain.GlobalConfig {
 	}
 	config.Defaults.Xray.API.Enabled = settings.Defaults.Xray.APIEnabled
 	config.Defaults.Xray.API.Services = append([]string(nil), settings.Defaults.Xray.APIServices...)
+	if settings.Traffic.Enabled {
+		// 流量监控依赖 stats、用户级计数和 StatsService，开启时不受默认值影响。
+		config.Defaults.Xray.Stats.Enabled = true
+		policy := &config.Defaults.Xray.Policy
+		policy.Enabled = true
+		policy.Levels["0"] = domain.XrayPolicyLevelConfig{StatsUserUplink: yes(true), StatsUserDownlink: yes(true)}
+		policy.System = domain.XrayPolicySystemConfig{
+			StatsInboundUplink: yes(true), StatsInboundDownlink: yes(true), StatsOutboundUplink: yes(true), StatsOutboundDownlink: yes(true),
+		}
+		config.Defaults.Xray.API.Enabled = true
+		if !slices.Contains(config.Defaults.Xray.API.Services, "StatsService") {
+			config.Defaults.Xray.API.Services = append(config.Defaults.Xray.API.Services, "StatsService")
+		}
+	}
 	for _, user := range users {
 		config.Users = append(config.Users, domain.UserProfile{
 			User:            user.Name,
 			Profile:         DefaultProfile,
+			Email:           domain.UserStatsEmail(user.ID, 0),
 			UUID:            user.UUID,
 			Password:        user.SSPassword,
 			Remark:          user.Remark,
@@ -100,6 +115,7 @@ func compileGlobal(settings Settings, users []User) domain.GlobalConfig {
 			config.Users = append(config.Users, domain.UserProfile{
 				User:            user.Name,
 				Profile:         profile.Name,
+				Email:           domain.UserStatsEmail(user.ID, profile.ID),
 				UUID:            profile.UUID,
 				Password:        profile.SSPassword,
 				Remark:          profile.Remark,
@@ -131,6 +147,13 @@ func compileStack(settings Settings, stack *Stack) (domain.Stack, error) {
 	}
 	if enabled := triState(xray.Policy); enabled != nil {
 		result.Xray.Policy = &domain.XrayPolicyOverride{Enabled: enabled}
+	}
+	if settings.Traffic.Enabled {
+		// 流量监控开启时 stack 级覆盖不能关闭统计所需的组件。
+		on := true
+		result.Xray.API.Enabled = &on
+		result.Xray.Stats = &domain.XrayStatsOverride{Enabled: &on}
+		result.Xray.Policy = &domain.XrayPolicyOverride{Enabled: &on}
 	}
 	for _, inbound := range xray.Inbounds {
 		result.Xray.Inbounds = append(result.Xray.Inbounds, compileInbound(inbound))

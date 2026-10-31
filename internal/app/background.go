@@ -15,6 +15,9 @@ const (
 	remoteSyncInterval  = 30 * time.Minute
 )
 
+// WaitBackground 等待需要在退出前收尾的后台循环结束（ctx 取消后调用，并且要早于关闭数据库）。
+func (s *Service) WaitBackground() { s.background.Wait() }
+
 // StartBackground 在服务启动时执行一次对账（纠正 unit 状态），并启动 unit 状态推送和定期对账报告。
 func (s *Service) StartBackground(ctx context.Context) error {
 	if err := s.Store.InTx(ctx, func(q *dbq.Queries) error {
@@ -30,6 +33,12 @@ func (s *Service) StartBackground(ctx context.Context) error {
 		slog.Info("startup reconcile", "finding", finding)
 	}
 	go s.MonitorUnits(ctx, unitMonitorInterval)
+	s.background.Add(1)
+	go func() {
+		defer s.background.Done()
+		s.runTraffic(ctx)
+	}()
+	go s.runNotifications(ctx)
 	go func() {
 		ticker := time.NewTicker(remoteSyncInterval)
 		defer ticker.Stop()

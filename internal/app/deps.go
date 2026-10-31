@@ -710,6 +710,7 @@ func (s *Service) restartAfterReplace(ctx context.Context, component, strategy s
 		}
 		return nil
 	}
+	s.collectTraffic(ctx)
 	if strategy == RestartAll {
 		for _, unit := range running {
 			logf("重启 %s", unit)

@@ -122,6 +122,7 @@ func (s *Server) register(api huma.API) {
 	registerRuntime(api, s)
 	registerDeps(api, s)
 	registerSubscription(api, s)
+	registerTraffic(api, s)
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.handler.ServeHTTP(w, r) }

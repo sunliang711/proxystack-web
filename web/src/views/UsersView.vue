@@ -2,20 +2,25 @@
 import { computed, h, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import {
-  NButton, NCard, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NSpace, NTag, useMessage,
+  NButton, NCard, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NPopconfirm, NSelect, NSpace, NTag, useMessage,
   type DataTableColumns,
 } from 'naive-ui'
-import { api, emptyErrors, fieldState, splitProblem, type FormErrors, type Schemas } from '../api/client'
+import { api, emptyErrors, fieldState, problemMessage, splitProblem, type FormErrors, type Schemas } from '../api/client'
 import ErrorList from '../components/ErrorList.vue'
 import ExportDialog from '../components/ExportDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
 import { formatBytes } from '../util/format'
 
 type User = Schemas['User']
+type Usage = Schemas['UserUsage']
+
+const pauseLabels = { daily: '每日阈值', quota: '额度', expired: '到期' } as const
 
 const router = useRouter()
 const message = useMessage()
 const users = ref<User[]>([])
+const usage = ref<Record<number, Usage>>({})
+const filter = ref<'all' | 'paused' | 'auto'>('all')
 const loading = ref(true)
 const checked = ref<string[]>([])
 const creating = ref(false)
@@ -26,11 +31,36 @@ const showExport = ref(false)
 
 async function load() {
   loading.value = true
-  const { data } = await api.GET('/api/users')
+  const [{ data }, { data: usageData }] = await Promise.all([api.GET('/api/users'), api.GET('/api/traffic/users')])
   users.value = data?.users ?? []
+  usage.value = Object.fromEntries((usageData ?? []).map((item) => [item.user_id, item]))
   loading.value = false
 }
 onMounted(load)
+
+const autoPauses = (user: User) => usage.value[user.id ?? 0]?.auto_pauses ?? []
+const rows = computed(() => users.value.filter((user) => {
+  if (filter.value === 'auto') return autoPauses(user).length > 0
+  if (filter.value === 'paused') return !user.enabled || autoPauses(user).length > 0
+  return true
+}))
+const used = (bytes?: { up: number; down: number }) => formatBytes((bytes?.up ?? 0) + (bytes?.down ?? 0))
+
+/** 批量切换手动暂停开关，逐 stack 的暂停保持不变。 */
+async function setEnabled(enabled: boolean) {
+  const targets = users.value.filter((user) => checked.value.includes(user.name))
+  for (const user of targets) {
+    const { error } = await api.PUT('/api/users/{id}/pause', {
+      params: { path: { id: user.id! } }, body: { enabled, paused_stacks: user.paused_stacks ?? [] },
+    })
+    if (error) {
+      message.error(`${user.name}：${problemMessage(error)}`)
+      break
+    }
+  }
+  message.success(enabled ? '已恢复所选用户' : '已暂停所选用户')
+  load()
+}
 
 const columns: DataTableColumns<User> = [
   { type: 'selection' },
@@ -42,10 +72,18 @@ const columns: DataTableColumns<User> = [
   {
     title: '状态',
     key: 'enabled',
-    width: 80,
-    render: (row) => h(NTag, { size: 'small', type: row.enabled ? 'success' : 'default' }, { default: () => (row.enabled ? '启用' : '停用') }),
+    width: 130,
+    render: (row) => {
+      const pauses = autoPauses(row)
+      if (row.enabled && pauses.length) {
+        return h(NTag, { size: 'small', type: 'warning' }, { default: () => pauses.map((pause) => pauseLabels[pause.reason]).join('、') + '暂停' })
+      }
+      return h(NTag, { size: 'small', type: row.enabled ? 'success' : 'default' }, { default: () => (row.enabled ? '启用' : '停用') })
+    },
   },
   { title: '备注', key: 'remark' },
+  { title: '今日用量', key: 'today', render: (row) => used(usage.value[row.id ?? 0]?.today) },
+  { title: '本周期用量', key: 'period', render: (row) => used(usage.value[row.id ?? 0]?.period) },
   { title: '额度', key: 'quota_bytes', render: (row) => (row.quota_bytes ? formatBytes(row.quota_bytes) : '不限') },
   { title: '重置', key: 'reset_mode', render: (row) => (row.reset_mode === 'monthly' ? `每月 ${row.reset_day} 日` : '不重置') },
   { title: '到期', key: 'expire_at', render: (row) => (row.expire_at ? new Date(row.expire_at).toLocaleString() : '—') },
@@ -75,6 +113,16 @@ async function create() {
   <NCard title="用户">
     <template #header-extra>
       <NSpace>
+        <NSelect
+          v-model:value="filter"
+          :options="[{ label: '全部用户', value: 'all' }, { label: '已暂停', value: 'paused' }, { label: '自动暂停', value: 'auto' }]"
+          style="width: 120px"
+        />
+        <NPopconfirm @positive-click="setEnabled(false)">
+          <template #trigger><NButton :disabled="!selectedNames.length">暂停所选</NButton></template>
+          在全部 stack 上暂停所选的 {{ selectedNames.length }} 个用户？
+        </NPopconfirm>
+        <NButton :disabled="!selectedNames.length" @click="setEnabled(true)">恢复所选</NButton>
         <NButton @click="showImport = true">导入</NButton>
         <NButton :disabled="!selectedNames.length" @click="showExport = true">导出所选</NButton>
         <NButton type="primary" @click="(creating = true), (draft = { name: '', remark: '' }), (errors = emptyErrors())">新建用户</NButton>
@@ -83,7 +131,7 @@ async function create() {
     <NDataTable
       v-model:checked-row-keys="checked"
       :columns="columns"
-      :data="users"
+      :data="rows"
       :loading="loading"
       :row-key="rowKey"
       :pagination="{ pageSize: 50 }"

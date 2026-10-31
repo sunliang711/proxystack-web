@@ -79,6 +79,33 @@
         },
         "type": "object"
       },
+      "AutoPause": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "enum": [
+              "daily",
+              "quota",
+              "expired"
+            ],
+            "type": "string"
+          },
+          "resume_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "since": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "since",
+          "resume_at"
+        ],
+        "type": "object"
+      },
       "BasicSettings": {
         "additionalProperties": false,
         "properties": {
@@ -158,6 +185,24 @@
         ],
         "type": "object"
       },
+      "Bytes": {
+        "additionalProperties": false,
+        "properties": {
+          "down": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "up": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "up",
+          "down"
+        ],
+        "type": "object"
+      },
       "Change": {
         "additionalProperties": false,
         "properties": {
@@ -224,6 +269,54 @@
         "required": [
           "conflict_with",
           "in_use"
+        ],
+        "type": "object"
+      },
+      "CollectStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "last_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "stack": {
+            "type": "string"
+          },
+          "stack_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stack_id",
+          "stack",
+          "last_at",
+          "error"
+        ],
+        "type": "object"
+      },
+      "DayUsage": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "type": "string"
+          },
+          "down": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "up": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "day",
+          "up",
+          "down"
         ],
         "type": "object"
       },
@@ -1173,6 +1266,36 @@
         ],
         "type": "object"
       },
+      "LivePoint": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "down": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "stacks": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Bytes"
+            },
+            "type": "object"
+          },
+          "up": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "at",
+          "up",
+          "down",
+          "stacks"
+        ],
+        "type": "object"
+      },
       "LogEntry": {
         "additionalProperties": false,
         "properties": {
@@ -1456,6 +1579,135 @@
         "required": [
           "enabled",
           "token"
+        ],
+        "type": "object"
+      },
+      "Notification": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "attempts": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "error": {
+            "type": "string"
+          },
+          "event": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "sent",
+              "failed",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "user_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "user_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "at",
+          "event",
+          "label",
+          "user_id",
+          "user_name",
+          "subject",
+          "status",
+          "error",
+          "attempts"
+        ],
+        "type": "object"
+      },
+      "NotifySettings": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "events": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "expire_days": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "from": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "port": {
+            "format": "int64",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "security": {
+            "enum": [
+              "none",
+              "starttls",
+              "tls"
+            ],
+            "type": "string"
+          },
+          "to": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "username": {
+            "type": "string"
+          },
+          "warn_percent": {
+            "format": "int64",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "host",
+          "port",
+          "security",
+          "username",
+          "password",
+          "from",
+          "to",
+          "events",
+          "warn_percent",
+          "expire_days"
         ],
         "type": "object"
       },
@@ -2154,6 +2406,9 @@
           "node_export": {
             "$ref": "#/components/schemas/NodeExportSettings"
           },
+          "notify": {
+            "$ref": "#/components/schemas/NotifySettings"
+          },
           "port_pools": {
             "$ref": "#/components/schemas/PortPools"
           },
@@ -2162,6 +2417,9 @@
           },
           "subscription": {
             "$ref": "#/components/schemas/SubscriptionSettings"
+          },
+          "traffic": {
+            "$ref": "#/components/schemas/TrafficSettings"
           }
         },
         "required": [
@@ -2172,7 +2430,9 @@
           "deps",
           "download_proxy",
           "subscription",
-          "node_export"
+          "node_export",
+          "traffic",
+          "notify"
         ],
         "type": "object"
       },
@@ -2709,6 +2969,18 @@
         ],
         "type": "object"
       },
+      "TestNotificationOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
       "TextOutputBody": {
         "additionalProperties": false,
         "properties": {
@@ -2718,6 +2990,177 @@
         },
         "required": [
           "text"
+        ],
+        "type": "object"
+      },
+      "TrafficOverview": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "failed_notifications": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "live": {
+            "items": {
+              "$ref": "#/components/schemas/LivePoint"
+            },
+            "type": "array"
+          },
+          "month": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "stacks": {
+            "items": {
+              "$ref": "#/components/schemas/CollectStatus"
+            },
+            "type": "array"
+          },
+          "today": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "top_users": {
+            "items": {
+              "$ref": "#/components/schemas/UserTraffic"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "today",
+          "month",
+          "top_users",
+          "live",
+          "stacks",
+          "failed_notifications"
+        ],
+        "type": "object"
+      },
+      "TrafficResult": {
+        "additionalProperties": false,
+        "properties": {
+          "buckets": {
+            "items": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/TrafficSeries"
+            },
+            "type": "array"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "timezone",
+          "buckets",
+          "series"
+        ],
+        "type": "object"
+      },
+      "TrafficSeries": {
+        "additionalProperties": false,
+        "properties": {
+          "down": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "up": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "subject",
+          "label",
+          "up",
+          "down"
+        ],
+        "type": "object"
+      },
+      "TrafficSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "disconnect_on_pause": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "interval": {
+            "enum": [
+              5,
+              10,
+              30
+            ],
+            "format": "int64",
+            "type": "integer"
+          },
+          "retention_day_days": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "retention_hour_days": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "retention_minute_days": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "retention_month_days": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "interval",
+          "retention_minute_days",
+          "retention_hour_days",
+          "retention_day_days",
+          "retention_month_days",
+          "disconnect_on_pause"
+        ],
+        "type": "object"
+      },
+      "TrafficSubject": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject",
+          "label"
         ],
         "type": "object"
       },
@@ -2827,6 +3270,19 @@
       "User": {
         "additionalProperties": false,
         "properties": {
+          "daily_limit_action": {
+            "description": "达到每日阈值后：pause 暂停并通知，notify 只通知",
+            "enum": [
+              "pause",
+              "notify"
+            ],
+            "type": "string"
+          },
+          "daily_limit_bytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
           "display_template": {
             "type": "string"
           },
@@ -2996,6 +3452,82 @@
           "stack",
           "inbound",
           "profile"
+        ],
+        "type": "object"
+      },
+      "UserTraffic": {
+        "additionalProperties": false,
+        "properties": {
+          "down": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "up": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "up",
+          "down"
+        ],
+        "type": "object"
+      },
+      "UserUsage": {
+        "additionalProperties": false,
+        "properties": {
+          "auto_pauses": {
+            "items": {
+              "$ref": "#/components/schemas/AutoPause"
+            },
+            "type": "array"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/DayUsage"
+            },
+            "type": "array"
+          },
+          "exempt": {
+            "type": "boolean"
+          },
+          "next_reset": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "period": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "period_start": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "today": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "user_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "today",
+          "period",
+          "period_start",
+          "next_reset",
+          "exempt",
+          "auto_pauses",
+          "daily"
         ],
         "type": "object"
       },
@@ -4030,6 +4562,39 @@
                         ],
                         "title": "Event task",
                         "type": "object"
+                      },
+                      {
+                        "properties": {
+                          "data": {
+                            "$ref": "#/components/schemas/LivePoint"
+                          },
+                          "event": {
+                            "const": "traffic",
+                            "description": "The event name.",
+                            "type": "string"
+                          },
+                          "id": {
+                            "description": "The event ID.",
+                            "oneOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "retry": {
+                            "description": "The retry time in milliseconds.",
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "data",
+                          "event"
+                        ],
+                        "title": "Event traffic",
+                        "type": "object"
                       }
                     ]
                   },
@@ -4187,6 +4752,145 @@
         "summary": "查看手工节点明文凭据（记入审计日志）",
         "tags": [
           "subscription"
+        ]
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "operationId": "listNotifications",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 200,
+              "format": "int64",
+              "maximum": 1000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Notification"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "通知记录",
+        "tags": [
+          "traffic"
+        ]
+      }
+    },
+    "/api/notifications/test": {
+      "post": {
+        "operationId": "testNotification",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotifySettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestNotificationOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "用表单当前值发送测试邮件",
+        "tags": [
+          "traffic"
+        ]
+      }
+    },
+    "/api/notifications/{id}/resend": {
+      "post": {
+        "operationId": "resendNotification",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "重新发送通知",
+        "tags": [
+          "traffic"
         ]
       }
     },
@@ -5720,6 +6424,367 @@
         ]
       }
     },
+    "/api/traffic/export": {
+      "get": {
+        "operationId": "exportTraffic",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "level",
+            "schema": {
+              "default": "day",
+              "enum": [
+                "hour",
+                "day",
+                "month",
+                "year"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "scope",
+            "schema": {
+              "default": "user",
+              "enum": [
+                "user",
+                "inbound",
+                "outbound"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "开始时间（Unix 秒）",
+            "explode": false,
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "description": "开始时间（Unix 秒）",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "结束时间（Unix 秒），不含",
+            "explode": false,
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "description": "结束时间（Unix 秒），不含",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "stack ID，逗号分隔，空表示全部",
+            "explode": false,
+            "in": "query",
+            "name": "stacks",
+            "schema": {
+              "description": "stack ID，逗号分隔，空表示全部",
+              "type": "string"
+            }
+          },
+          {
+            "description": "对象，逗号分隔，空表示全部",
+            "explode": false,
+            "in": "query",
+            "name": "subjects",
+            "schema": {
+              "description": "对象，逗号分隔，空表示全部",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "contentEncoding": "base64",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "导出流量明细（CSV）",
+        "tags": [
+          "traffic"
+        ]
+      }
+    },
+    "/api/traffic/overview": {
+      "get": {
+        "operationId": "getTrafficOverview",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrafficOverview"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "流量总览",
+        "tags": [
+          "traffic"
+        ]
+      }
+    },
+    "/api/traffic/query": {
+      "get": {
+        "operationId": "queryTraffic",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "level",
+            "schema": {
+              "default": "day",
+              "enum": [
+                "hour",
+                "day",
+                "month",
+                "year"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "scope",
+            "schema": {
+              "default": "user",
+              "enum": [
+                "user",
+                "inbound",
+                "outbound"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "开始时间（Unix 秒）",
+            "explode": false,
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "description": "开始时间（Unix 秒）",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "结束时间（Unix 秒），不含",
+            "explode": false,
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "description": "结束时间（Unix 秒），不含",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "stack ID，逗号分隔，空表示全部",
+            "explode": false,
+            "in": "query",
+            "name": "stacks",
+            "schema": {
+              "description": "stack ID，逗号分隔，空表示全部",
+              "type": "string"
+            }
+          },
+          {
+            "description": "对象，逗号分隔，空表示全部",
+            "explode": false,
+            "in": "query",
+            "name": "subjects",
+            "schema": {
+              "description": "对象，逗号分隔，空表示全部",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrafficResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "流量明细",
+        "tags": [
+          "traffic"
+        ]
+      }
+    },
+    "/api/traffic/subjects": {
+      "get": {
+        "operationId": "listTrafficSubjects",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "scope",
+            "schema": {
+              "default": "user",
+              "enum": [
+                "user",
+                "inbound",
+                "outbound"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TrafficSubject"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "流量明细的筛选对象",
+        "tags": [
+          "traffic"
+        ]
+      }
+    },
+    "/api/traffic/users": {
+      "get": {
+        "operationId": "listUsersUsage",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UserUsage"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "全部用户的用量和自动暂停",
+        "tags": [
+          "traffic"
+        ]
+      }
+    },
     "/api/users": {
       "get": {
         "operationId": "listUsers",
@@ -5937,6 +7002,59 @@
         "summary": "保存用户",
         "tags": [
           "config"
+        ]
+      }
+    },
+    "/api/users/{id}/auto-pause/{reason}": {
+      "delete": {
+        "operationId": "releaseAutoPause",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "reason",
+            "required": true,
+            "schema": {
+              "enum": [
+                "daily",
+                "quota",
+                "expired"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "解除自动暂停",
+        "tags": [
+          "traffic"
         ]
       }
     },
@@ -6196,6 +7314,53 @@
         "summary": "预览用户的订阅内容",
         "tags": [
           "subscription"
+        ]
+      }
+    },
+    "/api/users/{id}/usage": {
+      "get": {
+        "operationId": "getUserUsage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserUsage"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "用户的用量、自动暂停和日用量趋势",
+        "tags": [
+          "traffic"
         ]
       }
     }

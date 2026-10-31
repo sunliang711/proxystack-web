@@ -131,7 +131,10 @@ func (g legacyGlobal) toDomain() domain.GlobalConfig {
 		Security: domain.DefaultSecurityConfig(),
 	}
 	for _, user := range g.Users {
-		config.Users = append(config.Users, domain.UserProfile(user))
+		config.Users = append(config.Users, domain.UserProfile{
+			User: user.User, Profile: user.Profile, UUID: user.UUID, Password: user.Password,
+			Remark: user.Remark, DisplayTemplate: user.DisplayTemplate, Tag: user.Tag,
+		})
 	}
 	clash := g.Defaults.Clash
 	setString(&config.Defaults.Clash.Mode, clash.Mode)

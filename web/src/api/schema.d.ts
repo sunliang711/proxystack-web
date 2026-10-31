@@ -346,6 +346,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 通知记录 */
+        get: operations["listNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 用表单当前值发送测试邮件 */
+        post: operations["testNotification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/{id}/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 重新发送通知 */
+        post: operations["resendNotification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ports/allocate": {
         parameters: {
             query?: never;
@@ -811,6 +862,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/traffic/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 导出流量明细（CSV） */
+        get: operations["exportTraffic"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/traffic/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 流量总览 */
+        get: operations["getTrafficOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/traffic/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 流量明细 */
+        get: operations["queryTraffic"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/traffic/subjects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 流量明细的筛选对象 */
+        get: operations["listTrafficSubjects"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/traffic/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 全部用户的用量和自动暂停 */
+        get: operations["listUsersUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users": {
         parameters: {
             query?: never;
@@ -843,6 +979,23 @@ export interface paths {
         post?: never;
         /** 删除用户 */
         delete: operations["deleteUser"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{id}/auto-pause/{reason}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 解除自动暂停 */
+        delete: operations["releaseAutoPause"];
         options?: never;
         head?: never;
         patch?: never;
@@ -933,6 +1086,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/users/{id}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 用户的用量、自动暂停和日用量趋势 */
+        get: operations["getUserUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -957,6 +1127,14 @@ export interface components {
         ApplyInputBody: {
             /** @description 为空时应用全部 stack */
             stacks?: string[];
+        };
+        AutoPause: {
+            /** @enum {string} */
+            reason: "daily" | "quota" | "expired";
+            /** Format: date-time */
+            resume_at: string;
+            /** Format: date-time */
+            since: string;
         };
         BasicSettings: {
             /** @description 订阅节点默认 server，域名或 IP */
@@ -985,6 +1163,12 @@ export interface components {
             /** Format: int64 */
             users: number;
         };
+        Bytes: {
+            /** Format: int64 */
+            down: number;
+            /** Format: int64 */
+            up: number;
+        };
         Change: {
             /** @enum {string} */
             component: "xray" | "mihomo";
@@ -1000,6 +1184,21 @@ export interface components {
         CheckPortOutputBody: {
             conflict_with: string;
             in_use: boolean;
+        };
+        CollectStatus: {
+            error: string;
+            /** Format: date-time */
+            last_at: string;
+            stack: string;
+            /** Format: int64 */
+            stack_id: number;
+        };
+        DayUsage: {
+            day: string;
+            /** Format: int64 */
+            down: number;
+            /** Format: int64 */
+            up: number;
         };
         DefaultsSettings: {
             mihomo: components["schemas"]["MihomoDefaults"];
@@ -1261,6 +1460,17 @@ export interface components {
             password: string;
             username: string;
         };
+        LivePoint: {
+            /** Format: date-time */
+            at: string;
+            /** Format: int64 */
+            down: number;
+            stacks: {
+                [key: string]: components["schemas"]["Bytes"];
+            };
+            /** Format: int64 */
+            up: number;
+        };
         LogEntry: {
             message: string;
             /** Format: int64 */
@@ -1331,6 +1541,40 @@ export interface components {
         NodeExportSettings: {
             enabled: boolean;
             token: string;
+        };
+        Notification: {
+            /** Format: date-time */
+            at: string;
+            /** Format: int64 */
+            attempts: number;
+            error: string;
+            event: string;
+            /** Format: int64 */
+            id: number;
+            label: string;
+            /** @enum {string} */
+            status: "pending" | "sent" | "failed" | "skipped";
+            subject: string;
+            /** Format: int64 */
+            user_id: number;
+            user_name: string;
+        };
+        NotifySettings: {
+            enabled: boolean;
+            events: string[];
+            /** Format: int64 */
+            expire_days: number;
+            from: string;
+            host: string;
+            password: string;
+            /** Format: int64 */
+            port: number;
+            /** @enum {string} */
+            security: "none" | "starttls" | "tls";
+            to: string[];
+            username: string;
+            /** Format: int64 */
+            warn_percent: number;
         };
         Outbound: {
             password: string;
@@ -1514,9 +1758,11 @@ export interface components {
             deps: components["schemas"]["DepsSettings"];
             download_proxy: components["schemas"]["DownloadProxySettings"];
             node_export: components["schemas"]["NodeExportSettings"];
+            notify: components["schemas"]["NotifySettings"];
             port_pools: components["schemas"]["PortPools"];
             security: components["schemas"]["SecuritySettings"];
             subscription: components["schemas"]["SubscriptionSettings"];
+            traffic: components["schemas"]["TrafficSettings"];
         };
         Stack: {
             desired_running: boolean;
@@ -1664,8 +1910,53 @@ export interface components {
             builtin: components["schemas"]["Templates"];
             current: components["schemas"]["Templates"];
         };
+        TestNotificationOutputBody: {
+            error: string;
+        };
         TextOutputBody: {
             text: string;
+        };
+        TrafficOverview: {
+            enabled: boolean;
+            /** Format: int64 */
+            failed_notifications: number;
+            live: components["schemas"]["LivePoint"][];
+            month: components["schemas"]["Bytes"];
+            stacks: components["schemas"]["CollectStatus"][];
+            today: components["schemas"]["Bytes"];
+            top_users: components["schemas"]["UserTraffic"][];
+        };
+        TrafficResult: {
+            buckets: string[];
+            series: components["schemas"]["TrafficSeries"][];
+            timezone: string;
+        };
+        TrafficSeries: {
+            down: number[];
+            label: string;
+            subject: string;
+            up: number[];
+        };
+        TrafficSettings: {
+            disconnect_on_pause: boolean;
+            enabled: boolean;
+            /**
+             * Format: int64
+             * @enum {integer}
+             */
+            interval: 5 | 10 | 30;
+            /** Format: int64 */
+            retention_day_days: number;
+            /** Format: int64 */
+            retention_hour_days: number;
+            /** Format: int64 */
+            retention_minute_days: number;
+            /** Format: int64 */
+            retention_month_days: number;
+        };
+        TrafficSubject: {
+            label: string;
+            subject: string;
         };
         UnitActionInputBody: {
             /** @enum {string} */
@@ -1699,6 +1990,13 @@ export interface components {
             type: "raw" | "xray-socks5";
         };
         User: {
+            /**
+             * @description 达到每日阈值后：pause 暂停并通知，notify 只通知
+             * @enum {string}
+             */
+            daily_limit_action?: "pause" | "notify";
+            /** Format: int64 */
+            daily_limit_bytes?: number;
             display_template: string;
             enabled: boolean;
             /** @description RFC 3339 时间，空表示不过期 */
@@ -1742,6 +2040,28 @@ export interface components {
             stack: string;
             /** Format: int64 */
             stack_id: number;
+        };
+        UserTraffic: {
+            /** Format: int64 */
+            down: number;
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /** Format: int64 */
+            up: number;
+        };
+        UserUsage: {
+            auto_pauses: components["schemas"]["AutoPause"][];
+            daily: components["schemas"]["DayUsage"][];
+            exempt: boolean;
+            /** Format: date-time */
+            next_reset: string;
+            period: components["schemas"]["Bytes"];
+            /** Format: date-time */
+            period_start: string;
+            today: components["schemas"]["Bytes"];
+            /** Format: int64 */
+            user_id: number;
         };
         Xray: {
             /** @enum {string} */
@@ -2390,6 +2710,17 @@ export interface operations {
                         id?: number | string;
                         /** @description The retry time in milliseconds. */
                         retry?: number;
+                    } | {
+                        data: components["schemas"]["LivePoint"];
+                        /**
+                         * @description The event name.
+                         * @constant
+                         */
+                        event: "traffic";
+                        /** @description The event ID. */
+                        id?: number | string;
+                        /** @description The retry time in milliseconds. */
+                        retry?: number;
                     })[];
                 };
             };
@@ -2483,6 +2814,99 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ManualNode"][];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listNotifications: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notification"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    testNotification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotifySettings"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestNotificationOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    resendNotification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -3535,6 +3959,177 @@ export interface operations {
             };
         };
     };
+    exportTraffic: {
+        parameters: {
+            query?: {
+                level?: "hour" | "day" | "month" | "year";
+                scope?: "user" | "inbound" | "outbound";
+                /** @description 开始时间（Unix 秒） */
+                from?: number;
+                /** @description 结束时间（Unix 秒），不含 */
+                to?: number;
+                /** @description stack ID，逗号分隔，空表示全部 */
+                stacks?: string;
+                /** @description 对象，逗号分隔，空表示全部 */
+                subjects?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getTrafficOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrafficOverview"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    queryTraffic: {
+        parameters: {
+            query?: {
+                level?: "hour" | "day" | "month" | "year";
+                scope?: "user" | "inbound" | "outbound";
+                /** @description 开始时间（Unix 秒） */
+                from?: number;
+                /** @description 结束时间（Unix 秒），不含 */
+                to?: number;
+                /** @description stack ID，逗号分隔，空表示全部 */
+                stacks?: string;
+                /** @description 对象，逗号分隔，空表示全部 */
+                subjects?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrafficResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listTrafficSubjects: {
+        parameters: {
+            query?: {
+                scope?: "user" | "inbound" | "outbound";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrafficSubject"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listUsersUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserUsage"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listUsers: {
         parameters: {
             query?: never;
@@ -3669,6 +4264,36 @@ export interface operations {
             header?: never;
             path: {
                 id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    releaseAutoPause: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                reason: "daily" | "quota" | "expired";
             };
             cookie?: never;
         };
@@ -3840,6 +4465,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TextOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getUserUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserUsage"];
                 };
             };
             /** @description Error */

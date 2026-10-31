@@ -254,6 +254,7 @@ func (g *GlobalConfig) Validate() error {
 type UserProfile struct {
 	User            string `json:"user"`
 	Profile         string `json:"profile"`
+	Email           string `json:"email,omitempty"`
 	UUID            string `json:"uuid"`
 	Password        string `json:"password"`
 	Remark          string `json:"remark"`
@@ -327,11 +328,52 @@ func (a InboundAuth) Validate() error {
 type InboundUser struct {
 	User            string `json:"user"`
 	Profile         string `json:"profile"`
+	Email           string `json:"email,omitempty"`
 	UUID            string `json:"uuid"`
 	Password        string `json:"password"`
 	Remark          string `json:"remark"`
 	DisplayTemplate string `json:"display_template"`
 	Tag             string `json:"tag"`
+}
+
+// StatsEmail 返回写入 xray 的 email，也是 xray 统计计数中的用户标识；未设置时使用用户名。
+func (u InboundUser) StatsEmail() string {
+	if u.Email != "" {
+		return u.Email
+	}
+	return u.User
+}
+
+// UserStatsEmail 返回用户（或其档案）在 xray 中的 email。按 ID 而不是用户名生成，用户改名后统计仍然连续。
+// userID 为 0（尚未入库）时返回空字符串。
+func UserStatsEmail(userID, profileID int64) string {
+	switch {
+	case userID == 0:
+		return ""
+	case profileID == 0:
+		return "u" + strconv.FormatInt(userID, 10)
+	default:
+		return "u" + strconv.FormatInt(userID, 10) + ".p" + strconv.FormatInt(profileID, 10)
+	}
+}
+
+// ParseUserStatsEmail 解析 UserStatsEmail 生成的 email；其他内容（例如占位用户）返回 false。
+func ParseUserStatsEmail(email string) (userID, profileID int64, ok bool) {
+	rest, ok := strings.CutPrefix(email, "u")
+	if !ok {
+		return 0, 0, false
+	}
+	userPart, profilePart, hasProfile := strings.Cut(rest, ".p")
+	userID, err := strconv.ParseInt(userPart, 10, 64)
+	if err != nil || userID <= 0 {
+		return 0, 0, false
+	}
+	if hasProfile {
+		if profileID, err = strconv.ParseInt(profilePart, 10, 64); err != nil || profileID <= 0 {
+			return 0, 0, false
+		}
+	}
+	return userID, profileID, true
 }
 
 // ProfileOrDefault 返回用户档案 profile，未配置时使用 default。

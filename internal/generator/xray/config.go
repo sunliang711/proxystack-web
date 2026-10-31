@@ -412,7 +412,7 @@ func enabledXrayStack(stackSet domain.StackSet, stackName string) (domain.Stack,
 func renderVmessInbound(inbound domain.Inbound) vmessInbound {
 	clients := make([]vmessClient, 0, len(inbound.Users))
 	for _, user := range inbound.Users {
-		clients = append(clients, vmessClient{ID: user.UUID, AlterID: 0, Email: user.User})
+		clients = append(clients, vmessClient{ID: user.UUID, AlterID: 0, Email: user.StatsEmail()})
 	}
 	stream := streamSettings{Network: inbound.Network}
 	if inbound.WSOpts != nil {
@@ -451,7 +451,7 @@ func renderShadowsocksInbound(inbound domain.Inbound) shadowsocksInbound {
 		for _, user := range inbound.Users {
 			client := shadowsocksClient{
 				Password: user.Password,
-				Email:    user.User,
+				Email:    user.StatsEmail(),
 			}
 			if !domain.IsShadowsocks2022Method(inbound.Method) {
 				client.Method = inbound.Method

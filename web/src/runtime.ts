@@ -20,6 +20,14 @@ export function onTaskEvent(listener: (event: TaskEvent) => void): () => void {
   return () => taskListeners.delete(listener)
 }
 
+const trafficListeners = new Set<(point: Schemas['LivePoint']) => void>()
+
+/** 订阅实时流量事件，返回取消函数。 */
+export function onTrafficEvent(listener: (point: Schemas['LivePoint']) => void): () => void {
+  trafficListeners.add(listener)
+  return () => trafficListeners.delete(listener)
+}
+
 let source: EventSource | null = null
 
 export function connectEvents() {
@@ -30,6 +38,10 @@ export function connectEvents() {
   source.addEventListener('runtime', (message) => {
     const data = JSON.parse((message as MessageEvent).data) as Schemas['RuntimeEvent']
     runtime.stacks = Object.fromEntries(data.stacks.map((stack) => [stack.name, stack]))
+  })
+  source.addEventListener('traffic', (message) => {
+    const data = JSON.parse((message as MessageEvent).data) as Schemas['LivePoint']
+    for (const listener of trafficListeners) listener(data)
   })
   source.addEventListener('task', (message) => {
     const data = JSON.parse((message as MessageEvent).data) as TaskEvent

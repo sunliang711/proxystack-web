@@ -12,6 +12,7 @@ import ErrorList from '../components/ErrorList.vue'
 import SecretInput from '../components/SecretInput.vue'
 import SubscriptionCard from '../components/SubscriptionCard.vue'
 import TemplateInput from '../components/TemplateInput.vue'
+import UsageCard from '../components/UsageCard.vue'
 import { useDirty } from '../composables/useDirty'
 import { randomString, randomUUID, shadowsocksKey } from '../util/generate'
 
@@ -191,6 +192,8 @@ async function remove() {
         </NCollapse>
       </NCard>
 
+      <UsageCard :user-id="id" :daily-limit="user.daily_limit_bytes ?? 0" :quota="user.quota_bytes" />
+
       <NCard title="额度与到期" size="small" class="card">
         <NFormItem label="流量额度" v-bind="f('quota_bytes', '0 表示不限')">
           <ByteSizeInput v-model:value="user.quota_bytes" />
@@ -203,6 +206,15 @@ async function remove() {
         </NFormItem>
         <NFormItem v-if="user.reset_mode === 'monthly'" label="重置日" v-bind="f('reset_day')">
           <NInputNumber v-model:value="user.reset_day" :min="1" :max="28" />
+        </NFormItem>
+        <NFormItem label="每日用量阈值" v-bind="f('daily_limit_bytes', '0 表示不限；上行与下行合计，按设置时区的自然日统计')">
+          <ByteSizeInput small :value="user.daily_limit_bytes ?? 0" @update:value="(value: number) => (user!.daily_limit_bytes = value)" />
+        </NFormItem>
+        <NFormItem v-if="user.daily_limit_bytes" label="达到阈值后" v-bind="f('daily_limit_action')">
+          <NRadioGroup v-model:value="user.daily_limit_action">
+            <NRadioButton value="pause">暂停并通知</NRadioButton>
+            <NRadioButton value="notify">只通知</NRadioButton>
+          </NRadioGroup>
         </NFormItem>
         <NFormItem label="到期时间" v-bind="f('expire_at')">
           <NDatePicker v-model:value="expireAt" type="datetime" clearable />

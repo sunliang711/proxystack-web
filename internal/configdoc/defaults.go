@@ -52,6 +52,14 @@ func DefaultSettings() Settings {
 			SourceName: "main", SurgeManaged: true, Interval: 86400, Strict: true,
 			DisabledResponse: DisabledNotFound,
 		},
+		Traffic: TrafficSettings{
+			Enabled: true, Interval: 10, RetentionMinuteDays: 7, RetentionHourDays: 180, RetentionDayDays: 730,
+		},
+		Notify: NotifySettings{
+			Port: 587, Security: SMTPSecuritySTARTTLS, To: []string{},
+			Events:      []string{EventDailyLimit, EventQuotaLimit, EventExpired},
+			WarnPercent: 80, ExpireDays: 3,
+		},
 	}
 }
 
