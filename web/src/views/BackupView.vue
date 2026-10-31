@@ -29,9 +29,9 @@ async function remove(name: string) {
   load()
 }
 
-const packing = ref<{ snapshot: string; plain: boolean; confirmed: boolean; passphrase: string; confirm: string; tls: boolean } | null>(null)
+const packing = ref<{ snapshot: string; plain: boolean; confirmed: boolean; passphrase: string; confirm: string } | null>(null)
 const openPacking = (snapshot = '') => {
-  packing.value = { snapshot, plain: false, confirmed: false, passphrase: '', confirm: '', tls: true }
+  packing.value = { snapshot, plain: false, confirmed: false, passphrase: '', confirm: '' }
 }
 const packReady = computed(() => {
   const form = packing.value
@@ -43,7 +43,7 @@ async function startPacking() {
   const form = packing.value
   if (!form) return
   const { data, error } = await api.POST('/api/backup/export', {
-    body: { passphrase: form.passphrase, plain: form.plain, include_tls: form.tls, snapshot: form.snapshot },
+    body: { passphrase: form.passphrase, plain: form.plain, snapshot: form.snapshot },
   })
   if (error) {
     message.error(problemMessage(error))
@@ -170,7 +170,6 @@ function waitForRestart() {
             <NDescriptionsItem label="源主机">{{ preview.hostname }}</NDescriptionsItem>
             <NDescriptionsItem label="导出时间">{{ formatTime(preview.exported_at) }}</NDescriptionsItem>
             <NDescriptionsItem label="程序版本">{{ preview.app_version }}</NDescriptionsItem>
-            <NDescriptionsItem label="包含证书">{{ preview.has_tls ? '是' : '否' }}</NDescriptionsItem>
             <NDescriptionsItem label="用户 / stack">{{ preview.counts.users }} / {{ preview.counts.stacks }}</NDescriptionsItem>
             <NDescriptionsItem label="手工节点 / 修订版本">{{ preview.counts.manual_nodes }} / {{ preview.counts.revisions }}</NDescriptionsItem>
             <NDescriptionsItem label="流量明细">{{ preview.counts.traffic }} 条</NDescriptionsItem>
@@ -216,7 +215,7 @@ function waitForRestart() {
 
     <NCard title="导出全部配置" size="small">
       <NText depth="3" tag="p">
-        导出系统设置（不含面板监听、TLS 和管理员）、全部用户和 stack，可在另一台实例导入。流量数据、审计日志和管理员账号不随配置导出。
+        导出系统设置（不含面板监听和管理员）、全部用户和 stack，可在另一台实例导入。流量数据、审计日志和管理员账号不随配置导出。
       </NText>
       <NButton @click="showExport = true">导出</NButton>
     </NCard>
@@ -247,7 +246,6 @@ function waitForRestart() {
       <NAlert v-else type="warning" :bordered="false" style="margin-bottom: 12px">
         <NCheckbox v-model:checked="packing.confirmed">我知道迁移包会包含全部明文凭据</NCheckbox>
       </NAlert>
-      <NFormItem label="面板证书"><NSwitch v-model:value="packing.tls" /></NFormItem>
     </NForm>
     <template #footer>
       <NButton type="primary" :disabled="!packReady" @click="startPacking">开始导出</NButton>

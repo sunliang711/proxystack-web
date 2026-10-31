@@ -17,9 +17,6 @@ func (l Layout) BinDir() string       { return filepath.Join(l.Base, "bin") }
 func (l Layout) GeoDir() string       { return filepath.Join(l.Base, "geo") }
 func (l Layout) DataDir() string      { return filepath.Join(l.Base, "data") }
 func (l Layout) DBPath() string       { return filepath.Join(l.DataDir(), "proxystack.db") }
-func (l Layout) TLSDir() string       { return filepath.Join(l.DataDir(), "tls") }
-func (l Layout) TLSCert() string      { return filepath.Join(l.TLSDir(), "cert.pem") }
-func (l Layout) TLSKey() string       { return filepath.Join(l.TLSDir(), "key.pem") }
 func (l Layout) RuntimeDir() string   { return filepath.Join(l.Base, "runtime") }
 func (l Layout) GeneratedDir() string { return filepath.Join(l.RuntimeDir(), "generated") }
 func (l Layout) BackupsDir() string   { return filepath.Join(l.Base, "backups") }
@@ -28,7 +25,7 @@ func (l Layout) DownloadsDir() string { return filepath.Join(l.Base, "downloads"
 // RestoreStagingDir 存放已上传、尚未执行的迁移包内容。
 func (l Layout) RestoreStagingDir() string { return filepath.Join(l.DataDir(), "restore-staging") }
 
-// RestorePendingDir 存放等待下次启动时替换到位的数据库和证书。
+// RestorePendingDir 存放等待下次启动时替换到位的数据库。
 func (l Layout) RestorePendingDir() string { return filepath.Join(l.DataDir(), "restore-pending") }
 
 // GeneratedXray 返回某个 stack 的 xray 生成物路径。
@@ -49,7 +46,7 @@ func (l Layout) MihomoWorkDir(stack string) string {
 // Dirs 返回 init 时需要创建的全部目录。
 func (l Layout) Dirs() []string {
 	return []string{
-		l.BinDir(), l.GeoDir(), l.DataDir(), l.TLSDir(),
+		l.BinDir(), l.GeoDir(), l.DataDir(),
 		filepath.Join(l.GeneratedDir(), "xray"), filepath.Join(l.GeneratedDir(), "mihomo"),
 		filepath.Join(l.RuntimeDir(), "mihomo"), l.BackupsDir(), l.DownloadsDir(),
 	}

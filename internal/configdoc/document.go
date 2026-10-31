@@ -235,6 +235,7 @@ type DownloadProxySettings struct {
 type BasicSettings struct {
 	ExternalHost string `json:"external_host" yaml:"external_host" doc:"订阅节点默认 server，域名或 IP"`
 	Timezone     string `json:"timezone" yaml:"timezone" doc:"流量统计周期边界使用的时区"`
+	PanelURL     string `json:"panel_url" yaml:"panel_url,omitempty" doc:"面板经 nginx 访问的地址，不含随机路径，用于通知邮件中的链接"`
 }
 
 // PortRange 是闭区间端口池。

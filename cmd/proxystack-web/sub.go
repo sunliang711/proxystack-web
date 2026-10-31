@@ -32,6 +32,7 @@ func newSubCommand() *cobra.Command {
 	cmd.AddCommand(
 		newSubServeCommand(layout),
 		newSubInitCommand(layout),
+		newSubConfigCommand(layout),
 		newSubImportCommand(layout),
 		newSubStatusCommand(layout),
 		newSubSourceCommand(layout),
@@ -57,7 +58,7 @@ func newSubServeCommand(layout func() subserver.Layout) *cobra.Command {
 }
 
 func newSubInitCommand(layout func() subserver.Layout) *cobra.Command {
-	var source, publicKey, listen, tlsCert, tlsKey string
+	var source, publicKey, listen string
 	var port int
 	cmd := &cobra.Command{
 		Use:   "init",
@@ -75,7 +76,6 @@ func newSubInitCommand(layout func() subserver.Layout) *cobra.Command {
 			if port != 0 {
 				config.Port = port
 			}
-			config.TLSCert, config.TLSKey = tlsCert, tlsKey
 			if publicKey != "" {
 				config.Sources = append(config.Sources, subserver.SourceConfig{Name: source, PublicKey: publicKey, Primary: true})
 			}
@@ -96,10 +96,43 @@ func newSubInitCommand(layout func() subserver.Layout) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&source, "source", "main", "name of the primary source (the panel's source name)")
 	cmd.Flags().StringVar(&publicKey, "public-key", "", "public key of the primary source (ed25519:...)")
-	cmd.Flags().StringVar(&listen, "listen", "", "listen address (default 0.0.0.0)")
+	cmd.Flags().StringVar(&listen, "listen", "", "listen address (default 127.0.0.1)")
 	cmd.Flags().IntVar(&port, "port", 0, "listen port (default 9444)")
-	cmd.Flags().StringVar(&tlsCert, "tls-cert", "", "TLS certificate file")
-	cmd.Flags().StringVar(&tlsKey, "tls-key", "", "TLS private key file")
+	return cmd
+}
+
+func newSubConfigCommand(layout func() subserver.Layout) *cobra.Command {
+	var listen string
+	var port int
+	cmd := &cobra.Command{
+		Use:   "config",
+		Short: "Show or change the listen address and port (changes take effect after restarting the service)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			l := layout()
+			config, err := subserver.LoadConfig(l)
+			if err != nil {
+				return err
+			}
+			if listen == "" && port == 0 {
+				fmt.Fprintf(cmd.OutOrStdout(), "Listen: %s\n", config.Addr())
+				return nil
+			}
+			if listen != "" {
+				config.Listen = listen
+			}
+			if port != 0 {
+				config.Port = port
+			}
+			if err := subserver.SaveConfig(l, config); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Listen address set to %s. Run `systemctl restart proxystack-sub` to apply it.\n", config.Addr())
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&listen, "listen", "", "listen address")
+	cmd.Flags().IntVar(&port, "port", 0, "listen port")
 	return cmd
 }
 
@@ -153,7 +186,7 @@ func newSubStatusCommand(layout func() subserver.Layout) *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "Directory: %s\nListen:    %s (TLS: %t)\n\n", l.Dir, config.Addr(), config.TLSCert != "")
+			fmt.Fprintf(out, "Directory: %s\nListen:    %s\n\n", l.Dir, config.Addr())
 			states := subserver.LoadSources(l, config)
 			tw := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
 			fmt.Fprintln(tw, "SOURCE\tROLE\tKEY\tSEQUENCE\tGENERATED\tUSERS\tNODES\tERROR")

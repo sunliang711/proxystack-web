@@ -30,9 +30,6 @@ const (
 	manifestName = "manifest.json"
 	// DatabaseName 是包内数据库快照的文件名。
 	DatabaseName = "proxystack.db"
-	// TLSCertName、TLSKeyName 是包内面板证书和私钥的文件名。
-	TLSCertName = "tls/cert.pem"
-	TLSKeyName  = "tls/key.pem"
 
 	ageHeader = "age-encryption.org/v1"
 )

@@ -7,20 +7,32 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"proxystack-web/internal/app"
 	"proxystack-web/internal/version"
 )
 
 // SystemInfo 是「系统」页显示的版本与面板信息。
 type SystemInfo struct {
-	Version     string `json:"version"`
-	Commit      string `json:"commit"`
-	BuildDate   string `json:"build_date"`
-	GoVersion   string `json:"go_version"`
-	Platform    string `json:"platform"`
-	PanelURL    string `json:"panel_url"`
-	TLSMode     string `json:"tls_mode"`
-	Fingerprint string `json:"fingerprint,omitempty"`
-	DevMode     bool   `json:"dev_mode"`
+	Version   string `json:"version"`
+	Commit    string `json:"commit"`
+	BuildDate string `json:"build_date"`
+	GoVersion string `json:"go_version"`
+	Platform  string `json:"platform"`
+	PanelURL  string `json:"panel_url"`
+	Listen    string `json:"listen"`
+	Port      int    `json:"port"`
+	DevMode   bool   `json:"dev_mode"`
+}
+
+type panelListenInput struct {
+	Body app.PanelListen
+}
+
+type panelListenOutput struct {
+	Body struct {
+		// Restarting 为假时需要手工重启管理服务才生效。
+		Restarting bool `json:"restarting"`
+	}
 }
 
 type systemInfoOutput struct {
@@ -40,15 +52,30 @@ func registerSystem(api huma.API, s *Server) {
 			return nil, toHTTPError(err)
 		}
 		return &systemInfoOutput{Body: SystemInfo{
-			Version:     version.Version,
-			Commit:      version.Commit,
-			BuildDate:   version.Date,
-			GoVersion:   runtime.Version(),
-			Platform:    runtime.GOOS + "/" + runtime.GOARCH,
-			PanelURL:    info.PanelURL,
-			TLSMode:     info.Panel.TLSMode,
-			Fingerprint: info.Fingerprint,
-			DevMode:     s.opts.Dev,
+			Version:   version.Version,
+			Commit:    version.Commit,
+			BuildDate: version.Date,
+			GoVersion: runtime.Version(),
+			Platform:  runtime.GOOS + "/" + runtime.GOARCH,
+			PanelURL:  info.PanelURL,
+			Listen:    info.Panel.Listen,
+			Port:      info.Panel.Port,
+			DevMode:   s.opts.Dev,
 		}}, nil
+	})
+
+	huma.Register(api, secured(huma.Operation{
+		OperationID: "updatePanelListen",
+		Method:      http.MethodPut,
+		Path:        "/api/system/panel",
+		Summary:     "修改面板监听地址和端口并重启管理服务",
+		Tags:        []string{"system"},
+	}), func(ctx context.Context, in *panelListenInput) (*panelListenOutput, error) {
+		if err := s.svc.UpdatePanelListen(ctx, actorFrom(ctx), in.Body); err != nil {
+			return nil, toHTTPError(err)
+		}
+		out := &panelListenOutput{}
+		out.Body.Restarting = s.svc.RestartSoon()
+		return out, nil
 	})
 }

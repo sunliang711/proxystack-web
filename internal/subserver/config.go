@@ -36,12 +36,10 @@ func (l Layout) BundlePath(source string) string {
 	return filepath.Join(l.DataDir(), source+".bundle")
 }
 
-// Config 是订阅端的本机配置：监听、证书和受信任的来源。
+// Config 是订阅端的本机配置：监听地址和受信任的来源。
 type Config struct {
 	Listen  string         `yaml:"listen"`
 	Port    int            `yaml:"port"`
-	TLSCert string         `yaml:"tls_cert,omitempty"`
-	TLSKey  string         `yaml:"tls_key,omitempty"`
 	Sources []SourceConfig `yaml:"sources"`
 }
 
@@ -52,24 +50,21 @@ type SourceConfig struct {
 	Primary   bool   `yaml:"primary,omitempty"`
 }
 
-// DefaultConfig 返回默认配置（没有来源）。
+// DefaultConfig 返回默认配置（没有来源）。订阅端由 nginx 反向代理，默认只监听回环地址。
 func DefaultConfig() Config {
-	return Config{Listen: "0.0.0.0", Port: 9444, Sources: []SourceConfig{}}
+	return Config{Listen: "127.0.0.1", Port: 9444, Sources: []SourceConfig{}}
 }
 
 // Addr 返回监听地址。
 func (c Config) Addr() string { return net.JoinHostPort(c.Listen, fmt.Sprint(c.Port)) }
 
-// Validate 校验配置：监听地址、证书成对、来源名唯一、公钥合法、恰好一个主来源。
+// Validate 校验配置：监听地址、来源名唯一、公钥合法、恰好一个主来源。
 func (c Config) Validate() error {
 	if net.ParseIP(c.Listen) == nil {
 		return fmt.Errorf("listen must be an IP address")
 	}
 	if c.Port < 1 || c.Port > 65535 {
 		return fmt.Errorf("port must be between 1 and 65535")
-	}
-	if (c.TLSCert == "") != (c.TLSKey == "") {
-		return errors.New("tls_cert and tls_key must be set together")
 	}
 	names := map[string]bool{}
 	primaries := 0
@@ -143,7 +138,7 @@ func SaveConfig(layout Layout, config Config) error {
 	if err != nil {
 		return err
 	}
-	header := []byte("# proxystack-web 订阅端配置。修改监听地址、端口或证书后需要重启 proxystack-sub 服务；来源变化自动生效。\n")
+	header := []byte("# proxystack-web 订阅端配置。修改监听地址或端口后需要重启 proxystack-sub 服务；来源变化自动生效。\n")
 	return writeFileAtomic(layout.ConfigPath(), append(header, data...), 0o640)
 }
 

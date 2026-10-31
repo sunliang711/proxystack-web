@@ -18,7 +18,7 @@ type globalFlags struct {
 }
 
 func main() {
-	// 与 unit 的 UMask=0027 一致：init 和救援命令在 unit 之外运行，创建的数据库、证书和生成物也不应对其他用户可读。
+	// 与 unit 的 UMask=0027 一致：init 和救援命令在 unit 之外运行，创建的数据库和生成物也不应对其他用户可读。
 	setUmask()
 	if err := newRootCommand().Execute(); err != nil {
 		if errors.Is(err, errRestart) {

@@ -195,6 +195,12 @@ func validateSettings(issues *Issues, doc *Document, settings Settings) {
 			issues.add("settings.basic.timezone", "unknown time zone")
 		}
 	}
+	if settings.Basic.PanelURL != "" {
+		parsed, err := url.Parse(settings.Basic.PanelURL)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+			issues.add("settings.basic.panel_url", "must be an http(s) URL without query or fragment")
+		}
+	}
 	validateTrafficNotify(issues, settings)
 	pools := map[string]PortRange{
 		"xray_inbound":      settings.PortPools.XrayInbound,

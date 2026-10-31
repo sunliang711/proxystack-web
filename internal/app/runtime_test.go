@@ -37,7 +37,7 @@ func newRuntimeHarness(t *testing.T) *harness {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
 	svc := app.New(st, layout)
-	_, err = svc.Initialize(context.Background(), app.InitOptions{TLSMode: store.TLSProxy, Port: 9443})
+	_, err = svc.Initialize(context.Background(), app.InitOptions{Port: 9443})
 	require.NoError(t, err)
 	fake := units.NewFake()
 	api := &xrayapi.Fake{}

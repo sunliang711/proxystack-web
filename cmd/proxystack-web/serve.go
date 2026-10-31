@@ -37,7 +37,7 @@ func newServeCommand(g *globalFlags) *cobra.Command {
 			return runServe(cmd.Context(), g, dev)
 		},
 	}
-	cmd.Flags().BoolVar(&dev, "dev", false, "development mode: non-Secure cookies, fake systemd and xray APIs")
+	cmd.Flags().BoolVar(&dev, "dev", false, "development mode: fake systemd and xray APIs")
 	return cmd
 }
 
@@ -95,10 +95,9 @@ func runServe(ctx context.Context, g *globalFlags, dev bool) error {
 		}
 	}
 	handler := api.New(svc, api.Options{
-		PanelPath:  panel.Path,
-		Dev:        dev,
-		TrustProxy: panel.TLSMode == store.TLSProxy,
-		Static:     web.Dist(),
+		PanelPath: panel.Path,
+		Dev:       dev,
+		Static:    web.Dist(),
 	})
 	srv := &http.Server{
 		Addr:              net.JoinHostPort(panel.Listen, strconv.Itoa(panel.Port)),
@@ -108,15 +107,8 @@ func runServe(ctx context.Context, g *globalFlags, dev bool) error {
 	}
 	errCh := make(chan error, 1)
 	go func() {
-		slog.Info("proxystack-web started", "version", version.Version, "addr", srv.Addr, "tls", panel.TLSMode, "dev", dev)
-		switch panel.TLSMode {
-		case store.TLSSelfSigned:
-			errCh <- srv.ListenAndServeTLS(layout.TLSCert(), layout.TLSKey())
-		case store.TLSProxy:
-			errCh <- srv.ListenAndServe()
-		default:
-			errCh <- fmt.Errorf("TLS mode %q is not supported yet", panel.TLSMode)
-		}
+		slog.Info("proxystack-web started", "version", version.Version, "addr", srv.Addr, "dev", dev)
+		errCh <- srv.ListenAndServe()
 	}()
 	select {
 	case err := <-errCh:

@@ -12,27 +12,18 @@ const (
 	SettingBasic = "basic"
 )
 
-// TLS 模式。
-const (
-	TLSSelfSigned = "self-signed"
-	TLSACME       = "acme"
-	TLSProxy      = "proxy"
-)
-
 // PanelSettings 是管理面板的监听与访问设置。
 type PanelSettings struct {
-	Listen     string `json:"listen"`
-	Port       int    `json:"port"`
-	Path       string `json:"path"`
-	TLSMode    string `json:"tls_mode"`
-	ACMEDomain string `json:"acme_domain,omitempty"`
-	ACMEEmail  string `json:"acme_email,omitempty"`
+	Listen string `json:"listen"`
+	Port   int    `json:"port"`
+	Path   string `json:"path"`
 }
 
 // BasicSettings 是基本设置。
 type BasicSettings struct {
 	ExternalHost string `json:"external_host"`
 	Timezone     string `json:"timezone"`
+	PanelURL     string `json:"panel_url,omitempty"`
 }
 
 // DefaultBasicSettings 返回基本设置的默认值。

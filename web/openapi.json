@@ -201,6 +201,10 @@
             "description": "订阅节点默认 server，域名或 IP",
             "type": "string"
           },
+          "panel_url": {
+            "description": "面板经 nginx 访问的地址，不含随机路径，用于通知邮件中的链接",
+            "type": "string"
+          },
           "timezone": {
             "description": "流量统计周期边界使用的时区",
             "type": "string"
@@ -208,7 +212,8 @@
         },
         "required": [
           "external_host",
-          "timezone"
+          "timezone",
+          "panel_url"
         ],
         "type": "object"
       },
@@ -994,9 +999,6 @@
       "ExportRequest": {
         "additionalProperties": false,
         "properties": {
-          "include_tls": {
-            "type": "boolean"
-          },
           "passphrase": {
             "type": "string"
           },
@@ -2141,6 +2143,37 @@
         ],
         "type": "object"
       },
+      "PanelListen": {
+        "additionalProperties": false,
+        "properties": {
+          "listen": {
+            "type": "string"
+          },
+          "port": {
+            "format": "int64",
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "listen",
+          "port"
+        ],
+        "type": "object"
+      },
+      "PanelListenOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "restarting": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "restarting"
+        ],
+        "type": "object"
+      },
       "PauseInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -2621,9 +2654,6 @@
           "external_host": {
             "type": "string"
           },
-          "has_tls": {
-            "type": "boolean"
-          },
           "hostname": {
             "type": "string"
           },
@@ -2651,7 +2681,6 @@
           "traffic_from",
           "traffic_to",
           "deps",
-          "has_tls",
           "port_conflicts"
         ],
         "type": "object"
@@ -3290,10 +3319,10 @@
           "dev_mode": {
             "type": "boolean"
           },
-          "fingerprint": {
+          "go_version": {
             "type": "string"
           },
-          "go_version": {
+          "listen": {
             "type": "string"
           },
           "panel_url": {
@@ -3302,8 +3331,9 @@
           "platform": {
             "type": "string"
           },
-          "tls_mode": {
-            "type": "string"
+          "port": {
+            "format": "int64",
+            "type": "integer"
           },
           "version": {
             "type": "string"
@@ -3316,7 +3346,8 @@
           "go_version",
           "platform",
           "panel_url",
-          "tls_mode",
+          "listen",
+          "port",
           "dev_mode"
         ],
         "type": "object"
@@ -4259,6 +4290,15 @@
     "/api/auth/login": {
       "post": {
         "operationId": "login",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Forwarded-Proto",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -4307,6 +4347,15 @@
     "/api/auth/logout": {
       "post": {
         "operationId": "logout",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Forwarded-Proto",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "204": {
             "description": "No Content",
@@ -7617,6 +7666,52 @@
           }
         ],
         "summary": "系统信息",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/system/panel": {
+      "put": {
+        "operationId": "updatePanelListen",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PanelListen"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PanelListenOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "修改面板监听地址和端口并重启管理服务",
         "tags": [
           "system"
         ]

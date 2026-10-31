@@ -41,10 +41,8 @@ const (
 type Options struct {
 	// PanelPath 是随机访问路径（不含斜杠）。
 	PanelPath string
-	// Dev 为开发模式：cookie 不设置 Secure。
+	// Dev 为开发模式。
 	Dev bool
-	// TrustProxy 为真时从 X-Forwarded-For 读取来源 IP（仅当直连方为回环地址）。
-	TrustProxy bool
 	// Static 是前端构建产物；为空时不提供静态资源。
 	Static StaticFS
 }
@@ -81,9 +79,7 @@ func New(svc *app.Service, opts Options) *Server {
 	s := &Server{svc: svc, opts: opts}
 	root := chi.NewRouter()
 	root.Use(middleware.Recoverer, securityHeaders)
-	if opts.TrustProxy {
-		root.Use(forwardedFor)
-	}
+	root.Use(forwardedFor)
 	root.NotFound(http.NotFound)
 	prefix := "/" + opts.PanelPath
 	root.Get(prefix, func(w http.ResponseWriter, r *http.Request) {

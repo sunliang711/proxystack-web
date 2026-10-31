@@ -135,7 +135,7 @@ func TestMigrationPackageRestoresAnotherInstance(t *testing.T) {
 	require.NoError(t, err)
 	sourceToken := sourceDoc.Users[0].SubToken
 
-	id, err := source.svc.ExportPackage(ctx, source.actor, app.ExportRequest{Passphrase: "correct horse", IncludeTLS: true})
+	id, err := source.svc.ExportPackage(ctx, source.actor, app.ExportRequest{Passphrase: "correct horse"})
 	require.NoError(t, err)
 	task := source.waitTask(t, id)
 	require.Equal(t, app.TaskSucceeded, task.Status, task.Error)

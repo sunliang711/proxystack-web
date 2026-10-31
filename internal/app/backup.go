@@ -169,8 +169,6 @@ type ExportRequest struct {
 	// Passphrase 是加密口令；Plain 为真时不加密，迁移包包含全部明文凭据。
 	Passphrase string `json:"passphrase" required:"false"`
 	Plain      bool   `json:"plain" required:"false"`
-	// IncludeTLS 为真时包含面板证书和私钥。
-	IncludeTLS bool `json:"include_tls" required:"false"`
 	// Snapshot 非空时用备份目录中已有的快照打包，否则新生成一份。
 	Snapshot string `json:"snapshot" required:"false"`
 }
@@ -196,7 +194,7 @@ func (s *Service) ExportPackage(ctx context.Context, actor Actor, req ExportRequ
 		return s.Store.InTx(ctx, func(q *dbq.Queries) error {
 			return audit.Write(ctx, q, s.Now(), audit.Entry{
 				Actor: actor.Name, SourceIP: actor.IP, Action: ActionBackupExport, Object: name,
-				Summary: fmt.Sprintf("导出迁移包 %s（加密=%t，证书=%t）", name, !req.Plain, req.IncludeTLS),
+				Summary: fmt.Sprintf("导出迁移包 %s（加密=%t）", name, !req.Plain),
 			})
 		})
 	})
@@ -247,13 +245,6 @@ func (s *Service) WritePackage(ctx context.Context, dest string, req ExportReque
 		return err
 	}
 	files := []backup.File{{Name: backup.DatabaseName, Path: snapshot}}
-	if req.IncludeTLS {
-		for name, path := range map[string]string{backup.TLSCertName: s.Layout.TLSCert(), backup.TLSKeyName: s.Layout.TLSKey()} {
-			if _, err := os.Stat(path); err == nil {
-				files = append(files, backup.File{Name: name, Path: path})
-			}
-		}
-	}
 	logf("打包%s", map[bool]string{true: "（不加密）", false: "并加密"}[req.Plain])
 	partial := filepath.Join(temp, "package")
 	file, err := os.OpenFile(partial, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o640)

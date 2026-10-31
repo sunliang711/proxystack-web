@@ -15,16 +15,11 @@ VERSION=latest
 BINARY=""
 LISTEN=""
 PORT=9443
-TLS=self-signed
-DOMAIN=""
-EMAIL=""
 RESTORE=""
 SOURCE=main
 PUBLIC_KEY=""
 SUB_LISTEN=""
 SUB_PORT=""
-SUB_TLS_CERT=""
-SUB_TLS_KEY=""
 
 usage() {
     cat <<USAGE
@@ -35,20 +30,15 @@ Usage: install.sh [options]
   --binary FILE         install a local proxystack-web binary instead of downloading
 
 Panel options:
-  --listen ADDR         panel listen address (default 0.0.0.0, or 127.0.0.1 with --tls proxy)
+  --listen ADDR         panel listen address (default 0.0.0.0)
   --port PORT           panel port (default 9443)
-  --tls MODE            self-signed | acme | proxy (default self-signed)
-  --domain DOMAIN       panel domain
-  --email EMAIL         ACME account email
   --restore FILE        initialize from a migration package instead of generating a new admin password
 
 Subscription server options:
   --source NAME         the panel's source name (default: main)
   --public-key KEY      the panel's subscription public key (ed25519:...), shown on its 发布订阅包 page
-  --sub-listen ADDR     listen address (default 0.0.0.0)
+  --sub-listen ADDR     listen address (default 127.0.0.1)
   --sub-port PORT       listen port (default 9444)
-  --sub-tls-cert FILE   TLS certificate (readable by the $SUB_USER user)
-  --sub-tls-key FILE    TLS private key
 
 Running with --role sub on a machine that already has a subscription server upgrades its binary.
 USAGE
@@ -61,16 +51,11 @@ while [[ $# -gt 0 ]]; do
         --binary) BINARY=$2; shift 2 ;;
         --listen) LISTEN=$2; shift 2 ;;
         --port) PORT=$2; shift 2 ;;
-        --tls) TLS=$2; shift 2 ;;
-        --domain) DOMAIN=$2; shift 2 ;;
-        --email) EMAIL=$2; shift 2 ;;
         --restore) RESTORE=$2; shift 2 ;;
         --source) SOURCE=$2; shift 2 ;;
         --public-key) PUBLIC_KEY=$2; shift 2 ;;
         --sub-listen) SUB_LISTEN=$2; shift 2 ;;
         --sub-port) SUB_PORT=$2; shift 2 ;;
-        --sub-tls-cert) SUB_TLS_CERT=$2; shift 2 ;;
-        --sub-tls-key) SUB_TLS_KEY=$2; shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -209,7 +194,7 @@ install_panel() {
 
     log "creating $BASE"
     install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_USER" \
-        "$BASE" "$BASE/bin" "$BASE/geo" "$BASE/data" "$BASE/data/tls" \
+        "$BASE" "$BASE/bin" "$BASE/geo" "$BASE/data" \
         "$BASE/runtime" "$BASE/runtime/generated" "$BASE/runtime/generated/xray" "$BASE/runtime/generated/mihomo" \
         "$BASE/runtime/mihomo" "$BASE/backups" "$BASE/downloads"
 
@@ -230,10 +215,8 @@ install_panel() {
         restore_panel
     else
         log "initializing database"
-        local args=(--base-dir "$BASE" init --port "$PORT" --tls "$TLS")
+        local args=(--base-dir "$BASE" init --port "$PORT")
         [[ -n $LISTEN ]] && args+=(--listen "$LISTEN")
-        [[ -n $DOMAIN ]] && args+=(--domain "$DOMAIN")
-        [[ -n $EMAIL ]] && args+=(--email "$EMAIL")
         PANEL_OUTPUT=$(runuser -u "$SERVICE_USER" -- "$BASE/bin/proxystack-web" "${args[@]}")
     fi
 
@@ -271,7 +254,6 @@ install_sub() {
     local args=(sub --dir "$SUB_BASE" init --source "$SOURCE" --public-key "$PUBLIC_KEY")
     [[ -n $SUB_LISTEN ]] && args+=(--listen "$SUB_LISTEN")
     [[ -n $SUB_PORT ]] && args+=(--port "$SUB_PORT")
-    [[ -n $SUB_TLS_CERT ]] && args+=(--tls-cert "$SUB_TLS_CERT" --tls-key "$SUB_TLS_KEY")
     runuser -u "$SUB_USER" -- "$SUB_BASE/bin/proxystack-web" "${args[@]}" >/dev/null
 
     log "writing systemd unit"
@@ -299,6 +281,9 @@ fi
 if [[ -n $PANEL_OUTPUT ]]; then
     echo
     echo "$PANEL_OUTPUT"
+    echo
+    echo "The panel serves plain HTTP on the address above. Put nginx in front of it;"
+    echo "see deploy/nginx/proxystack-web.conf for an example."
 fi
 if [[ -n $SUB_OUTPUT ]]; then
     echo

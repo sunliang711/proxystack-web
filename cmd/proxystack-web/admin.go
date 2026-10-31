@@ -17,7 +17,47 @@ func newAdminCommand(g *globalFlags) *cobra.Command {
 		Use:   "admin",
 		Short: "Rescue commands for the admin account (run as root or the service account)",
 	}
-	cmd.AddCommand(newResetPasswordCommand(g), newResetLinkCommand(g))
+	cmd.AddCommand(newResetPasswordCommand(g), newResetLinkCommand(g), newSetListenCommand(g))
+	return cmd
+}
+
+// newSetListenCommand 在本机修改面板监听，用于网页上改错地址、连不上面板时恢复。
+func newSetListenCommand(g *globalFlags) *cobra.Command {
+	var listen string
+	var port int
+	cmd := &cobra.Command{
+		Use:   "set-listen",
+		Short: "Change the panel listen address or port (takes effect after restarting the service)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if listen == "" && port == 0 {
+				return fmt.Errorf("give --listen, --port or both")
+			}
+			svc, closeFn, err := openService(cmd.Context(), g.layout())
+			if err != nil {
+				return err
+			}
+			defer closeFn()
+			info, err := svc.Info(cmd.Context())
+			if err != nil {
+				return err
+			}
+			target := app.PanelListen{Listen: info.Panel.Listen, Port: info.Panel.Port}
+			if listen != "" {
+				target.Listen = listen
+			}
+			if port != 0 {
+				target.Port = port
+			}
+			if err := svc.UpdatePanelListen(cmd.Context(), app.Actor{Name: "cli"}, target); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Panel listen address set to %s:%d. Run `systemctl restart proxystack-web` to apply it.\n", target.Listen, target.Port)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&listen, "listen", "", "listen address")
+	cmd.Flags().IntVar(&port, "port", 0, "listen port")
 	return cmd
 }
 

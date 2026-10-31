@@ -35,7 +35,7 @@ func newBackupCommand(g *globalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "backup",
 		Short: "Write a migration package with the whole database",
-		Long: "backup writes a migration package: a consistent database snapshot and optionally the panel certificate. " +
+		Long: "backup writes a migration package: a consistent database snapshot. " +
 			"The package is encrypted with a passphrase unless --plain is given. Traffic the running service has not yet " +
 			"written to the database is not included; use the panel to export while the service runs.",
 		Args: cobra.NoArgs,
@@ -64,7 +64,6 @@ func newBackupCommand(g *globalFlags) *cobra.Command {
 	cmd.Flags().StringVar(&output, "output", "", "package file to write")
 	_ = cmd.MarkFlagRequired("output")
 	cmd.Flags().BoolVar(&req.Plain, "plain", false, "do not encrypt: the package holds every credential in clear text")
-	cmd.Flags().BoolVar(&req.IncludeTLS, "include-tls", false, "include the panel certificate and key")
 	return cmd
 }
 
@@ -114,9 +113,6 @@ func newRestoreCommand(g *globalFlags) *cobra.Command {
 					return err
 				}
 				fmt.Fprintf(out, "  Panel URL:  %s\n", info.PanelURL)
-				if info.Fingerprint != "" {
-					fmt.Fprintf(out, "  TLS SHA-256 fingerprint:\n    %s\n", info.Fingerprint)
-				}
 				fmt.Fprintln(out, "Log in with the administrator account of the source instance.")
 				return nil
 			}
@@ -148,7 +144,7 @@ func newRestoreCommand(g *globalFlags) *cobra.Command {
 	f.BoolVar(&fresh, "fresh", false, "initialize an empty installation directory from the package")
 	f.BoolVar(&encrypted, "encrypted", true, "the package is encrypted: read the passphrase")
 	f.StringVar(&opts.ExternalHost, "external-host", "", "replace the external host of the source instance")
-	f.BoolVar(&opts.KeepPanel, "keep-panel", false, "keep this instance's panel settings and certificate")
+	f.BoolVar(&opts.KeepPanel, "keep-panel", false, "keep this instance's panel settings")
 	f.BoolVar(&opts.KeepAdmins, "keep-admins", false, "keep this instance's administrator accounts")
 	f.BoolVar(&noStart, "no-start", false, "do not start stacks after restoring")
 	return cmd

@@ -19,7 +19,7 @@ func sample(t *testing.T) []backup.File {
 	cert := filepath.Join(dir, "cert")
 	require.NoError(t, os.WriteFile(db, []byte("database"), 0o640))
 	require.NoError(t, os.WriteFile(cert, []byte("certificate"), 0o640))
-	return []backup.File{{Name: backup.DatabaseName, Path: db}, {Name: backup.TLSCertName, Path: cert}}
+	return []backup.File{{Name: backup.DatabaseName, Path: db}, {Name: "extra/note.txt", Path: cert}}
 }
 
 // TestRoundTrip 验证加密和不加密的迁移包都能完整读回，口令错误和缺失时给出明确错误。
@@ -33,7 +33,7 @@ func TestRoundTrip(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "old", got.Hostname)
 		require.Len(t, got.Files, 2)
-		content, err := os.ReadFile(filepath.Join(dest, "tls", "cert.pem"))
+		content, err := os.ReadFile(filepath.Join(dest, "extra", "note.txt"))
 		require.NoError(t, err)
 		require.Equal(t, "certificate", string(content))
 		if passphrase != "" {

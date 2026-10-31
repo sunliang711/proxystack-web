@@ -200,42 +200,45 @@ async function save() {
       <ErrorList :errors="errors.global" />
       <NCard title="基本" size="small" class="card">
         <NFormItem label="对外地址" v-bind="f('basic.external_host', '订阅节点默认使用的域名或 IP')">
-          <NInput v-model:value="settings.basic.external_host" placeholder="proxy.example.com" />
+          <NInput v-model:value="form.basic.external_host" placeholder="proxy.example.com" />
+        </NFormItem>
+        <NFormItem label="面板地址" v-bind="f('basic.panel_url', '经 nginx 访问面板的地址，不含随机路径；用于通知邮件中的链接')">
+          <NInput v-model:value="form.basic.panel_url" placeholder="https://panel.example.com" />
         </NFormItem>
         <NFormItem label="时区" v-bind="f('basic.timezone', '流量统计的日、月边界按此时区计算')">
-          <NSelect v-model:value="settings.basic.timezone" :options="timezones" filterable />
+          <NSelect v-model:value="form.basic.timezone" :options="timezones" filterable />
         </NFormItem>
       </NCard>
 
       <NCard title="端口池" size="small" class="card">
         <NFormItem v-for="pool in pools" :key="pool.key" :label="pool.label" v-bind="f(`port_pools.${pool.key}`)">
           <NSpace align="center">
-            <NInputNumber v-model:value="settings.port_pools[pool.key].start" :min="1" :max="65535" :show-button="false" />
+            <NInputNumber v-model:value="form.port_pools[pool.key].start" :min="1" :max="65535" :show-button="false" />
             <span>—</span>
-            <NInputNumber v-model:value="settings.port_pools[pool.key].end" :min="1" :max="65535" :show-button="false" />
+            <NInputNumber v-model:value="form.port_pools[pool.key].end" :min="1" :max="65535" :show-button="false" />
           </NSpace>
         </NFormItem>
       </NCard>
 
       <NCard title="默认值" size="small" class="card">
         <NFormItem label="Mihomo 模式">
-          <NRadioGroup v-model:value="settings.defaults.mihomo.mode">
+          <NRadioGroup v-model:value="form.defaults.mihomo.mode">
             <NRadioButton value="Rule">Rule</NRadioButton>
             <NRadioButton value="Global">Global</NRadioButton>
             <NRadioButton value="Direct">Direct</NRadioButton>
           </NRadioGroup>
         </NFormItem>
         <NFormItem label="Mihomo 日志级别">
-          <NSelect v-model:value="settings.defaults.mihomo.loglevel" :options="mihomoLogLevels.map((v) => ({ label: v, value: v }))" />
+          <NSelect v-model:value="form.defaults.mihomo.loglevel" :options="mihomoLogLevels.map((v) => ({ label: v, value: v }))" />
         </NFormItem>
         <NFormItem label="Xray 日志级别">
-          <NSelect v-model:value="settings.defaults.xray.loglevel" :options="xrayLogLevels.map((v) => ({ label: v, value: v }))" />
+          <NSelect v-model:value="form.defaults.xray.loglevel" :options="xrayLogLevels.map((v) => ({ label: v, value: v }))" />
         </NFormItem>
         <NFormItem label="Xray API">
-          <NSwitch v-model:value="settings.defaults.xray.api_enabled" />
+          <NSwitch v-model:value="form.defaults.xray.api_enabled" />
         </NFormItem>
         <NFormItem label="API 服务" v-bind="f('defaults.xray.api_services', 'HandlerService 是用户启停即时生效的前提，StatsService 用于流量统计')">
-          <NCheckboxGroup v-model:value="settings.defaults.xray.api_services">
+          <NCheckboxGroup v-model:value="form.defaults.xray.api_services">
             <NSpace>
               <NCheckbox value="HandlerService">HandlerService</NCheckbox>
               <NCheckbox value="StatsService">StatsService</NCheckbox>
@@ -243,16 +246,16 @@ async function save() {
           </NCheckboxGroup>
         </NFormItem>
         <NFormItem label="Xray stats">
-          <NSwitch v-model:value="settings.defaults.xray.stats" />
+          <NSwitch v-model:value="form.defaults.xray.stats" />
         </NFormItem>
         <NFormItem label="Xray policy">
-          <NSwitch v-model:value="settings.defaults.xray.policy.enabled" />
+          <NSwitch v-model:value="form.defaults.xray.policy.enabled" />
         </NFormItem>
         <NCollapse>
           <NCollapseItem title="policy 统计开关" name="policy">
             <NGrid :cols="1">
               <NFormItemGi v-for="flag in policyFlags" :key="flag.key" :label="flag.label" label-width="280">
-                <NSwitch v-model:value="settings.defaults.xray.policy[flag.key]" />
+                <NSwitch v-model:value="form.defaults.xray.policy[flag.key]" />
               </NFormItemGi>
             </NGrid>
           </NCollapseItem>
@@ -261,10 +264,10 @@ async function save() {
 
       <NCard title="安全" size="small" class="card">
         <NFormItem label="公开入站必须认证" label-width="200">
-          <NSwitch v-model:value="settings.security.require_auth_for_public_socks_http" />
+          <NSwitch v-model:value="form.security.require_auth_for_public_socks_http" />
         </NFormItem>
         <NFormItem label="允许公开的无认证入站" label-width="200">
-          <NSwitch :value="settings.security.allow_noauth_public" @update:value="toggleNoAuth" />
+          <NSwitch :value="form.security.allow_noauth_public" @update:value="toggleNoAuth" />
         </NFormItem>
       </NCard>
 

@@ -96,12 +96,8 @@ func (s *Server) Run(ctx context.Context) error {
 	srv := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
 	errCh := make(chan error, 1)
 	go func() {
-		slog.Info("subscription server started", "addr", config.Addr(), "tls", config.TLSCert != "", "dir", s.Layout.Dir)
-		if config.TLSCert != "" {
-			errCh <- srv.ServeTLS(listener, config.TLSCert, config.TLSKey)
-		} else {
-			errCh <- srv.Serve(listener)
-		}
+		slog.Info("subscription server started", "addr", config.Addr(), "dir", s.Layout.Dir)
+		errCh <- srv.Serve(listener)
 	}()
 	s.signature = s.dataSignature()
 	ticker := time.NewTicker(pollInterval)
@@ -139,8 +135,8 @@ func (s *Server) poll(running Config) {
 		s.mu.Unlock()
 		return
 	}
-	if config.Addr() != running.Addr() || config.TLSCert != running.TLSCert || config.TLSKey != running.TLSKey {
-		slog.Warn("listen address or certificate changed; restart proxystack-sub to apply")
+	if config.Addr() != running.Addr() {
+		slog.Warn("listen address changed; restart proxystack-sub to apply")
 	}
 	s.reload(config)
 }
@@ -275,8 +271,9 @@ func (s *Server) Handler() http.Handler {
 			writeError(w, http.StatusServiceUnavailable, "index_unavailable", "subscription is not available")
 			return
 		}
+		// TLS 在 nginx 上终结，协议取 nginx 传来的值，只影响这次响应里的 Surge managed 首行。
 		requestURL := &url.URL{Scheme: "http", Host: r.Host}
-		if r.TLS != nil {
+		if r.Header.Get("X-Forwarded-Proto") == "https" {
 			requestURL.Scheme = "https"
 		}
 		result := view.Serve(r.PathValue("token"), format, requestURL, s.now())

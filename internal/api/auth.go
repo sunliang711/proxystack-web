@@ -22,7 +22,8 @@ type sessionOutput struct {
 }
 
 type loginInput struct {
-	Body struct {
+	ForwardedProto string `header:"X-Forwarded-Proto"`
+	Body           struct {
 		Username string `json:"username" minLength:"1" maxLength:"64"`
 		Password string `json:"password" minLength:"1" maxLength:"256"`
 	}
@@ -46,18 +47,24 @@ type currentSessionOutput struct {
 	Body SessionBody
 }
 
+type logoutInput struct {
+	ForwardedProto string `header:"X-Forwarded-Proto"`
+}
+
 type logoutOutput struct {
 	SetCookie http.Cookie `header:"Set-Cookie"`
 }
 
-func (s *Server) sessionCookie(value string, maxAge int) http.Cookie {
+// sessionCookie 返回会话 cookie。TLS 在 nginx 上终结，经 HTTPS 访问时 cookie 才带 Secure：
+// 否则浏览器会在 HTTP 访问时丢弃它，登录静默失败。
+func (s *Server) sessionCookie(value string, maxAge int, forwardedProto string) http.Cookie {
 	return http.Cookie{
 		Name:     SessionCookie,
 		Value:    value,
 		Path:     "/" + s.opts.PanelPath + "/",
 		MaxAge:   maxAge,
 		HttpOnly: true,
-		Secure:   !s.opts.Dev,
+		Secure:   forwardedProto == "https",
 		SameSite: http.SameSiteStrictMode,
 	}
 }
@@ -75,7 +82,7 @@ func registerAuth(api huma.API, s *Server) {
 			return nil, toHTTPError(err)
 		}
 		return &sessionOutput{
-			SetCookie: s.sessionCookie(sess.Token, 0),
+			SetCookie: s.sessionCookie(sess.Token, 0, in.ForwardedProto),
 			Body:      SessionBody{Admin: sess.Admin, CSRFToken: sess.CSRFToken},
 		}, nil
 	})
@@ -100,11 +107,11 @@ func registerAuth(api huma.API, s *Server) {
 		Tags:          []string{"auth"},
 		DefaultStatus: http.StatusNoContent,
 		Metadata:      map[string]any{metaAllowPending: true},
-	}), func(ctx context.Context, _ *struct{}) (*logoutOutput, error) {
+	}), func(ctx context.Context, in *logoutInput) (*logoutOutput, error) {
 		if err := s.svc.Logout(ctx, sessionFrom(ctx), metaFrom(ctx)); err != nil {
 			return nil, toHTTPError(err)
 		}
-		return &logoutOutput{SetCookie: s.sessionCookie("", -1)}, nil
+		return &logoutOutput{SetCookie: s.sessionCookie("", -1, in.ForwardedProto)}, nil
 	})
 
 	huma.Register(api, secured(huma.Operation{

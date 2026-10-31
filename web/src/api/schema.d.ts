@@ -1099,6 +1099,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/panel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 修改面板监听地址和端口并重启管理服务 */
+        put: operations["updatePanelListen"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/update": {
         parameters: {
             query?: never;
@@ -1453,6 +1470,8 @@ export interface components {
         BasicSettings: {
             /** @description 订阅节点默认 server，域名或 IP */
             external_host: string;
+            /** @description 面板经 nginx 访问的地址，不含随机路径，用于通知邮件中的链接 */
+            panel_url: string;
             /** @description 流量统计周期边界使用的时区 */
             timezone: string;
         };
@@ -1693,7 +1712,6 @@ export interface components {
             users?: string[];
         };
         ExportRequest: {
-            include_tls?: boolean;
             passphrase?: string;
             plain?: boolean;
             snapshot?: string;
@@ -1993,6 +2011,14 @@ export interface components {
             type: "mihomo" | "socks5" | "http" | "direct";
             username: string;
         };
+        PanelListen: {
+            listen: string;
+            /** Format: int64 */
+            port: number;
+        };
+        PanelListenOutputBody: {
+            restarting: boolean;
+        };
         PauseInputBody: {
             enabled: boolean;
             paused_stacks: string[];
@@ -2124,7 +2150,6 @@ export interface components {
             /** Format: date-time */
             exported_at: string;
             external_host: string;
-            has_tls: boolean;
             hostname: string;
             port_conflicts: string[];
             /** Format: date-time */
@@ -2300,11 +2325,12 @@ export interface components {
             build_date: string;
             commit: string;
             dev_mode: boolean;
-            fingerprint?: string;
             go_version: string;
+            listen: string;
             panel_url: string;
             platform: string;
-            tls_mode: string;
+            /** Format: int64 */
+            port: number;
             version: string;
         };
         Task: {
@@ -2576,7 +2602,9 @@ export interface operations {
     login: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Forwarded-Proto"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2610,7 +2638,9 @@ export interface operations {
     logout: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Forwarded-Proto"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4812,6 +4842,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemInfo"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updatePanelListen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PanelListen"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PanelListenOutputBody"];
                 };
             };
             /** @description Error */

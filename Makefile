@@ -44,7 +44,7 @@ dist: web
 
 # 开发模式：实例目录 .dev，面板走 HTTP 监听 127.0.0.1:9090。
 dev-init:
-	go run ./cmd/proxystack-web --base-dir .dev init --tls proxy --listen 127.0.0.1 --port 9090
+	go run ./cmd/proxystack-web --base-dir .dev init --listen 127.0.0.1 --port 9090
 
 dev-serve:
 	go run ./cmd/proxystack-web --base-dir .dev serve --dev

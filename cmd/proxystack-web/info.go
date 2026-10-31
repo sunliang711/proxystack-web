@@ -14,7 +14,7 @@ func newInfoCommand(g *globalFlags) *cobra.Command {
 	var subKey bool
 	cmd := &cobra.Command{
 		Use:   "info",
-		Short: "Show the panel URL, certificate fingerprint and subscription bundle public key",
+		Short: "Show the panel URL and subscription bundle public key",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			svc, closeFn, err := openService(cmd.Context(), g.layout())
@@ -38,10 +38,6 @@ func newInfoCommand(g *globalFlags) *cobra.Command {
 			fmt.Fprintf(out, "Version:    %s\n", version.Version)
 			fmt.Fprintf(out, "Base dir:   %s\n", g.baseDir)
 			fmt.Fprintf(out, "Panel URL:  %s\n", info.PanelURL)
-			fmt.Fprintf(out, "TLS mode:   %s\n", info.Panel.TLSMode)
-			if info.Fingerprint != "" {
-				fmt.Fprintf(out, "TLS SHA-256 fingerprint:\n  %s\n", info.Fingerprint)
-			}
 			fmt.Fprintf(out, "Subscription source:     %s\n", source)
 			fmt.Fprintf(out, "Subscription public key: %s\n", publicKey)
 			return nil

@@ -19,7 +19,6 @@ import (
 	"proxystack-web/internal/runtime"
 	"proxystack-web/internal/store"
 	"proxystack-web/internal/store/dbq"
-	"proxystack-web/internal/tlsutil"
 	"proxystack-web/internal/units"
 )
 
@@ -43,7 +42,6 @@ type RestorePreview struct {
 	TrafficFrom  time.Time         `json:"traffic_from"`
 	TrafficTo    time.Time         `json:"traffic_to"`
 	Deps         map[string]string `json:"deps"`
-	HasTLS       bool              `json:"has_tls"`
 	// PortConflicts 是迁移包中的 stack 与本机已被占用端口的冲突。
 	PortConflicts []string `json:"port_conflicts"`
 }
@@ -71,7 +69,6 @@ func (s *Service) StageRestore(ctx context.Context, source io.Reader, passphrase
 		Counts: manifest.Counts, TrafficFrom: manifest.TrafficFrom, TrafficTo: manifest.TrafficTo, Deps: manifest.Deps,
 		PortConflicts: []string{},
 	}
-	_, preview.HasTLS = manifest.Files[backup.TLSCertName]
 	if preview.PortConflicts, err = s.portConflicts(ctx, staging); err != nil {
 		return nil, err
 	}
@@ -162,7 +159,7 @@ func (s *Service) portConflicts(ctx context.Context, staging string) ([]string, 
 type RestoreOptions struct {
 	// ExternalHost 非空时覆盖迁移包中的对外地址。
 	ExternalHost string `json:"external_host" required:"false"`
-	// KeepPanel 为真时保留本机的面板设置（监听、访问路径、TLS 和证书）。
+	// KeepPanel 为真时保留本机的面板设置（监听和访问路径）。
 	KeepPanel bool `json:"keep_panel" required:"false"`
 	// KeepAdmins 为真时保留本机的管理员账号。
 	KeepAdmins bool `json:"keep_admins" required:"false"`
@@ -267,11 +264,6 @@ func (s *Service) stageForRestart(ctx context.Context, actor Actor, opts Restore
 	if err := prepareRestore(ctx, staging, actor, opts, &manifest, s); err != nil {
 		return err
 	}
-	if opts.KeepPanel {
-		if err := os.RemoveAll(filepath.Join(staging, "tls")); err != nil {
-			return err
-		}
-	}
 	name := "pre-restore-" + s.Now().UTC().Format("20060102-150405") + dbSuffix
 	if err := os.MkdirAll(s.Layout.BackupsDir(), 0o750); err != nil {
 		return err
@@ -299,7 +291,7 @@ func (s *Service) StageRestoreForNextStart(ctx context.Context, opts RestoreOpti
 	return s.stageForRestart(ctx, Actor{Name: "cli"}, opts)
 }
 
-// ApplyPendingRestore 把待替换的数据库和证书放到位。在打开数据库之前调用。返回是否执行了替换。
+// ApplyPendingRestore 把待替换的数据库放到位。在打开数据库之前调用。返回是否执行了替换。
 func ApplyPendingRestore(layout paths.Layout) (bool, error) {
 	pending := layout.RestorePendingDir()
 	database := filepath.Join(pending, backup.DatabaseName)
@@ -314,22 +306,10 @@ func ApplyPendingRestore(layout paths.Layout) (bool, error) {
 	if err := os.Rename(database, layout.DBPath()); err != nil {
 		return false, err
 	}
-	for source, target := range map[string]string{backup.TLSCertName: layout.TLSCert(), backup.TLSKeyName: layout.TLSKey()} {
-		from := filepath.Join(pending, filepath.FromSlash(source))
-		if _, err := os.Stat(from); err == nil {
-			if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
-				return false, err
-			}
-			if err := os.Rename(from, target); err != nil {
-				return false, err
-			}
-		}
-	}
 	return true, os.RemoveAll(pending)
 }
 
-// RestoreFresh 在全新安装的目录上恢复迁移包（install.sh --restore）。数据库和证书直接就位；
-// 迁移包不含证书且面板使用自签证书时生成一张。
+// RestoreFresh 在全新安装的目录上恢复迁移包（install.sh --restore），数据库直接就位。
 func RestoreFresh(ctx context.Context, layout paths.Layout, source io.Reader, passphrase string, opts RestoreOptions) (*backup.Manifest, error) {
 	if _, err := os.Stat(layout.DBPath()); err == nil {
 		return nil, ErrAlreadyInitialized
@@ -358,23 +338,6 @@ func RestoreFresh(ctx context.Context, layout paths.Layout, source io.Reader, pa
 	}
 	if _, err := ApplyPendingRestore(layout); err != nil {
 		return nil, err
-	}
-	st, err := store.Open(layout.DBPath())
-	if err != nil {
-		return nil, err
-	}
-	defer st.Close()
-	panel, err := store.GetPanelSettings(ctx, st.Q)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := os.Stat(layout.TLSCert()); errors.Is(err, os.ErrNotExist) && panel.TLSMode == store.TLSSelfSigned {
-		if err := os.MkdirAll(layout.TLSDir(), 0o750); err != nil {
-			return nil, err
-		}
-		if err := tlsutil.GenerateSelfSigned(layout.TLSCert(), layout.TLSKey(), tlsutil.LocalHosts()); err != nil {
-			return nil, err
-		}
 	}
 	return manifest, nil
 }
