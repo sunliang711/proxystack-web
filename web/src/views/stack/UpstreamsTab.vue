@@ -3,7 +3,8 @@ import { computed, h, ref, watch } from 'vue'
 import YAML from 'yaml'
 import {
   NAlert, NButton, NCascader, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NInputNumber,
-  NPopconfirm, NRadioButton, NRadioGroup, NSelect, NSpace, NSwitch, NTabPane, NTabs, NTag, type DataTableColumns,
+  NPopconfirm, NRadioButton, NRadioGroup, NSelect, NSpace, NSwitch, NTabPane, NTabs, NTag, NText, useMessage,
+  type DataTableColumns,
 } from 'naive-ui'
 import { fieldState, hasErrorsUnder, type FormErrors, type Schemas } from '../../api/client'
 import CodeEditor from '../../components/CodeEditor.vue'
@@ -13,6 +14,7 @@ type Upstream = Schemas['Upstream']
 type RawConfig = Record<string, unknown>
 
 const props = defineProps<{ stack: Schemas['Stack']; summaries: Schemas['StackSummary'][]; errors: FormErrors }>()
+const message = useMessage()
 
 const editing = ref<{ index: number; draft: Upstream; config: RawConfig } | null>(null)
 const yamlText = ref('')
@@ -90,8 +92,39 @@ function confirm() {
     if (oldName && oldName !== draft.name) renameTarget(oldName, draft.name)
   } else {
     props.stack.mihomo.upstreams.push(draft)
+    const joined = joinGroups(draft.name)
+    if (joined.length) message.success(`已加入代理组 ${joined.join('、')}，保存后生效`)
   }
   editing.value = null
+}
+
+const BUILTINS = ['DIRECT', 'REJECT']
+const AUTO_TYPES = ['url-test', 'load-balance', 'fallback']
+
+/**
+ * 新增的上游自动加入代理组，返回加入的组名。有自动测速或负载均衡组时加入这些组，以及引用它们的 select 组；
+ * 否则加入兜底规则指向的 select 组（默认是 AllProxy）。select 组里排在 DIRECT、REJECT 之前，
+ * 原先只有 DIRECT 时新上游成为默认选择。
+ */
+function joinGroups(name: string): string[] {
+  const groups = props.stack.mihomo.groups
+  const autoGroups = new Set(groups.filter((group) => AUTO_TYPES.includes(group.type)).map((group) => group.name))
+  let targets = groups.filter(
+    (group) => autoGroups.has(group.name) || (group.type === 'select' && group.proxies.some((proxy) => autoGroups.has(proxy))),
+  )
+  if (!targets.length) {
+    const fallback =
+      groups.find((group) => group.type === 'select' && group.name === props.stack.mihomo.rules.final) ??
+      groups.find((group) => group.type === 'select')
+    targets = fallback ? [fallback] : []
+  }
+  for (const group of targets) {
+    if (group.proxies.includes(name)) continue
+    const position = group.type === 'select' ? group.proxies.findIndex((proxy) => BUILTINS.includes(proxy)) : -1
+    if (position < 0) group.proxies.push(name)
+    else group.proxies.splice(position, 0, name)
+  }
+  return targets.map((group) => group.name)
 }
 
 /** 上游改名时同步本 stack 内的组成员和规则目标。 */
@@ -206,7 +239,8 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
 </script>
 
 <template>
-  <NSpace justify="end" style="margin-bottom: 8px">
+  <NSpace justify="space-between" align="center" style="margin-bottom: 8px">
+    <NText depth="3">新增的上游会自动加入代理组，排在 DIRECT 之前；顺序和成员可以在「代理组」标签页调整。</NText>
     <NButton type="primary" @click="open(stack.mihomo.upstreams.length)">添加上游</NButton>
   </NSpace>
   <NDataTable :columns="columns" :data="rows" size="small" />
