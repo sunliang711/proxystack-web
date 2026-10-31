@@ -105,11 +105,12 @@ install_polkit() {
     fi
     log "installing polkit"
     if command -v apt-get >/dev/null; then
-        apt-get update -qq && (apt-get install -y -qq polkitd || apt-get install -y -qq policykit-1)
+        apt-get update -qq || die "apt package index update failed"
+        apt-get install -y -qq polkitd || apt-get install -y -qq policykit-1 || die "polkit installation failed"
     elif command -v dnf >/dev/null; then
-        dnf install -y -q polkit
+        dnf install -y -q polkit || die "polkit installation failed"
     elif command -v yum >/dev/null; then
-        yum install -y -q polkit
+        yum install -y -q polkit || die "polkit installation failed"
     else
         die "polkit is required; install it with your package manager"
     fi
@@ -142,11 +143,14 @@ fetch_binary() {
     install -m 0755 "$WORK/$asset" "$dest"
 }
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+SCRIPT_DIR=""
+if [[ -n ${BASH_SOURCE[0]:-} ]]; then
+    SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+fi
 asset_file() {
     # 优先使用与脚本同目录的 deploy 文件；不存在时从发布包下载。
     local rel=$1 dest=$2
-    if [[ -f $SCRIPT_DIR/$rel ]]; then
+    if [[ -n $SCRIPT_DIR && -f $SCRIPT_DIR/$rel ]]; then
         install -m 0644 "$SCRIPT_DIR/$rel" "$dest"
     else
         local ref=$VERSION

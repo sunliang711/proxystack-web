@@ -3,6 +3,7 @@ package configdoc
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -89,6 +90,9 @@ type NewStackOptions struct {
 }
 
 // NewStack 按模板生成一个完整的 stack：端口从端口池分配，凭据随机生成。
+// ErrNoUsers 表示没有用户：新建 stack 的入站要引用用户，至少要有一个用户才能创建。
+var ErrNoUsers = errors.New("create a user first: a new stack needs at least one user")
+
 func NewStack(doc *Document, settings Settings, opts NewStackOptions) (Stack, error) {
 	auto := opts.Template == TemplateAutoURLTest || opts.Template == TemplateLoadBalance
 	if !auto && opts.Template != TemplatePair {
@@ -96,6 +100,9 @@ func NewStack(doc *Document, settings Settings, opts NewStackOptions) (Stack, er
 	}
 	if auto && len(opts.Members) == 0 {
 		return Stack{}, fmt.Errorf("auto templates require at least one member")
+	}
+	if len(doc.Users) == 0 {
+		return Stack{}, ErrNoUsers
 	}
 	refs := make([]UserRef, 0, len(doc.Users))
 	for _, user := range doc.Users {

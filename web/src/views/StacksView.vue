@@ -82,6 +82,9 @@ type Template = 'pair' | 'auto-url-test' | 'load-balance'
 const draft = ref({ template: 'pair' as Template, name: '', labels: [] as string[], members: [] as string[] })
 const errors = ref<FormErrors>(emptyErrors())
 const creating = ref(false)
+/** 用户数；入站要引用用户，没有用户时不能创建 stack。null 表示还没查询到。 */
+const userCount = ref<number | null>(null)
+const noUsers = computed(() => userCount.value === 0)
 
 const templates: { value: Template; title: string; diagram: string }[] = [
   { value: 'pair', title: 'pair · 单节点链路', diagram: '客户端 → Xray 入站 → Mihomo → 上游节点' },
@@ -95,11 +98,26 @@ const memberOptions = computed(() =>
     .map((s) => ({ label: s.name, value: s.name })),
 )
 
-function openWizard() {
+async function openWizard() {
   draft.value = { template: 'pair', name: '', labels: [], members: [] }
   errors.value = emptyErrors()
   step.value = 1
   wizard.value = true
+  userCount.value = null
+  const { data } = await api.GET('/api/users')
+  userCount.value = data?.users.length ?? null
+}
+
+/** 向导只有名称和成员两个可以定位错误的控件，其他字段的错误要显示在顶部，否则点了创建没有任何反应。 */
+function wizardErrors(problem: Parameters<typeof splitProblem>[0]): FormErrors {
+  const out = splitProblem(problem, '创建失败')
+  for (const [field, text] of Object.entries(out.fields)) {
+    if (field !== 'name' && field !== 'members') {
+      out.global.push(text)
+      delete out.fields[field]
+    }
+  }
+  return out
 }
 
 async function create() {
@@ -107,7 +125,7 @@ async function create() {
   const { data, error } = await api.POST('/api/stacks', { body: { ...draft.value, members: isAuto.value ? draft.value.members : [] } })
   creating.value = false
   if (error) {
-    errors.value = splitProblem(error, '创建失败')
+    errors.value = wizardErrors(error)
     step.value = errors.value.fields.name ? 2 : step.value
     return
   }
@@ -142,6 +160,9 @@ async function create() {
       <NStep title="基本信息" />
       <NStep v-if="isAuto" title="成员" />
     </NSteps>
+    <NAlert v-if="noUsers" type="warning" :bordered="false" style="margin-bottom: 12px">
+      当前没有用户。stack 的入站要引用用户，请先<RouterLink :to="{ name: 'users' }">创建用户</RouterLink>。
+    </NAlert>
     <ErrorList :errors="errors.global" title="创建失败" />
 
     <NRadioGroup v-if="step === 1" v-model:value="draft.template" style="width: 100%">
@@ -174,12 +195,12 @@ async function create() {
     <template #footer>
       <NSpace justify="end">
         <NButton v-if="step > 1" @click="step--">上一步</NButton>
-        <NButton v-if="step === 1 || (step === 2 && isAuto)" type="primary" :disabled="step === 2 && !draft.name" @click="step++">下一步</NButton>
+        <NButton v-if="step === 1 || (step === 2 && isAuto)" type="primary" :disabled="noUsers || (step === 2 && !draft.name)" @click="step++">下一步</NButton>
         <NButton
           v-else
           type="primary"
           :loading="creating"
-          :disabled="!draft.name || (isAuto && !draft.members.length)"
+          :disabled="noUsers || !draft.name || (isAuto && !draft.members.length)"
           @click="create"
         >
           创建

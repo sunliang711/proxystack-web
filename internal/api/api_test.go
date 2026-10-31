@@ -265,3 +265,15 @@ func TestPanelListenCanBeChanged(t *testing.T) {
 	require.Error(t, h.svc.UpdatePanelListen(ctx, actor, app.PanelListen{Listen: "localhost", Port: 19000}))
 	require.Error(t, h.svc.UpdatePanelListen(ctx, actor, app.PanelListen{Listen: "0.0.0.0", Port: 0}))
 }
+
+// TestCreateStackWithoutUsersExplainsWhy 验证没有用户时创建 stack 返回明确的原因，不是入站校验的内部错误。
+func TestCreateStackWithoutUsersExplainsWhy(t *testing.T) {
+	h, password := newHarness(t)
+	h.login("admin", password)
+	resp, _ := h.do(http.MethodPost, "/api/auth/password", map[string]string{"old_password": password, "new_password": "NewPassword-12345"})
+	require.Less(t, resp.StatusCode, 300)
+	h.login("admin", "NewPassword-12345")
+	resp, body := h.do(http.MethodPost, "/api/stacks", map[string]any{"template": "pair", "name": "edge1", "labels": []string{}, "members": []string{}})
+	require.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode)
+	require.Contains(t, fmt.Sprint(body["errors"]), "create a user first")
+}
