@@ -48,9 +48,11 @@ const addSourceCommand = computed(() =>
 
 <template>
   <NSpace vertical :size="12">
-    <NCard title="发布订阅包">
-      <template #header-extra>
-        <NButton type="primary" :loading="busy" :disabled="!status" @click="publish">签发并下载</NButton>
+    <NCard>
+      <template #header>
+        <NSpace justify="end">
+          <NButton type="primary" :loading="busy" :disabled="!status" @click="publish">签发并下载</NButton>
+        </NSpace>
       </template>
       <NSpace v-if="status" vertical>
         <NAlert v-if="status.sequence === 0" type="info" :bordered="false">还没有发布过订阅包。</NAlert>

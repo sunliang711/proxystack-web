@@ -60,10 +60,10 @@ async function save() {
 </script>
 
 <template>
-  <NCard title="订阅模板">
-    <template #header-extra>
-      <NSpace>
-        <NText v-if="dirty" type="warning">未保存</NText>
+  <NCard>
+    <template #header>
+      <NSpace justify="end" align="center">
+        <NText v-if="dirty" type="warning" class="header-note">未保存</NText>
         <NButton type="primary" :disabled="!dirty" :loading="saving" @click="save">保存</NButton>
       </NSpace>
     </template>

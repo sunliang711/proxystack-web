@@ -28,7 +28,7 @@ async function submit() {
 </script>
 
 <template>
-  <AuthCard title="proxystack-web">
+  <AuthCard title="登录">
     <NForm :model="form" @submit.prevent="submit">
       <NFormItem label="用户名" path="username">
         <NInput v-model:value="form.username" autocomplete="username" />

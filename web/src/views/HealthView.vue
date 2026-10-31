@@ -37,10 +37,10 @@ const columns: DataTableColumns<Check> = [
 </script>
 
 <template>
-  <NCard title="健康检查">
-    <template #header-extra>
-      <NSpace align="center">
-        <NText v-if="!loading" depth="3">{{ summary }}</NText>
+  <NCard>
+    <template #header>
+      <NSpace align="center" justify="space-between">
+        <NText v-if="!loading" depth="3" class="header-note">{{ summary }}</NText>
         <NButton size="small" :loading="loading" @click="load">重新检查</NButton>
       </NSpace>
     </template>

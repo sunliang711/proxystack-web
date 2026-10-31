@@ -91,9 +91,11 @@ const showExport = computed({
 </script>
 
 <template>
-  <NCard title="配置历史">
-    <template #header-extra>
-      <NButton :disabled="checked.length !== 2" @click="compareChecked">比较所选两个版本</NButton>
+  <NCard>
+    <template #header>
+      <NSpace justify="end">
+        <NButton :disabled="checked.length !== 2" @click="compareChecked">比较所选两个版本</NButton>
+      </NSpace>
     </template>
     <NDataTable
       v-model:checked-row-keys="checked"

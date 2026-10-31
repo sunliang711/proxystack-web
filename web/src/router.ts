@@ -2,6 +2,15 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { panelBase } from './api/client'
 import { loadSession, session } from './session'
 
+declare module 'vue-router' {
+  interface RouteMeta {
+    public?: boolean
+    // 页面标题和正文顶部的页面说明。
+    title?: string
+    description?: string
+  }
+}
+
 const router = createRouter({
   history: createWebHistory(panelBase),
   routes: [
@@ -12,25 +21,25 @@ const router = createRouter({
       path: '/',
       component: () => import('./layouts/MainLayout.vue'),
       children: [
-        { path: '', name: 'dashboard', component: () => import('./views/DashboardView.vue'), meta: { title: '总览' } },
-        { path: 'traffic', name: 'traffic', component: () => import('./views/TrafficView.vue'), meta: { title: '流量明细' } },
-        { path: 'notifications', name: 'notifications', component: () => import('./views/NotificationsView.vue'), meta: { title: '通知记录' } },
-        { path: 'stacks', name: 'stacks', component: () => import('./views/StacksView.vue'), meta: { title: 'Stack' } },
-        { path: 'stacks/:id', name: 'stack', component: () => import('./views/stack/StackEditView.vue'), meta: { title: 'Stack 编辑' } },
-        { path: 'users', name: 'users', component: () => import('./views/UsersView.vue'), meta: { title: '用户' } },
-        { path: 'users/:id', name: 'user', component: () => import('./views/UserDetailView.vue'), meta: { title: '用户详情' } },
-        { path: 'manual-nodes', name: 'manual-nodes', component: () => import('./views/ManualNodesView.vue'), meta: { title: '手工节点' } },
-        { path: 'remote-sources', name: 'remote-sources', component: () => import('./views/RemoteSourcesView.vue'), meta: { title: '远端节点源' } },
-        { path: 'sub-publish', name: 'sub-publish', component: () => import('./views/SubPublishView.vue'), meta: { title: '发布订阅包' } },
-        { path: 'templates', name: 'templates', component: () => import('./views/TemplatesView.vue'), meta: { title: '订阅模板' } },
-        { path: 'deps', name: 'deps', component: () => import('./views/DepsView.vue'), meta: { title: '依赖' } },
-        { path: 'jobs', name: 'jobs', component: () => import('./views/JobsView.vue'), meta: { title: '定时任务' } },
-        { path: 'health', name: 'health', component: () => import('./views/HealthView.vue'), meta: { title: '健康检查' } },
-        { path: 'audit', name: 'audit', component: () => import('./views/AuditView.vue'), meta: { title: '审计日志' } },
-        { path: 'history', name: 'history', component: () => import('./views/HistoryView.vue'), meta: { title: '配置历史' } },
-        { path: 'backup', name: 'backup', component: () => import('./views/BackupView.vue'), meta: { title: '备份' } },
-        { path: 'settings', name: 'settings', component: () => import('./views/SettingsView.vue'), meta: { title: '系统设置' } },
-        { path: 'system', name: 'system', component: () => import('./views/SystemView.vue'), meta: { title: '系统' } },
+        { path: '', name: 'dashboard', component: () => import('./views/DashboardView.vue'), meta: { title: '总览', description: '今日和本月流量、最近一小时的实时速率与本月用量排行；采集失败、通知发送失败等需要处理的事项会在顶部提示。' } },
+        { path: 'traffic', name: 'traffic', component: () => import('./views/TrafficView.vue'), meta: { title: '流量明细', description: '按小时、日、月、年查看用户、入站或出站的流量趋势与明细，可按 stack 和对象筛选，并导出为 CSV。' } },
+        { path: 'notifications', name: 'notifications', component: () => import('./views/NotificationsView.vue'), meta: { title: '通知记录', description: '每日阈值、额度超限、到期暂停等事件产生的邮件通知及其发送状态。发送失败的记录可以手动重发。' } },
+        { path: 'stacks', name: 'stacks', component: () => import('./views/StacksView.vue'), meta: { title: 'Stack', description: '每个 stack 是一组独立运行的 xray / mihomo 进程及其配置。在这里新建、导入和导出 stack，进入后编辑入站、出站与规则。' } },
+        { path: 'stacks/:id', name: 'stack', component: () => import('./views/stack/StackEditView.vue'), meta: { title: 'Stack 编辑', description: '编辑这个 stack 的入站、出站、上游、代理组和规则。保存只写入数据库，应用后才会生成配置并重启相关服务。' } },
+        { path: 'users', name: 'users', component: () => import('./views/UsersView.vue'), meta: { title: '用户', description: '代理用户及其凭据、额度与到期时间。暂停会立即把用户从代理端移除，配置保留，恢复后即可继续使用。' } },
+        { path: 'users/:id', name: 'user', component: () => import('./views/UserDetailView.vue'), meta: { title: '用户详情', description: '编辑用户的基本信息、额度与到期、订阅和凭据档案，并单独控制该用户在各个 stack 上的暂停状态。' } },
+        { path: 'manual-nodes', name: 'manual-nodes', component: () => import('./views/ManualNodesView.vue'), meta: { title: '手工节点', description: '手工录入的订阅节点，按用户归属，与本机 stack 生成的节点一起进入该用户的订阅。' } },
+        { path: 'remote-sources', name: 'remote-sources', component: () => import('./views/RemoteSourcesView.vue'), meta: { title: '远端节点源', description: '从另一台 proxystack-web 拉取其导出的节点，按用户名分给本机同名用户，每 30 分钟自动同步一次。' } },
+        { path: 'sub-publish', name: 'sub-publish', component: () => import('./views/SubPublishView.vue'), meta: { title: '发布订阅包', description: '把当前订阅内容签名打包并下载，再拷贝到订阅端导入。订阅端只提供最近一次导入的内容。' } },
+        { path: 'templates', name: 'templates', component: () => import('./views/TemplatesView.vue'), meta: { title: '订阅模板', description: 'Clash、Premium Clash 和 Surge 订阅文件的模板。默认使用内置模板，也可以在其基础上自定义。' } },
+        { path: 'deps', name: 'deps', component: () => import('./views/DepsView.vue'), meta: { title: '依赖', description: '管理 xray、mihomo 和 geo 数据文件的安装、升级与回滚。新版本先通过当前配置的校验再替换，失败时自动回滚。' } },
+        { path: 'jobs', name: 'jobs', component: () => import('./views/JobsView.vue'), meta: { title: '定时任务', description: '内置后台任务的执行计划、超时设置和最近运行结果，可以手动立即执行。流量汇总、阈值恢复和到期判定随采集实时进行，不在此列；时间按系统设置的时区计算。' } },
+        { path: 'health', name: 'health', component: () => import('./views/HealthView.vue'), meta: { title: '健康检查', description: '汇总依赖、服务状态、配置漂移、端口占用、流量采集、磁盘与备份等检查项，每项给出结论和处理建议。' } },
+        { path: 'audit', name: 'audit', component: () => import('./views/AuditView.vue'), meta: { title: '审计日志', description: '管理员在面板上执行的每一次修改操作及其结果，可按操作类型和操作者筛选。' } },
+        { path: 'history', name: 'history', component: () => import('./views/HistoryView.vue'), meta: { title: '配置历史', description: '每次配置变更都会保存一个完整快照。可以比较任意两个版本的差异，或回滚到选中的版本。' } },
+        { path: 'backup', name: 'backup', component: () => import('./views/BackupView.vue'), meta: { title: '备份', description: '导出整机迁移包、下载自动生成的备份文件，或从迁移包恢复整个实例。' } },
+        { path: 'settings', name: 'settings', component: () => import('./views/SettingsView.vue'), meta: { title: '系统设置', description: '对外地址、端口池、默认值、安全、订阅、节点导出、流量、通知、依赖源和下载代理等全局设置。' } },
+        { path: 'system', name: 'system', component: () => import('./views/SystemView.vue'), meta: { title: '系统', description: '管理服务的版本与构建信息，以及面板的监听地址和端口。' } },
       ],
     },
     { path: '/:pathMatch(.*)*', redirect: '/' },

@@ -136,9 +136,9 @@ async function create() {
 </script>
 
 <template>
-  <NCard title="Stack">
-    <template #header-extra>
-      <NSpace>
+  <NCard>
+    <template #header>
+      <NSpace justify="end">
         <NButton @click="showImport = true">导入</NButton>
         <NButton :disabled="!checked.length" @click="showExport = true">导出所选</NButton>
         <NButton type="primary" @click="openWizard">新建</NButton>

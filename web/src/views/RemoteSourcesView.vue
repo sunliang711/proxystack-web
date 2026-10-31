@@ -94,9 +94,9 @@ const f = (path: string, hint?: string) => fieldState(errors.value, `[${editing.
 </script>
 
 <template>
-  <NCard title="远端节点源">
-    <template #header-extra>
-      <NSpace>
+  <NCard>
+    <template #header>
+      <NSpace justify="end">
         <NButton :loading="syncing === 0" @click="sync(0)">全部同步</NButton>
         <NButton type="primary" @click="open(sources.length)">添加</NButton>
       </NSpace>

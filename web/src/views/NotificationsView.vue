@@ -57,8 +57,8 @@ const columns: DataTableColumns<Item> = [
 </script>
 
 <template>
-  <NCard title="通知记录">
-    <template #header-extra>
+  <NCard>
+    <template #header>
       <NRadioGroup v-model:value="status" size="small">
         <NRadioButton value="all">全部</NRadioButton>
         <NRadioButton value="failed">发送失败</NRadioButton>

@@ -110,9 +110,9 @@ async function create() {
 </script>
 
 <template>
-  <NCard title="用户">
-    <template #header-extra>
-      <NSpace>
+  <NCard>
+    <template #header>
+      <NSpace justify="end">
         <NSelect
           v-model:value="filter"
           :options="[{ label: '全部用户', value: 'all' }, { label: '已暂停', value: 'paused' }, { label: '自动暂停', value: 'auto' }]"

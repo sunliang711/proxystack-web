@@ -124,10 +124,7 @@ const columns: DataTableColumns<Job> = [
 </script>
 
 <template>
-  <NCard title="定时任务">
-    <template #header-extra>
-      <NText depth="3">流量汇总、阈值恢复和到期判定随采集实时进行，不在此列。时间按系统设置的时区计算。</NText>
-    </template>
+  <NCard>
     <NDataTable :columns="columns" :data="jobs" :loading="loading" :row-key="(row: Job) => row.id" :scroll-x="1040" />
   </NCard>
 

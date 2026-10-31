@@ -165,9 +165,9 @@ function cloneChecked() {
 </script>
 
 <template>
-  <NCard title="手工节点">
-    <template #header-extra>
-      <NSpace>
+  <NCard>
+    <template #header>
+      <NSpace justify="end">
         <NSelect v-model:value="filterUser" :options="users.map((u) => ({ label: u.name, value: u.name }))" clearable placeholder="全部用户" style="width: 160px" />
         <NButton @click="showImport = true">导入</NButton>
         <NButton type="primary" :disabled="!users.length" @click="open(nodes.length)">添加节点</NButton>

@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, ref, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   NBadge,
+  NBreadcrumb,
+  NBreadcrumbItem,
   NButton,
   NDropdown,
+  NIcon,
   NLayout,
   NLayoutContent,
   NLayoutHeader,
@@ -12,44 +15,129 @@ import {
   NMenu,
   type MenuOption,
 } from 'naive-ui'
+import {
+  ArchiveOutline,
+  ChevronDownOutline,
+  CloudDownloadOutline,
+  CubeOutline,
+  DocumentTextOutline,
+  GitCommitOutline,
+  GitPullRequestOutline,
+  GridOutline,
+  InformationCircleOutline,
+  LayersOutline,
+  NotificationsOutline,
+  PaperPlaneOutline,
+  PeopleOutline,
+  PersonCircleOutline,
+  PulseOutline,
+  ReceiptOutline,
+  ServerOutline,
+  SettingsOutline,
+  StatsChartOutline,
+  TimerOutline,
+} from '@vicons/ionicons5'
 import { logout, session } from '../session'
 import PendingDrawer from '../components/PendingDrawer.vue'
 import { connectEvents, disconnectEvents, refreshPending, runtime } from '../runtime'
 
 const route = useRoute()
 const router = useRouter()
-const collapsed = ref(false)
+// 侧栏的 breakpoint 只在窗口尺寸变化时触发，首次进入时按当前宽度决定是否收起。
+const collapsed = ref(window.matchMedia('(max-width: 767px)').matches)
 
-const link = (name: string, label: string): MenuOption => ({
-  key: name,
-  label: () => h(RouterLink, { to: { name } }, { default: () => label }),
-})
+interface NavItem {
+  name: string
+  label: string
+  icon: Component
+}
 
-const menu: MenuOption[] = [
-  link('dashboard', '总览'),
-  link('traffic', '流量明细'),
-  link('stacks', 'Stack'),
-  link('users', '用户'),
-  link('manual-nodes', '手工节点'),
-  link('remote-sources', '远端节点源'),
-  link('templates', '订阅模板'),
-  link('sub-publish', '发布订阅包'),
-  link('deps', '依赖'),
-  link('notifications', '通知记录'),
-  link('jobs', '定时任务'),
-  link('health', '健康检查'),
-  link('audit', '审计日志'),
-  link('history', '配置历史'),
-  link('backup', '备份'),
-  link('settings', '系统设置'),
-  link('system', '系统'),
+const groups: { key: string; label: string; items: NavItem[] }[] = [
+  {
+    key: 'overview',
+    label: '概览',
+    items: [
+      { name: 'dashboard', label: '总览', icon: GridOutline },
+      { name: 'traffic', label: '流量明细', icon: StatsChartOutline },
+    ],
+  },
+  {
+    key: 'proxy',
+    label: '代理',
+    items: [
+      { name: 'stacks', label: 'Stack', icon: LayersOutline },
+      { name: 'users', label: '用户', icon: PeopleOutline },
+      { name: 'manual-nodes', label: '手工节点', icon: ServerOutline },
+      { name: 'remote-sources', label: '远端节点源', icon: CloudDownloadOutline },
+    ],
+  },
+  {
+    key: 'subscription',
+    label: '订阅',
+    items: [
+      { name: 'templates', label: '订阅模板', icon: DocumentTextOutline },
+      { name: 'sub-publish', label: '发布订阅包', icon: PaperPlaneOutline },
+    ],
+  },
+  {
+    key: 'ops',
+    label: '运维',
+    items: [
+      { name: 'deps', label: '依赖', icon: CubeOutline },
+      { name: 'jobs', label: '定时任务', icon: TimerOutline },
+      { name: 'health', label: '健康检查', icon: PulseOutline },
+      { name: 'notifications', label: '通知记录', icon: NotificationsOutline },
+      { name: 'audit', label: '审计日志', icon: ReceiptOutline },
+      { name: 'history', label: '配置历史', icon: GitCommitOutline },
+      { name: 'backup', label: '备份', icon: ArchiveOutline },
+    ],
+  },
+  {
+    key: 'system',
+    label: '系统',
+    items: [
+      { name: 'settings', label: '系统设置', icon: SettingsOutline },
+      { name: 'system', label: '系统', icon: InformationCircleOutline },
+    ],
+  },
 ]
+
+const icon = (component: Component) => () => h(NIcon, null, { default: () => h(component) })
+
+const menu: MenuOption[] = groups.map((group) => ({
+  type: 'group',
+  key: group.key,
+  label: group.label,
+  children: group.items.map((item) => ({
+    key: item.name,
+    label: () => h(RouterLink, { to: { name: item.name } }, { default: () => item.label }),
+    icon: icon(item.icon),
+  })),
+}))
+
 const parents: Record<string, string> = { stack: 'stacks', user: 'users' }
 const active = computed(() => {
   const name = String(route.name ?? '')
   return parents[name] ?? name
 })
-const title = computed(() => String(route.meta.title ?? ''))
+const title = computed(() => route.meta.title ?? '')
+const description = computed(() => route.meta.description ?? '')
+
+// 面包屑：分组 / 列表页 / 详情页，列表页在详情页中可点击返回。
+const crumbs = computed(() => {
+  const name = String(route.name ?? '')
+  const group = groups.find((g) => g.items.some((item) => item.name === active.value))
+  const items: { label: string; to?: string }[] = []
+  if (group) {
+    items.push({ label: group.label })
+  }
+  if (parents[name]) {
+    const parent = group?.items.find((item) => item.name === parents[name])
+    items.push({ label: parent?.label ?? '', to: parents[name] })
+  }
+  items.push({ label: title.value })
+  return items
+})
 
 const showPending = ref(false)
 onMounted(() => {
@@ -80,31 +168,69 @@ async function onAccount(key: string) {
     <NLayoutSider
       bordered
       collapse-mode="width"
-      :collapsed-width="0"
-      :width="200"
+      :collapsed-width="64"
+      :width="220"
       :collapsed="collapsed"
+      :native-scrollbar="false"
       show-trigger="bar"
       breakpoint="md"
       @collapse="collapsed = true"
       @expand="collapsed = false"
     >
-      <div class="brand">proxystack-web</div>
-      <NMenu :options="menu" :value="active" />
+      <div class="brand" :class="{ collapsed }">
+        <div class="brand-mark">
+          <NIcon :size="18"><LayersOutline /></NIcon>
+        </div>
+        <div v-if="!collapsed" class="brand-text">
+          <span class="brand-name">proxystack</span>
+          <span class="brand-sub">管理面板</span>
+        </div>
+      </div>
+      <NMenu
+        :options="menu"
+        :value="active"
+        :collapsed="collapsed"
+        :collapsed-width="64"
+        :collapsed-icon-size="20"
+        :icon-size="18"
+        :indent="20"
+        class="nav"
+      />
     </NLayoutSider>
     <NLayout>
       <NLayoutHeader bordered class="header">
-        <span class="title">{{ title }}</span>
+        <NBreadcrumb class="crumbs">
+          <NBreadcrumbItem v-for="(crumb, i) in crumbs" :key="i" :clickable="!!crumb.to">
+            <RouterLink v-if="crumb.to" :to="{ name: crumb.to }" class="crumb-link">{{ crumb.label }}</RouterLink>
+            <template v-else>{{ crumb.label }}</template>
+          </NBreadcrumbItem>
+        </NBreadcrumb>
         <div class="header-actions">
           <NBadge :value="runtime.pendingCount" :show="runtime.pendingCount > 0 || !!runtime.pendingError" :dot="!!runtime.pendingError && !runtime.pendingCount">
-            <NButton :type="runtime.pendingCount ? 'warning' : 'default'" secondary size="small" @click="showPending = true">待应用变更</NButton>
+            <NButton :type="runtime.pendingCount ? 'warning' : 'default'" secondary size="small" @click="showPending = true">
+              <template #icon><NIcon><GitPullRequestOutline /></NIcon></template>
+              待应用变更
+            </NButton>
           </NBadge>
-          <NDropdown :options="accountOptions" trigger="click" @select="onAccount">
-            <NButton quaternary>{{ session.admin?.username }}</NButton>
+          <NDropdown :options="accountOptions" trigger="click" placement="bottom-end" @select="onAccount">
+            <NButton quaternary size="small" icon-placement="right">
+              <template #icon><NIcon><ChevronDownOutline /></NIcon></template>
+              <span class="account">
+                <NIcon :size="20"><PersonCircleOutline /></NIcon>
+                {{ session.admin?.username }}
+              </span>
+            </NButton>
           </NDropdown>
         </div>
       </NLayoutHeader>
-      <NLayoutContent content-style="padding: 16px;" :native-scrollbar="false" style="height: calc(100vh - 57px)">
-        <RouterView />
+      <NLayoutContent :native-scrollbar="false" style="height: calc(100vh - 57px)">
+        <div class="page">
+          <div class="page-head">
+            <h1 class="page-title">{{ title }}</h1>
+            <p v-if="description" class="page-desc">{{ description }}</p>
+          </div>
+          <RouterView />
+        </div>
       </NLayoutContent>
     </NLayout>
   </NLayout>
@@ -113,25 +239,103 @@ async function onAccount(key: string) {
 
 <style scoped>
 .brand {
-  font-weight: 600;
-  font-size: 16px;
-  padding: 18px 20px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 56px;
+  padding: 0 18px;
+  box-sizing: border-box;
   white-space: nowrap;
+  overflow: hidden;
+}
+.brand.collapsed {
+  padding: 0;
+  justify-content: center;
+}
+.brand-mark {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: linear-gradient(135deg, #36ad6a, #18a058 55%, #0c7a43);
+  box-shadow: 0 2px 6px rgba(24, 160, 88, 0.35);
+}
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.brand-name {
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.2px;
+}
+.brand-sub {
+  font-size: 12px;
+  opacity: 0.55;
+}
+.nav {
+  padding-bottom: 16px;
 }
 .header {
   height: 56px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  gap: 12px;
+  padding: 0 20px;
+}
+.crumbs {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 .header-actions {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
-.title {
-  font-size: 16px;
-  font-weight: 500;
+.account {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.crumb-link {
+  color: inherit;
+}
+.crumb-link:hover {
+  text-decoration: none;
+}
+.page {
+  padding: 20px 24px 32px;
+}
+.page-head {
+  margin-bottom: 16px;
+}
+.page-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+}
+.page-desc {
+  margin: 4px 0 0;
+  max-width: 820px;
+  font-size: 13px;
+  line-height: 1.7;
+  opacity: 0.65;
+}
+@media (max-width: 640px) {
+  .page {
+    padding: 16px 12px 24px;
+  }
+  .header {
+    padding: 0 12px;
+  }
 }
 </style>
