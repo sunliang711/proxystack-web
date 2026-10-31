@@ -145,6 +145,7 @@ func PlanImport(current, incoming *Document, opts ImportOptions) (*ImportPlan, e
 			})
 			entry.NewName = newName
 			RenameStack(incoming, stack.Name, newName)
+			RenameStackRemarks(stack, stack.Name, newName)
 			stack.Name = newName
 		default:
 			entry.Action = ActionSkip

@@ -1,6 +1,7 @@
 package configdoc
 
 import (
+	"cmp"
 	"slices"
 	"strings"
 )
@@ -212,13 +213,9 @@ func CloneStack(source *Stack, target string) Stack {
 	clone.DesiredRunning = false
 	clone.Mihomo.ControllerSecret = RandomSecret()
 	for index := range clone.Xray.Inbounds {
-		inbound := &clone.Xray.Inbounds[index]
-		inbound.ID = 0
-		inbound.Remark = replaceRemarkPrefix(inbound.Remark, source.Name, target)
-		for refIndex := range inbound.Users {
-			inbound.Users[refIndex].Remark = replaceRemarkPrefix(inbound.Users[refIndex].Remark, source.Name, target)
-		}
+		clone.Xray.Inbounds[index].ID = 0
 	}
+	RenameStackRemarks(&clone, source.Name, target)
 	for index := range clone.Mihomo.Upstreams {
 		upstream := &clone.Mihomo.Upstreams[index]
 		upstream.ID = 0
@@ -230,6 +227,66 @@ func CloneStack(source *Stack, target string) Stack {
 		clone.Mihomo.Groups[index].ID = 0
 	}
 	return clone
+}
+
+// RenameStackRemarks 把 stack 内入站和用户引用中以旧 stack 名开头的显示名换成新名字。
+// 新建 stack 时生成的显示名都以 stack 名开头；手工改过、不以旧名开头的显示名保持不变。
+func RenameStackRemarks(stack *Stack, oldName, newName string) {
+	if oldName == newName {
+		return
+	}
+	for index := range stack.Xray.Inbounds {
+		inbound := &stack.Xray.Inbounds[index]
+		inbound.Remark = replaceRemarkPrefix(inbound.Remark, oldName, newName)
+		for refIndex := range inbound.Users {
+			inbound.Users[refIndex].Remark = replaceRemarkPrefix(inbound.Users[refIndex].Remark, oldName, newName)
+		}
+	}
+}
+
+// RemarkConflict 是新 stack 的入站与已有 stack 的入站对同一用户使用了相同显示名。
+type RemarkConflict struct {
+	Remark  string
+	User    string
+	Stack   string
+	Inbound string
+}
+
+// FindRemarkConflicts 找出 stack 的订阅入站与文档中其他 stack 的订阅入站对同一用户使用的相同显示名。
+// 只比较显示名本身，不展开展示名模板；按模板渲染后的完整重名由整体校验兜底。
+func FindRemarkConflicts(doc *Document, stack *Stack) []RemarkConflict {
+	type owner struct{ stack, inbound string }
+	used := map[[2]string]owner{}
+	for index := range doc.Stacks {
+		other := &doc.Stacks[index]
+		if other.Name == stack.Name || !other.Enabled || !other.Xray.Enabled {
+			continue
+		}
+		for _, inbound := range other.Xray.Inbounds {
+			if !inbound.Sub {
+				continue
+			}
+			for _, ref := range inbound.Users {
+				key := [2]string{ref.User, cmp.Or(ref.Remark, inbound.Remark)}
+				if _, ok := used[key]; !ok {
+					used[key] = owner{other.Name, inbound.Name}
+				}
+			}
+		}
+	}
+	var conflicts []RemarkConflict
+	for _, inbound := range stack.Xray.Inbounds {
+		if !inbound.Sub {
+			continue
+		}
+		for _, ref := range inbound.Users {
+			remark := cmp.Or(ref.Remark, inbound.Remark)
+			if found, ok := used[[2]string{ref.User, remark}]; ok && remark != "" {
+				conflicts = append(conflicts, RemarkConflict{Remark: remark, User: ref.User, Stack: found.stack, Inbound: found.inbound})
+			}
+		}
+	}
+	return conflicts
 }
 
 func replaceRemarkPrefix(remark, source, target string) string {

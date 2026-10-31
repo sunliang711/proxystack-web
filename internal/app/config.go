@@ -306,6 +306,9 @@ func (s *Service) CreateStack(ctx context.Context, actor Actor, opts configdoc.N
 			if err != nil {
 				return &FieldError{Field: "template", Message: err.Error()}
 			}
+			if err := remarkConflictError(doc, &stack); err != nil {
+				return err
+			}
 			change.Scope = fmt.Sprintf("stacks[%d]", len(doc.Stacks))
 			doc.Stacks = append(doc.Stacks, stack)
 			return nil
@@ -316,6 +319,22 @@ func (s *Service) CreateStack(ctx context.Context, actor Actor, opts configdoc.N
 		return err
 	})
 	return created, err
+}
+
+// remarkConflictError 在新 stack 的入站显示名与已有 stack 重复时返回指明冲突来源的错误，
+// 例如另一个 stack 的显示名仍以新 stack 的名字开头，或被手工改成了相同的名字。
+func remarkConflictError(doc *configdoc.Document, stack *configdoc.Stack) error {
+	conflicts := configdoc.FindRemarkConflicts(doc, stack)
+	if len(conflicts) == 0 {
+		return nil
+	}
+	c := conflicts[0]
+	message := fmt.Sprintf("节点名「%s」已被 stack %s 的入站 %s 使用（用户 %s）。请先在 %s 的「入站」中修改该入站的显示名，或换一个 stack 名称",
+		c.Remark, c.Stack, c.Inbound, c.User, c.Stack)
+	if len(conflicts) > 1 {
+		message += fmt.Sprintf("；共 %d 处重名", len(conflicts))
+	}
+	return &FieldError{Field: "name", Message: message}
 }
 
 // UpdateStack 保存整个 stack。按子项 ID 识别改名，同步其他 stack 中的引用和本 stack 内的代理组、规则。
@@ -339,6 +358,7 @@ func (s *Service) UpdateStack(ctx context.Context, actor Actor, id int64, stack 
 			}
 		}
 		configdoc.RenameStack(doc, old.Name, stack.Name)
+		configdoc.RenameStackRemarks(&stack, old.Name, stack.Name)
 		renameTargets(&stack, old)
 		doc.Stacks[index] = stack
 		return nil
@@ -410,6 +430,9 @@ func (s *Service) CloneStack(ctx context.Context, actor Actor, id int64, name st
 			}
 			change.Summary = "克隆 stack " + doc.Stacks[index].Name + " 为 " + name
 			clone := configdoc.CloneStack(&doc.Stacks[index], name)
+			if err := remarkConflictError(doc, &clone); err != nil {
+				return err
+			}
 			if err := configdoc.AllocateStackPorts(doc, *doc.Settings, &clone, reserved); err != nil {
 				return &FieldError{Field: "name", Message: err.Error()}
 			}
