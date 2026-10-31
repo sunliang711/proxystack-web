@@ -35,7 +35,8 @@ async function loadPreview() {
   const { data, error } = await api.GET('/api/users/{id}/subscription/preview', {
     params: { path: { id: props.userId }, query: { format: format.value } },
   })
-  previewError.value = error ? problemMessage(error) + (error.errors?.map((e) => `：${e.message}`).join('') ?? '') : ''
+  // 有字段说明时直接显示说明（例如用户为什么没有节点），否则显示通用错误。
+  previewError.value = error ? (error.errors?.map((e) => e.message).join('；') || problemMessage(error)) : ''
   preview.value = data?.text ?? ''
 }
 watch([format, () => props.userId], loadPreview, { immediate: true })

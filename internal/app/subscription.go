@@ -47,6 +47,11 @@ type subSnapshot struct {
 	local []sub.Node
 	// warnings 是构建时跳过的节点。
 	warnings []string
+	// applied 是各 stack 已应用的版本，skipped 是构建时整体跳过的版本及原因，
+	// manualSkipped 是各用户无法生成的手工节点；三者用于说明用户为什么没有节点。
+	applied       map[string]int64
+	skipped       map[int64]string
+	manualSkipped map[string][]string
 }
 
 type subCache struct {
@@ -119,13 +124,18 @@ func (s *Service) buildSubscription(ctx context.Context) (*subSnapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	snapshot := &subSnapshot{doc: doc}
+	snapshot := &subSnapshot{doc: doc, applied: map[string]int64{}, skipped: map[int64]string{}, manualSkipped: map[string][]string{}}
+	skip := func(revision int64, err error) {
+		snapshot.warnings = append(snapshot.warnings, fmt.Sprintf("revision %d: %v", revision, err))
+		snapshot.skipped[revision] = err.Error()
+	}
 
 	// 本机节点：每个已应用的 stack 按它已应用的版本渲染，订阅与实际运行的配置一致；
 	// 对外地址取当前设置。未应用过的 stack 没有节点。
 	byRevision := map[int64][]string{}
 	for _, row := range applied {
 		byRevision[row.RevisionID] = append(byRevision[row.RevisionID], row.StackName)
+		snapshot.applied[row.StackName] = row.RevisionID
 	}
 	revisions := make([]int64, 0, len(byRevision))
 	for revision := range byRevision {
@@ -136,19 +146,19 @@ func (s *Service) buildSubscription(ctx context.Context) (*subSnapshot, error) {
 		stacks := byRevision[revision]
 		snapshotDoc, err := s.RevisionSnapshot(ctx, revision)
 		if err != nil {
-			snapshot.warnings = append(snapshot.warnings, fmt.Sprintf("revision %d: %v", revision, err))
+			skip(revision, err)
 			continue
 		}
 		snapshotDoc.Settings.Basic.ExternalHost = doc.Settings.Basic.ExternalHost
 		set, err := configdoc.Compile(snapshotDoc)
 		if err != nil {
-			snapshot.warnings = append(snapshot.warnings, fmt.Sprintf("revision %d: %v", revision, err))
+			skip(revision, err)
 			continue
 		}
 		set.Stacks = slices.DeleteFunc(set.Stacks, func(stack domain.Stack) bool { return !slices.Contains(stacks, stack.Name) })
 		input, err := sub.RenderStackInputAt(set, "local", s.Now().UTC().Format(time.RFC3339))
 		if err != nil {
-			snapshot.warnings = append(snapshot.warnings, fmt.Sprintf("revision %d: %v", revision, err))
+			skip(revision, err)
 			continue
 		}
 		snapshot.local = append(snapshot.local, input.Nodes...)
@@ -168,6 +178,7 @@ func (s *Service) buildSubscription(ctx context.Context) (*subSnapshot, error) {
 		node, err := manual.SubNode(index)
 		if err != nil {
 			snapshot.warnings = append(snapshot.warnings, fmt.Sprintf("manual node %s: %v", manual.Remark, err))
+			snapshot.manualSkipped[manual.User] = append(snapshot.manualSkipped[manual.User], fmt.Sprintf("手工节点 %s 无法生成：%v", manual.Remark, err))
 			continue
 		}
 		nodes = append(nodes, node)
@@ -277,6 +288,10 @@ func (s *Service) PreviewSubscription(ctx context.Context, userID int64, format 
 	if index < 0 {
 		return "", ErrNotFound
 	}
+	user := snapshot.doc.Users[index]
+	if !slices.ContainsFunc(snapshot.data.Nodes, func(node sub.Node) bool { return node.User == user.Name }) {
+		return "", &FieldError{Field: "user_id", Message: snapshot.explainNoNodes(user)}
+	}
 	source := snapshot.view.Templates
 	template := map[string]string{sub.FormatClash: source.Clash, sub.FormatPremium: source.Premium, sub.FormatSurge: source.Surge}[format]
 	if override != nil {
@@ -291,6 +306,46 @@ func (s *Service) PreviewSubscription(ctx context.Context, userID int64, format 
 		return "", &FieldError{Field: "content", Message: err.Error()}
 	}
 	return text, nil
+}
+
+// explainNoNodes 说明用户在订阅中没有任何节点的原因：逐个检查把该用户列入订阅入站的 stack，
+// 以及该用户无法生成的手工节点。
+func (snapshot *subSnapshot) explainNoNodes(user configdoc.User) string {
+	var reasons []string
+	for _, stack := range snapshot.doc.Stacks {
+		if !servesUser(stack, user.Name) {
+			continue
+		}
+		revision, applied := snapshot.applied[stack.Name]
+		switch {
+		case !stack.Enabled || !stack.Xray.Enabled:
+			reasons = append(reasons, fmt.Sprintf("stack %s 已停用或未启用 Xray", stack.Name))
+		case slices.Contains(user.PausedStacks, stack.Name):
+			reasons = append(reasons, fmt.Sprintf("该用户在 stack %s 上已暂停", stack.Name))
+		case !applied:
+			reasons = append(reasons, fmt.Sprintf("stack %s 还没有应用过，应用后才会生成节点", stack.Name))
+		case snapshot.skipped[revision] != "":
+			reason := snapshot.skipped[revision]
+			if strings.Contains(reason, "node.server is required") {
+				reason += "（入站没有填 server，也没有设置「系统设置 → 基本 → 对外地址」；补上后重新应用）"
+			}
+			reasons = append(reasons, fmt.Sprintf("stack %s 已应用的版本 #%d 在构建订阅时被跳过：%s", stack.Name, revision, reason))
+		default:
+			reasons = append(reasons, fmt.Sprintf("stack %s 已应用的版本 #%d 里还没有该用户，修改入站后需要重新应用", stack.Name, revision))
+		}
+	}
+	reasons = append(reasons, snapshot.manualSkipped[user.Name]...)
+	if len(reasons) == 0 {
+		return fmt.Sprintf("用户 %s 不在任何进入订阅的入站中：在 stack 的「入站」里把该用户加入用户列表并把「进入订阅」设为是，或在「手工节点」中为该用户添加节点", user.Name)
+	}
+	return fmt.Sprintf("用户 %s 目前没有订阅节点：%s", user.Name, strings.Join(reasons, "；"))
+}
+
+// servesUser 判断 stack 是否有进入订阅且引用该用户的入站。
+func servesUser(stack configdoc.Stack, user string) bool {
+	return slices.ContainsFunc(stack.Xray.Inbounds, func(inbound configdoc.Inbound) bool {
+		return inbound.Sub && slices.ContainsFunc(inbound.Users, func(ref configdoc.UserRef) bool { return ref.User == user })
+	})
 }
 
 // ExportNodes 返回本机 stack 节点，供其他实例的远端节点源拉取。token 不匹配或未开启时返回 false。

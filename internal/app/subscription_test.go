@@ -260,3 +260,41 @@ func TestRemoteSourceSyncsExportedNodes(t *testing.T) {
 	require.Equal(t, http.StatusOK, status, body)
 	require.Contains(t, body, "name: usa1 vmess")
 }
+
+// TestPreviewExplainsMissingNodes 验证用户没有订阅节点时，预览说明具体原因而不是生成器的报错。
+func TestPreviewExplainsMissingNodes(t *testing.T) {
+	ctx := context.Background()
+	h := newRuntimeHarness(t)
+	reason := func(name string) string {
+		t.Helper()
+		doc, err := h.svc.LoadConfig(ctx)
+		require.NoError(t, err)
+		_, err = h.svc.PreviewSubscription(ctx, doc.Users[doc.UserByName(name)].ID, "clash", nil)
+		var fieldErr *app.FieldError
+		require.ErrorAs(t, err, &fieldErr)
+		return fieldErr.Message
+	}
+
+	require.Contains(t, reason("alice"), "stack usa1 还没有应用过")
+	_, err := h.svc.CreateUser(ctx, h.actor, configdoc.User{Name: "bob", Enabled: true, ResetMode: "none", Profiles: []configdoc.Profile{}})
+	require.NoError(t, err)
+	require.Contains(t, reason("bob"), "不在任何进入订阅的入站中")
+
+	id, err := h.svc.Apply(ctx, h.actor, nil)
+	require.NoError(t, err)
+	require.Equal(t, app.TaskSucceeded, h.waitTask(t, id).Status)
+	doc, err := h.svc.LoadConfig(ctx)
+	require.NoError(t, err)
+	_, err = h.svc.PreviewSubscription(ctx, doc.Users[doc.UserByName("alice")].ID, "clash", nil)
+	require.NoError(t, err, "applied stacks give alice nodes")
+
+	usa2 := doc.Stacks[doc.StackByName("usa2")]
+	for index := range usa2.Xray.Inbounds {
+		if usa2.Xray.Inbounds[index].Sub {
+			usa2.Xray.Inbounds[index].Users = append(usa2.Xray.Inbounds[index].Users, configdoc.UserRef{User: "bob"})
+		}
+	}
+	_, err = h.svc.UpdateStack(ctx, h.actor, usa2.ID, usa2)
+	require.NoError(t, err)
+	require.Regexp(t, `stack usa2 已应用的版本 #\d+ 里还没有该用户`, reason("bob"))
+}
