@@ -264,8 +264,8 @@ async function remove() {
               </NFormItem>
             </NGridItem>
             <NGridItem>
-              <NFormItem label="展示名" label-width="70">
-                <NInput v-model:value="profile.display_template" placeholder="展示名模板" />
+              <NFormItem label="展示名" label-width="70" v-bind="f(`profiles[${index}].display_template`)">
+                <TemplateInput v-model:value="profile.display_template" />
               </NFormItem>
             </NGridItem>
             <NGridItem>

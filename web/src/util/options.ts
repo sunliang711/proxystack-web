@@ -39,3 +39,20 @@ export const regions: { label: string; value: string }[] = [
 
 export const templateVariables = ['.stack', '.inbound', '.protocol', '.port', '.user', '.profile', '.remark']
 export const templateFunctions = ['toUpper', 'toLower', 'trim', 'replace']
+
+export const templateVariableHelp: Record<string, string> = {
+  '.stack': 'Stack 名称，例如 usa1',
+  '.inbound': '入站名称，例如 vmess',
+  '.protocol': '入站协议，例如 vmess、shadowsocks、socks5、http',
+  '.port': '入站监听端口，例如 443',
+  '.user': '当前订阅用户的名称',
+  '.profile': '当前引用的用户档案名，默认档案为 default',
+  '.remark': '生效的备注：入站用户覆盖 → 所选用户档案 → 入站备注；均为空时使用入站名称',
+}
+
+export const templateFunctionHelp: Record<string, { description: string; example: string }> = {
+  toUpper: { description: '转为大写', example: '{{ .stack | toUpper }}' },
+  toLower: { description: '转为小写', example: '{{ .stack | toLower }}' },
+  trim: { description: '去掉首尾空白', example: '{{ .remark | trim }}' },
+  replace: { description: '替换全部匹配文字：replace "原文字" "新文字"', example: '{{ .remark | replace " " "-" }}' },
+}

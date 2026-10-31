@@ -278,6 +278,7 @@ func validateUsers(issues *Issues, doc *Document) {
 		user := &doc.Users[index]
 		path := fmt.Sprintf("users[%d]", index)
 		checkIdentifier(issues, path+".name", user.Name)
+		checkDisplayTemplate(issues, path+".display_template", user.DisplayTemplate)
 		if user.Name == xrayPlaceholderUser {
 			issues.add(path+".name", "this name is reserved")
 		}
@@ -325,6 +326,7 @@ func validateUsers(issues *Issues, doc *Document) {
 		for profileIndex, profile := range user.Profiles {
 			profilePath := fmt.Sprintf("%s.profiles[%d]", path, profileIndex)
 			checkIdentifier(issues, profilePath+".name", profile.Name)
+			checkDisplayTemplate(issues, profilePath+".display_template", profile.DisplayTemplate)
 			if profiles[profile.Name] {
 				issues.add(profilePath+".name", "duplicate profile name: %s", profile.Name)
 			}
@@ -388,6 +390,7 @@ func validateOutbound(issues *Issues, path string, outbound Outbound) {
 
 func validateInbound(issues *Issues, doc *Document, path string, inbound *Inbound) {
 	checkIdentifier(issues, path+".name", inbound.Name)
+	checkDisplayTemplate(issues, path+".display_template", inbound.DisplayTemplate)
 	if !validListen(inbound.Listen) {
 		issues.add(path+".listen", "must be an IP address")
 	}
@@ -445,6 +448,7 @@ func validateInbound(issues *Issues, doc *Document, path string, inbound *Inboun
 	seen := map[string]bool{}
 	for index, ref := range inbound.Users {
 		refPath := fmt.Sprintf("%s.users[%d]", path, index)
+		checkDisplayTemplate(issues, refPath+".display_template", ref.DisplayTemplate)
 		profile := ref.Profile
 		if profile == "" {
 			profile = DefaultProfile
@@ -482,6 +486,12 @@ func validateInbound(issues *Issues, doc *Document, path string, inbound *Inboun
 				}
 			}
 		}
+	}
+}
+
+func checkDisplayTemplate(issues *Issues, path string, value string) {
+	if err := validation.CheckDisplayTemplate(value); err != nil {
+		issues.add(path, "%s", err.Error())
 	}
 }
 
