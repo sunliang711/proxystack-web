@@ -13,6 +13,7 @@ import {
   NLayoutHeader,
   NLayoutSider,
   NMenu,
+  NTooltip,
   type MenuOption,
 } from 'naive-ui'
 import {
@@ -45,11 +46,34 @@ import { logout, session } from '../session'
 import { themePreference, type ThemePreference } from '../theme'
 import PendingDrawer from '../components/PendingDrawer.vue'
 import { connectEvents, disconnectEvents, refreshPending, runtime } from '../runtime'
+import { api, type Schemas } from '../api/client'
 
 const route = useRoute()
 const router = useRouter()
 // 侧栏的 breakpoint 只在窗口尺寸变化时触发，首次进入时按当前宽度决定是否收起。
 const collapsed = ref(window.matchMedia('(max-width: 767px)').matches)
+const buildInfo = ref<Schemas['SystemInfo'] | null>(null)
+const versionLoaded = ref(false)
+const versionLabel = computed(() => {
+  if (!buildInfo.value) return versionLoaded.value ? '版本未知' : '读取版本中'
+  const version = buildInfo.value.version
+  return version.startsWith('dev+') ? `dev · ${version.slice(4).split('.').join(' · ')}` : version
+})
+
+async function loadVersion() {
+  try {
+    const { data } = await api.GET('/api/system/info')
+    buildInfo.value = data ?? null
+  } catch {
+    buildInfo.value = null
+  } finally {
+    versionLoaded.value = true
+  }
+}
+
+function buildValue(value: string | undefined) {
+  return value && value !== 'unknown' ? value : '未知'
+}
 
 interface NavItem {
   name: string
@@ -146,6 +170,7 @@ const crumbs = computed(() => {
 
 const showPending = ref(false)
 onMounted(() => {
+  loadVersion()
   connectEvents()
   refreshPending()
 })
@@ -200,15 +225,23 @@ async function onAccount(key: string) {
       @collapse="collapsed = true"
       @expand="collapsed = false"
     >
-      <div class="brand" :class="{ collapsed }">
-        <div class="brand-mark">
-          <NIcon :size="18"><LayersOutline /></NIcon>
-        </div>
-        <div v-if="!collapsed" class="brand-text">
-          <span class="brand-name">proxystack</span>
-          <span class="brand-sub">管理面板</span>
-        </div>
-      </div>
+      <NTooltip placement="bottom-start" style="max-width: min(420px, calc(100vw - 32px)); box-sizing: border-box; overflow-wrap: anywhere">
+        <template #trigger>
+          <RouterLink :to="{ name: 'system' }" class="brand" :class="{ collapsed }" :aria-label="`系统信息，${versionLabel}`">
+            <div class="brand-mark">
+              <NIcon :size="18"><LayersOutline /></NIcon>
+            </div>
+            <div v-if="!collapsed" class="brand-text">
+              <span class="brand-name">proxystack</span>
+              <span class="brand-sub">管理面板 · {{ versionLabel }}</span>
+            </div>
+          </RouterLink>
+        </template>
+        <div>版本：{{ buildInfo?.version || versionLabel }}</div>
+        <div>提交：{{ buildValue(buildInfo?.commit) }}</div>
+        <div>构建时间：{{ buildValue(buildInfo?.build_date) }}</div>
+        <div>点击查看系统信息</div>
+      </NTooltip>
       <NMenu
         :options="menu"
         :value="active"
@@ -275,6 +308,8 @@ async function onAccount(key: string) {
   box-sizing: border-box;
   white-space: nowrap;
   overflow: hidden;
+  color: inherit;
+  text-decoration: none;
 }
 .brand.collapsed {
   padding: 0;
@@ -296,6 +331,7 @@ async function onAccount(key: string) {
   display: flex;
   flex-direction: column;
   line-height: 1.2;
+  min-width: 0;
 }
 .brand-name {
   font-weight: 600;
@@ -305,6 +341,8 @@ async function onAccount(key: string) {
 .brand-sub {
   font-size: 12px;
   opacity: 0.55;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .nav {
   padding-bottom: 16px;

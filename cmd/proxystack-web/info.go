@@ -35,7 +35,7 @@ func newInfoCommand(g *globalFlags) *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "Version:    %s\n", version.Version)
+			fmt.Fprintf(out, "Version:    %s\n", version.Current().Version)
 			fmt.Fprintf(out, "Base dir:   %s\n", g.baseDir)
 			fmt.Fprintf(out, "Panel URL:  %s\n", info.PanelURL)
 			fmt.Fprintf(out, "Subscription source:     %s\n", source)

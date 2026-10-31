@@ -285,7 +285,7 @@ func (s *Service) buildManifest(ctx context.Context, snapshot string) (*backup.M
 	}
 	hostname, _ := os.Hostname()
 	manifest := &backup.Manifest{
-		AppVersion: version.Version, SchemaVersion: schema, ExportedAt: s.Now().UTC(), Hostname: hostname, ExternalHost: basic.ExternalHost,
+		AppVersion: version.Current().Version, SchemaVersion: schema, ExportedAt: s.Now().UTC(), Hostname: hostname, ExternalHost: basic.ExternalHost,
 		Counts: stats.Counts, TrafficFrom: stats.TrafficFrom, TrafficTo: stats.TrafficTo, Deps: map[string]string{},
 	}
 	status, err := s.DepsStatus(ctx)

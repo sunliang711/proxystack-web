@@ -106,7 +106,7 @@ func runServe(ctx context.Context, g *globalFlags, dev bool) error {
 	}
 	errCh := make(chan error, 1)
 	go func() {
-		slog.Info("proxystack-web started", "version", version.Version, "addr", srv.Addr, "dev", dev)
+		slog.Info("proxystack-web started", "version", version.Current().Version, "addr", srv.Addr, "dev", dev)
 		errCh <- srv.ListenAndServe()
 	}()
 	select {

@@ -42,7 +42,7 @@ type HealthCheck struct {
 
 // HealthChecks 汇总各检查项。某一项查询失败时该项标为失败，不影响其他项。
 func (s *Service) HealthChecks(ctx context.Context) []HealthCheck {
-	out := []HealthCheck{{Group: "版本", Title: "管理服务", Status: HealthOK, Detail: version.Version}}
+	out := []HealthCheck{{Group: "版本", Title: "管理服务", Status: HealthOK, Detail: version.Current().Version}}
 	out = append(out, s.checkDeps(ctx)...)
 	out = append(out, s.checkUnits(ctx)...)
 	out = append(out, s.checkPending(ctx))

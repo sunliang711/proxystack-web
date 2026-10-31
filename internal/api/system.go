@@ -51,10 +51,11 @@ func registerSystem(api huma.API, s *Server) {
 		if err != nil {
 			return nil, toHTTPError(err)
 		}
+		build := version.Current()
 		return &systemInfoOutput{Body: SystemInfo{
-			Version:   version.Version,
-			Commit:    version.Commit,
-			BuildDate: version.Date,
+			Version:   build.Version,
+			Commit:    build.Commit,
+			BuildDate: build.Date,
 			GoVersion: runtime.Version(),
 			Platform:  runtime.GOOS + "/" + runtime.GOARCH,
 			PanelURL:  info.PanelURL,

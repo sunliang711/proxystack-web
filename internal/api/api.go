@@ -61,7 +61,7 @@ func init() {
 
 // NewConfig 返回 Huma 配置；OpenAPI 文档与交互文档不对外暴露。
 func NewConfig() huma.Config {
-	config := huma.DefaultConfig("proxystack-web", version.Version)
+	config := huma.DefaultConfig("proxystack-web", version.Current().Version)
 	config.OpenAPIPath = ""
 	config.DocsPath = ""
 	config.SchemasPath = ""

@@ -805,8 +805,8 @@ func (s *Service) CheckSelfUpdate(ctx context.Context) (*SelfVersion, error) {
 		return nil, &FieldError{Field: "version", Message: err.Error()}
 	}
 	return &SelfVersion{
-		Current: version.Version, Latest: release.Tag, Notes: release.Notes,
-		UpdateAvailable: strings.TrimPrefix(release.Tag, "v") != strings.TrimPrefix(version.Version, "v"),
+		Current: version.Current().Version, Latest: release.Tag, Notes: release.Notes,
+		UpdateAvailable: strings.TrimPrefix(release.Tag, "v") != strings.TrimPrefix(version.Current().Version, "v"),
 	}, nil
 }
 
@@ -874,7 +874,7 @@ func (s *Service) SelfUpdate(ctx context.Context, actor Actor) (int64, error) {
 			return err
 		}
 		_ = s.Store.InTx(ctx, func(q *dbq.Queries) error {
-			return audit.Write(ctx, q, s.Now(), audit.Entry{Actor: actor.Name, SourceIP: actor.IP, Action: ActionSelfUpdate, Object: "proxystack-web", Summary: version.Version + " → " + release.Tag})
+			return audit.Write(ctx, q, s.Now(), audit.Entry{Actor: actor.Name, SourceIP: actor.IP, Action: ActionSelfUpdate, Object: "proxystack-web", Summary: version.Current().Version + " → " + release.Tag})
 		})
 		logf("已替换为 %s，管理服务即将重启", release.Tag)
 		if s.RequestRestart != nil {

@@ -32,10 +32,11 @@ func main() {
 func newRootCommand() *cobra.Command {
 	g := &globalFlags{}
 	serve := newServeCommand(g)
+	build := version.Current()
 	root := &cobra.Command{
 		Use:           "proxystack-web",
 		Short:         "Web-managed xray/mihomo proxy stacks",
-		Version:       fmt.Sprintf("%s (%s, %s)", version.Version, version.Commit, version.Date),
+		Version:       fmt.Sprintf("%s (%s, %s)", build.Version, build.Commit, build.Date),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.NoArgs,
