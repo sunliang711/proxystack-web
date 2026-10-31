@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/eagle/proxystack-web/internal/generator/sub"
-	"github.com/eagle/proxystack-web/internal/subscription"
+	"proxystack-web/internal/generator/sub"
+	"proxystack-web/internal/subscription"
 )
 
 func socksNode(id, user, tag, remark string) sub.Node {

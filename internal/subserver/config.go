@@ -13,7 +13,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/eagle/proxystack-web/internal/subscription"
+	"proxystack-web/internal/subscription"
 )
 
 // DefaultDir 是订阅端的默认目录。

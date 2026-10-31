@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eagle/proxystack-web/internal/domain"
-	"github.com/eagle/proxystack-web/internal/generator/xray"
-	"github.com/eagle/proxystack-web/internal/testutil"
 	"github.com/stretchr/testify/require"
+	"proxystack-web/internal/domain"
+	"proxystack-web/internal/generator/xray"
+	"proxystack-web/internal/testutil"
 )
 
 const (

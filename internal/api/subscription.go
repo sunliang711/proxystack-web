@@ -10,9 +10,9 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/eagle/proxystack-web/internal/app"
-	"github.com/eagle/proxystack-web/internal/configdoc"
-	"github.com/eagle/proxystack-web/internal/generator/sub"
+	"proxystack-web/internal/app"
+	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/generator/sub"
 )
 
 type manualNodesOutput struct {

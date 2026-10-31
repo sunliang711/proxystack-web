@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/eagle/proxystack-web/internal/app"
-	"github.com/eagle/proxystack-web/internal/store"
+	"proxystack-web/internal/app"
+	"proxystack-web/internal/store"
 )
 
 func newInitCommand(g *globalFlags) *cobra.Command {

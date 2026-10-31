@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/eagle/proxystack-web/internal/domain"
+	"proxystack-web/internal/domain"
 )
 
 // Issue 表示引用图校验问题。

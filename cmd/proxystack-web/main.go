@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/eagle/proxystack-web/internal/paths"
-	"github.com/eagle/proxystack-web/internal/version"
+	"proxystack-web/internal/paths"
+	"proxystack-web/internal/version"
 )
 
 type globalFlags struct {

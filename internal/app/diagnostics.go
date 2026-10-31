@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eagle/proxystack-web/internal/configdoc"
-	"github.com/eagle/proxystack-web/internal/deps"
-	"github.com/eagle/proxystack-web/internal/mihomoapi"
-	"github.com/eagle/proxystack-web/internal/units"
+	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/deps"
+	"proxystack-web/internal/mihomoapi"
+	"proxystack-web/internal/units"
 )
 
 // 出口 IP 的数据源和回退顺序沿用参考项目。

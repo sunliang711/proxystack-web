@@ -6,7 +6,7 @@ import (
 	"os"
 	"sort"
 
-	"github.com/eagle/proxystack-web/internal/subscription"
+	"proxystack-web/internal/subscription"
 )
 
 // ErrStale 表示订阅包不比已导入的新：序号小于或等于当前序号。

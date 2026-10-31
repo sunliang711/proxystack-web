@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eagle/proxystack-web/internal/audit"
-	"github.com/eagle/proxystack-web/internal/configdoc"
-	"github.com/eagle/proxystack-web/internal/domain"
-	"github.com/eagle/proxystack-web/internal/store/dbq"
-	"github.com/eagle/proxystack-web/internal/traffic"
+	"proxystack-web/internal/audit"
+	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/domain"
+	"proxystack-web/internal/store/dbq"
+	"proxystack-web/internal/traffic"
 )
 
 // 自动暂停的原因。

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eagle/proxystack-web/internal/domain"
-	"github.com/eagle/proxystack-web/internal/domain/validation"
+	"proxystack-web/internal/domain"
+	"proxystack-web/internal/domain/validation"
 )
 
 // Issue 是一条校验问题，Path 为文档内的字段路径（例如 stacks[1].xray.inbounds[0].port），

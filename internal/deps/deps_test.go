@@ -13,7 +13,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/eagle/proxystack-web/internal/deps"
+	"proxystack-web/internal/deps"
 )
 
 func TestSelectAssetPicksPlatformAndVariant(t *testing.T) {

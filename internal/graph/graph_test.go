@@ -3,10 +3,10 @@ package graph_test
 import (
 	"testing"
 
-	"github.com/eagle/proxystack-web/internal/domain"
-	"github.com/eagle/proxystack-web/internal/graph"
-	"github.com/eagle/proxystack-web/internal/testutil"
 	"github.com/stretchr/testify/require"
+	"proxystack-web/internal/domain"
+	"proxystack-web/internal/graph"
+	"proxystack-web/internal/testutil"
 )
 
 // TestReferenceGraphIndexesExamples 验证示例项目能建立 endpoint 索引。

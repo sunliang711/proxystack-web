@@ -15,14 +15,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eagle/proxystack-web/internal/audit"
-	"github.com/eagle/proxystack-web/internal/configdoc"
-	"github.com/eagle/proxystack-web/internal/deps"
-	"github.com/eagle/proxystack-web/internal/runtime"
-	"github.com/eagle/proxystack-web/internal/store"
-	"github.com/eagle/proxystack-web/internal/store/dbq"
-	"github.com/eagle/proxystack-web/internal/units"
-	"github.com/eagle/proxystack-web/internal/version"
+	"proxystack-web/internal/audit"
+	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/deps"
+	"proxystack-web/internal/runtime"
+	"proxystack-web/internal/store"
+	"proxystack-web/internal/store/dbq"
+	"proxystack-web/internal/units"
+	"proxystack-web/internal/version"
 )
 
 // 依赖管理的审计动作。

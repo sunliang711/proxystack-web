@@ -10,14 +10,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/eagle/proxystack-web/internal/app"
-	"github.com/eagle/proxystack-web/internal/configdoc"
-	"github.com/eagle/proxystack-web/internal/paths"
-	"github.com/eagle/proxystack-web/internal/runtime"
-	"github.com/eagle/proxystack-web/internal/store"
-	"github.com/eagle/proxystack-web/internal/testutil"
-	"github.com/eagle/proxystack-web/internal/units"
-	"github.com/eagle/proxystack-web/internal/xrayapi"
+	"proxystack-web/internal/app"
+	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/paths"
+	"proxystack-web/internal/runtime"
+	"proxystack-web/internal/store"
+	"proxystack-web/internal/testutil"
+	"proxystack-web/internal/units"
+	"proxystack-web/internal/xrayapi"
 )
 
 type harness struct {

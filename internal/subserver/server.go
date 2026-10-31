@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eagle/proxystack-web/internal/generator/sub"
-	"github.com/eagle/proxystack-web/internal/subscription"
+	"proxystack-web/internal/generator/sub"
+	"proxystack-web/internal/subscription"
 )
 
 var formats = map[string]bool{sub.FormatClash: true, sub.FormatPremium: true, sub.FormatSurge: true}

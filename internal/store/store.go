@@ -14,7 +14,7 @@ import (
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
 
-	"github.com/eagle/proxystack-web/internal/store/dbq"
+	"proxystack-web/internal/store/dbq"
 )
 
 //go:embed migrations/*.sql

@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/eagle/proxystack-web/internal/domain"
-	subgen "github.com/eagle/proxystack-web/internal/generator/sub"
-	"github.com/eagle/proxystack-web/internal/testutil"
 	"github.com/stretchr/testify/require"
+	"proxystack-web/internal/domain"
+	subgen "proxystack-web/internal/generator/sub"
+	"proxystack-web/internal/testutil"
 )
 
 const fixedGeneratedAt = "2026-06-05T12:00:00+08:00"

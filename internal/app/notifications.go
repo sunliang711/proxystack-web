@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eagle/proxystack-web/internal/configdoc"
-	"github.com/eagle/proxystack-web/internal/notify"
-	"github.com/eagle/proxystack-web/internal/store/dbq"
+	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/notify"
+	"proxystack-web/internal/store/dbq"
 )
 
 // 通知状态：pending 等待发送，sent 已发送，failed 重试后仍失败，skipped 未启用邮件或未订阅该事件，只在界面显示。

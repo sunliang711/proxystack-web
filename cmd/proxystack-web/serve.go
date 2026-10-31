@@ -17,14 +17,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/eagle/proxystack-web/internal/api"
-	"github.com/eagle/proxystack-web/internal/app"
-	"github.com/eagle/proxystack-web/internal/runtime"
-	"github.com/eagle/proxystack-web/internal/store"
-	"github.com/eagle/proxystack-web/internal/units"
-	"github.com/eagle/proxystack-web/internal/version"
-	"github.com/eagle/proxystack-web/internal/xrayapi"
-	"github.com/eagle/proxystack-web/web"
+	"proxystack-web/internal/api"
+	"proxystack-web/internal/app"
+	"proxystack-web/internal/runtime"
+	"proxystack-web/internal/store"
+	"proxystack-web/internal/units"
+	"proxystack-web/internal/version"
+	"proxystack-web/internal/xrayapi"
+	"proxystack-web/web"
 )
 
 func newServeCommand(g *globalFlags) *cobra.Command {

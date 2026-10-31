@@ -9,11 +9,11 @@ import (
 	"slices"
 	"time"
 
-	"github.com/eagle/proxystack-web/internal/audit"
-	"github.com/eagle/proxystack-web/internal/generator/sub"
-	"github.com/eagle/proxystack-web/internal/store"
-	"github.com/eagle/proxystack-web/internal/store/dbq"
-	"github.com/eagle/proxystack-web/internal/subscription"
+	"proxystack-web/internal/audit"
+	"proxystack-web/internal/generator/sub"
+	"proxystack-web/internal/store"
+	"proxystack-web/internal/store/dbq"
+	"proxystack-web/internal/subscription"
 )
 
 // ActionSubscriptionPublish 是发布订阅包的审计动作。

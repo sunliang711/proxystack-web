@@ -11,13 +11,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/eagle/proxystack-web/internal/audit"
-	"github.com/eagle/proxystack-web/internal/configdoc"
-	"github.com/eagle/proxystack-web/internal/domain"
-	"github.com/eagle/proxystack-web/internal/generator/mihomo"
-	"github.com/eagle/proxystack-web/internal/generator/xray"
-	"github.com/eagle/proxystack-web/internal/store"
-	"github.com/eagle/proxystack-web/internal/store/dbq"
+	"proxystack-web/internal/audit"
+	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/domain"
+	"proxystack-web/internal/generator/mihomo"
+	"proxystack-web/internal/generator/xray"
+	"proxystack-web/internal/store"
+	"proxystack-web/internal/store/dbq"
 )
 
 // 配置相关的审计动作。

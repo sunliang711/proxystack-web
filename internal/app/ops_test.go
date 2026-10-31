@@ -11,13 +11,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/eagle/proxystack-web/internal/app"
-	"github.com/eagle/proxystack-web/internal/backup"
-	"github.com/eagle/proxystack-web/internal/configdoc"
-	"github.com/eagle/proxystack-web/internal/paths"
-	"github.com/eagle/proxystack-web/internal/store"
-	"github.com/eagle/proxystack-web/internal/units"
-	"github.com/eagle/proxystack-web/internal/xrayapi"
+	"proxystack-web/internal/app"
+	"proxystack-web/internal/backup"
+	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/paths"
+	"proxystack-web/internal/store"
+	"proxystack-web/internal/units"
+	"proxystack-web/internal/xrayapi"
 )
 
 func jobNamed(t *testing.T, h *trafficHarness, kind string) app.JobView {

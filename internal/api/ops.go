@@ -12,8 +12,8 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/eagle/proxystack-web/internal/app"
-	"github.com/eagle/proxystack-web/internal/mihomoapi"
+	"proxystack-web/internal/app"
+	"proxystack-web/internal/mihomoapi"
 )
 
 // maxRestoreBytes 是迁移包上传的大小上限。

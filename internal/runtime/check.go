@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eagle/proxystack-web/internal/paths"
-	"github.com/eagle/proxystack-web/internal/units"
+	"proxystack-web/internal/paths"
+	"proxystack-web/internal/units"
 )
 
 // ErrBinaryMissing 表示对应组件的二进制尚未安装，无法做配置检查。

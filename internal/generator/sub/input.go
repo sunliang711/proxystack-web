@@ -10,7 +10,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/eagle/proxystack-web/internal/domain"
+	"proxystack-web/internal/domain"
 )
 
 var supportedInputExtensions = map[string]bool{

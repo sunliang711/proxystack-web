@@ -6,8 +6,8 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/eagle/proxystack-web/internal/store"
-	"github.com/eagle/proxystack-web/internal/tlsutil"
+	"proxystack-web/internal/store"
+	"proxystack-web/internal/tlsutil"
 )
 
 // InstanceInfo 是 `info` 命令和系统页显示的实例信息。

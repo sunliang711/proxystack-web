@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/eagle/proxystack-web/internal/domain"
-	"github.com/eagle/proxystack-web/internal/generator/xray"
 	"github.com/stretchr/testify/require"
+	"proxystack-web/internal/domain"
+	"proxystack-web/internal/generator/xray"
 )
 
 const twoUserVmessInboundYAML = `name: vmess

@@ -7,7 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/eagle/proxystack-web/internal/domain"
+	"proxystack-web/internal/domain"
 )
 
 // 参考项目 YAML 的镜像结构。指针字段表示「YAML 中是否写了该字段」，

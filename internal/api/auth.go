@@ -7,7 +7,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/eagle/proxystack-web/internal/app"
+	"proxystack-web/internal/app"
 )
 
 // SessionBody 是登录和查询会话的响应。

@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/eagle/proxystack-web/internal/app"
+	"proxystack-web/internal/app"
 )
 
 func newAdminCommand(g *globalFlags) *cobra.Command {

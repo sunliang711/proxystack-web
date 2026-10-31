@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/eagle/proxystack-web/internal/domain"
+	"proxystack-web/internal/domain"
 )
 
 // DefaultSettings 返回新实例的全局设置。

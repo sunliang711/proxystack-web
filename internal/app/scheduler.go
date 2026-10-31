@@ -14,9 +14,9 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"github.com/eagle/proxystack-web/internal/audit"
-	"github.com/eagle/proxystack-web/internal/deps"
-	"github.com/eagle/proxystack-web/internal/store/dbq"
+	"proxystack-web/internal/audit"
+	"proxystack-web/internal/deps"
+	"proxystack-web/internal/store/dbq"
 )
 
 // 定时任务类型。

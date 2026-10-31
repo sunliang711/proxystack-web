@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eagle/proxystack-web/internal/audit"
-	"github.com/eagle/proxystack-web/internal/configdoc"
-	"github.com/eagle/proxystack-web/internal/store"
-	"github.com/eagle/proxystack-web/internal/store/dbq"
+	"proxystack-web/internal/audit"
+	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/store"
+	"proxystack-web/internal/store/dbq"
 )
 
 // Revision 是配置历史中的一个版本。

@@ -5,7 +5,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/eagle/proxystack-web/internal/store/dbq"
+	"proxystack-web/internal/store/dbq"
 )
 
 // 审计动作名。

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eagle/proxystack-web/internal/domain"
-	"github.com/eagle/proxystack-web/internal/xrayapi"
+	"proxystack-web/internal/domain"
+	"proxystack-web/internal/xrayapi"
 )
 
 // 统计维度。

@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/eagle/proxystack-web/internal/configdoc"
-	"github.com/eagle/proxystack-web/internal/store/dbq"
+	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/store/dbq"
 )
 
 // 参与配置生成的设置分组 key。

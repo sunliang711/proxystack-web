@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/eagle/proxystack-web/internal/domain"
+	"proxystack-web/internal/domain"
 )
 
 // loopback 是 xray API 与 mihomo controller 固定的监听地址。

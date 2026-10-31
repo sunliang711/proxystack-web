@@ -11,8 +11,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/eagle/proxystack-web/internal/api"
-	"github.com/eagle/proxystack-web/internal/configdoc"
+	"proxystack-web/internal/api"
+	"proxystack-web/internal/configdoc"
 )
 
 func newAdminHarness(t *testing.T) *harness {

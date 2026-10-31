@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 
-	"github.com/eagle/proxystack-web/internal/store/dbq"
+	"proxystack-web/internal/store/dbq"
 )
 
 // 设置分组的 key。

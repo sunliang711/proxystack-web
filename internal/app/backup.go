@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eagle/proxystack-web/internal/audit"
-	"github.com/eagle/proxystack-web/internal/backup"
-	"github.com/eagle/proxystack-web/internal/store"
-	"github.com/eagle/proxystack-web/internal/store/dbq"
-	"github.com/eagle/proxystack-web/internal/version"
+	"proxystack-web/internal/audit"
+	"proxystack-web/internal/backup"
+	"proxystack-web/internal/store"
+	"proxystack-web/internal/store/dbq"
+	"proxystack-web/internal/version"
 )
 
 // 备份相关的审计动作。

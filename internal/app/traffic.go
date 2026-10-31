@@ -13,13 +13,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eagle/proxystack-web/internal/configdoc"
-	"github.com/eagle/proxystack-web/internal/domain"
-	"github.com/eagle/proxystack-web/internal/events"
-	"github.com/eagle/proxystack-web/internal/store"
-	"github.com/eagle/proxystack-web/internal/store/dbq"
-	"github.com/eagle/proxystack-web/internal/traffic"
-	"github.com/eagle/proxystack-web/internal/units"
+	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/domain"
+	"proxystack-web/internal/events"
+	"proxystack-web/internal/store"
+	"proxystack-web/internal/store/dbq"
+	"proxystack-web/internal/traffic"
+	"proxystack-web/internal/units"
 )
 
 const (

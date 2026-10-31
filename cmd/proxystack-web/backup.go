@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/eagle/proxystack-web/internal/app"
+	"proxystack-web/internal/app"
 )
 
 // readPassphrase 读取口令：stdin 是终端时不回显地提示输入，否则读取一行。

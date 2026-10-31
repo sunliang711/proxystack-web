@@ -7,9 +7,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/eagle/proxystack-web/internal/domain"
-	"github.com/eagle/proxystack-web/internal/generator/sub"
-	"github.com/eagle/proxystack-web/internal/subscription"
+	"proxystack-web/internal/domain"
+	"proxystack-web/internal/generator/sub"
+	"proxystack-web/internal/subscription"
 )
 
 // SubNodeID 是手工节点在订阅中的节点 ID。

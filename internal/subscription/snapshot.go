@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eagle/proxystack-web/internal/generator/sub"
+	"proxystack-web/internal/generator/sub"
 )
 
 // 停用或到期用户的订阅响应。

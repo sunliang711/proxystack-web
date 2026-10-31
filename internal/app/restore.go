@@ -12,15 +12,15 @@ import (
 	"sort"
 	"time"
 
-	"github.com/eagle/proxystack-web/internal/audit"
-	"github.com/eagle/proxystack-web/internal/backup"
-	"github.com/eagle/proxystack-web/internal/configdoc"
-	"github.com/eagle/proxystack-web/internal/paths"
-	"github.com/eagle/proxystack-web/internal/runtime"
-	"github.com/eagle/proxystack-web/internal/store"
-	"github.com/eagle/proxystack-web/internal/store/dbq"
-	"github.com/eagle/proxystack-web/internal/tlsutil"
-	"github.com/eagle/proxystack-web/internal/units"
+	"proxystack-web/internal/audit"
+	"proxystack-web/internal/backup"
+	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/paths"
+	"proxystack-web/internal/runtime"
+	"proxystack-web/internal/store"
+	"proxystack-web/internal/store/dbq"
+	"proxystack-web/internal/tlsutil"
+	"proxystack-web/internal/units"
 )
 
 // settingRestoreState 记录恢复后尚未完成的收尾工作（运行状态，不属于配置）。

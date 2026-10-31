@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/eagle/proxystack-web/internal/app"
-	"github.com/eagle/proxystack-web/internal/paths"
-	"github.com/eagle/proxystack-web/internal/store"
+	"proxystack-web/internal/app"
+	"proxystack-web/internal/paths"
+	"proxystack-web/internal/store"
 )
 
 // openService 打开已初始化实例的数据库；未初始化时报错。

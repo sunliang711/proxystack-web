@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/eagle/proxystack-web/internal/audit"
-	"github.com/eagle/proxystack-web/internal/auth"
-	"github.com/eagle/proxystack-web/internal/store/dbq"
+	"proxystack-web/internal/audit"
+	"proxystack-web/internal/auth"
+	"proxystack-web/internal/store/dbq"
 )
 
 // 会话与登录保护参数。

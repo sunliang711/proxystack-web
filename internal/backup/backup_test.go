@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/eagle/proxystack-web/internal/backup"
+	"proxystack-web/internal/backup"
 )
 
 func sample(t *testing.T) []backup.File {

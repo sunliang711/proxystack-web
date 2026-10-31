@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/eagle/proxystack-web/internal/store/dbq"
+	"proxystack-web/internal/store/dbq"
 )
 
 // 后台循环的间隔。

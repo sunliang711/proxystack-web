@@ -8,14 +8,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eagle/proxystack-web/internal/domain/validation"
-	"github.com/eagle/proxystack-web/internal/events"
-	"github.com/eagle/proxystack-web/internal/notify"
-	"github.com/eagle/proxystack-web/internal/paths"
-	"github.com/eagle/proxystack-web/internal/runtime"
-	"github.com/eagle/proxystack-web/internal/store"
-	"github.com/eagle/proxystack-web/internal/units"
-	"github.com/eagle/proxystack-web/internal/xrayapi"
+	"proxystack-web/internal/domain/validation"
+	"proxystack-web/internal/events"
+	"proxystack-web/internal/notify"
+	"proxystack-web/internal/paths"
+	"proxystack-web/internal/runtime"
+	"proxystack-web/internal/store"
+	"proxystack-web/internal/units"
+	"proxystack-web/internal/xrayapi"
 )
 
 // Service 汇集应用服务层依赖。

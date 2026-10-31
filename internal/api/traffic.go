@@ -10,8 +10,8 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/eagle/proxystack-web/internal/app"
-	"github.com/eagle/proxystack-web/internal/configdoc"
+	"proxystack-web/internal/app"
+	"proxystack-web/internal/configdoc"
 )
 
 type trafficOverviewOutput struct {

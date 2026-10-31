@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/eagle/proxystack-web/internal/domain"
-	"github.com/eagle/proxystack-web/internal/generator/mihomo"
-	"github.com/eagle/proxystack-web/internal/testutil"
 	"github.com/stretchr/testify/require"
+	"proxystack-web/internal/domain"
+	"proxystack-web/internal/generator/mihomo"
+	"proxystack-web/internal/testutil"
 )
 
 // TestRenderMihomoExamplesMatchGolden 验证示例 stack 生成稳定 mihomo YAML。

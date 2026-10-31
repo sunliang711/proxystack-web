@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/eagle/proxystack-web/internal/domain"
 	"gopkg.in/yaml.v3"
+	"proxystack-web/internal/domain"
 )
 
 const (

@@ -7,9 +7,9 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/eagle/proxystack-web/internal/app"
-	"github.com/eagle/proxystack-web/internal/configdoc"
-	"github.com/eagle/proxystack-web/internal/deps"
+	"proxystack-web/internal/app"
+	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/deps"
 )
 
 type componentPath struct {

@@ -15,11 +15,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eagle/proxystack-web/internal/configdoc"
-	"github.com/eagle/proxystack-web/internal/domain"
-	"github.com/eagle/proxystack-web/internal/generator/sub"
-	"github.com/eagle/proxystack-web/internal/store/dbq"
-	"github.com/eagle/proxystack-web/internal/subscription"
+	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/domain"
+	"proxystack-web/internal/generator/sub"
+	"proxystack-web/internal/store/dbq"
+	"proxystack-web/internal/subscription"
 )
 
 // 节点导出文件的标识。

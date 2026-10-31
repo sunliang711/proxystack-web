@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/eagle/proxystack-web/internal/api"
-	"github.com/eagle/proxystack-web/internal/version"
+	"proxystack-web/internal/api"
+	"proxystack-web/internal/version"
 )
 
 func newInfoCommand(g *globalFlags) *cobra.Command {

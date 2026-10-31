@@ -12,8 +12,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/eagle/proxystack-web/internal/subscription"
-	"github.com/eagle/proxystack-web/internal/subserver"
+	"proxystack-web/internal/subscription"
+	"proxystack-web/internal/subserver"
 )
 
 // newSubCommand 是订阅端的命令组：订阅端与管理端分开部署，只通过管理端签发的订阅包获得数据。

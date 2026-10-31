@@ -9,8 +9,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/eagle/proxystack-web/internal/domain"
-	"github.com/eagle/proxystack-web/internal/domain/validation"
+	"proxystack-web/internal/domain"
+	"proxystack-web/internal/domain/validation"
 )
 
 // 本文件按参考项目的 YAML 布局（config.yaml + stacks/*.yaml）加载 golden 测试 fixture，

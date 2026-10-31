@@ -7,8 +7,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/eagle/proxystack-web/internal/domain"
-	"github.com/eagle/proxystack-web/internal/graph"
+	"proxystack-web/internal/domain"
+	"proxystack-web/internal/graph"
 )
 
 // Issue 表示带字段路径的配置校验问题。

@@ -14,9 +14,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/eagle/proxystack-web/internal/app"
-	"github.com/eagle/proxystack-web/internal/deps"
-	"github.com/eagle/proxystack-web/internal/units"
+	"proxystack-web/internal/app"
+	"proxystack-web/internal/deps"
+	"proxystack-web/internal/units"
 )
 
 // fakeXray 是一个冒充 xray 的脚本：version 输出版本号，run -test 总是通过。

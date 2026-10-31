@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/eagle/proxystack-web/internal/domain"
-	"github.com/eagle/proxystack-web/internal/graph"
+	"proxystack-web/internal/domain"
+	"proxystack-web/internal/graph"
 )
 
 const outboundTagPrefix = "egress"

@@ -10,9 +10,9 @@ import (
 	"strings"
 	"sync"
 
-	builtintemplates "github.com/eagle/proxystack-web/internal/generator/sub/templates"
 	"github.com/flosch/pongo2/v6"
 	"gopkg.in/yaml.v3"
+	builtintemplates "proxystack-web/internal/generator/sub/templates"
 )
 
 var (

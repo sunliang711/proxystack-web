@@ -6,11 +6,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/eagle/proxystack-web/internal/audit"
-	"github.com/eagle/proxystack-web/internal/auth"
-	"github.com/eagle/proxystack-web/internal/store"
-	"github.com/eagle/proxystack-web/internal/store/dbq"
-	"github.com/eagle/proxystack-web/internal/tlsutil"
+	"proxystack-web/internal/audit"
+	"proxystack-web/internal/auth"
+	"proxystack-web/internal/store"
+	"proxystack-web/internal/store/dbq"
+	"proxystack-web/internal/tlsutil"
 )
 
 // DefaultAdminUsername 是 init 创建的管理员账号名。

@@ -14,8 +14,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/eagle/proxystack-web/internal/app"
-	"github.com/eagle/proxystack-web/internal/version"
+	"proxystack-web/internal/app"
+	"proxystack-web/internal/version"
 )
 
 // SessionCookie 是会话 cookie 名。

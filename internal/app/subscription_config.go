@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/eagle/proxystack-web/internal/configdoc"
+	"proxystack-web/internal/configdoc"
 )
 
 // 订阅相关配置的审计动作。

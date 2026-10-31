@@ -14,13 +14,13 @@ import (
 
 	"github.com/pmezard/go-difflib/difflib"
 
-	"github.com/eagle/proxystack-web/internal/configdoc"
-	"github.com/eagle/proxystack-web/internal/domain"
-	"github.com/eagle/proxystack-web/internal/generator/mihomo"
-	"github.com/eagle/proxystack-web/internal/generator/xray"
-	"github.com/eagle/proxystack-web/internal/graph"
-	"github.com/eagle/proxystack-web/internal/paths"
-	"github.com/eagle/proxystack-web/internal/units"
+	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/domain"
+	"proxystack-web/internal/generator/mihomo"
+	"proxystack-web/internal/generator/xray"
+	"proxystack-web/internal/graph"
+	"proxystack-web/internal/paths"
+	"proxystack-web/internal/units"
 )
 
 // Files 是一个 stack 的生成物；某个组件未启用时对应字段为 nil。

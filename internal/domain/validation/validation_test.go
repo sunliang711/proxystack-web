@@ -3,10 +3,10 @@ package validation_test
 import (
 	"testing"
 
-	"github.com/eagle/proxystack-web/internal/domain"
-	"github.com/eagle/proxystack-web/internal/domain/validation"
-	"github.com/eagle/proxystack-web/internal/testutil"
 	"github.com/stretchr/testify/require"
+	"proxystack-web/internal/domain"
+	"proxystack-web/internal/domain/validation"
+	"proxystack-web/internal/testutil"
 )
 
 // TestFakePortCheckerReportsOccupiedPort 验证系统端口占用可通过 fake checker 测试。

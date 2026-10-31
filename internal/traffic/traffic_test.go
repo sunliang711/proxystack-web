@@ -6,8 +6,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/eagle/proxystack-web/internal/traffic"
-	"github.com/eagle/proxystack-web/internal/xrayapi"
+	"proxystack-web/internal/traffic"
+	"proxystack-web/internal/xrayapi"
 )
 
 // TestParse 验证计数解析：用户和档案合并到用户用量，api 入站被忽略，未知 email 归入 unknown。

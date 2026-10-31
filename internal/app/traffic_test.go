@@ -11,11 +11,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/eagle/proxystack-web/internal/app"
-	"github.com/eagle/proxystack-web/internal/configdoc"
-	"github.com/eagle/proxystack-web/internal/notify"
-	"github.com/eagle/proxystack-web/internal/store"
-	"github.com/eagle/proxystack-web/internal/xrayapi"
+	"proxystack-web/internal/app"
+	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/notify"
+	"proxystack-web/internal/store"
+	"proxystack-web/internal/xrayapi"
 )
 
 const usa1API = "127.0.0.1:10091"

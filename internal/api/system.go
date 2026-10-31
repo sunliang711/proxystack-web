@@ -7,7 +7,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/eagle/proxystack-web/internal/version"
+	"proxystack-web/internal/version"
 )
 
 // SystemInfo 是「系统」页显示的版本与面板信息。

@@ -7,11 +7,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/eagle/proxystack-web/internal/configdoc"
-	"github.com/eagle/proxystack-web/internal/domain"
-	"github.com/eagle/proxystack-web/internal/generator/mihomo"
-	"github.com/eagle/proxystack-web/internal/generator/xray"
-	"github.com/eagle/proxystack-web/internal/testutil"
+	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/domain"
+	"proxystack-web/internal/generator/mihomo"
+	"proxystack-web/internal/generator/xray"
+	"proxystack-web/internal/testutil"
 )
 
 func loadExampleDoc(t *testing.T) *configdoc.Document {

@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/eagle/proxystack-web/internal/domain"
-	"github.com/eagle/proxystack-web/internal/graph"
 	"gopkg.in/yaml.v3"
+	"proxystack-web/internal/domain"
+	"proxystack-web/internal/graph"
 )
 
 var defaultRuleProfile = []string{

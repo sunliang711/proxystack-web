@@ -13,10 +13,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/eagle/proxystack-web/internal/api"
-	"github.com/eagle/proxystack-web/internal/app"
-	"github.com/eagle/proxystack-web/internal/configdoc"
-	"github.com/eagle/proxystack-web/internal/subserver"
+	"proxystack-web/internal/api"
+	"proxystack-web/internal/app"
+	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/subserver"
 )
 
 func get(t *testing.T, server *httptest.Server, path string, header ...string) (int, string, http.Header) {
