@@ -4,7 +4,7 @@ import { NButton, NDropdown, NSpace, NTag, NTooltip, useMessage } from 'naive-ui
 import { api, problemMessage } from '../api/client'
 import { runtime, unitLabel } from '../runtime'
 
-const props = defineProps<{ stack: string; actions?: boolean }>()
+const props = defineProps<{ stack: string; actions?: boolean; prominent?: boolean }>()
 const message = useMessage()
 const state = computed(() => runtime.stacks[props.stack])
 
@@ -45,7 +45,9 @@ async function run(key: string) {
       <NTag v-if="!state.applied_revision" size="small">未应用</NTag>
     </template>
     <NDropdown v-if="actions" :options="options" trigger="click" @select="run">
-      <NButton size="tiny" quaternary>操作</NButton>
+      <NButton :type="prominent ? 'primary' : undefined" :secondary="prominent" :size="prominent ? 'small' : 'tiny'" :quaternary="!prominent">
+        {{ prominent ? '运行操作' : '操作' }}
+      </NButton>
     </NDropdown>
   </NSpace>
 </template>

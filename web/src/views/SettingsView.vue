@@ -190,7 +190,7 @@ async function save() {
   errors.value = emptyErrors()
   settings.value = data!
   markClean()
-  message.success('已保存，配置变更将在下次应用时生效')
+  message.success('已保存；需要应用的生成物变更已进入“待应用变更”')
 }
 </script>
 
@@ -198,6 +198,9 @@ async function save() {
   <NSpin :show="!settings">
     <NForm v-if="settings" label-placement="left" label-width="160" style="max-width: 860px">
       <ErrorList :errors="errors.global" />
+      <NAlert type="info" :bordered="false" style="margin-bottom: 12px">
+        下载代理、通知和采集设置保存后立即影响后续后台任务；涉及 xray / mihomo 生成物的设置会进入“待应用变更”，需要再执行应用。
+      </NAlert>
       <NCard title="基本" size="small" class="card">
         <NFormItem label="对外地址" v-bind="f('basic.external_host', '订阅节点默认使用的域名或 IP')">
           <NInput v-model:value="form.basic.external_host" placeholder="proxy.example.com" />

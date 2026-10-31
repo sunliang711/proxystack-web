@@ -218,12 +218,12 @@ async function saveMembers() {
 <template>
   <NSpin :show="!stack">
     <template v-if="stack">
-      <NCard size="small" style="margin-bottom: 12px">
+      <NCard size="small" class="stack-toolbar">
         <NSpace justify="space-between" align="center">
           <NSpace align="center">
             <NText strong style="font-size: 16px">{{ stack.name }}</NText>
             <NText v-if="dirty" type="warning">未保存</NText>
-            <UnitStatus :stack="stack.name" actions />
+            <UnitStatus :stack="stack.name" actions prominent />
           </NSpace>
           <NSpace>
             <NButton @click="(cloning = true), (cloneName = `${stack.name}-copy`), (cloneErrors = emptyErrors())">克隆</NButton>
@@ -409,3 +409,23 @@ async function saveMembers() {
     </template>
   </NModal>
 </template>
+
+<style scoped>
+.stack-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin-bottom: 12px;
+  background: var(--n-color);
+}
+
+@media (max-width: 767px) {
+  .stack-toolbar :deep(.n-card__content) {
+    padding: 10px;
+  }
+
+  .stack-toolbar :deep(.n-space) {
+    flex-wrap: wrap;
+  }
+}
+</style>

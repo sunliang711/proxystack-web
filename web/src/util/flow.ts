@@ -66,18 +66,23 @@ function layers(names: string[], sources: Map<string, string[]>): Map<string, nu
 const protocolNames: Record<string, string> = { vmess: 'VMess', shadowsocks: 'Shadowsocks', socks5: 'SOCKS5', http: 'HTTP' }
 const groupTypes: Record<string, string> = { select: '手动选择', 'url-test': '自动测速', 'load-balance': '负载均衡', fallback: '故障转移' }
 
-/** Stack 列表页的整体拓扑：客户端 → stack（按引用关系分层）→ 出口 → 互联网。 */
+/**
+ * Stack 列表页的整体拓扑：客户端 → stack（按引用关系分层）→ 出口 → 互联网。
+ * 每个 stack 一个节点，节点内列出入站和 Xray 出站；Mihomo 上游画成出口节点，引用其他 stack 时画成 stack 之间的箭头。
+ */
 export function stackTopology(stacks: Summary[]): FlowGraph {
   const nodes: FlowNode[] = []
   const edges: FlowEdge[] = []
   if (!stacks.length) return { nodes, edges, columns: [] }
 
   const names = new Set(stacks.map((stack) => stack.name))
+  // 只有 Xray 出站经过 Mihomo 时，Mihomo 的上游才承载流量。
+  const viaMihomo = (stack: Summary) => stack.xray_enabled && stack.mihomo_enabled && stack.outbound.type === 'mihomo'
   // A 的上游引用 B 的入站时，流量从 A 流向 B。
   const referrers = new Map<string, string[]>()
   const references = new Map<string, { stack: string; inbound: string }[]>()
   for (const stack of stacks) {
-    if (!stack.mihomo_enabled || stack.outbound.type !== 'mihomo') continue
+    if (!viaMihomo(stack)) continue
     for (const upstream of stack.upstreams) {
       if (upstream.type !== 'xray-socks5' || !names.has(upstream.stack)) continue
       referrers.set(upstream.stack, [...(referrers.get(upstream.stack) ?? []), stack.name])
@@ -95,17 +100,30 @@ export function stackTopology(stacks: Summary[]): FlowGraph {
   const subInbounds = stacks.flatMap((stack) => stack.inbounds.filter((inbound) => inbound.sub))
   nodes.push({ id: 'client', column: 0, title: '客户端', subtitle: '订阅用户', tone: 'client', lines: [`${subInbounds.length} 个订阅入站`] })
 
+  const outboundLine = (stack: Summary) => {
+    if (!stack.xray_enabled) return '出 Xray 未启用'
+    switch (stack.outbound.type) {
+      case 'mihomo':
+        return `出 Mihomo ${stack.mihomo_socks || '未启用'}`
+      case 'direct':
+        return '出 直连'
+      default:
+        return `出 外部 ${stack.outbound.type.toUpperCase()} ${stack.outbound.target}`
+    }
+  }
+
   let usesDirect = false
   for (const stack of stacks) {
     const id = `stack:${stack.name}`
     const auto = stack.role === 'auto'
+    const inboundLines = stack.inbounds.map((inbound) => `入 ${inbound.name} ${inbound.protocol} :${inbound.port}`)
     nodes.push({
       id,
       column: 1 + (layer.get(stack.name) ?? 0),
       title: stack.name,
       badge: !stack.enabled ? '停用' : auto ? 'auto' : undefined,
-      subtitle: auto ? `${stack.members.length} 个成员` : stack.xray_enabled ? 'Xray → Mihomo' : 'Xray 未启用',
-      lines: limit(stack.inbounds.map((inbound) => `${inbound.name} ${inbound.protocol} :${inbound.port}`)),
+      subtitle: auto ? `${stack.members.length} 个成员` : 'edge',
+      lines: [...(inboundLines.length > 2 ? [inboundLines[0], `入 … 另 ${inboundLines.length - 1} 个`] : inboundLines), outboundLine(stack)],
       tone: auto ? 'auto' : 'stack',
       dim: !stack.enabled,
       clickable: true,
@@ -128,7 +146,7 @@ export function stackTopology(stacks: Summary[]): FlowGraph {
         edges.push({ from: exit, to: 'internet' })
       }
       edges.push({ from: id, to: exit })
-    } else if (stack.mihomo_enabled) {
+    } else if (viaMihomo(stack)) {
       const raw = stack.upstreams.filter((upstream) => upstream.type === 'raw')
       if (raw.length) {
         const exit = `upstreams:${stack.name}`
@@ -157,13 +175,13 @@ export function stackTopology(stacks: Summary[]): FlowGraph {
 }
 
 /**
- * 单个 stack 的详细流向：来源 → 入站 → 出站 / 监听 → 规则 → 代理组 → 上游 → 出口。
- * Xray 出站转发到本 stack 的 Mihomo 时，出站和 Mihomo SOCKS 监听合成一个节点。
+ * 单个 stack 的详细流向：来源 → 入站 → 出站 → Mihomo 监听 → 规则 → 代理组 → 上游 → 出口。
+ * Xray 出站转发到本 stack 的 Mihomo 时，出站和 Mihomo SOCKS 监听仍分别展示。
  */
 export function stackFlow(stack: Stack, summaries: Summary[]): FlowGraph {
   const nodes: FlowNode[] = []
   const edges: FlowEdge[] = []
-  const columns = ['来源', '入站', '出站 / 监听']
+  const columns = ['来源', '入站', '出站']
   const inbounds = stack.xray.enabled ? stack.xray.inbounds : []
 
   // 来源：订阅客户端、引用本 stack 入站的其他 stack、本机程序。
@@ -210,32 +228,21 @@ export function stackFlow(stack: Stack, summaries: Summary[]): FlowGraph {
   const outbound = stack.xray.outbound
   const mihomo = stack.mihomo
   const authLabel = (listener: Schemas['Listener']) => ({ inherit: '认证跟随全局', none: '不认证', accounts: `${listener.accounts.length} 个账号` })[listener.auth] ?? listener.auth
-  const merged = stack.xray.enabled && mihomo.enabled && outbound.type === 'mihomo'
+  const viaMihomo = stack.xray.enabled && mihomo.enabled && outbound.type === 'mihomo'
   const outboundTitles: Record<string, string> = { mihomo: '转发到 Mihomo', socks5: '外部 SOCKS5', http: '外部 HTTP', direct: '直连' }
-  nodes.push(
-    merged
-      ? {
-          id: 'xray',
-          column: 2,
-          title: 'Xray → Mihomo',
-          subtitle: `SOCKS 监听 ${mihomo.socks.name || 'socks'}`,
-          lines: [`${mihomo.socks.listen}:${mihomo.socks.port}`, authLabel(mihomo.socks)],
-          tone: 'mihomo',
-          hint: 'Xray 出站转发到本 stack 的 Mihomo SOCKS 监听',
-        }
-      : {
-          id: 'xray',
-          column: 2,
-          title: 'Xray 出站',
-          subtitle: stack.xray.enabled ? outboundTitles[outbound.type] : 'Xray 未启用',
-          lines: [
-            ...(outbound.type === 'socks5' || outbound.type === 'http' ? [`${outbound.server}:${outbound.port}`] : []),
-            ...(outbound.private_direct ? ['私网目标直连'] : []),
-          ],
-          tone: 'xray',
-          dim: !stack.xray.enabled,
-        },
-  )
+  nodes.push({
+    id: 'xray',
+    column: 2,
+    title: 'Xray 出站',
+    subtitle: stack.xray.enabled ? outboundTitles[outbound.type] : 'Xray 未启用',
+    lines: [
+      ...(viaMihomo ? [`→ ${mihomo.socks.listen}:${mihomo.socks.port}`] : []),
+      ...(outbound.type === 'socks5' || outbound.type === 'http' ? [`${outbound.server}:${outbound.port}`] : []),
+      ...(outbound.private_direct ? ['私网目标直连'] : []),
+    ],
+    tone: 'xray',
+    dim: !stack.xray.enabled,
+  })
   for (const inbound of inbounds) edges.push({ from: `in:${inbound.name}`, to: 'xray' })
 
   const internet: FlowNode = { id: 'internet', column: 0, title: '互联网', subtitle: '目标网站', tone: 'internet' }
@@ -252,27 +259,25 @@ export function stackFlow(stack: Stack, summaries: Summary[]): FlowGraph {
     return { nodes, edges, columns }
   }
 
-  // Mihomo：监听 → 规则 → 代理组（按嵌套分层）→ 上游。监听和 Xray 出站在同一列。
-  const socks = merged ? 'xray' : 'socks'
-  if (!merged) {
-    nodes.push({ id: 'socks', column: 2, title: `Mihomo ${mihomo.socks.name || 'socks'}`, subtitle: 'SOCKS 监听', lines: [`${mihomo.socks.listen}:${mihomo.socks.port}`, authLabel(mihomo.socks)], tone: 'mihomo' })
-    edges.push({ from: 'local', to: 'socks' })
-  }
+  // Mihomo：监听 → 规则 → 代理组（按嵌套分层）→ 上游。Xray 不经过 Mihomo 时，监听只服务本机程序。
+  columns.push('Mihomo 监听')
+  nodes.push({ id: 'socks', column: 3, title: `Mihomo ${mihomo.socks.name || 'socks'}`, subtitle: 'SOCKS 监听', lines: [`${mihomo.socks.listen}:${mihomo.socks.port}`, authLabel(mihomo.socks)], tone: 'mihomo' })
+  edges.push({ from: viaMihomo ? 'xray' : 'local', to: 'socks' })
   if (mihomo.http.enabled) {
-    nodes.push({ id: 'http', column: 2, title: `Mihomo ${mihomo.http.name || 'http'}`, subtitle: 'HTTP 监听', lines: [`${mihomo.http.listen}:${mihomo.http.port}`, authLabel(mihomo.http)], tone: 'mihomo' })
+    nodes.push({ id: 'http', column: 3, title: `Mihomo ${mihomo.http.name || 'http'}`, subtitle: 'HTTP 监听', lines: [`${mihomo.http.listen}:${mihomo.http.port}`, authLabel(mihomo.http)], tone: 'mihomo' })
     edges.push({ from: 'local', to: 'http' })
   }
 
   const rules = mihomo.rules
   nodes.push({
     id: 'rules',
-    column: 3,
+    column: 4,
     title: '规则',
     subtitle: `模式：${mihomo.mode === 'inherit' ? '跟随全局' : mihomo.mode}`,
     lines: [`附加规则 ${rules.extra.length} 条`, ...rules.extra.slice(0, 2).map((rule) => `${rule.type} ${rule.value}`), `兜底 → ${rules.final}`],
     tone: 'rules',
   })
-  edges.push({ from: socks, to: 'rules' })
+  edges.push({ from: 'socks', to: 'rules' })
   if (mihomo.http.enabled) edges.push({ from: 'http', to: 'rules' })
 
   const groups = new Map(mihomo.groups.map((group) => [group.name, group]))
@@ -289,7 +294,7 @@ export function stackFlow(stack: Stack, summaries: Summary[]): FlowGraph {
   const groupColumns = mihomo.groups.length ? Math.max(...groupLayer.values()) + 1 : 0
   columns.push('规则')
   for (let index = 0; index < groupColumns; index++) columns.push(index ? '代理组（嵌套）' : '代理组')
-  const upstreamColumn = 4 + groupColumns
+  const upstreamColumn = 5 + groupColumns
   columns.push('上游', '出口')
 
   const upstreams = new Map(mihomo.upstreams.map((upstream) => [upstream.name, upstream]))
@@ -299,7 +304,7 @@ export function stackFlow(stack: Stack, summaries: Summary[]): FlowGraph {
   for (const group of mihomo.groups) {
     nodes.push({
       id: `group:${group.name}`,
-      column: 4 + (groupLayer.get(group.name) ?? 0),
+      column: 5 + (groupLayer.get(group.name) ?? 0),
       title: group.name,
       subtitle: groupTypes[group.type] ?? group.type,
       lines: limit(group.proxies.map((proxy, index) => (group.type === 'select' && index === 0 ? `★ ${proxy}` : `· ${proxy}`))),

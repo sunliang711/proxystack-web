@@ -66,11 +66,15 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
 
     <NCard title="实时速率（最近 1 小时）" size="small">
       <TrafficChart v-if="live.length > 1" kind="line" :labels="labels" :series="rateSeries" :format="formatRate" />
-      <NEmpty v-else description="等待采集数据" />
+      <NEmpty v-else description="最近一小时还没有采集到速率数据">
+        <template #extra><RouterLink :to="{ name: 'health' }">查看采集状态</RouterLink></template>
+      </NEmpty>
     </NCard>
 
     <NCard title="本月用量排行" size="small">
-      <NEmpty v-if="!overview.top_users.length" description="本月还没有用量" />
+      <NEmpty v-if="!overview.top_users.length" description="本月还没有用量">
+        <template #extra><RouterLink :to="{ name: 'users' }">查看用户用量</RouterLink></template>
+      </NEmpty>
       <NTable v-else :bordered="false" size="small">
         <thead><tr><th>用户</th><th>上行</th><th>下行</th><th style="width: 45%">合计</th></tr></thead>
         <tbody>

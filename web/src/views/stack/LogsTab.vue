@@ -49,7 +49,7 @@ const level = (priority: number) => (priority <= 3 ? 'error' : priority === 4 ? 
     </NRadioGroup>
     <NInput v-model:value="keyword" size="small" placeholder="关键字过滤" clearable style="width: 220px" />
     <NSwitch v-model:value="paused" size="small"><template #checked>已暂停</template><template #unchecked>实时</template></NSwitch>
-    <NButton size="small" @click="entries = []">清空</NButton>
+    <NButton size="small" @click="entries = []">清除当前视图</NButton>
     <NText depth="3">{{ visible.length }} 行</NText>
   </NSpace>
   <NScrollbar ref="scroller" style="max-height: 560px; border: 1px solid rgba(128, 128, 128, 0.25); border-radius: 3px">

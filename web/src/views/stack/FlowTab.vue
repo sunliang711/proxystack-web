@@ -20,7 +20,7 @@ function open(node: FlowNode) {
 <template>
   <div class="flow-tab">
     <NText depth="3" class="intro">
-      按当前编辑中的配置绘制（含未保存的修改）。流动的线表示流量方向；虚线是 select 组里未默认选中的备选成员；变淡的上游没有被代理组或规则引用，流量不会经过它。悬停节点可以突出与它相连的路径，点击其他 stack 可以跳转。
+      按当前编辑中的配置绘制（含未保存的修改）。流动的线表示流量方向；入站、Xray 出站、Mihomo 监听和上游分别展示；虚线是 select 组里未默认选中的备选成员；变淡的上游没有被代理组或规则引用，流量不会经过它。悬停节点可以突出与它相连的路径，点击其他 stack 可以跳转。
     </NText>
     <FlowDiagram :nodes="graph.nodes" :edges="graph.edges" :columns="graph.columns" @select="open" />
   </div>

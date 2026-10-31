@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { NAlert, NButton, NCard, NDescriptions, NDescriptionsItem, NInputGroup, NInput, NSpace, NTag, NText, useMessage } from 'naive-ui'
+import { NAlert, NButton, NCard, NDescriptions, NDescriptionsItem, NInputGroup, NInput, NPopconfirm, NSpace, NTag, NText, useMessage } from 'naive-ui'
 import { api, problemMessage, saveBlob, type Schemas } from '../api/client'
 import { formatTime } from '../util/format'
 
@@ -44,6 +44,8 @@ const installCommand = computed(() =>
 const addSourceCommand = computed(() =>
   status.value ? `proxystack-web sub source add ${status.value.source} ${status.value.public_key}` : '',
 )
+/** 构建时跳过的节点数；跳过的节点不进入订阅包，其余内容照常签发。 */
+const skipped = computed(() => status.value?.build_warnings.length ?? 0)
 </script>
 
 <template>
@@ -51,7 +53,13 @@ const addSourceCommand = computed(() =>
     <NCard>
       <template #header>
         <NSpace justify="end">
-          <NButton type="primary" :loading="busy" :disabled="!status" @click="publish">签发并下载</NButton>
+          <NPopconfirm v-if="skipped" @positive-click="publish">
+            <template #trigger>
+              <NButton type="primary" :loading="busy">签发并下载</NButton>
+            </template>
+            有 {{ skipped }} 项内容在构建时被跳过，签发的订阅包里不包含它们。确定签发？
+          </NPopconfirm>
+          <NButton v-else type="primary" :loading="busy" :disabled="!status" @click="publish">签发并下载</NButton>
         </NSpace>
       </template>
       <NSpace v-if="status" vertical>
@@ -60,6 +68,9 @@ const addSourceCommand = computed(() =>
           订阅内容在上次发布（#{{ status.sequence }}）之后有变化，订阅端仍在提供旧内容。暂停用户已经在代理端生效，订阅中的节点要等下次发布导入后才会去掉。
         </NAlert>
         <NAlert v-else type="success" :bordered="false">订阅端导入 #{{ status.sequence }} 后即为最新内容。</NAlert>
+        <NAlert v-if="skipped" type="warning" :bordered="false" title="部分内容被跳过">
+          下面 {{ skipped }} 项在构建订阅时被跳过，不会进入签发的订阅包，其余节点照常签发。修复对应的配置后重新加载本页即可恢复。
+        </NAlert>
         <NAlert v-for="warning in status.build_warnings" :key="warning" type="warning" :bordered="false">{{ warning }}</NAlert>
         <NDescriptions :column="1" label-placement="left" bordered size="small">
           <NDescriptionsItem label="来源名">{{ status.source }}</NDescriptionsItem>

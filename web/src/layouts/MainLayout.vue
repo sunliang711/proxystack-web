@@ -115,7 +115,7 @@ const menu: MenuOption[] = groups.map((group) => ({
   label: group.label,
   children: group.items.map((item) => ({
     key: item.name,
-    label: () => h(RouterLink, { to: { name: item.name } }, { default: () => item.label }),
+    label: () => h(RouterLink, { to: { name: item.name }, title: item.label }, { default: () => item.label }),
     icon: icon(item.icon),
   })),
 }))
@@ -364,6 +364,26 @@ async function onAccount(key: string) {
   }
   .header {
     padding: 0 12px;
+  }
+}
+
+@media (max-width: 767px) {
+  .page :deep(.n-form) {
+    max-width: none !important;
+  }
+
+  .page :deep(.n-form-item) {
+    display: block;
+  }
+
+  .page :deep(.n-form-item-label) {
+    width: auto !important;
+    height: auto !important;
+    padding: 0 0 4px !important;
+  }
+
+  .page :deep(.n-form-item-blank) {
+    min-width: 0;
   }
 }
 </style>

@@ -206,7 +206,7 @@ async function create() {
     </template>
     <template v-if="showTopology">
       <NText depth="3" style="display: block; margin-bottom: 8px; font-size: 13px">
-        客户端经订阅连到各 stack；stack 之间的箭头表示上游引用（例如自动测速 stack 经成员的 relay 入站转发），最后经上游节点或直连到达互联网。点击 stack 打开编辑页，悬停突出相连的路径。
+        客户端经订阅连到各 stack 的入站，节点里列出入站和 Xray 出站；stack 之间的箭头表示上游引用（例如自动测速 stack 经成员的 relay 入站转发），最后经上游节点、外部代理或直连到达互联网。点击 stack 节点打开编辑页，悬停突出相连的路径。
       </NText>
       <FlowDiagram v-if="topology.nodes.length" :nodes="topology.nodes" :edges="topology.edges" :columns="topology.columns" @select="openStack" />
       <NText v-else-if="!loading" depth="3">还没有 stack。</NText>

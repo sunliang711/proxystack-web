@@ -49,16 +49,23 @@ const used = (bytes?: { up: number; down: number }) => formatBytes((bytes?.up ??
 /** 批量切换手动暂停开关，逐 stack 的暂停保持不变。 */
 async function setEnabled(enabled: boolean) {
   const targets = users.value.filter((user) => checked.value.includes(user.name))
+  const succeeded: string[] = []
+  const failed: string[] = []
   for (const user of targets) {
     const { error } = await api.PUT('/api/users/{id}/pause', {
       params: { path: { id: user.id! } }, body: { enabled, paused_stacks: user.paused_stacks ?? [] },
     })
     if (error) {
-      message.error(`${user.name}：${problemMessage(error)}`)
-      break
+      failed.push(`${user.name}：${problemMessage(error)}`)
+    } else {
+      succeeded.push(user.name)
     }
   }
-  message.success(enabled ? '已恢复所选用户' : '已暂停所选用户')
+  if (failed.length) {
+    message.warning(`已处理 ${succeeded.length}/${targets.length} 个用户；失败：${failed.join('；')}`)
+  } else {
+    message.success(enabled ? '已恢复所选用户' : '已暂停所选用户')
+  }
   load()
 }
 
