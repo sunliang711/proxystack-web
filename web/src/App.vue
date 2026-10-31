@@ -7,13 +7,11 @@ import {
   NDialogProvider,
   NGlobalStyle,
   NMessageProvider,
-  useOsTheme,
   zhCN,
   type GlobalThemeOverrides,
 } from 'naive-ui'
+import { isDark as dark } from './theme'
 
-const osTheme = useOsTheme()
-const dark = computed(() => osTheme.value === 'dark')
 const theme = computed(() => (dark.value ? darkTheme : null))
 
 const fontFamily =
@@ -61,10 +59,8 @@ a {
 a:hover {
   text-decoration: underline;
 }
-@media (prefers-color-scheme: dark) {
-  a {
-    color: #63e2b7;
-  }
+:root[data-theme='dark'] a {
+  color: #63e2b7;
 }
 /* 卡片标题栏里的辅助文字使用正文字号，不随标题加粗放大。 */
 .n-card-header .header-note {

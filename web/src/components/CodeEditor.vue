@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useOsTheme } from 'naive-ui'
 import { basicSetup, EditorView } from 'codemirror'
 import { Compartment, EditorState } from '@codemirror/state'
 import { yaml } from '@codemirror/lang-yaml'
 import { json } from '@codemirror/lang-json'
 import { oneDark } from '@codemirror/theme-one-dark'
+import { isDark } from '../theme'
 
 const props = withDefaults(defineProps<{ language?: 'yaml' | 'json' | 'text'; readonly?: boolean; minHeight?: string }>(), {
   language: 'yaml',
@@ -14,7 +14,6 @@ const props = withDefaults(defineProps<{ language?: 'yaml' | 'json' | 'text'; re
 })
 const value = defineModel<string>('value', { required: true })
 const host = ref<HTMLDivElement>()
-const osTheme = useOsTheme()
 const themeSlot = new Compartment()
 let view: EditorView | undefined
 
@@ -34,7 +33,7 @@ onMounted(() => {
         languageExtension(),
         EditorState.readOnly.of(props.readonly),
         EditorView.lineWrapping,
-        themeSlot.of(osTheme.value === 'dark' ? oneDark : []),
+        themeSlot.of(isDark.value ? oneDark : []),
         EditorView.theme({ '&': { minHeight: props.minHeight, fontSize: '13px' }, '.cm-scroller': { minHeight: props.minHeight } }),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
@@ -52,8 +51,8 @@ watch(value, (next) => {
   }
 })
 
-watch(osTheme, (theme) => {
-  view?.dispatch({ effects: themeSlot.reconfigure(theme === 'dark' ? oneDark : []) })
+watch(isDark, (dark) => {
+  view?.dispatch({ effects: themeSlot.reconfigure(dark ? oneDark : []) })
 })
 
 onBeforeUnmount(() => view?.destroy())

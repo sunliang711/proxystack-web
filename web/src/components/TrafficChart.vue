@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useOsTheme } from 'naive-ui'
 import { use } from 'echarts/core'
 import { BarChart, LineChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, MarkLineComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import VChart from 'vue-echarts'
+import { isDark } from '../theme'
 import { chartTokens, seriesColors, type ChartSeries } from '../util/chart'
 
 use([BarChart, LineChart, GridComponent, LegendComponent, MarkLineComponent, TooltipComponent, CanvasRenderer])
@@ -20,8 +20,7 @@ const props = defineProps<{
   height?: string
 }>()
 
-const osTheme = useOsTheme()
-const mode = computed(() => (osTheme.value === 'dark' ? 'dark' : 'light'))
+const mode = computed(() => (isDark.value ? 'dark' : 'light'))
 
 const option = computed(() => {
   const tokens = chartTokens[mode.value]

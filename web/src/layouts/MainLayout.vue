@@ -17,15 +17,18 @@ import {
 } from 'naive-ui'
 import {
   ArchiveOutline,
+  CheckmarkOutline,
   ChevronDownOutline,
   CloudDownloadOutline,
   CubeOutline,
+  DesktopOutline,
   DocumentTextOutline,
   GitCommitOutline,
   GitPullRequestOutline,
   GridOutline,
   InformationCircleOutline,
   LayersOutline,
+  MoonOutline,
   NotificationsOutline,
   PaperPlaneOutline,
   PeopleOutline,
@@ -35,9 +38,11 @@ import {
   ServerOutline,
   SettingsOutline,
   StatsChartOutline,
+  SunnyOutline,
   TimerOutline,
 } from '@vicons/ionicons5'
 import { logout, session } from '../session'
+import { themePreference, type ThemePreference } from '../theme'
 import PendingDrawer from '../components/PendingDrawer.vue'
 import { connectEvents, disconnectEvents, refreshPending, runtime } from '../runtime'
 
@@ -148,6 +153,21 @@ onBeforeUnmount(disconnectEvents)
 // 任何页面保存后都可能产生待应用变更：路由切换时顺便刷新。
 router.afterEach(() => refreshPending())
 
+const themeIcons: Record<ThemePreference, Component> = { system: DesktopOutline, light: SunnyOutline, dark: MoonOutline }
+const themeLabels: Record<ThemePreference, string> = { system: '跟随系统', light: '浅色', dark: '深色' }
+// 当前选中的主题在菜单项末尾打勾。
+const themeOptions = computed(() =>
+  (['system', 'light', 'dark'] as ThemePreference[]).map((key) => ({
+    key,
+    icon: icon(themeIcons[key]),
+    label: () =>
+      h('span', { style: 'display: inline-flex; align-items: center; gap: 12px' }, [
+        themeLabels[key],
+        key === themePreference.value ? h(NIcon, { size: 14 }, { default: () => h(CheckmarkOutline) }) : null,
+      ]),
+  })),
+)
+
 const accountOptions = [
   { key: 'security', label: '账号安全' },
   { key: 'password', label: '修改密码' },
@@ -209,6 +229,11 @@ async function onAccount(key: string) {
           </NBreadcrumbItem>
         </NBreadcrumb>
         <div class="header-actions">
+          <NDropdown :options="themeOptions" trigger="click" placement="bottom-end" @select="(key: ThemePreference) => (themePreference = key)">
+            <NButton quaternary circle size="small" :title="`主题：${themeLabels[themePreference]}`">
+              <template #icon><NIcon><component :is="themeIcons[themePreference]" /></NIcon></template>
+            </NButton>
+          </NDropdown>
           <NBadge :value="runtime.pendingCount" :show="runtime.pendingCount > 0 || !!runtime.pendingError" :dot="!!runtime.pendingError && !runtime.pendingCount">
             <NButton :type="runtime.pendingCount ? 'warning' : 'default'" secondary size="small" @click="showPending = true">
               <template #icon><NIcon><GitPullRequestOutline /></NIcon></template>

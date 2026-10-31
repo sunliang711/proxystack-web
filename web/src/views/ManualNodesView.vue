@@ -2,8 +2,9 @@
 import { computed, h, onMounted, ref } from 'vue'
 import YAML from 'yaml'
 import {
-  NAlert, NButton, NCard, NDataTable, NDrawer, NDrawerContent, NDynamicInput, NForm, NFormItem, NInput, NInputNumber,
-  NModal, NPopconfirm, NRadioButton, NRadioGroup, NSelect, NSpace, NSwitch, NTag, useMessage, type DataTableColumns,
+  NAlert, NButton, NCard, NCode, NCollapse, NCollapseItem, NDataTable, NDrawer, NDrawerContent, NDropdown, NDynamicInput, NForm,
+  NFormItem, NGrid, NGridItem, NInput, NInputNumber, NModal, NPopconfirm, NRadioButton, NRadioGroup, NSelect, NSpace, NSwitch, NTag,
+  NText, useDialog, useMessage, type DataTableColumns,
 } from 'naive-ui'
 import { api, emptyErrors, fieldState, MASKED, splitProblem, type FormErrors, type Schemas } from '../api/client'
 import CodeEditor from '../components/CodeEditor.vue'
@@ -12,11 +13,13 @@ import ExportDialog from '../components/ExportDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
 import SecretInput from '../components/SecretInput.vue'
 import { randomString, randomUUID, shadowsocksKey } from '../util/generate'
+import { nodeSamples } from '../util/nodeSamples'
 import { protocolLabels, regions, ssMethods } from '../util/options'
 
 type Node = Schemas['ManualNode']
 
 const message = useMessage()
+const dialog = useDialog()
 const nodes = ref<Node[]>([])
 const users = ref<Schemas['User'][]>([])
 const filterUser = ref<string | null>(null)
@@ -115,7 +118,53 @@ function blank(): Node {
 
 function open(index: number) {
   const draft: Node = JSON.parse(JSON.stringify(index < nodes.value.length ? nodes.value[index] : blank()))
-  editing.value = { index, draft, yaml: draft.config ? YAML.stringify(draft.config) : 'type: vless\nserver: \nport: 443\n', yamlError: '' }
+  editing.value = { index, draft, yaml: draft.config ? YAML.stringify(draft.config) : DIRECT_SKELETON, yamlError: '' }
+}
+
+const DIRECT_SKELETON = 'type: vless\nserver: \nport: 443\n'
+
+const modeHints: Record<string, string> = {
+  standard: '用表单填写 VMess、Shadowsocks、SOCKS5、HTTP 节点，三种订阅格式都能输出',
+  direct: '直接写 mihomo 的 proxy 字段，可以用 VLESS、Trojan、Hysteria2 等表单没有的协议',
+}
+
+const sampleOptions = nodeSamples.map((sample) => ({
+  key: sample.key,
+  label: sample.surge ? sample.label : `${sample.label}（Surge 订阅跳过）`,
+}))
+
+// Clash 配置与这里写法的对照示例。
+const clashExample = `proxies:
+  - name: 东京-01
+    type: trojan
+    server: proxy.example.com
+    port: 443
+    password: REPLACE_WITH_PASSWORD
+    udp: true
+    sni: proxy.example.com`
+const directExample = `type: trojan
+server: proxy.example.com
+port: 443
+password: REPLACE_WITH_PASSWORD
+udp: true
+sni: proxy.example.com`
+
+/** 用示例替换编辑器内容；已经写过内容时先确认。 */
+function fillSample(key: string) {
+  const sample = nodeSamples.find((item) => item.key === key)
+  if (!sample || !editing.value) return
+  const current = editing.value.yaml.trim()
+  if (!current || current === DIRECT_SKELETON.trim()) {
+    onYAML(sample.yaml)
+    return
+  }
+  dialog.warning({
+    title: '替换当前内容？',
+    content: `用「${sample.label}」示例覆盖编辑器里已有的内容。`,
+    positiveText: '替换',
+    negativeText: '取消',
+    onPositiveClick: () => onYAML(sample.yaml),
+  })
 }
 
 function onYAML(text: string) {
@@ -173,6 +222,37 @@ function cloneChecked() {
         <NButton type="primary" :disabled="!users.length" @click="open(nodes.length)">添加节点</NButton>
       </NSpace>
     </template>
+    <NCollapse :default-expanded-names="['help']" style="margin-bottom: 12px">
+      <NCollapseItem title="填写说明与示例" name="help">
+        <div class="help">
+          <p><NText strong>两种模式。</NText>{{ modeHints.standard }}；Mihomo 原生节点则{{ modeHints.direct }}。</p>
+          <p>
+            <NText strong>原生节点的写法。</NText>填一个 YAML 映射，相当于 Clash 配置 <NText code>proxies</NText> 列表中的一项，去掉开头的
+            <NText code>- </NText>。必须包含 <NText code>type</NText>、<NText code>server</NText>、<NText code>port</NText>；
+            <NText code>name</NText> 不用写，订阅里统一使用「名称」栏的值。
+          </p>
+          <p>
+            <NText strong>Surge 兼容。</NText>Surge 订阅只输出 vmess（tcp 或 ws）、ss、socks5、http 类型的节点，其他类型只出现在 Clash 和 Premium Clash 订阅里。
+          </p>
+          <p>
+            <NText strong>保存与生效。</NText>节点 tag 全局唯一，同一用户下名称不能重复。改动在「发布订阅包」重新发布并导入订阅端后，客户端才能拉到。
+          </p>
+          <NGrid cols="1 m:2" responsive="screen" :x-gap="12" :y-gap="8">
+            <NGridItem>
+              <NText depth="3" class="example-title">Clash 配置里的节点</NText>
+              <NCode :code="clashExample" class="example" />
+            </NGridItem>
+            <NGridItem>
+              <NText depth="3" class="example-title">填到原生节点里的内容（「名称」栏填 东京-01）</NText>
+              <NCode :code="directExample" class="example" />
+            </NGridItem>
+          </NGrid>
+          <p style="margin-bottom: 0">
+            <NText depth="3">编辑原生节点时，可以用编辑器上方的「填入示例」直接套用 VLESS + Reality、VLESS + WS、Trojan、Hysteria2、VMess、Shadowsocks 2022 的模板。</NText>
+          </p>
+        </div>
+      </NCollapseItem>
+    </NCollapse>
     <ErrorList :errors="errors.global" />
     <NSpace v-if="checked.length" style="margin-bottom: 8px" align="center">
       <span>已选 {{ checked.length }} 个</span>
@@ -203,7 +283,7 @@ function cloneChecked() {
         <NFormItem label="所属用户" v-bind="f('user')">
           <NSelect v-model:value="editing.draft.user" :options="users.map((u) => ({ label: u.name, value: u.name }))" filterable />
         </NFormItem>
-        <NFormItem label="模式" v-bind="f('mode')">
+        <NFormItem label="模式" v-bind="f('mode', modeHints[editing.draft.mode])">
           <NRadioGroup v-model:value="editing.draft.mode">
             <NRadioButton value="standard">标准节点</NRadioButton>
             <NRadioButton value="direct">Mihomo 原生节点</NRadioButton>
@@ -272,6 +352,12 @@ function cloneChecked() {
         <template v-else>
           <NFormItem label="节点字段" v-bind="f('config', '按 mihomo proxy 字段原样输出到 Clash；Surge 按兼容规则映射，不支持的类型跳过')">
             <div style="width: 100%">
+              <NSpace align="center" justify="space-between" style="margin-bottom: 6px">
+                <NText depth="3">Clash 节点去掉 name 和开头的 "- " 即可</NText>
+                <NDropdown :options="sampleOptions" trigger="click" @select="fillSample">
+                  <NButton size="small">填入示例</NButton>
+                </NDropdown>
+              </NSpace>
               <CodeEditor :value="editing.yaml" language="yaml" min-height="240px" @update:value="onYAML" />
               <NAlert v-if="editing.yamlError" type="error" :bordered="false" style="margin-top: 6px">{{ editing.yamlError }}</NAlert>
             </div>
@@ -290,3 +376,27 @@ function cloneChecked() {
   <ImportDialog v-model:show="showImport" scope="users" @done="load" />
   <ExportDialog v-model:show="showExport" scope="manual_nodes" :manual-nodes="checked" />
 </template>
+
+<style scoped>
+.help {
+  font-size: 13px;
+  line-height: 1.8;
+}
+.help p {
+  margin: 0 0 8px;
+}
+.example-title {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+.example {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: rgba(128, 128, 128, 0.08);
+  font-size: 12px;
+  white-space: pre;
+  overflow-x: auto;
+}
+</style>

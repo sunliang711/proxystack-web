@@ -111,9 +111,7 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
   border-radius: 0 4px 4px 0;
   background: #2a78d6;
 }
-@media (prefers-color-scheme: dark) {
-  .bar {
-    background: #3987e5;
-  }
+:root[data-theme='dark'] .bar {
+  background: #3987e5;
 }
 </style>
