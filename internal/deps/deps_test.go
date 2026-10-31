@@ -100,3 +100,21 @@ func TestHTTPProxySendsCredentials(t *testing.T) {
 	require.True(t, errors.As(err, &fetchErr))
 	require.Equal(t, deps.ErrProxyAuth, fetchErr.Kind)
 }
+
+// TestSelectSelfAssetIgnoresPackages 验证自更新在发布产物里选裸二进制和它的摘要，不会选到 tar.gz。
+func TestSelectSelfAssetIgnoresPackages(t *testing.T) {
+	names := []string{
+		"proxystack-web-linux-amd64", "proxystack-web-linux-amd64.sha256",
+		"proxystack-web-linux-arm64", "proxystack-web-linux-arm64.sha256",
+		"proxystack-web-v1.2.3-linux-arm64.tar.gz", "proxystack-web-v1.2.3-linux-arm64.tar.gz.sha256",
+	}
+	release := deps.Release{Tag: "v1.2.3"}
+	for _, name := range names {
+		release.Assets = append(release.Assets, deps.Asset{Name: name, URL: "https://example.com/" + name})
+	}
+	asset, digest, err := deps.SelectAsset(deps.Self, release, "linux", "arm64", "")
+	require.NoError(t, err)
+	require.Equal(t, "proxystack-web-linux-arm64", asset.Name)
+	require.NotNil(t, digest)
+	require.Equal(t, "proxystack-web-linux-arm64.sha256", digest.Name)
+}

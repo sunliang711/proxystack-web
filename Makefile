@@ -26,11 +26,20 @@ test:
 	go test ./...
 	cd web && $(NPM) run typecheck
 
+# 发布产物：裸二进制供 install.sh 和面板自更新下载，tar.gz 带 deploy 目录用于离线安装。
 dist: web
+	rm -rf dist
 	mkdir -p dist
-	for arch in amd64 arm64; do \
-		CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build -trimpath -ldflags "$(LDFLAGS)" -o dist/proxystack-web-linux-$$arch ./cmd/proxystack-web; \
-		(cd dist && shasum -a 256 proxystack-web-linux-$$arch > proxystack-web-linux-$$arch.sha256); \
+	set -e; for arch in amd64 arm64; do \
+		binary=proxystack-web-linux-$$arch; \
+		package=proxystack-web-$(VERSION)-linux-$$arch; \
+		CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build -trimpath -ldflags "$(LDFLAGS)" -o dist/$$binary ./cmd/proxystack-web; \
+		mkdir dist/$$package; \
+		cp dist/$$binary dist/$$package/proxystack-web; \
+		cp -R deploy dist/$$package/deploy; \
+		COPYFILE_DISABLE=1 tar -C dist -czf dist/$$package.tar.gz $$package; \
+		rm -rf dist/$$package; \
+		(cd dist && shasum -a 256 $$binary > $$binary.sha256 && shasum -a 256 $$package.tar.gz > $$package.tar.gz.sha256); \
 	done
 
 # 开发模式：实例目录 .dev，面板走 HTTP 监听 127.0.0.1:9090。

@@ -1,0 +1,48 @@
+# 推送 vA.B.C 格式的 tag 时：跑测试，编译 linux amd64/arm64，打包后发布到 GitHub Release。
+#
+# 产物：
+#   proxystack-web-linux-<arch>(.sha256)                 裸二进制，install.sh 和面板自更新按这个名字下载
+#   proxystack-web-<tag>-linux-<arch>.tar.gz(.sha256)    二进制加 deploy 目录，用于离线安装
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        run: make dist VERSION="$GITHUB_REF_NAME"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # gh release create 先传完文件再公开，自更新不会看到缺文件的版本；重跑时覆盖已有文件。
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+          fi

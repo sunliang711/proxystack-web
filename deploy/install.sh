@@ -9,7 +9,7 @@ BASE=/opt/proxystack-web
 SERVICE_USER=proxystack-web
 SUB_BASE=/opt/proxystack-sub
 SUB_USER=proxystack-sub
-RELEASE_BASE=${PSW_RELEASE_BASE:-https://github.com/eagle/proxystack-web/releases/download}
+RELEASE_BASE=${PSW_RELEASE_BASE:-https://github.com/sunliang711/proxystack-web/releases/download}
 ROLE=panel
 VERSION=latest
 BINARY=""
@@ -166,7 +166,7 @@ asset_file() {
     else
         local ref=$VERSION
         [[ $ref == latest ]] && ref=main
-        curl -fsSL -o "$dest" "https://raw.githubusercontent.com/eagle/proxystack-web/$ref/deploy/$rel"
+        curl -fsSL -o "$dest" "https://raw.githubusercontent.com/sunliang711/proxystack-web/$ref/deploy/$rel"
         chmod 0644 "$dest"
     fi
 }

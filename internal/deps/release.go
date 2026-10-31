@@ -37,7 +37,7 @@ const (
 var GitHubAPI = "https://api.github.com"
 
 // SelfRepo 是管理服务发布包所在的 GitHub 仓库。
-var SelfRepo = "eagle/proxystack-web"
+var SelfRepo = "sunliang711/proxystack-web"
 
 // Repo 返回组件的 GitHub 仓库。
 func Repo(component string) string {

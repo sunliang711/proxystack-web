@@ -877,6 +877,8 @@ StatsService 返回的计数名格式为 `user>>>EMAIL>>>traffic>>>uplink`、`in
 - 数据库迁移在启动时自动执行，执行前先 `VACUUM INTO` 备份一份。
 - xray/mihomo/geo 的安装、升级和回滚见 11.3。
 
+发版：推送 `vA.B.C` 格式的 tag 后，GitHub Actions 跑测试，编译 linux amd64/arm64，把产物发布到 GitHub Release。每个架构有两种产物：裸二进制 `proxystack-web-linux-<arch>` 及其 `.sha256`，供安装脚本和面板自更新下载；`proxystack-web-<tag>-linux-<arch>.tar.gz` 及其 `.sha256`，包含二进制和 `deploy` 目录，解压后执行 `deploy/install.sh --binary ./proxystack-web` 即可离线安装。
+
 ### 11.3 xray / mihomo / geo 管理
 
 「依赖」页集中管理三个组件：xray、mihomo、geo 数据（geoip.dat / geosite.dat）。安装源、版本解析、归档解压与路径安全检查沿用参考项目的依赖安装逻辑。
