@@ -3,7 +3,7 @@ import type { components, paths } from './schema'
 
 export type Schemas = components['schemas']
 
-/** 面板挂在随机路径下，后端通过 <base href> 告知前端。 */
+/** 面板的根地址，取自后端注入的 <base href>。 */
 export const panelBase = new URL('.', document.baseURI).pathname
 
 let csrfToken = ''

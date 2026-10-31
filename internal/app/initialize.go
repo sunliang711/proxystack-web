@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"net"
-	"strings"
 
 	"proxystack-web/internal/audit"
 	"proxystack-web/internal/auth"
@@ -40,7 +39,7 @@ func (s *Service) IsInitialized(ctx context.Context) (bool, error) {
 	return n > 0, nil
 }
 
-// Initialize 建库、迁移、生成管理员随机密码和面板随机路径。
+// Initialize 建库、迁移、生成管理员随机密码。
 func (s *Service) Initialize(ctx context.Context, opts InitOptions) (*InitResult, error) {
 	if err := validateInitOptions(&opts); err != nil {
 		return nil, err
@@ -62,7 +61,6 @@ func (s *Service) Initialize(ctx context.Context, opts InitOptions) (*InitResult
 	panel := store.PanelSettings{
 		Listen: opts.Listen,
 		Port:   opts.Port,
-		Path:   strings.ToLower(auth.RandomString(16)),
 	}
 	basic := store.DefaultBasicSettings()
 	err = s.Store.InTx(ctx, func(q *dbq.Queries) error {

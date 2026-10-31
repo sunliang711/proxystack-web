@@ -379,7 +379,7 @@ Web 端恢复流程：
    | 选项 | 控件 | 默认 |
    | --- | --- | --- |
    | external_host | 文本框，预填源实例的值 | 源实例的值；更换了 IP 且订阅使用 IP 时需要修改 |
-   | 面板设置（监听、访问路径） | 单选按钮组：保留本机 / 使用迁移包 | 保留本机 |
+   | 面板设置（监听地址和端口） | 单选按钮组：保留本机 / 使用迁移包 | 保留本机 |
    | 管理员账号 | 单选按钮组：使用迁移包 / 保留本机 | 使用迁移包 |
    | 恢复后启动代理 | 开关 | 开启 |
 5. **端口检查**：用迁移包中的配置检查本机端口占用，冲突时列出冲突的 stack 和端口，可以先恢复再在 Web 端调整，或返回取消。
@@ -808,10 +808,10 @@ StatsService 返回的计数名格式为 `user>>>EMAIL>>>traffic>>>uplink`、`in
 
 ## 10. 安全
 
-- **初始密码**：`proxystack-web init` 生成管理员随机密码，只在执行它的终端打印一次，数据库只保存哈希，不写入任何文件或日志。安装脚本调用 `init`，因此密码出现在运行安装脚本的终端，与面板地址（含随机访问路径）一起打印。首次登录强制修改密码。数据库未初始化时 `serve` 拒绝启动并提示先执行 `init`，避免服务自行生成密码并写入 journal。
+- **初始密码**：`proxystack-web init` 生成管理员随机密码，只在执行它的终端打印一次，数据库只保存哈希，不写入任何文件或日志。安装脚本调用 `init`，因此密码出现在运行安装脚本的终端，与面板地址一起打印。首次登录强制修改密码。数据库未初始化时 `serve` 拒绝启动并提示先执行 `init`，避免服务自行生成密码并写入 journal。
 - **传输**：管理服务和订阅端都只提供明文 HTTP，TLS 由 nginx 终结，程序不处理证书。管理服务默认监听 `0.0.0.0`，订阅端默认监听 `127.0.0.1`。管理服务的监听地址和端口可以在安装时用 `--listen`、`--port` 指定，之后在「系统」页修改（保存后自动重启管理服务），或在本机执行 `proxystack-web admin set-listen`；订阅端用 `--sub-listen`、`--sub-port` 指定，之后执行 `proxystack-web sub config --listen --port` 并重启服务。来源 IP 只信任本机连入的 `X-Forwarded-For`，nginx 在别的机器上时审计日志记录的是 nginx 的地址。`deploy/nginx/proxystack-web.conf` 是反向代理示例：要传 `X-Forwarded-For` 和 `X-Forwarded-Proto`，关闭响应缓冲以支持 SSE，放开上传大小限制。
 - **认证**：argon2id 密码哈希；会话 cookie 设置 HttpOnly、SameSite=Strict，经 HTTPS 访问时（`X-Forwarded-Proto: https`）带 Secure；所有修改类请求校验 CSRF token；会话闲置 12 小时失效，绝对有效期 7 天；登录失败按账号和来源 IP 两个维度限制：同一账号连续失败 5 次锁定 15 分钟，同一来源 IP 15 分钟内失败 10 次后暂停接受其认证请求 15 分钟（返回 429 和 Retry-After）；可选 TOTP 两步验证（RFC 6238，验证码只能使用一次）。
-- **访问路径**：管理端挂在随机路径下，其他路径返回 404，减少被扫描识别的概率。
+- **访问路径**：管理端挂在根路径下，`http://<地址>:<端口>/` 直接进入登录页。面板的访问控制依靠登录认证、两步验证和登录限速；需要缩小暴露面时，由 nginx 或防火墙限制来源。
 - **敏感信息**：日志中不记录密码、token、uuid 和完整订阅内容（沿用参考项目的约束）；API 默认返回遮蔽值，点击「显示」时单独请求明文并记入审计日志。
 - **权限边界**：管理服务以普通用户运行，只能操作 `psw-` 前缀的两个模板 unit；Web 端被攻破时，影响范围是代理配置和服务账号可写的目录，不能直接获得 root。
 - **救援命令**：`proxystack-web admin reset-password`、`proxystack-web admin reset-link`、`proxystack-web info`（显示面板地址和订阅包公钥）、`proxystack-web backup` / `restore`。救援命令需要 root 或服务账号身份执行。
@@ -848,7 +848,7 @@ StatsService 返回的计数名格式为 `user>>>EMAIL>>>traffic>>>uplink`、`in
 3. 创建 `/opt/proxystack-web` 目录树并设置属主和权限。
 4. 下载指定版本的 release 二进制并校验 sha256，安装到 `bin/`，在 `/usr/local/bin` 建软链接。
 5. 写入三个 unit 文件和 polkit 规则，执行 `daemon-reload`。
-6. 以服务账号执行 `proxystack-web init`：建库、执行迁移、生成管理员随机密码和面板随机路径。
+6. 以服务账号执行 `proxystack-web init`：建库、执行迁移、生成管理员随机密码。
 7. `systemctl enable --now proxystack-web.service`。
 8. 打印面板地址和初始密码，并提示配置 nginx。
 

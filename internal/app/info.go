@@ -36,7 +36,7 @@ func (s *Service) Info(ctx context.Context) (*InstanceInfo, error) {
 // panelURL 返回面板地址：设置了经 nginx 访问的地址时用它，否则是管理服务自己的监听地址。
 func (s *Service) panelURL(panel store.PanelSettings, basic store.BasicSettings) string {
 	if basic.PanelURL != "" {
-		return strings.TrimSuffix(basic.PanelURL, "/") + "/" + panel.Path + "/"
+		return strings.TrimSuffix(basic.PanelURL, "/") + "/"
 	}
 	host := panel.Listen
 	if ip := net.ParseIP(host); host == "" || (ip != nil && ip.IsUnspecified()) {
@@ -45,7 +45,7 @@ func (s *Service) panelURL(panel store.PanelSettings, basic store.BasicSettings)
 	if host == "" {
 		host = "127.0.0.1"
 	}
-	return fmt.Sprintf("http://%s/%s/", net.JoinHostPort(host, strconv.Itoa(panel.Port)), panel.Path)
+	return fmt.Sprintf("http://%s/", net.JoinHostPort(host, strconv.Itoa(panel.Port)))
 }
 
 // primaryIP 返回第一个非回环的 IPv4 地址。

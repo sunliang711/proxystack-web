@@ -7,7 +7,7 @@
 // 环境变量（run.sh 负责设置）：
 //
 //	PSW_E2E_CONTAINER  安装所在的容器名，用 docker exec 在机器内执行检查
-//	PSW_E2E_URL        宿主机访问面板的地址，含随机路径，例如 http://127.0.0.1:49153/abcd
+//	PSW_E2E_URL        宿主机访问面板的地址，例如 http://127.0.0.1:49153
 //	PSW_E2E_PASSWORD   安装脚本打印的初始管理员密码
 //	PSW_E2E_PROXY      可选，下载依赖使用的代理，例如 http://user:pass@host:port 或 socks5://host:port
 package e2e

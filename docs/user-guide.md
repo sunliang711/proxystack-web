@@ -51,12 +51,12 @@ curl -fsSL --proxy "$https_proxy" https://raw.githubusercontent.com/sunliang711/
 
 ```text
 proxystack-web initialized.
-  Panel URL:  http://203.0.113.10:9443/k3x9q2m7v1c8w4za/
+  Panel URL:  http://203.0.113.10:9443/
   Username:   admin
   Password:   ********************
 ```
 
-初始密码只打印这一次，数据库只保存其哈希值。面板挂载在地址中的随机路径下，访问其他路径一律返回 404，请完整保存该地址。
+初始密码只打印这一次，数据库只保存其哈希值。面板挂载在根路径下，在浏览器中打开 `http://<服务器地址>:9443/` 即可进入登录页。面板直接暴露在公网时，建议用 nginx 加 TLS，或只对可信来源开放该端口。
 
 安装脚本只负责首次安装。目标机器上已经存在管理端数据库时，脚本在执行任何改动之前退出，正在运行的服务和已有数据不受影响。管理端的升级在面板中完成（见第 7.1 节）。
 

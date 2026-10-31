@@ -39,15 +39,13 @@ func newHarness(t *testing.T) (*harness, string) {
 	svc := app.New(st, layout)
 	res, err := svc.Initialize(context.Background(), app.InitOptions{Port: 9443})
 	require.NoError(t, err)
-	panel, err := store.GetPanelSettings(context.Background(), st.Q)
-	require.NoError(t, err)
 	static := fstest.MapFS{
 		"index.html":    {Data: []byte("<html><head><!--psw:base--></head></html>")},
 		"assets/app.js": {Data: []byte("console.log(1)")},
 	}
-	srv := httptest.NewServer(api.New(svc, api.Options{PanelPath: panel.Path, Dev: true, Static: static}))
+	srv := httptest.NewServer(api.New(svc, api.Options{Dev: true, Static: static}))
 	t.Cleanup(srv.Close)
-	h := &harness{t: t, svc: svc, server: srv, base: srv.URL + "/" + panel.Path}
+	h := &harness{t: t, svc: svc, server: srv, base: srv.URL}
 	h.client = newClient(t)
 	return h, res.Password
 }
@@ -176,18 +174,20 @@ func TestAccountLockout(t *testing.T) {
 	require.Equal(t, http.StatusLocked, resp.StatusCode)
 }
 
-func TestPanelPathAndStatic(t *testing.T) {
+func TestStatic(t *testing.T) {
 	h, _ := newHarness(t)
-	resp, err := http.Get(h.server.URL + "/")
-	require.NoError(t, err)
-	require.Equal(t, http.StatusNotFound, resp.StatusCode, "paths outside the panel path return 404")
+	for _, page := range []string{"/", "/users/1"} {
+		resp, err := http.Get(h.base + page)
+		require.NoError(t, err)
+		var buf bytes.Buffer
+		_, _ = buf.ReadFrom(resp.Body)
+		require.Equal(t, http.StatusOK, resp.StatusCode, page)
+		require.Contains(t, buf.String(), `<base href="/">`, page)
+	}
 
-	resp, err = http.Get(h.base + "/users/1")
+	resp, err := http.Get(h.base + "/assets/app.js")
 	require.NoError(t, err)
-	var buf bytes.Buffer
-	_, _ = buf.ReadFrom(resp.Body)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	require.Contains(t, buf.String(), `<base href="/`)
 
 	resp, err = http.Get(h.base + "/assets/missing.js")
 	require.NoError(t, err)
@@ -234,7 +234,7 @@ func TestPanelURLPrefersConfiguredAddress(t *testing.T) {
 	info, err := h.svc.Info(ctx)
 	require.NoError(t, err)
 	require.Equal(t, "0.0.0.0", info.Panel.Listen)
-	require.Contains(t, info.PanelURL, ":9443/"+info.Panel.Path+"/")
+	require.True(t, strings.HasSuffix(info.PanelURL, ":9443/"), info.PanelURL)
 
 	doc, err := h.svc.LoadConfig(ctx)
 	require.NoError(t, err)
@@ -244,7 +244,7 @@ func TestPanelURLPrefersConfiguredAddress(t *testing.T) {
 	require.NoError(t, err)
 	info, err = h.svc.Info(ctx)
 	require.NoError(t, err)
-	require.Equal(t, "https://panel.example.com/"+info.Panel.Path+"/", info.PanelURL)
+	require.Equal(t, "https://panel.example.com/", info.PanelURL)
 
 	settings.Basic.PanelURL = "ftp://panel.example.com"
 	_, err = h.svc.UpdateSettings(ctx, app.Actor{Name: "admin"}, settings)

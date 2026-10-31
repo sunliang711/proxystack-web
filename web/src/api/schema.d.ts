@@ -1521,7 +1521,7 @@ export interface components {
         BasicSettings: {
             /** @description 订阅节点默认 server，域名或 IP */
             external_host: string;
-            /** @description 面板经 nginx 访问的地址，不含随机路径，用于通知邮件中的链接 */
+            /** @description 面板经 nginx 访问的地址，用于通知邮件中的链接 */
             panel_url: string;
             /** @description 流量统计周期边界使用的时区 */
             timezone: string;

@@ -159,7 +159,7 @@ func (s *Service) portConflicts(ctx context.Context, staging string) ([]string, 
 type RestoreOptions struct {
 	// ExternalHost 非空时覆盖迁移包中的对外地址。
 	ExternalHost string `json:"external_host" required:"false"`
-	// KeepPanel 为真时保留本机的面板设置（监听和访问路径）。
+	// KeepPanel 为真时保留本机的面板设置（监听地址和端口）。
 	KeepPanel bool `json:"keep_panel" required:"false"`
 	// KeepAdmins 为真时保留本机的管理员账号。
 	KeepAdmins bool `json:"keep_admins" required:"false"`

@@ -235,10 +235,10 @@ func TestRemoteSourceSyncsExportedNodes(t *testing.T) {
 	settings.NodeExport = configdoc.NodeExportSettings{Enabled: true, Token: "export-token-0123456789"}
 	_, err = exporter.svc.UpdateSettings(ctx, exporter.actor, settings)
 	require.NoError(t, err)
-	exportServer := httptest.NewServer(api.New(exporter.svc, api.Options{PanelPath: "panel"}))
+	exportServer := httptest.NewServer(api.New(exporter.svc, api.Options{}))
 	defer exportServer.Close()
 
-	status, _, _ := get(t, exportServer, "/panel/export/nodes", "Authorization", "Bearer wrong")
+	status, _, _ := get(t, exportServer, "/export/nodes", "Authorization", "Bearer wrong")
 	require.Equal(t, http.StatusForbidden, status)
 
 	// 导入端：只有用户 alice，没有任何 stack。
@@ -249,7 +249,7 @@ func TestRemoteSourceSyncsExportedNodes(t *testing.T) {
 		require.NoError(t, importer.svc.DeleteStack(ctx, importer.actor, stack.ID))
 	}
 	_, err = importer.svc.SaveRemoteSources(ctx, importer.actor, []configdoc.RemoteSource{{
-		Name: "east", URL: exportServer.URL + "/panel/export/nodes", Token: "export-token-0123456789", Enabled: true,
+		Name: "east", URL: exportServer.URL + "/export/nodes", Token: "export-token-0123456789", Enabled: true,
 	}})
 	require.NoError(t, err)
 	require.NoError(t, importer.svc.SyncRemoteSources(ctx, 0))

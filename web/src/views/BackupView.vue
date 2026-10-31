@@ -117,7 +117,7 @@ async function execute() {
   waitForRestart()
 }
 
-/** 管理服务重启后回到登录页。选择使用迁移包的面板设置时访问路径会变，这里等不到，提示手工打开。 */
+/** 管理服务重启后回到登录页。选择使用迁移包的面板设置时监听地址可能会变，这里等不到，提示手工打开。 */
 function waitForRestart() {
   const deadline = Date.now() + 60_000
   const poll = async () => {
@@ -152,7 +152,7 @@ function waitForRestart() {
     </NCard>
 
     <NCard title="恢复迁移包" size="small">
-      <NAlert v-if="restarting" type="info" :bordered="false">正在重启管理服务，完成后跳转到登录页。如果迁移包改变了面板访问路径，请用新的地址打开。</NAlert>
+      <NAlert v-if="restarting" type="info" :bordered="false">正在重启管理服务，完成后跳转到登录页。如果迁移包改变了面板的监听地址或端口，请用新的地址打开。</NAlert>
       <template v-else>
         <NText depth="3" tag="p">恢复会整体替换当前实例的数据库，执行前自动备份当前数据库，然后重启管理服务。</NText>
         <NAlert v-if="restoreError" type="error" :bordered="false" style="margin-bottom: 12px">{{ restoreError }}</NAlert>

@@ -16,7 +16,6 @@ const (
 type PanelSettings struct {
 	Listen string `json:"listen"`
 	Port   int    `json:"port"`
-	Path   string `json:"path"`
 }
 
 // BasicSettings 是基本设置。

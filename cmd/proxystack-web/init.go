@@ -15,7 +15,7 @@ func newInitCommand(g *globalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Create the database and the initial admin password",
-		Long: "init creates the directory tree and database, generates a random admin password and a random panel path. " +
+		Long: "init creates the directory tree and database, generates a random admin password. " +
 			"The panel serves plain HTTP for nginx to proxy. The password is printed once to this terminal and only its hash is stored.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

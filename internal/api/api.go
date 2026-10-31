@@ -40,8 +40,6 @@ const (
 
 // Options 是管理端 HTTP 层的配置。
 type Options struct {
-	// PanelPath 是随机访问路径（不含斜杠）。
-	PanelPath string
 	// Dev 为开发模式。
 	Dev bool
 	// Static 是前端构建产物；为空时不提供静态资源。
@@ -75,31 +73,25 @@ func NewConfig() huma.Config {
 	return config
 }
 
-// New 创建管理端处理器，挂载在 /<PanelPath>/ 下；其他路径一律 404。
+// New 创建管理端处理器，挂载在根路径下。
 func New(svc *app.Service, opts Options) *Server {
 	s := &Server{svc: svc, opts: opts}
 	root := chi.NewRouter()
 	root.Use(middleware.Recoverer, securityHeaders)
 	root.Use(forwardedFor)
 	root.NotFound(http.NotFound)
-	prefix := "/" + opts.PanelPath
-	root.Get(prefix, func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, prefix+"/", http.StatusMovedPermanently)
-	})
-	panel := chi.NewRouter()
-	s.api = humachi.New(panel, NewConfig())
+	s.api = humachi.New(root, NewConfig())
 	s.api.UseMiddleware(s.authMiddleware)
 	s.register(s.api)
 	if svc != nil {
-		panel.Get("/export/nodes", exportNodesHandler(svc))
+		root.Get("/export/nodes", exportNodesHandler(svc))
 	}
-	panel.HandleFunc("/api/*", func(w http.ResponseWriter, r *http.Request) {
+	root.HandleFunc("/api/*", func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 	})
 	if opts.Static != nil {
-		panel.Handle("/*", newSPAHandler(opts.Static, prefix+"/"))
+		root.Handle("/*", newSPAHandler(opts.Static, "/"))
 	}
-	root.Mount(prefix, panel)
 	s.handler = root
 	return s
 }

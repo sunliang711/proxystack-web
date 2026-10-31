@@ -59,15 +59,14 @@ run_distro() {
     docker cp "$ROOT/deploy" "$name:/root/deploy"
     docker exec "$name" bash /root/deploy/install.sh --role all --binary /root/proxystack-web | tee "$WORK/install-$distro.log"
 
-    local panel_path password port
-    panel_path=$(sed -n 's|^ *Panel URL: *http://[^/]*/\([^/]*\)/.*|\1|p' "$WORK/install-$distro.log")
+    local password port
     password=$(sed -n 's|^ *Password: *||p' "$WORK/install-$distro.log")
     port=$(docker port "$name" 9443/tcp | head -1 | sed 's|.*:||')
-    [[ -n $panel_path && -n $password && -n $port ]] || { echo "could not parse the install output" >&2; return 1; }
+    [[ -n $password && -n $port ]] || { echo "could not parse the install output" >&2; return 1; }
 
     log "[$distro] running the end-to-end test"
     local status=0
-    (cd "$ROOT" && PSW_E2E_CONTAINER=$name PSW_E2E_URL="http://127.0.0.1:$port/$panel_path" \
+    (cd "$ROOT" && PSW_E2E_CONTAINER=$name PSW_E2E_URL="http://127.0.0.1:$port" \
         PSW_E2E_PASSWORD=$password PSW_E2E_EXPECT_OS="$expect" \
         go test -tags e2e -count=1 -v -timeout 40m ./tests/e2e/) || status=$?
     if [[ $status -ne 0 ]]; then
@@ -77,7 +76,7 @@ run_distro() {
     if [[ ${KEEP:-} != 1 ]]; then
         docker rm -f "$name" >/dev/null 2>&1 || true
     else
-        log "[$distro] container $name kept (panel http://127.0.0.1:$port/$panel_path/)"
+        log "[$distro] container $name kept (panel http://127.0.0.1:$port/)"
     fi
     return $status
 }

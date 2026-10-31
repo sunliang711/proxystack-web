@@ -79,7 +79,7 @@ func (s *Server) sessionCookie(value string, maxAge int, forwardedProto string) 
 	return http.Cookie{
 		Name:     SessionCookie,
 		Value:    value,
-		Path:     "/" + s.opts.PanelPath + "/",
+		Path:     "/",
 		MaxAge:   maxAge,
 		HttpOnly: true,
 		Secure:   forwardedProto == "https",

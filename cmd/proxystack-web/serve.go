@@ -95,9 +95,8 @@ func runServe(ctx context.Context, g *globalFlags, dev bool) error {
 		}
 	}
 	handler := api.New(svc, api.Options{
-		PanelPath: panel.Path,
-		Dev:       dev,
-		Static:    web.Dist(),
+		Dev:    dev,
+		Static: web.Dist(),
 	})
 	srv := &http.Server{
 		Addr:              net.JoinHostPort(panel.Listen, strconv.Itoa(panel.Port)),

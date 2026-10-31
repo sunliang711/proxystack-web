@@ -140,7 +140,7 @@ async function testMail() {
   mailResult.value = error ? problemMessage(error) : data?.error || 'ok'
 }
 
-/** 节点导出接口挂在面板地址下，与面板共用端口和访问路径。 */
+/** 节点导出接口挂在面板地址下，与面板共用端口。 */
 const exportURL = new URL('export/nodes', document.baseURI).href
 
 async function revealSettings() {
@@ -202,7 +202,7 @@ async function save() {
         <NFormItem label="对外地址" v-bind="f('basic.external_host', '订阅节点默认使用的域名或 IP')">
           <NInput v-model:value="form.basic.external_host" placeholder="proxy.example.com" />
         </NFormItem>
-        <NFormItem label="面板地址" v-bind="f('basic.panel_url', '经 nginx 访问面板的地址，不含随机路径；用于通知邮件中的链接')">
+        <NFormItem label="面板地址" v-bind="f('basic.panel_url', '经 nginx 访问面板的地址，用于通知邮件中的链接')">
           <NInput v-model:value="form.basic.panel_url" placeholder="https://panel.example.com" />
         </NFormItem>
         <NFormItem label="时区" v-bind="f('basic.timezone', '流量统计的日、月边界按此时区计算')">

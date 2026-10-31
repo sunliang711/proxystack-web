@@ -157,8 +157,8 @@ func TestMigrationPackageRestoresAnotherInstance(t *testing.T) {
 	require.Greater(t, preview.Counts["traffic"], int64(0))
 	require.False(t, preview.TrafficFrom.IsZero())
 
-	targetPanel, err := store.GetPanelSettings(ctx, target.svc.Store.Q)
-	require.NoError(t, err)
+	targetPanel := store.PanelSettings{Listen: "127.0.0.1", Port: 9555}
+	require.NoError(t, store.PutJSON(ctx, target.svc.Store.Q, store.SettingPanel, targetPanel))
 	restarted := false
 	target.svc.RequestRestart = func() { restarted = true }
 	require.NoError(t, target.svc.ExecuteRestore(ctx, target.actor, app.RestoreOptions{ExternalHost: "203.0.113.9", KeepPanel: true, KeepAdmins: true, StartProxies: true}))
@@ -192,7 +192,7 @@ func TestMigrationPackageRestoresAnotherInstance(t *testing.T) {
 	require.Equal(t, "203.0.113.9", doc.Settings.Basic.ExternalHost)
 	panel, err := store.GetPanelSettings(ctx, st.Q)
 	require.NoError(t, err)
-	require.Equal(t, targetPanel.Path, panel.Path, "panel settings are kept")
+	require.Equal(t, targetPanel, panel, "panel settings are kept")
 	usage, err := restored.UserUsageDetail(ctx, doc.Users[0].ID)
 	require.NoError(t, err)
 	require.EqualValues(t, 3000, usage.Today.Total(), "traffic history continues")
@@ -262,7 +262,7 @@ func TestMigrationPackageFreshInstall(t *testing.T) {
 	defer st.Close()
 	panel, err := store.GetPanelSettings(ctx, st.Q)
 	require.NoError(t, err)
-	require.Equal(t, sourcePanel.Path, panel.Path)
+	require.Equal(t, sourcePanel, panel)
 	count, err := st.Q.CountAdmins(ctx)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, count)
