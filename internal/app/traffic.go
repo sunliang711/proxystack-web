@@ -431,6 +431,9 @@ type TrafficOverview struct {
 	ByStack  []StackTraffic  `json:"by_stack"`
 	// FailedNotifications 是发送失败的通知数。
 	FailedNotifications int64 `json:"failed_notifications"`
+
+	// TopUsersToday 是今日用量排行；TopUsers 保留本月排行。
+	TopUsersToday []UserTraffic `json:"top_users_today"`
 }
 
 // UserTraffic 是一个用户的用量。

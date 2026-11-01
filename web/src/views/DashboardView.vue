@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { NAlert, NButton, NCard, NEmpty, NGrid, NGridItem, NSelect, NSpace, NStatistic, NTable, NTag, NText, useMessage } from 'naive-ui'
+import { NAlert, NButton, NCard, NEmpty, NGrid, NGridItem, NRadioButton, NRadioGroup, NSelect, NSpace, NStatistic, NTable, NTag, NText, useMessage } from 'naive-ui'
 import { api, problemMessage, type Schemas } from '../api/client'
 import TrafficChart from '../components/TrafficChart.vue'
 import EntityLink from '../components/EntityLink.vue'
@@ -18,6 +18,7 @@ const REFRESH = 30_000
 const overview = ref<Schemas['TrafficOverview'] | null>(null)
 const live = ref<Schemas['LivePoint'][]>([])
 const userId = ref<number | null>(null)
+const rankingPeriod = ref<'day' | 'month'>('day')
 const users = ref<Schemas['User'][]>([])
 const loading = ref(false)
 const message = useMessage()
@@ -68,7 +69,8 @@ const rateSeries = computed(() => [
   { name: '下行', data: filteredLive.value.map((point) => point.down), slot: 1 },
 ])
 const total = (bytes: { up: number; down: number }) => bytes.up + bytes.down
-const peak = computed(() => Math.max(1, ...(overview.value?.top_users ?? []).map(total)))
+const rankedUsers = computed(() => (rankingPeriod.value === 'day' ? overview.value?.top_users_today : overview.value?.top_users) ?? [])
+const peak = computed(() => Math.max(1, ...rankedUsers.value.map(total)))
 const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stack) => stack.error))
 </script>
 
@@ -120,14 +122,20 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
       </NTable></div>
     </NCard>
 
-    <NCard :title="userId ? '所选用户本月用量' : '本月用量排行'" size="small">
-      <NEmpty v-if="!overview.top_users.length" description="本月还没有用量">
+    <NCard title="用量排行" size="small">
+      <template #header-extra>
+        <NRadioGroup v-model:value="rankingPeriod" size="small" aria-label="排行周期">
+          <NRadioButton value="day">日</NRadioButton>
+          <NRadioButton value="month">月</NRadioButton>
+        </NRadioGroup>
+      </template>
+      <NEmpty v-if="!rankedUsers.length" :description="rankingPeriod === 'day' ? '今日还没有用量' : '本月还没有用量'">
         <template #extra><RouterLink :to="{ name: 'users' }">查看用户用量</RouterLink></template>
       </NEmpty>
       <div v-else class="table-scroll"><NTable :bordered="false" size="small">
         <thead><tr><th>用户</th><th>上行</th><th>下行</th><th style="width: 45%">合计</th></tr></thead>
         <tbody>
-          <tr v-for="user in overview.top_users" :key="user.id">
+          <tr v-for="user in rankedUsers" :key="user.id">
             <td><EntityLink kind="user" :id="user.id" :name="user.name" /></td>
             <td>{{ formatBytes(user.up) }}</td>
             <td>{{ formatBytes(user.down) }}</td>

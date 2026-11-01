@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"proxystack-web/internal/app"
+	"proxystack-web/internal/configdoc"
 	"proxystack-web/internal/traffic"
 	"proxystack-web/internal/xrayapi"
 )
@@ -138,4 +139,68 @@ func TestTrafficSubjectsIncludeUnusedUsers(t *testing.T) {
 	subjects, err := h.svc.TrafficSubjects(context.Background(), traffic.ScopeUser)
 	require.NoError(t, err)
 	require.Contains(t, subjects, app.TrafficSubject{Subject: strconv.FormatInt(h.alice(t).ID, 10), Label: "alice"})
+}
+
+// 今日和本月独立排名，日边界采用系统时区，并合并用户的凭据档案。
+func TestTrafficOverviewDailyAndMonthlyRankings(t *testing.T) {
+	h := newTrafficHarness(t)
+	ctx := context.Background()
+	h.now = time.Date(2026, 11, 10, 23, 30, 0, 0, h.now.Location())
+	h.svc.Now = func() time.Time { return h.now.UTC() }
+	alice := h.alice(t)
+	bob, err := h.svc.CreateUser(ctx, h.actor, configdoc.User{Name: "bob", Enabled: true, ResetMode: "none", Profiles: []configdoc.Profile{}})
+	require.NoError(t, err)
+	doc, err := h.svc.LoadConfig(ctx)
+	require.NoError(t, err)
+	stackID := doc.Stacks[doc.StackByName("usa1")].ID
+	day := traffic.DayStart(h.now, h.now.Location())
+	month := traffic.MonthStart(h.now, h.now.Location())
+	insert := func(table string, bucket time.Time, subject string, up, down int64) {
+		t.Helper()
+		_, err := h.svc.Store.DB.ExecContext(ctx, "INSERT INTO "+table+" (bucket_start, stack_id, scope, subject, up, down) VALUES (?, ?, 'user', ?, ?, ?)", bucket.Unix(), stackID, subject, up, down)
+		require.NoError(t, err)
+	}
+	before, err := h.svc.TrafficOverviewData(ctx, 0)
+	require.NoError(t, err)
+	require.NotNil(t, before.TopUsersToday)
+	require.Empty(t, before.TopUsersToday)
+	aliceSubject, bobSubject := strconv.FormatInt(alice.ID, 10), strconv.FormatInt(bob.ID, 10)
+	insert("traffic_day", day, aliceSubject, 40, 60)
+	insert("traffic_day", day, aliceSubject+".7", 5, 5)
+	insert("traffic_day", day, bobSubject, 100, 300)
+	insert("traffic_day", day.AddDate(0, 0, -1), aliceSubject, 500, 500)
+	insert("traffic_day", day.AddDate(0, 0, 1), bobSubject, 9999, 9999)
+	insert("traffic_month", month, aliceSubject, 540, 560)
+	insert("traffic_month", month, aliceSubject+".7", 5, 5)
+	insert("traffic_month", month, bobSubject, 100, 300)
+	insert("traffic_month", month.AddDate(0, -1, 0), bobSubject, 9999, 9999)
+	insert("traffic_month", month.AddDate(0, 1, 0), bobSubject, 9999, 9999)
+	for _, userID := range []int64{0, alice.ID} {
+		overview, err := h.svc.TrafficOverviewData(ctx, userID)
+		require.NoError(t, err)
+		if userID == 0 {
+			require.Len(t, overview.TopUsersToday, 2)
+			require.Equal(t, bob.ID, overview.TopUsersToday[0].ID)
+			require.EqualValues(t, 400, overview.TopUsersToday[0].Total())
+			require.Equal(t, alice.ID, overview.TopUsers[0].ID)
+		} else {
+			require.Len(t, overview.TopUsersToday, 1)
+			require.Len(t, overview.TopUsers, 1)
+		}
+		for _, user := range overview.TopUsersToday {
+			if user.ID == alice.ID {
+				require.EqualValues(t, 110, user.Total())
+			}
+		}
+		require.EqualValues(t, 1110, overview.TopUsers[0].Total())
+	}
+	// 本月前十没有今日第一名时，今日排行也必须保留该用户。
+	for id := int64(1000); id < 1011; id++ {
+		insert("traffic_month", month, strconv.FormatInt(id, 10), 10000, 0)
+	}
+	overview, err := h.svc.TrafficOverviewData(ctx, 0)
+	require.NoError(t, err)
+	require.Len(t, overview.TopUsers, 10)
+	require.EqualValues(t, 1000, overview.TopUsers[0].ID)
+	require.Equal(t, bob.ID, overview.TopUsersToday[0].ID)
 }

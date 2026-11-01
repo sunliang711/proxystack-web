@@ -4005,6 +4005,12 @@
               "$ref": "#/components/schemas/UserTraffic"
             },
             "type": "array"
+          },
+          "top_users_today": {
+            "items": {
+              "$ref": "#/components/schemas/UserTraffic"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -4015,7 +4021,8 @@
           "live",
           "stacks",
           "by_stack",
-          "failed_notifications"
+          "failed_notifications",
+          "top_users_today"
         ],
         "type": "object"
       },

@@ -67,7 +67,7 @@ func (s *Service) trafficOverview(ctx context.Context, userID int64) (*TrafficOv
 		return nil, err
 	}
 	now, loc := s.Now(), location(settings)
-	out := &TrafficOverview{Enabled: settings.Traffic.Enabled, TopUsers: []UserTraffic{}, Live: []LivePoint{}, Stacks: []CollectStatus{}, ByStack: []StackTraffic{}}
+	out := &TrafficOverview{Enabled: settings.Traffic.Enabled, TopUsers: []UserTraffic{}, TopUsersToday: []UserTraffic{}, Live: []LivePoint{}, Stacks: []CollectStatus{}, ByStack: []StackTraffic{}}
 	var names, stacks map[int64]string
 	err = s.Store.InTx(ctx, func(q *dbq.Queries) error {
 		if names, err = userNames(ctx, q); err != nil {
@@ -124,16 +124,27 @@ func (s *Service) trafficOverview(ctx context.Context, userID int64) (*TrafficOv
 			}
 		}
 	}
-	rows, err := s.Store.QueryTraffic(ctx, store.LevelMonth, traffic.ScopeUser, traffic.MonthStart(now, loc).Unix(), now.Add(time.Hour).Unix(), nil)
-	if err != nil {
-		return nil, err
-	}
 	totals := map[int64]traffic.Bytes{}
-	for _, row := range rows {
-		if id, ok := traffic.SubjectUser(row.Subject); ok && matchesTrafficUser(row.Subject, userID) {
-			value := totals[id]
-			value.Add(traffic.Bytes{Up: row.Up, Down: row.Down})
-			totals[id] = value
+	todayTotals := map[int64]traffic.Bytes{}
+	for _, period := range []struct {
+		level  string
+		from   time.Time
+		to     time.Time
+		totals map[int64]traffic.Bytes
+	}{
+		{store.LevelDay, traffic.DayStart(now, loc), traffic.DayStart(now, loc).AddDate(0, 0, 1), todayTotals},
+		{store.LevelMonth, traffic.MonthStart(now, loc), traffic.MonthStart(now, loc).AddDate(0, 1, 0), totals},
+	} {
+		rows, err := s.Store.QueryTraffic(ctx, period.level, traffic.ScopeUser, period.from.Unix(), period.to.Unix(), nil)
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			if id, ok := traffic.SubjectUser(row.Subject); ok && matchesTrafficUser(row.Subject, userID) {
+				value := period.totals[id]
+				value.Add(traffic.Bytes{Up: row.Up, Down: row.Down})
+				period.totals[id] = value
+			}
 		}
 	}
 	s.traffic.mu.Lock()
@@ -151,6 +162,9 @@ func (s *Service) trafficOverview(ctx context.Context, userID int64) (*TrafficOv
 		value := totals[id]
 		value.Add(bytes)
 		totals[id] = value
+		value = todayTotals[id]
+		value.Add(bytes)
+		todayTotals[id] = value
 	}
 	out.Live = append(out.Live, s.traffic.live...)
 	for _, status := range s.traffic.statuses {
@@ -164,19 +178,26 @@ func (s *Service) trafficOverview(ctx context.Context, userID int64) (*TrafficOv
 	}
 	sort.Slice(out.ByStack, func(i, j int) bool { return out.ByStack[i].Stack < out.ByStack[j].Stack })
 	sort.Slice(out.Stacks, func(i, j int) bool { return out.Stacks[i].Stack < out.Stacks[j].Stack })
-	for id, bytes := range totals {
-		out.TopUsers = append(out.TopUsers, UserTraffic{ID: id, Name: subjectName(names, id), Bytes: bytes})
-	}
-	sort.Slice(out.TopUsers, func(i, j int) bool {
-		a, b := out.TopUsers[i], out.TopUsers[j]
-		if a.Total() != b.Total() {
-			return a.Total() > b.Total()
+	// 两个周期分别排序和取前十，避免按月截断后遗漏今日活跃用户。
+	rankUsers := func(totals map[int64]traffic.Bytes) []UserTraffic {
+		ranked := []UserTraffic{}
+		for id, bytes := range totals {
+			ranked = append(ranked, UserTraffic{ID: id, Name: subjectName(names, id), Bytes: bytes})
 		}
-		return a.ID < b.ID
-	})
-	if len(out.TopUsers) > topUsers {
-		out.TopUsers = out.TopUsers[:topUsers]
+		sort.Slice(ranked, func(i, j int) bool {
+			a, b := ranked[i], ranked[j]
+			if a.Total() != b.Total() {
+				return a.Total() > b.Total()
+			}
+			return a.ID < b.ID
+		})
+		if len(ranked) > topUsers {
+			ranked = ranked[:topUsers]
+		}
+		return ranked
 	}
+	out.TopUsers = rankUsers(totals)
+	out.TopUsersToday = rankUsers(todayTotals)
 	return out, nil
 }
 

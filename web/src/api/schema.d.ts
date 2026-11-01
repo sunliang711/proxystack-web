@@ -2610,6 +2610,7 @@ export interface components {
             stacks: components["schemas"]["CollectStatus"][];
             today: components["schemas"]["Bytes"];
             top_users: components["schemas"]["UserTraffic"][];
+            top_users_today: components["schemas"]["UserTraffic"][];
         };
         TrafficResult: {
             buckets: string[];

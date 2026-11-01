@@ -157,6 +157,8 @@ func TestTrafficCollectsAndAggregates(t *testing.T) {
 	require.Len(t, overview.TopUsers, 1)
 	require.Equal(t, "alicia", overview.TopUsers[0].Name)
 	require.EqualValues(t, 335, overview.TopUsers[0].Total())
+	require.Len(t, overview.TopUsersToday, 1)
+	require.EqualValues(t, 335, overview.TopUsersToday[0].Total())
 }
 
 // TestTrafficCollectBeforeRestart 验证重启 xray 前补采，两次采集之间的流量不丢。
