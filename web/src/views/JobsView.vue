@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   NButton, NCard, NCode, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NInputNumber, NSelect, NSpace, NSwitch, NTag, NText,
   useMessage, type DataTableColumns,
@@ -30,6 +30,12 @@ const presets = [
   { label: '每月', value: '0 4 1 * *' },
   { label: '自定义', value: 'custom' },
 ]
+const planPresets = computed(() => editing.value?.kind === 'egress_check' ? [
+  { label: '每分钟', value: '* * * * *' },
+  { label: '每 2 分钟', value: '*/2 * * * *' },
+  { label: '每 5 分钟', value: '*/5 * * * *' },
+  ...presets,
+] : presets)
 const statusView: Record<Run['status'], { label: string; type: 'default' | 'info' | 'success' | 'warning' | 'error' }> = {
   running: { label: '执行中', type: 'info' },
   succeeded: { label: '成功', type: 'success' },
@@ -68,7 +74,7 @@ async function toggle(job: Job, enabled: boolean) {
 
 function edit(job: Job) {
   editing.value = JSON.parse(JSON.stringify(job))
-  preset.value = presets.find((item) => item.value === job.schedule)?.value ?? 'custom'
+  preset.value = planPresets.value.find((item) => item.value === job.schedule)?.value ?? 'custom'
   errors.value = emptyErrors()
 }
 
@@ -138,7 +144,7 @@ const columns: DataTableColumns<Job> = [
       <ErrorList :errors="errors.global" />
       <NForm label-placement="top">
         <NFormItem label="计划">
-          <NSelect v-model:value="preset" :options="presets" />
+          <NSelect v-model:value="preset" :options="planPresets" />
         </NFormItem>
         <NFormItem v-if="preset === 'custom'" label="cron 表达式" v-bind="fieldState(errors, 'schedule', `五段式：分 时 日 月 周；默认 ${editing.default_schedule}`)">
           <NInput v-model:value="editing.schedule" />
@@ -151,10 +157,10 @@ const columns: DataTableColumns<Job> = [
           <NInputNumber v-model:value="editing.timeout" :min="1" />
         </NFormItem>
         <template v-if="editing.kind === 'egress_check'">
-          <NFormItem label="连续失败告警阈值" v-bind="fieldState(errors, 'params.failure_threshold', '连续多轮 IPv4、IPv6 均失败才告警，任一地址恢复后通知')">
-            <NInputNumber v-model:value="editing.params.failure_threshold" :min="1" :max="100" />
+          <NFormItem label="失败后重试次数" v-bind="fieldState(errors, 'params.retry_count', '首次查询失败后，每隔 1 秒额外重试；默认重试 3 次，共查询 4 次；0 表示不重试。任一地址成功即结束本轮')">
+            <NInputNumber v-model:value="editing.params.retry_count" :min="0" :max="10" />
           </NFormItem>
-          <NFormItem label="单个 Stack 检测超时（秒）" v-bind="fieldState(errors, 'params.probe_timeout', 'IPv4、IPv6 并发检测，共享此总超时；任务总超时需覆盖所有 Stack')">
+          <NFormItem label="每次查询超时（秒）" v-bind="fieldState(errors, 'params.probe_timeout', '每次 IPv4、IPv6 并发查询共享此超时；任务总超时需覆盖所有 Stack 的查询、重试及等待时间')">
             <NInputNumber v-model:value="editing.params.probe_timeout" :min="1" :max="60" />
           </NFormItem>
         </template>

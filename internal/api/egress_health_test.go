@@ -1,11 +1,14 @@
 package api_test
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"proxystack-web/internal/app"
 	"proxystack-web/internal/configdoc"
 )
 
@@ -27,4 +30,33 @@ func TestEgressHealthAPI(t *testing.T) {
 	require.Equal(t, stack["id"], row["stack_id"])
 	require.Equal(t, "unsupported", row["status"])
 	require.EqualValues(t, 0, row["failures"])
+}
+
+// TestEgressRetryParamsAPI 验证出口参数不成为其它任务的必填项，且显式零次重试可保存。
+func TestEgressRetryParamsAPI(t *testing.T) {
+	h := newAdminHarness(t)
+	jobs, err := h.svc.ListJobs(context.Background())
+	require.NoError(t, err)
+	for _, job := range jobs {
+		params := map[string]any{}
+		switch job.Kind {
+		case app.JobBackup:
+			params["keep"] = 7
+		case app.JobEgressCheck:
+			params["retry_count"] = 0
+			params["probe_timeout"] = 12
+		default:
+			continue
+		}
+		h.mustDo(http.MethodPut, fmt.Sprintf("/api/jobs/%d", job.ID), map[string]any{
+			"schedule": job.Schedule, "enabled": job.Enabled, "timeout": job.Timeout, "params": params,
+		}, http.StatusNoContent)
+	}
+	jobs, err = h.svc.ListJobs(context.Background())
+	require.NoError(t, err)
+	for _, job := range jobs {
+		if job.Kind == app.JobEgressCheck {
+			require.Zero(t, job.Params.RetryCount)
+		}
+	}
 }

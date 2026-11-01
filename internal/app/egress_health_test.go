@@ -31,6 +31,9 @@ func newEgressHarness(t *testing.T) (*trafficHarness, configdoc.Stack) {
 	settings.Notify.Events = append(settings.Notify.Events, configdoc.EventEgressDown, configdoc.EventEgressRecovered)
 	_, err = h.svc.UpdateSettings(ctx, h.actor, settings)
 	require.NoError(t, err)
+	job := jobNamed(t, h, app.JobEgressCheck)
+	job.Params.RetryCount = 0
+	require.NoError(t, h.svc.UpdateJob(ctx, h.actor, job.ID, app.JobUpdate{Schedule: job.Schedule, Enabled: job.Enabled, Timeout: job.Timeout, Params: job.Params}))
 	for _, stack := range doc.Stacks {
 		if stack.Name != "usa1" {
 			require.NoError(t, h.units.Stop(ctx, units.Name(units.Mihomo, stack.Name)))
@@ -62,7 +65,7 @@ func egressStatus(t *testing.T, h *trafficHarness, id int64) app.EgressHealth {
 	return app.EgressHealth{}
 }
 
-// TestEgressHealthLifecycle 验证两个地址族只需一个可用、连续失败去抖、持久化去重及每次故障独立通知。
+// TestEgressHealthLifecycle 验证两个地址族只需一个可用、单轮失败告警、持久化去重及每次故障独立通知。
 func TestEgressHealthLifecycle(t *testing.T) {
 	h, stack := newEgressHarness(t)
 	ctx := context.Background()
@@ -77,9 +80,8 @@ func TestEgressHealthLifecycle(t *testing.T) {
 	require.Empty(t, notifications, "initial successful probe is silent")
 	results = nil
 	checkEgress(t, h)
-	require.Equal(t, "failing", egressStatus(t, h, stack.ID).Status)
-	checkEgress(t, h)
 	require.Equal(t, "down", egressStatus(t, h, stack.ID).Status)
+	require.EqualValues(t, 1, egressStatus(t, h, stack.ID).Failures)
 	h.svc.DeliverNotifications(ctx)
 	require.Len(t, h.mails, 1)
 	require.Contains(t, h.mails[0], "Stack 出口异常：usa1")
@@ -166,7 +168,7 @@ func TestEgressUsesAppliedSettings(t *testing.T) {
 	require.Equal(t, "healthy", egressStatus(t, h, stack.ID).Status)
 }
 
-// TestEgressStoppedAndUnsupported 验证主动停止不报警、重启前未达到阈值的失败次数不跨暂停累计。
+// TestEgressStoppedAndUnsupported 验证主动停止不报警，已告警故障在暂停后继续保留且不重复通知。
 func TestEgressStoppedAndUnsupported(t *testing.T) {
 	h, stack := newEgressHarness(t)
 	ctx := context.Background()
@@ -178,10 +180,10 @@ func TestEgressStoppedAndUnsupported(t *testing.T) {
 	require.Zero(t, egressStatus(t, h, stack.ID).Failures)
 	require.NoError(t, h.units.Start(ctx, units.Name(units.Mihomo, stack.Name)))
 	checkEgress(t, h)
-	require.Equal(t, "failing", egressStatus(t, h, stack.ID).Status)
+	require.Equal(t, "down", egressStatus(t, h, stack.ID).Status)
 	rows, err := h.svc.ListNotifications(ctx, 100)
 	require.NoError(t, err)
-	require.Empty(t, rows)
+	require.Len(t, rows, 1, "stopping and restarting must not generate duplicate alarms or recovery")
 	stack.Mihomo.Enabled = false
 	stack.Xray.Outbound = configdoc.Outbound{Type: "direct"}
 	_, err = h.svc.UpdateStack(ctx, h.actor, stack.ID, stack)
@@ -211,9 +213,9 @@ func TestEgressJobOptions(t *testing.T) {
 	h, stack := newEgressHarness(t)
 	ctx := context.Background()
 	job := jobNamed(t, h, app.JobEgressCheck)
-	require.Equal(t, "* * * * *", job.Schedule)
-	require.Equal(t, 2, job.Params.FailureThreshold)
-	for _, params := range []app.JobParams{{FailureThreshold: 0, ProbeTimeout: 12}, {FailureThreshold: 2, ProbeTimeout: 0}, {FailureThreshold: 101, ProbeTimeout: 12}, {FailureThreshold: 2, ProbeTimeout: 61}} {
+	require.Equal(t, "*/2 * * * *", job.Schedule)
+	require.Equal(t, 0, job.Params.RetryCount)
+	for _, params := range []app.JobParams{{RetryCount: -1, ProbeTimeout: 12}, {RetryCount: 3, ProbeTimeout: 0}, {RetryCount: 11, ProbeTimeout: 12}, {RetryCount: 3, ProbeTimeout: 61}} {
 		require.Error(t, h.svc.UpdateJob(ctx, h.actor, job.ID, app.JobUpdate{Schedule: job.Schedule, Enabled: true, Timeout: 120, Params: params}))
 	}
 	var probes atomic.Int64
@@ -381,4 +383,114 @@ func TestEgressUnitQueryIsolation(t *testing.T) {
 	rows, err := h.svc.ListNotifications(ctx, 100)
 	require.NoError(t, err)
 	require.Empty(t, rows)
+}
+
+// TestEgressDefaultRetrySettings 验证新实例的调度和参数默认值。
+func TestEgressDefaultRetrySettings(t *testing.T) {
+	h := newTrafficHarness(t)
+	job := jobNamed(t, h, app.JobEgressCheck)
+	require.Equal(t, "*/2 * * * *", job.Schedule)
+	require.Equal(t, 3, job.Params.RetryCount)
+	require.Equal(t, 12, job.Params.ProbeTimeout)
+}
+
+// TestEgressRetryPolicy 验证首次查询加额外重试的次数、间隔和任一地址族成功即停止。
+func TestEgressRetryPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		retries   int
+		successAt int
+		family    string
+		ip        string
+		queries   int
+	}{
+		{name: "first-success", retries: 3, successAt: 1, family: "ipv4", ip: "203.0.113.10", queries: 1},
+		{name: "retry-ipv6-success", retries: 3, successAt: 2, family: "ipv6", ip: "2001:db8::10", queries: 2},
+		{name: "last-retry-success", retries: 3, successAt: 4, family: "ipv4", ip: "203.0.113.10", queries: 4},
+		{name: "three-retries-exhausted", retries: 3, queries: 4},
+		{name: "no-retries", retries: 0, queries: 1},
+		{name: "custom-retries", retries: 1, queries: 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, stack := newEgressHarness(t)
+			ctx := context.Background()
+			job := jobNamed(t, h, app.JobEgressCheck)
+			job.Params.RetryCount = tc.retries
+			require.NoError(t, h.svc.UpdateJob(ctx, h.actor, job.ID, app.JobUpdate{Schedule: job.Schedule, Enabled: job.Enabled, Timeout: job.Timeout, Params: job.Params}))
+			require.Equal(t, tc.retries, jobNamed(t, h, app.JobEgressCheck).Params.RetryCount, "zero must survive JSON serialization and default merging")
+			var queryTimes []time.Time
+			h.svc.ProbeEgress = func(context.Context, deps.ProxyConfig, time.Duration) ([]app.EgressResult, error) {
+				queryTimes = append(queryTimes, time.Now())
+				if len(queryTimes) == tc.successAt {
+					return []app.EgressResult{{Family: tc.family, EgressInfo: app.EgressInfo{IP: tc.ip}}}, nil
+				}
+				return []app.EgressResult{{Family: "ipv4", EgressInfo: app.EgressInfo{IP: "not-an-ip"}}}, errors.New("probe failed")
+			}
+			checkEgress(t, h)
+			require.Len(t, queryTimes, tc.queries)
+			for i := 1; i < len(queryTimes); i++ {
+				require.GreaterOrEqual(t, queryTimes[i].Sub(queryTimes[i-1]), time.Second)
+			}
+			h.svc.DeliverNotifications(ctx)
+			status := egressStatus(t, h, stack.ID)
+			if tc.successAt > 0 {
+				require.Equal(t, "healthy", status.Status)
+				require.Zero(t, status.Failures)
+				require.Empty(t, h.mails, "transient failures must not generate an alarm or recovery")
+			} else {
+				require.Equal(t, "down", status.Status)
+				require.EqualValues(t, tc.queries, status.Failures)
+				require.Len(t, h.mails, 1)
+			}
+		})
+	}
+}
+
+// TestEgressRetryWaitCancellation 验证重试等待可被任务超时取消，不生成不完整轮次的故障。
+func TestEgressRetryWaitCancellation(t *testing.T) {
+	h, stack := newEgressHarness(t)
+	ctx := context.Background()
+	job := jobNamed(t, h, app.JobEgressCheck)
+	job.Params.RetryCount = 3
+	require.NoError(t, h.svc.UpdateJob(ctx, h.actor, job.ID, app.JobUpdate{Schedule: job.Schedule, Enabled: true, Timeout: 1, Params: job.Params}))
+	var calls atomic.Int64
+	h.svc.ProbeEgress = func(context.Context, deps.ProxyConfig, time.Duration) ([]app.EgressResult, error) {
+		calls.Add(1)
+		time.Sleep(100 * time.Millisecond)
+		return nil, errors.New("probe failed")
+	}
+	require.NoError(t, h.svc.RunJobNow(ctx, h.actor, job.ID))
+	h.svc.WaitJobs()
+	require.Equal(t, app.RunTimeout, jobNamed(t, h, app.JobEgressCheck).LastRun.Status)
+	require.EqualValues(t, 1, calls.Load())
+	require.Equal(t, "unknown", egressStatus(t, h, stack.ID).Status)
+	rows, err := h.svc.ListNotifications(ctx, 100)
+	require.NoError(t, err)
+	require.Empty(t, rows)
+}
+
+// TestEgressRecoveryDuringRetry 验证已确认故障后在重试中恢复，只发送一次恢复通知。
+func TestEgressRecoveryDuringRetry(t *testing.T) {
+	h, stack := newEgressHarness(t)
+	ctx := context.Background()
+	h.svc.ProbeEgress = func(context.Context, deps.ProxyConfig, time.Duration) ([]app.EgressResult, error) { return nil, nil }
+	checkEgress(t, h)
+	h.svc.DeliverNotifications(ctx)
+	require.Len(t, h.mails, 1)
+	job := jobNamed(t, h, app.JobEgressCheck)
+	job.Params.RetryCount = 3
+	require.NoError(t, h.svc.UpdateJob(ctx, h.actor, job.ID, app.JobUpdate{Schedule: job.Schedule, Enabled: job.Enabled, Timeout: job.Timeout, Params: job.Params}))
+	var calls atomic.Int64
+	h.svc.ProbeEgress = func(context.Context, deps.ProxyConfig, time.Duration) ([]app.EgressResult, error) {
+		if calls.Add(1) == 2 {
+			return []app.EgressResult{{Family: "ipv6", EgressInfo: app.EgressInfo{IP: "2001:db8::11"}}}, nil
+		}
+		return nil, nil
+	}
+	checkEgress(t, h)
+	h.svc.DeliverNotifications(ctx)
+	require.EqualValues(t, 2, calls.Load())
+	require.Equal(t, "healthy", egressStatus(t, h, stack.ID).Status)
+	require.Len(t, h.mails, 2)
+	require.Contains(t, h.mails[1], "出口恢复")
 }

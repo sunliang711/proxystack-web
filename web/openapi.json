@@ -1636,13 +1636,6 @@
       "JobParams": {
         "additionalProperties": false,
         "properties": {
-          "failure_threshold": {
-            "description": "出口连续失败告警阈值",
-            "format": "int64",
-            "maximum": 100,
-            "minimum": 0,
-            "type": "integer"
-          },
           "keep": {
             "description": "数据库备份保留份数",
             "format": "int64",
@@ -1650,9 +1643,16 @@
             "type": "integer"
           },
           "probe_timeout": {
-            "description": "每个 Stack 出口检测总超时（秒）",
+            "description": "每个 Stack 单次出口查询超时（秒）",
             "format": "int64",
             "maximum": 60,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "retry_count": {
+            "description": "出口首次查询失败后的额外重试次数",
+            "format": "int64",
+            "maximum": 10,
             "minimum": 0,
             "type": "integer"
           }

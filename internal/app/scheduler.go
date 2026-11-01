@@ -70,8 +70,8 @@ type jobType struct {
 // JobParams 是备份保留和出口检测任务的参数。
 type JobParams struct {
 	Keep int `json:"keep,omitempty" minimum:"0" doc:"数据库备份保留份数"`
-	FailureThreshold int `json:"failure_threshold,omitempty" minimum:"0" maximum:"100" doc:"出口连续失败告警阈值"`
-	ProbeTimeout int `json:"probe_timeout,omitempty" minimum:"0" maximum:"60" doc:"每个 Stack 出口检测总超时（秒）"`
+	RetryCount int `json:"retry_count" required:"false" minimum:"0" maximum:"10" doc:"出口首次查询失败后的额外重试次数"`
+	ProbeTimeout int `json:"probe_timeout,omitempty" minimum:"0" maximum:"60" doc:"每个 Stack 单次出口查询超时（秒）"`
 }
 
 // jobTypes 是任务注册表，顺序决定列表页的显示顺序。
@@ -122,8 +122,8 @@ var jobTypes = []jobType{
 			}
 			return nil
 		}},
-	{Kind: JobEgressCheck, Name: "Stack 出口检测", Description: "检测运行中 Stack 的 IPv4/IPv6 出口，连续失败告警、恢复后通知；仅支持已应用的 Mihomo SOCKS 监听",
-		Schedule: "* * * * *", Timeout: 120, Params: JobParams{FailureThreshold: 2, ProbeTimeout: 12}, Run: runEgressCheckJob},
+	{Kind: JobEgressCheck, Name: "Stack 出口检测", Description: "检测运行中 Stack 的 IPv4/IPv6 出口，失败后间隔 1 秒重试，耗尽重试后告警、恢复后通知；仅支持已应用的 Mihomo SOCKS 监听",
+		Schedule: "*/2 * * * *", Timeout: 120, Params: JobParams{RetryCount: 3, ProbeTimeout: 12}, Run: runEgressCheckJob},
 }
 
 func jobTypeOf(kind string) *jobType {
@@ -477,8 +477,8 @@ func (s *Service) UpdateJob(ctx context.Context, actor Actor, id int64, update J
 			return &FieldError{Field: "params.keep", Message: "must be at least 1"}
 		}
 		if kind == JobEgressCheck {
-			if update.Params.FailureThreshold < 1 || update.Params.FailureThreshold > 100 {
-				return &FieldError{Field: "params.failure_threshold", Message: "must be between 1 and 100"}
+			if update.Params.RetryCount < 0 || update.Params.RetryCount > maxEgressRetries {
+				return &FieldError{Field: "params.retry_count", Message: "must be between 0 and 10"}
 			}
 			if update.Params.ProbeTimeout < 1 || update.Params.ProbeTimeout > 60 {
 				return &FieldError{Field: "params.probe_timeout", Message: "must be between 1 and 60 seconds"}

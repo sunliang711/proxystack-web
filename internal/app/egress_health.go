@@ -18,7 +18,12 @@ import (
 	"proxystack-web/internal/units"
 )
 
-const egressConcurrency = 4
+const (
+	egressConcurrency = 4
+	// 每轮首次查询后最多重试十次，重试前固定等待一秒。
+	maxEgressRetries = 10
+	egressRetryDelay = time.Second
+)
 
 // EgressHealth 是独立于浏览器出口缓存的后台检测结果。
 type EgressHealth struct {
@@ -184,22 +189,70 @@ func (s *Service) probeStackEgress(ctx context.Context, target egressTarget, sec
 		return nil, err
 	}
 	defer fetcher.CloseIdleConnections()
-	results := make([]EgressResult, 2)
-	var wg sync.WaitGroup
-	for index, family := range []string{"ipv4", "ipv6"} {
-		wg.Add(1)
+	return probeEgressFamilies(probeCtx, fetcher, timeout/3), nil
+}
+
+func probeEgressFamilies(ctx context.Context, fetcher deps.Fetcher, sourceTimeout time.Duration) []EgressResult {
+	queryCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	// 成功后可直接返回；缓冲保证被取消的另一地址族仍能完成结果发送。
+	completed := make(chan EgressResult, 2)
+	for _, family := range []string{"ipv4", "ipv6"} {
 		go func() {
-			defer wg.Done()
 			// 为三个回退源预留时间，同时限制每个 Stack 的整体检测时长。
-			results[index] = queryEgress(probeCtx, fetcher, family, timeout/3)
+			completed <- queryEgress(queryCtx, fetcher, family, sourceTimeout)
 		}()
 	}
-	wg.Wait()
-	return results, nil
+	results := make([]EgressResult, 0, 2)
+	for range 2 {
+		result := <-completed
+		results = append(results, result)
+		if matchesFamily(result.IP, result.Family) {
+			return results
+		}
+	}
+	return results
+}
+
+type egressProbe struct {
+	results   []EgressResult
+	err       error
+	attempts  int
+	startedAt time.Time
+}
+
+// probeEgressWithRetries 在单轮内确认故障，任一地址族成功就结束本轮。
+func (s *Service) probeEgressWithRetries(ctx context.Context, target egressTarget, params JobParams, logf Logf) egressProbe {
+	probe := egressProbe{startedAt: s.Now()}
+	for retry := 0; retry <= params.RetryCount; retry++ {
+		if retry > 0 {
+			logf("Stack %s: retry %d/%d after 1 second", target.name, retry, params.RetryCount)
+			timer := time.NewTimer(egressRetryDelay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				probe.err = ctx.Err()
+				return probe
+			case <-timer.C:
+			}
+		}
+		if ctx.Err() != nil {
+			probe.err = ctx.Err()
+			return probe
+		}
+		probe.attempts++
+		probe.results, probe.err = s.probeStackEgress(ctx, target, params.ProbeTimeout)
+		ipv4, _ := egressFamily(probe.results, "ipv4", probe.err)
+		ipv6, _ := egressFamily(probe.results, "ipv6", probe.err)
+		if ipv4 != "" || ipv6 != "" {
+			break
+		}
+	}
+	return probe
 }
 
 func runEgressCheckJob(ctx context.Context, s *Service, params JobParams, logf Logf) error {
-	if params.FailureThreshold < 1 || params.FailureThreshold > 100 || params.ProbeTimeout < 1 || params.ProbeTimeout > 60 {
+	if params.RetryCount < 0 || params.RetryCount > maxEgressRetries || params.ProbeTimeout < 1 || params.ProbeTimeout > 60 {
 		return errors.New("invalid egress check parameters")
 	}
 	// 与手动执行、测试入口共用互斥，数据库中的每轮结果只能被累计一次。
@@ -236,21 +289,20 @@ targetsLoop:
 				mu.Unlock()
 				return
 			}
-			var results []EgressResult
-			var probeErr error
+			var probe egressProbe
 			if target.mode == "ready" {
-				results, probeErr = s.probeStackEgress(ctx, target, params.ProbeTimeout)
+				probe = s.probeEgressWithRetries(ctx, target, params, logf)
 			}
 			if err := ctx.Err(); err != nil {
 				return
 			}
-			if err := s.recordEgressResult(ctx, target, results, probeErr, params.FailureThreshold); err != nil {
+			if err := s.recordEgressResult(ctx, target, probe); err != nil {
 				mu.Lock()
 				failures = append(failures, err)
 				mu.Unlock()
 				return
 			}
-			logf("Stack %s: %s", target.name, target.mode)
+			logf("Stack %s: %s, queries=%d", target.name, target.mode, probe.attempts)
 		}()
 	}
 	wg.Wait()
@@ -284,7 +336,7 @@ func egressFamily(results []EgressResult, family string, probeErr error) (string
 	return "", "No valid IP address returned"
 }
 
-func (s *Service) recordEgressResult(ctx context.Context, target egressTarget, results []EgressResult, probeErr error, threshold int) error {
+func (s *Service) recordEgressResult(ctx context.Context, target egressTarget, probe egressProbe) error {
 	// 等待正在发送的邮件时不占用运行时锁，保持应用和启停操作可用。
 	s.notificationMu.Lock()
 	defer s.notificationMu.Unlock()
@@ -330,8 +382,8 @@ func (s *Service) recordEgressResult(ctx context.Context, target egressTarget, r
 			}
 			row.Fingerprint = target.fingerprint
 			row.CheckedAt = s.Now().Unix()
-			row.Ipv4, row.Ipv4Error = egressFamily(results, "ipv4", probeErr)
-			row.Ipv6, row.Ipv6Error = egressFamily(results, "ipv6", probeErr)
+			row.Ipv4, row.Ipv4Error = egressFamily(probe.results, "ipv4", probe.err)
+			row.Ipv6, row.Ipv6Error = egressFamily(probe.results, "ipv6", probe.err)
 			event := ""
 			if row.Ipv4 != "" || row.Ipv6 != "" {
 				row.Status, row.Failures = "healthy", 0
@@ -340,17 +392,13 @@ func (s *Service) recordEgressResult(ctx context.Context, target egressTarget, r
 				}
 				row.Alarmed = 0
 			} else {
-				if row.FailureSince == 0 {
-					row.FailureSince = row.CheckedAt
-				}
-				row.Failures++
-				row.Status = "failing"
-				if row.Failures >= int64(threshold) && row.Alarmed == 0 {
+				// 仅在首次查询和所有重试都失败后保存故障，不再跨调度周期累计。
+				row.Failures = int64(probe.attempts)
+				row.Status = "down"
+				if row.Alarmed == 0 {
+					row.FailureSince = probe.startedAt.Unix()
 					row.Incident++
 					row.Alarmed, event = 1, configdoc.EventEgressDown
-				}
-				if row.Alarmed != 0 {
-					row.Status = "down"
 				}
 			}
 			if event != "" {
@@ -384,7 +432,7 @@ func (s *Service) enqueueEgressNotification(ctx context.Context, q *dbq.Queries,
 		"首次失败：" + time.Unix(row.FailureSince, 0).In(loc).Format(time.DateTime),
 		"检测时间：" + s.Now().In(loc).Format(time.DateTime)}
 	if event == configdoc.EventEgressDown {
-		lines = append(lines, fmt.Sprintf("连续失败次数：%d", row.Failures), "IPv4："+row.Ipv4Error, "IPv6："+row.Ipv6Error)
+		lines = append(lines, fmt.Sprintf("本轮查询失败次数：%d", row.Failures), "IPv4："+row.Ipv4Error, "IPv6："+row.Ipv6Error)
 	} else {
 		lines = append(lines, "故障持续时间："+s.Now().Sub(time.Unix(row.FailureSince, 0)).Round(time.Second).String(),
 			"IPv4："+row.Ipv4, "IPv6："+row.Ipv6)

@@ -1999,19 +1999,19 @@ export interface components {
         JobParams: {
             /**
              * Format: int64
-             * @description 出口连续失败告警阈值
-             */
-            failure_threshold?: number;
-            /**
-             * Format: int64
              * @description 数据库备份保留份数
              */
             keep?: number;
             /**
              * Format: int64
-             * @description 每个 Stack 出口检测总超时（秒）
+             * @description 每个 Stack 单次出口查询超时（秒）
              */
             probe_timeout?: number;
+            /**
+             * Format: int64
+             * @description 出口首次查询失败后的额外重试次数
+             */
+            retry_count?: number;
         };
         JobRun: {
             /** Format: date-time */

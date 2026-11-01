@@ -35,7 +35,7 @@ const checked = computed(() => props.health?.checked_at && !props.health.checked
       <div v-if="checked">最后完成检测：{{ checked }}</div>
       <div>后台 IPv4：{{ health.ipv4 || '-' }}</div>
       <div>后台 IPv6：{{ health.ipv6 || '-' }}</div>
-      <div v-if="health.failures">连续失败：{{ health.failures }} 次</div>
+      <div v-if="health.failures">本轮查询失败：{{ health.failures }} 次</div>
       <div v-if="health.ipv4_error">IPv4：{{ health.ipv4_error }}</div>
       <div v-if="health.ipv6_error">IPv6：{{ health.ipv6_error }}</div>
     </template>
