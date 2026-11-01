@@ -198,6 +198,11 @@ func (v *View) BaseURL(requestURL *url.URL) string {
 	return ""
 }
 
+// Path 返回带用户名的订阅路径；用户名仅用于识别，鉴权仍以 token 为准。
+func Path(user, token, format string) string {
+	return "/s/" + url.PathEscape(user) + "/" + url.PathEscape(token) + "/" + url.PathEscape(format)
+}
+
 // Serve 渲染 token 对应用户的订阅。requestURL 用于未设置对外地址时的 Surge managed 首行。
 func (v *View) Serve(token, format string, requestURL *url.URL, now time.Time) *Response {
 	user := v.UserByToken(token)
@@ -213,7 +218,7 @@ func (v *View) Serve(token, format string, requestURL *url.URL, now time.Time) *
 	if len(sub.NodesForUser(v.Index, user.Name)) == 0 {
 		return &Response{Status: http.StatusNotFound, Code: "not_found"}
 	}
-	body, err := v.Render(user.Name, format, v.Templates.forFormat(format), v.BaseURL(requestURL)+"/s/"+token+"/surge")
+	body, err := v.Render(user.Name, format, v.Templates.forFormat(format), v.BaseURL(requestURL)+Path(user.Name, token, sub.FormatSurge))
 	if err != nil {
 		slog.Error("render subscription", "user", user.Name, "format", format, "err", err)
 		var templateErr sub.TemplateError

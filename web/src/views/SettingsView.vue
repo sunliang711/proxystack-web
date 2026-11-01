@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import {
-  NButton, NCard, NCheckbox, NCheckboxGroup, NCollapse, NCollapseItem, NDynamicTags, NForm, NFormItem, NGrid, NFormItemGi,
+  NButton, NCheckbox, NCheckboxGroup, NCollapse, NCollapseItem, NDynamicTags, NForm, NFormItem, NGrid, NFormItemGi,
   NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NSwitch, NTimePicker, NAlert,
   useDialog, useMessage,
 } from 'naive-ui'
@@ -9,6 +9,8 @@ import { api, emptyErrors, fieldState, MASKED, problemMessage, splitProblem, typ
 import { randomString } from '../util/generate'
 import SecretInput from '../components/SecretInput.vue'
 import ErrorList from '../components/ErrorList.vue'
+import SettingsSection from '../components/SettingsSection.vue'
+import { useSettingsSections } from '../composables/useSettingsSections'
 import { useDirty } from '../composables/useDirty'
 import { mihomoLogLevels, xrayLogLevels } from '../util/options'
 
@@ -21,6 +23,13 @@ const saving = ref(false)
 const message = useMessage()
 const dialog = useDialog()
 const { dirty, markClean } = useDirty(settings)
+const { expanded, revealErrors } = useSettingsSections()
+const policyExpanded = computed({
+  get: () => expanded.value.includes('policy') ? ['policy'] : [],
+  set: (names: Array<string | number>) => {
+    expanded.value = [...expanded.value.filter((name) => name !== 'policy'), ...names.map(String)]
+  },
+})
 
 const timezones = (Intl as unknown as { supportedValuesOf(key: string): string[] })
   .supportedValuesOf('timeZone')
@@ -185,6 +194,7 @@ async function save() {
   saving.value = false
   if (error) {
     errors.value = splitProblem(error)
+    revealErrors(errors.value.fields)
     return
   }
   errors.value = emptyErrors()
@@ -201,7 +211,7 @@ async function save() {
       <NAlert type="info" :bordered="false" style="margin-bottom: 12px">
         下载代理、通知和采集设置保存后立即影响后续后台任务；涉及 xray / mihomo 生成物的设置会进入“待应用变更”，需要再执行应用。
       </NAlert>
-      <NCard title="基本" size="small" class="card">
+      <SettingsSection title="基本" name="basic" v-model:expanded-names="expanded">
         <NFormItem label="对外地址" v-bind="f('basic.external_host', '订阅节点默认使用的域名或 IP')">
           <NInput v-model:value="form.basic.external_host" placeholder="proxy.example.com" />
         </NFormItem>
@@ -211,9 +221,9 @@ async function save() {
         <NFormItem label="时区" v-bind="f('basic.timezone', '流量统计的日、月边界按此时区计算')">
           <NSelect v-model:value="form.basic.timezone" :options="timezones" filterable />
         </NFormItem>
-      </NCard>
+      </SettingsSection>
 
-      <NCard title="端口池" size="small" class="card">
+      <SettingsSection title="端口池" name="port_pools" v-model:expanded-names="expanded">
         <NFormItem v-for="pool in pools" :key="pool.key" :label="pool.label" v-bind="f(`port_pools.${pool.key}`)">
           <NSpace align="center">
             <NInputNumber v-model:value="form.port_pools[pool.key].start" :min="1" :max="65535" :show-button="false" />
@@ -221,9 +231,9 @@ async function save() {
             <NInputNumber v-model:value="form.port_pools[pool.key].end" :min="1" :max="65535" :show-button="false" />
           </NSpace>
         </NFormItem>
-      </NCard>
+      </SettingsSection>
 
-      <NCard title="默认值" size="small" class="card">
+      <SettingsSection title="默认值" name="defaults" v-model:expanded-names="expanded">
         <NFormItem label="Mihomo 模式">
           <NRadioGroup v-model:value="form.defaults.mihomo.mode">
             <NRadioButton value="Rule">Rule</NRadioButton>
@@ -254,7 +264,7 @@ async function save() {
         <NFormItem label="Xray policy">
           <NSwitch v-model:value="form.defaults.xray.policy.enabled" />
         </NFormItem>
-        <NCollapse>
+        <NCollapse v-model:expanded-names="policyExpanded">
           <NCollapseItem title="policy 统计开关" name="policy">
             <NGrid :cols="1">
               <NFormItemGi v-for="flag in policyFlags" :key="flag.key" :label="flag.label" label-width="280">
@@ -263,18 +273,18 @@ async function save() {
             </NGrid>
           </NCollapseItem>
         </NCollapse>
-      </NCard>
+      </SettingsSection>
 
-      <NCard title="安全" size="small" class="card">
+      <SettingsSection title="安全" name="security" v-model:expanded-names="expanded">
         <NFormItem label="公开入站必须认证" label-width="200">
           <NSwitch v-model:value="form.security.require_auth_for_public_socks_http" />
         </NFormItem>
         <NFormItem label="允许公开的无认证入站" label-width="200">
           <NSwitch :value="form.security.allow_noauth_public" @update:value="toggleNoAuth" />
         </NFormItem>
-      </NCard>
+      </SettingsSection>
 
-      <NCard title="订阅" size="small" class="card">
+      <SettingsSection title="订阅" name="subscription" v-model:expanded-names="expanded">
         <NAlert type="info" :bordered="false" style="margin-bottom: 12px">
           订阅由单独部署的订阅端提供。这里的设置随订阅包下发，在「发布订阅包」页签发并拷贝到订阅端后生效。
         </NAlert>
@@ -302,9 +312,9 @@ async function save() {
             <NRadioButton value="empty">返回空订阅</NRadioButton>
           </NRadioGroup>
         </NFormItem>
-      </NCard>
+      </SettingsSection>
 
-      <NCard title="节点导出" size="small" class="card">
+      <SettingsSection title="节点导出" name="node_export" v-model:expanded-names="expanded">
         <NFormItem label="开启只读导出" v-bind="f('node_export.enabled', '其他 proxystack-web 实例可以凭 token 拉取本机节点（远端节点源）')">
           <NSwitch v-model:value="form.node_export.enabled" />
         </NFormItem>
@@ -316,9 +326,9 @@ async function save() {
             <NText code>{{ exportURL }}</NText>
           </NFormItem>
         </template>
-      </NCard>
+      </SettingsSection>
 
-      <NCard title="流量" size="small" class="card">
+      <SettingsSection title="流量" name="traffic" v-model:expanded-names="expanded">
         <NFormItem label="启用流量监控" v-bind="f('traffic.enabled', '开启后所有 stack 强制启用 stats 和用户级计数，生成物变化需要应用')">
           <NSwitch v-model:value="form.traffic.enabled" />
         </NFormItem>
@@ -344,9 +354,9 @@ async function save() {
         <NFormItem label="暂停时断开现有连接" v-bind="f('traffic.disconnect_on_pause', '自动暂停后重启受影响的 xray 以切断已建立的连接，其他用户的连接会被短暂中断')">
           <NSwitch v-model:value="form.traffic.disconnect_on_pause" />
         </NFormItem>
-      </NCard>
+      </SettingsSection>
 
-      <NCard title="通知" size="small" class="card">
+      <SettingsSection title="通知" name="notify" v-model:expanded-names="expanded">
         <NFormItem label="启用邮件通知" v-bind="f('notify.enabled', '未启用时事件只记录在「通知记录」页')">
           <NSwitch v-model:value="form.notify.enabled" />
         </NFormItem>
@@ -396,9 +406,9 @@ async function save() {
             </NAlert>
           </NSpace>
         </NFormItem>
-      </NCard>
+      </SettingsSection>
 
-      <NCard title="依赖源" size="small" class="card">
+      <SettingsSection title="依赖源" name="deps" v-model:expanded-names="expanded">
         <template v-for="dep in depKeys" :key="dep.key">
           <NFormItem :label="`${dep.label} 版本`" v-bind="f(`deps.${dep.key}.version`, 'latest 或具体版本号；「依赖」页的升级按钮按此安装')">
             <NInput v-model:value="form.deps[dep.key].version" />
@@ -442,9 +452,9 @@ async function save() {
             <NTimePicker :value="timeValue(form.deps.window_end)" format="HH:mm" @update:value="(v) => (form.deps.window_end = timeText(v))" />
           </NSpace>
         </NFormItem>
-      </NCard>
+      </SettingsSection>
 
-      <NCard title="下载代理" size="small" class="card">
+      <SettingsSection title="下载代理" name="download_proxy" v-model:expanded-names="expanded">
         <NFormItem label="模式" v-bind="f('download_proxy.mode', '作用于依赖管理和面板自更新的全部对外请求，保存后立即生效')">
           <NRadioGroup v-model:value="form.download_proxy.mode">
             <NRadioButton value="direct">直连</NRadioButton>
@@ -499,7 +509,7 @@ async function save() {
             </NAlert>
           </NSpace>
         </NFormItem>
-      </NCard>
+      </SettingsSection>
 
       <NSpace class="actions">
         <NButton type="primary" :loading="saving" :disabled="!dirty" @click="save">保存</NButton>
@@ -509,9 +519,6 @@ async function save() {
 </template>
 
 <style scoped>
-.card {
-  margin-bottom: 12px;
-}
 .actions {
   position: sticky;
   bottom: 0;

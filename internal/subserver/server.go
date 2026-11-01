@@ -258,7 +258,7 @@ func (s *Server) Handler() http.Handler {
 		}
 		writeJSON(w, status, health)
 	})
-	mux.HandleFunc("GET /s/{token}/{format}", func(w http.ResponseWriter, r *http.Request) {
+	serveSubscription := func(w http.ResponseWriter, r *http.Request) {
 		format := r.PathValue("format")
 		if !formats[format] {
 			writeError(w, http.StatusNotFound, "not_found", "unknown subscription format")
@@ -289,7 +289,10 @@ func (s *Server) Handler() http.Handler {
 		}
 		w.WriteHeader(result.Status)
 		_, _ = w.Write(result.Body)
-	})
+	}
+	// 同时支持旧路径；用户名只是标签，用户改名后已分发的链接仍可使用。
+	mux.HandleFunc("GET /s/{user}/{token}/{format}", serveSubscription)
+	mux.HandleFunc("GET /s/{token}/{format}", serveSubscription)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "not found")
 	})

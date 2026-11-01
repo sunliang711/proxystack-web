@@ -114,7 +114,7 @@ func TestSubscriptionBundleServesAppliedNodes(t *testing.T) {
 
 	status, body, _ = get(t, subs.http, "/s/alice-token/surge")
 	require.Equal(t, http.StatusOK, status)
-	require.True(t, strings.HasPrefix(body, "#!MANAGED-CONFIG "+subs.http.URL+"/s/alice-token/surge"), body[:80])
+	require.True(t, strings.HasPrefix(body, "#!MANAGED-CONFIG "+subs.http.URL+"/s/alice/alice-token/surge"), body[:80])
 
 	status, _, _ = get(t, subs.http, "/s/wrong-token/clash")
 	require.Equal(t, http.StatusForbidden, status)
@@ -147,6 +147,65 @@ func TestSubscriptionBundleServesAppliedNodes(t *testing.T) {
 	health := subs.server.Health()
 	require.Equal(t, "ok", health.Status)
 	require.EqualValues(t, 3, health.Source[0].Sequence)
+}
+
+// TestNamedSubscriptionLinks 验证带用户名的链接、旧链接兼容、改名及 token 鉴权。
+func TestNamedSubscriptionLinks(t *testing.T) {
+	ctx := context.Background()
+	h := newRuntimeHarness(t)
+	id, err := h.svc.Apply(ctx, h.actor, nil)
+	require.NoError(t, err)
+	require.Equal(t, app.TaskSucceeded, h.waitTask(t, id).Status)
+	subs := newSubServer(t, sourceOf(t, h, true))
+	subs.deliver(t, publish(t, h))
+	doc, err := h.svc.LoadConfig(ctx)
+	require.NoError(t, err)
+	alice := doc.Users[doc.UserByName("alice")]
+	links, err := h.svc.UserSubscriptionLinks(ctx, alice.ID)
+	require.NoError(t, err)
+	preview, err := h.svc.PreviewSubscription(ctx, alice.ID, "surge", nil)
+	require.NoError(t, err)
+	require.Contains(t, preview, "/s/alice/%3Ctoken%3E/surge")
+	require.NotContains(t, preview, alice.SubToken)
+	for _, format := range []string{"clash", "premium", "surge"} {
+		path := "/s/alice/alice-token/" + format
+		require.Equal(t, links.BaseURL+path, links.Links[format])
+		status, named, _ := get(t, subs.http, path)
+		require.Equal(t, http.StatusOK, status, named)
+		status, legacy, _ := get(t, subs.http, "/s/alice-token/"+format)
+		require.Equal(t, http.StatusOK, status, legacy)
+		require.Equal(t, legacy, named)
+	}
+	status, _, _ := get(t, subs.http, "/s/alice/wrong-token/clash")
+	require.Equal(t, http.StatusForbidden, status)
+	status, _, _ = get(t, subs.http, "/s/alice/alice-token/unknown")
+	require.Equal(t, http.StatusNotFound, status)
+
+	// 用户名仅用于识别；发布改名后旧名称链接仍通过原 token 访问对应用户。
+	alice.Name = "alice-renamed"
+	_, err = h.svc.UpdateUser(ctx, h.actor, alice.ID, alice)
+	require.NoError(t, err)
+	id, err = h.svc.Apply(ctx, h.actor, nil)
+	require.NoError(t, err)
+	require.Equal(t, app.TaskSucceeded, h.waitTask(t, id).Status)
+	subs.deliver(t, publish(t, h))
+	status, body, _ := get(t, subs.http, "/s/alice/alice-token/surge")
+	require.Equal(t, http.StatusOK, status)
+	require.Contains(t, body, "/s/alice-renamed/alice-token/surge")
+	links, err = h.svc.UserSubscriptionLinks(ctx, alice.ID)
+	require.NoError(t, err)
+	require.Equal(t, links.BaseURL+"/s/alice-renamed/alice-token/clash", links.Links["clash"])
+
+	alice.SubToken = "replacement-token"
+	_, err = h.svc.UpdateUser(ctx, h.actor, alice.ID, alice)
+	require.NoError(t, err)
+	subs.deliver(t, publish(t, h))
+	for _, path := range []string{"/s/alice-token/clash", "/s/alice/alice-token/clash"} {
+		status, _, _ = get(t, subs.http, path)
+		require.Equal(t, http.StatusForbidden, status)
+	}
+	status, _, _ = get(t, subs.http, "/s/alice-renamed/replacement-token/clash")
+	require.Equal(t, http.StatusOK, status)
 }
 
 // TestSubscriptionBundleRejections 验证订阅端拒收被篡改的包、未受信任来源的包和旧包，拒收后保留原有数据。

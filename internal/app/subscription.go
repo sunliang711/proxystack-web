@@ -273,7 +273,7 @@ func (s *Service) UserSubscriptionLinks(ctx context.Context, id int64) (*Subscri
 	base := snapshot.view.BaseURL(nil)
 	links := map[string]string{}
 	for _, format := range []string{sub.FormatClash, sub.FormatPremium, sub.FormatSurge} {
-		links[format] = base + "/s/" + user.SubToken + "/" + format
+		links[format] = base + subscription.Path(user.Name, user.SubToken, format)
 	}
 	return &SubscriptionLinks{BaseURL: base, Links: links, Nodes: len(sub.NodesForUser(snapshot.view.Index, user.Name))}, nil
 }
@@ -301,7 +301,7 @@ func (s *Service) PreviewSubscription(ctx context.Context, userID int64, format 
 	if base == "" {
 		base = "http://<订阅端地址>"
 	}
-	text, err := snapshot.view.Render(snapshot.doc.Users[index].Name, format, template, base+"/s/<token>/surge")
+	text, err := snapshot.view.Render(snapshot.doc.Users[index].Name, format, template, base+subscription.Path(user.Name, "<token>", sub.FormatSurge))
 	if err != nil {
 		return "", &FieldError{Field: "content", Message: err.Error()}
 	}

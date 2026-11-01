@@ -10,7 +10,8 @@
     "typecheck": "vue-tsc --noEmit",
     "test:egress": "node --test tests/egress.test.mjs",
     "test:polling": "node --test tests/polling.test.mjs",
-    "test:inbounds": "node --test tests/inbounds.test.mjs"
+    "test:inbounds": "node --test tests/inbounds.test.mjs",
+    "test:settings": "node --test tests/settings-sections.test.mjs"
   },
   "dependencies": {
     "@codemirror/lang-json": "^6.0.2",
