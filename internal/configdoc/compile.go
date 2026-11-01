@@ -101,13 +101,13 @@ func compileGlobal(settings Settings, users []User) domain.GlobalConfig {
 		}
 	}
 	for _, user := range users {
+		// 用户备注仅用于管理识别，不作为 default 档案的订阅节点名。
 		config.Users = append(config.Users, domain.UserProfile{
 			User:            user.Name,
 			Profile:         DefaultProfile,
 			Email:           domain.UserStatsEmail(user.ID, 0),
 			UUID:            user.UUID,
 			Password:        user.SSPassword,
-			Remark:          user.Remark,
 			DisplayTemplate: user.DisplayTemplate,
 			Tag:             user.Tag,
 		})

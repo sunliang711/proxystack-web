@@ -231,7 +231,7 @@ const showUsers = computed(() => isUserProtocol.value || (isAuthProtocol.value &
                 <NSelect v-model:value="ref.profile" :options="profileOptions(ref)" />
               </NFormItem>
               <NFormItem label="remark" label-width="90">
-                <NInput v-model:value="ref.remark" placeholder="覆盖用户 remark" />
+                <NInput v-model:value="ref.remark" placeholder="覆盖此用户在当前入站的节点名" />
               </NFormItem>
               <NFormItem label="展示名模板" label-width="90" v-bind="f(`users[${index}].display_template`)">
                 <TemplateInput v-model:value="ref.display_template" />

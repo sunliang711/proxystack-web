@@ -165,7 +165,7 @@ async function remove() {
         <NFormItem label="启用" :feedback="'切换后当场生效：通过 xray API 移除或加回该用户，配置不删除'">
           <NSwitch :value="user.enabled" :loading="pausing" @update:value="(v) => setPause(v, user!.paused_stacks ?? [])" />
         </NFormItem>
-        <NFormItem label="备注" v-bind="f('remark')">
+        <NFormItem label="备注" v-bind="f('remark', '仅用于管理识别，不影响订阅节点名')">
           <NInput v-model:value="user.remark" />
         </NFormItem>
         <NFormItem label="展示名模板" v-bind="f('display_template')">

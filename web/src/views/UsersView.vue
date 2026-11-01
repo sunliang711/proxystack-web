@@ -160,7 +160,7 @@ async function create() {
         <NFormItem label="名称" required v-bind="fieldState(errors, 'name', '字母或数字开头，可含 _ . -')">
           <NInput v-model:value="draft.name" />
         </NFormItem>
-        <NFormItem label="备注">
+        <NFormItem label="备注" feedback="仅用于管理识别，不影响订阅节点名">
           <NInput v-model:value="draft.remark" />
         </NFormItem>
       </NForm>

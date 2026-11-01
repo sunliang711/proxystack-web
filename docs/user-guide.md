@@ -71,6 +71,8 @@ curl -fsSL https://raw.githubusercontent.com/sunliang711/proxystack-web/refs/hea
 
 订阅端默认监听 `127.0.0.1:9444`，可以用 `--sub-listen` 和 `--sub-port` 指定。在已经安装订阅端的机器上再次执行 `--role sub` 时，脚本只升级订阅端的二进制并重启订阅服务，配置和已导入的订阅包保持不变。
 
+脚本地址中的 `main` 只决定安装脚本的版本；未指定 `--binary` 时，脚本下载 GitHub Release 的二进制，默认使用最新正式发布版本，不会从 `main` 源码编译。旧版二进制的 CLI 默认目录仍可能是 `/opt/proxystack-sub`，管理订阅数据时请显式指定 `sub --dir /opt/proxystack-web-sub`，以便与服务读取的目录保持一致。
+
 本项目使用 `/opt/proxystack-web-sub`、账号 `proxystack-web-sub` 和 `proxystack-web-sub.service`，与 proxystack-go 的 pssub（`/opt/proxystack-sub`、`proxystack-sub.service`）独立，可以同时安装。管理订阅服务使用：
 
 ```bash
@@ -125,6 +127,8 @@ sudo bash install.sh --role sub --migrate-sub
 1. 在「系统设置 → 基本」中填写对外地址，即订阅节点默认使用的域名或 IP。
 2. 在「用户」页面新建代理用户。新建 stack 的入站需要引用用户，因此至少要先有一个用户。
 3. 在「Stack」页面按模板新建 stack。一个 stack 对应一组独立运行的 xray 与 mihomo 进程，端口从「系统设置 → 端口池」中自动分配，凭据随机生成。新建后可以进入编辑页调整入站、出站、上游、代理组和规则。编辑页中新增的上游自动加入代理组并排在 DIRECT 之前：只有 DIRECT 的代理组会以新上游作为默认选择，含自动测速或负载均衡组的 stack 把新上游加入这些组。stack 改名时，以旧名字开头的入站显示名同步换成新名字，手工改过的显示名保持不变。「Stack」页面顶部的流量拓扑展示客户端、各 stack 之间的上游引用和出口；编辑页的「流量图示」标签展示单个 stack 从入站、出站、规则、代理组到上游的完整流向，按编辑中的内容实时绘制。列表中的出口 IP 列同时显示 IPv4 和 IPv6 出口，查不到的显示为 -。
+
+用户基本信息中的「备注」仅用于管理识别，不覆盖订阅节点名，也不作为展示名模板中的 `.remark`。例如用户 `xc` 备注为 `xiaochen`，加入 `usa1`、`usa3` 的 VMess 入站后，节点仍可分别使用 `usa1 vmess`、`usa3 vmess`。需要自定义节点名时，在 Stack 入站中设置节点备注、用户覆盖或展示名模板；非 default 凭据档案的节点备注仍可继承，同一用户的最终节点名必须唯一。
 
 ### 4.3 应用配置
 

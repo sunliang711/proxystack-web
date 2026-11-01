@@ -47,7 +47,7 @@ export const templateVariableHelp: Record<string, string> = {
   '.port': '入站监听端口，例如 443',
   '.user': '当前订阅用户的名称',
   '.profile': '当前引用的用户档案名，默认档案为 default',
-  '.remark': '生效的备注：入站用户覆盖 → 所选用户档案 → 入站备注；均为空时使用入站名称',
+  '.remark': '生效的节点备注：入站用户覆盖 → 非 default 凭据档案备注 → 入站备注；均为空时使用入站名称，不包含用户的管理备注',
 }
 
 export const templateFunctionHelp: Record<string, { description: string; example: string }> = {
