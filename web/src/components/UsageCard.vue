@@ -81,9 +81,10 @@ const reference = computed(() => (!stackId.value && props.dailyLimit ? { value: 
         <NProgress v-if="dailyLimit" type="line" :percentage="percent(total(usage.today), dailyLimit)" :status="status(percent(total(usage.today), dailyLimit))" />
       </div>
       <div>
-        <NText>本周期总用量（全部 Stack） {{ formatBytes(total(usage.period)) }}<template v-if="quota"> / {{ formatBytes(quota) }}</template></NText>
+        <NText>{{ new Date(usage.period_start).getFullYear() > 1 ? '本周期总用量' : '累计用量' }}（全部 Stack） {{ formatBytes(total(usage.period)) }}<template v-if="quota"> / {{ formatBytes(quota) }}</template></NText>
         <NProgress v-if="quota" type="line" :percentage="percent(total(usage.period), quota)" :status="status(percent(total(usage.period), quota))" />
         <NText v-if="new Date(usage.next_reset).getFullYear() > 1" depth="3" style="display: block">{{ formatTime(usage.next_reset) }} 重置</NText>
+        <NText v-else depth="3" style="display: block">不按周期重置，包含历史累计流量。</NText>
       </div>
       <NSpace align="center">
         <NText strong>按 Stack 查看用量</NText>

@@ -2,7 +2,7 @@
 import { computed, h, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import {
-  NButton, NCard, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NModal, NPopconfirm, NSelect, NSpace, NTag, useMessage,
+  NButton, NCard, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NModal, NPopconfirm, NSelect, NSpace, NTag, NTooltip, useMessage,
   type DataTableColumns,
 } from 'naive-ui'
 import { api, emptyErrors, fieldState, problemMessage, splitProblem, type FormErrors, type Schemas } from '../api/client'
@@ -47,6 +47,12 @@ const rows = computed(() => users.value.filter((user) => {
   return true
 }))
 const used = (bytes?: { up: number; down: number }) => formatBytes((bytes?.up ?? 0) + (bytes?.down ?? 0))
+const usageTitle = computed(() => {
+  if (!rows.value.length) return '用量'
+  if (rows.value.every((user) => user.reset_mode !== 'monthly')) return '累计用量'
+  if (rows.value.every((user) => user.reset_mode === 'monthly')) return '本周期用量'
+  return '周期 / 累计用量'
+})
 
 /** 批量切换手动暂停开关，逐 stack 的暂停保持不变。 */
 async function setEnabled(enabled: boolean) {
@@ -91,7 +97,10 @@ const columns: DataTableColumns<User> = [
     },
   },
   { title: '今日用量', key: 'today', render: (row) => used(usage.value[row.id ?? 0]?.today) },
-  { title: '本周期用量', key: 'period', render: (row) => used(usage.value[row.id ?? 0]?.period) },
+  { title: () => usageTitle.value, key: 'period', render: (row) => h(NTooltip, null, {
+    trigger: () => h('span', { tabindex: 0 }, used(usage.value[row.id ?? 0]?.period)),
+    default: () => row.reset_mode === 'monthly' ? `本周期用量，每月 ${row.reset_day} 日重置` : '累计用量：不按周期重置，包含历史流量',
+  }) },
   { title: '每日阈值', key: 'daily_limit_bytes', width: 100, render: (row) => (row.daily_limit_bytes ? formatBytes(row.daily_limit_bytes) : '不限') },
   { title: '额度', key: 'quota_bytes', width: 90, render: (row) => (row.quota_bytes ? formatBytes(row.quota_bytes) : '不限') },
   { title: '重置', key: 'reset_mode', width: 100, render: (row) => (row.reset_mode === 'monthly' ? `每月 ${row.reset_day} 日` : '不重置') },

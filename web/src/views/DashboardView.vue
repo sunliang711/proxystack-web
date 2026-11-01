@@ -125,8 +125,8 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
     <NCard title="用量排行" size="small">
       <template #header-extra>
         <NRadioGroup v-model:value="rankingPeriod" size="small" aria-label="排行周期">
-          <NRadioButton value="day">日</NRadioButton>
-          <NRadioButton value="month">月</NRadioButton>
+          <NRadioButton value="day">今日</NRadioButton>
+          <NRadioButton value="month">本月</NRadioButton>
         </NRadioGroup>
       </template>
       <NEmpty v-if="!rankedUsers.length" :description="rankingPeriod === 'day' ? '今日还没有用量' : '本月还没有用量'">
