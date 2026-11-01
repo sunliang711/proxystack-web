@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"proxystack-web/internal/deps"
 	"proxystack-web/internal/domain/validation"
 	"proxystack-web/internal/events"
 	"proxystack-web/internal/notify"
@@ -49,11 +50,16 @@ type Service struct {
 	autoPause autoPauseState
 	scheduler schedulerState
 	guard     loginGuard
+	// notificationMu 串行化邮件发送与出口事件替换，避免恢复后发送滞后的故障邮件。
+	notificationMu sync.Mutex
+	egressMu sync.Mutex
 	// background 跟踪退出前要收尾的后台循环。
 	background sync.WaitGroup
 
 	// SendMail 发送邮件，为 nil 时通过 SMTP 发送（测试替换）。
 	SendMail func(ctx context.Context, config notify.Config, subject, body string) error
+	// ProbeEgress 替换出口探测，生产环境为 nil 时使用真实 SOCKS 请求。
+	ProbeEgress func(ctx context.Context, proxy deps.ProxyConfig, timeout time.Duration) ([]EgressResult, error)
 }
 
 // New 创建应用服务。

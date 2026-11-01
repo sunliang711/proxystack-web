@@ -178,6 +178,9 @@ type Notification struct {
 	Error         string `json:"error"`
 	Attempts      int64  `json:"attempts"`
 	NextAttemptAt int64  `json:"next_attempt_at"`
+	StackID       int64  `json:"stack_id"`
+	StackName     string `json:"stack_name"`
+	Incident      int64  `json:"incident"`
 }
 
 type RemoteSource struct {
@@ -242,12 +245,28 @@ type Stack struct {
 	RuleFinal             string `json:"rule_final"`
 	RuleExtra             string `json:"rule_extra"`
 	XrayAccessLog         string `json:"xray_access_log"`
+	DirectSuffix          string `json:"direct_suffix"`
 }
 
 type StackDirectUser struct {
 	StackID  int64 `json:"stack_id"`
 	UserID   int64 `json:"user_id"`
 	Position int64 `json:"position"`
+}
+
+type StackEgressHealth struct {
+	StackID      int64  `json:"stack_id"`
+	Status       string `json:"status"`
+	CheckedAt    int64  `json:"checked_at"`
+	Failures     int64  `json:"failures"`
+	FailureSince int64  `json:"failure_since"`
+	Incident     int64  `json:"incident"`
+	Alarmed      int64  `json:"alarmed"`
+	Fingerprint  string `json:"fingerprint"`
+	Ipv4         string `json:"ipv4"`
+	Ipv6         string `json:"ipv6"`
+	Ipv4Error    string `json:"ipv4_error"`
+	Ipv6Error    string `json:"ipv6_error"`
 }
 
 type SubTemplate struct {

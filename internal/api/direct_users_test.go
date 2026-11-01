@@ -18,16 +18,29 @@ func TestStackDirectUsersAPI(t *testing.T) {
 	stack := h.mustDo(http.MethodPost, "/api/stacks", map[string]any{"template": "pair", "name": "edge1", "labels": []string{}, "members": []string{}}, http.StatusCreated)
 	path := fmt.Sprintf("/api/stacks/%.0f", stack["id"])
 	require.Empty(t, stack["direct_users"])
+	require.Equal(t, " [DRT]", stack["direct_suffix"])
+	stack["direct_suffix"] = "  [直连]"
 	stack["direct_users"] = []string{"alice"}
 	stack = h.mustDo(http.MethodPut, path, stack, http.StatusOK)
 	require.Equal(t, []any{"alice"}, stack["direct_users"])
 	stack = h.mustDo(http.MethodGet, path, nil, http.StatusOK)
 	require.Equal(t, []any{"alice"}, stack["direct_users"])
+	require.Equal(t, "  [直连]", stack["direct_suffix"])
+	for _, suffix := range []string{"bad\nsuffix", "bad\rsuffix", "bad\tsuffix"} {
+		stack["direct_suffix"] = suffix
+		h.mustDo(http.MethodPut, path, stack, http.StatusUnprocessableEntity)
+	}
+	stack["direct_suffix"] = "  [直连]"
 	for _, users := range [][]string{{"missing"}, {"alice", "alice"}} {
 		stack["direct_users"] = users
 		h.mustDo(http.MethodPut, path, stack, http.StatusUnprocessableEntity)
 	}
 	delete(stack, "direct_users")
+	delete(stack, "direct_suffix")
 	stack = h.mustDo(http.MethodPut, path, stack, http.StatusOK)
 	require.Empty(t, stack["direct_users"])
+	require.Equal(t, " [DRT]", stack["direct_suffix"])
+	stack["direct_suffix"] = ""
+	stack = h.mustDo(http.MethodPut, path, stack, http.StatusOK)
+	require.Equal(t, " [DRT]", stack["direct_suffix"])
 }

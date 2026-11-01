@@ -150,6 +150,14 @@ const columns: DataTableColumns<Job> = [
         <NFormItem label="超时（秒）" v-bind="fieldState(errors, 'timeout')">
           <NInputNumber v-model:value="editing.timeout" :min="1" />
         </NFormItem>
+        <template v-if="editing.kind === 'egress_check'">
+          <NFormItem label="连续失败告警阈值" v-bind="fieldState(errors, 'params.failure_threshold', '连续多轮 IPv4、IPv6 均失败才告警，任一地址恢复后通知')">
+            <NInputNumber v-model:value="editing.params.failure_threshold" :min="1" :max="100" />
+          </NFormItem>
+          <NFormItem label="单个 Stack 检测超时（秒）" v-bind="fieldState(errors, 'params.probe_timeout', 'IPv4、IPv6 并发检测，共享此总超时；任务总超时需覆盖所有 Stack')">
+            <NInputNumber v-model:value="editing.params.probe_timeout" :min="1" :max="60" />
+          </NFormItem>
+        </template>
         <NFormItem v-if="editing.has_keep" label="保留份数" v-bind="fieldState(errors, 'params.keep')">
           <NInputNumber v-model:value="editing.params.keep" :min="1" />
         </NFormItem>

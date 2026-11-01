@@ -98,6 +98,9 @@ func NewHTTPFetcher(cfg ProxyConfig) (*HTTPFetcher, error) {
 	return &HTTPFetcher{client: &http.Client{Transport: transport}, proxy: cfg}, nil
 }
 
+// CloseIdleConnections 关闭本轮探测结束后不再使用的空闲连接。
+func (f *HTTPFetcher) CloseIdleConnections() { f.client.CloseIdleConnections() }
+
 // Get 读取一个较小的响应（发布信息、摘要文件）。
 func (f *HTTPFetcher) Get(ctx context.Context, target string) ([]byte, error) {
 	return f.Download(ctx, target, nil)

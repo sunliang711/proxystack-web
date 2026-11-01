@@ -876,6 +876,87 @@
         ],
         "type": "object"
       },
+      "EgressHealth": {
+        "additionalProperties": false,
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "failure_since": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "failures": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "ipv4": {
+            "type": "string"
+          },
+          "ipv4_error": {
+            "type": "string"
+          },
+          "ipv6": {
+            "type": "string"
+          },
+          "ipv6_error": {
+            "type": "string"
+          },
+          "stack_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "stack_name": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "unknown",
+              "healthy",
+              "failing",
+              "down",
+              "stopped",
+              "unsupported",
+              "paused",
+              "unavailable"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "stack_id",
+          "stack_name",
+          "status",
+          "checked_at",
+          "failure_since",
+          "failures",
+          "ipv4",
+          "ipv6",
+          "ipv4_error",
+          "ipv6_error"
+        ],
+        "type": "object"
+      },
+      "EgressHealthView": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "stacks": {
+            "items": {
+              "$ref": "#/components/schemas/EgressHealth"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "stacks"
+        ],
+        "type": "object"
+      },
       "EgressResult": {
         "additionalProperties": false,
         "properties": {
@@ -1555,9 +1636,23 @@
       "JobParams": {
         "additionalProperties": false,
         "properties": {
+          "failure_threshold": {
+            "description": "出口连续失败告警阈值",
+            "format": "int64",
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer"
+          },
           "keep": {
             "description": "数据库备份保留份数",
             "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "probe_timeout": {
+            "description": "每个 Stack 出口检测总超时（秒）",
+            "format": "int64",
+            "maximum": 60,
             "minimum": 0,
             "type": "integer"
           }
@@ -2132,6 +2227,13 @@
           "label": {
             "type": "string"
           },
+          "stack_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "stack_name": {
+            "type": "string"
+          },
           "status": {
             "enum": [
               "pending",
@@ -2159,6 +2261,8 @@
           "label",
           "user_id",
           "user_name",
+          "stack_id",
+          "stack_name",
           "subject",
           "status",
           "error",
@@ -3150,6 +3254,10 @@
         "properties": {
           "desired_running": {
             "type": "boolean"
+          },
+          "direct_suffix": {
+            "description": "直连节点后缀，留空使用默认值（前导空格加 [DRT]）",
+            "type": "string"
           },
           "direct_users": {
             "items": {
@@ -7227,6 +7335,42 @@
         "summary": "应用配置（后台作业）",
         "tags": [
           "runtime"
+        ]
+      }
+    },
+    "/api/runtime/egress-health": {
+      "get": {
+        "operationId": "getStackEgressHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EgressHealthView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "后台出口检测状态（只读）",
+        "tags": [
+          "ops"
         ]
       }
     },

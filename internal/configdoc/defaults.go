@@ -10,6 +10,9 @@ import (
 	"proxystack-web/internal/domain"
 )
 
+// DefaultDirectSuffix 包含前导空格，使直连标记与原节点名分隔。
+const DefaultDirectSuffix = " [DRT]"
+
 // DefaultSettings 返回新实例的全局设置。
 func DefaultSettings() Settings {
 	return Settings{
@@ -59,7 +62,7 @@ func DefaultSettings() Settings {
 		},
 		Notify: NotifySettings{
 			Port: 587, Security: SMTPSecuritySTARTTLS, To: []string{},
-			Events:      []string{EventDailyLimit, EventQuotaLimit, EventExpired},
+			Events:      []string{EventDailyLimit, EventQuotaLimit, EventExpired, EventEgressDown, EventEgressRecovered},
 			WarnPercent: 80, ExpireDays: 3,
 		},
 	}
@@ -116,6 +119,7 @@ func NewStack(doc *Document, settings Settings, opts NewStackOptions) (Stack, er
 		Role:           "edge",
 		Labels:         append([]string{}, opts.Labels...),
 		DirectUsers:    []string{},
+		DirectSuffix:   DefaultDirectSuffix,
 		Xray: Xray{
 			AccessLog: Inherit,
 			Enabled:   true,

@@ -138,6 +138,8 @@ const notifyEvents = [
   { value: 'quota_warning', label: '额度预警' },
   { value: 'expired', label: '到期暂停' },
   { value: 'expiring', label: '即将到期' },
+  { value: 'egress_down', label: 'Stack 出口异常' },
+  { value: 'egress_recovered', label: 'Stack 出口恢复' },
 ]
 const testingMail = ref(false)
 const mailResult = ref('')

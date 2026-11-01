@@ -36,4 +36,5 @@ func TestDirectUsersMigration(t *testing.T) {
 	require.Len(t, stacks, 1)
 	require.Equal(t, "edge", stacks[0].Name)
 	require.Equal(t, "error", stacks[0].XrayLoglevel)
+	require.Equal(t, " [DRT]", stacks[0].DirectSuffix)
 }

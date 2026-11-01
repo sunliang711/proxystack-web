@@ -8,6 +8,8 @@ import {
 import { InformationCircleOutline, RefreshOutline } from '@vicons/ionicons5'
 import { api, emptyErrors, fieldState, splitProblem, type FormErrors, type Schemas } from '../api/client'
 import EgressCell from '../components/EgressCell.vue'
+import EgressHealthStatus from '../components/EgressHealthStatus.vue'
+import { usePolling } from '../composables/usePolling'
 import InboundSummary from '../components/InboundSummary.vue'
 import MihomoSummary from '../components/MihomoSummary.vue'
 import FlowDiagram from '../components/FlowDiagram.vue'
@@ -61,6 +63,12 @@ function openStack(node: FlowNode) {
 
 // 出口 IP：优先读取浏览器本地缓存，没有缓存时查询，手动刷新后更新缓存。
 const egress = useEgress()
+const health = usePolling(() => true, async (signal) => {
+  const { data, error } = await api.GET('/api/runtime/egress-health', { signal })
+  if (error || !data) throw new Error('后台出口状态刷新失败')
+  return data
+})
+const healthByID = computed(() => new Map(health.data.value?.stacks.map((item) => [item.stack_id, item]) ?? []))
 const egressTargets = computed(() => stacks.value.filter((stack) => stack.mihomo_enabled))
 watch(egressTargets, (targets) => egress.ensure(targets))
 // mihomo 从停止变为运行后自动重新检测。
@@ -104,11 +112,14 @@ const columns: DataTableColumns<Summary> = [
     key: 'egress',
     minWidth: 300,
     render: (row) =>
-      h(EgressCell, {
-        state: egress.states[row.id],
-        mihomoEnabled: row.mihomo_enabled,
-        onRefresh: () => egress.refreshOne(row),
-      }),
+      h('div', [
+        h(EgressCell, {
+          state: egress.states[row.id],
+          mihomoEnabled: row.mihomo_enabled,
+          onRefresh: () => egress.refreshOne(row),
+        }),
+        h(EgressHealthStatus, { health: healthByID.value.get(row.id), error: health.error.value }),
+      ]),
   },
   { title: '角色', key: 'role', width: 70 },
   {

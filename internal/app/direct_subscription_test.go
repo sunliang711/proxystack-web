@@ -42,15 +42,15 @@ func TestDirectUpstreamsSubscription(t *testing.T) {
 		require.Equal(t, http.StatusOK, status, body)
 		require.Contains(t, body, "usa1 vmess")
 		require.Contains(t, body, "usa1 relay socks")
-		require.Contains(t, body, "usa1 vmess · server-a[DRT]")
-		require.Contains(t, body, "usa1 vmess · server-b[DRT]")
+		require.Contains(t, body, "usa1 vmess · server-a [DRT]")
+		require.Contains(t, body, "usa1 vmess · server-b [DRT]")
 		require.Contains(t, body, "remote-http.example.com")
 		require.Contains(t, body, "upstream-user")
 		require.Contains(t, body, "upstream-password")
 		require.NotContains(t, body, "local-ref[DRT]")
 		status, body, _ = get(t, subs.http, "/s/"+bob.SubToken+"/"+format)
 		require.Equal(t, http.StatusOK, status, body)
-		require.Contains(t, body, "usa1 vmess · server-a[DRT]")
+		require.Contains(t, body, "usa1 vmess · server-a [DRT]")
 		require.NotContains(t, body, "usa2 relay socks")
 		if format == "surge" {
 			require.Contains(t, body, `https, remote-http.example.com, 8443, username="upstream-user", password="upstream-password", sni=http.example.com`)
@@ -58,12 +58,23 @@ func TestDirectUpstreamsSubscription(t *testing.T) {
 			require.Contains(t, body, "tls: true")
 		}
 	}
+	stack.DirectSuffix = " [直连]"
+	_, err = h.svc.UpdateStack(ctx, h.actor, stack.ID, stack)
+	require.NoError(t, err)
+	subs.deliver(t, publish(t, h))
+	for _, format := range []string{"clash", "premium", "surge"} {
+		status, renamed, _ := get(t, subs.http, "/s/alice-token/"+format)
+		require.Equal(t, http.StatusOK, status, renamed)
+		require.Contains(t, renamed, "usa1 vmess · server-a [直连]")
+		require.Contains(t, renamed, "usa1 vmess · server-b [直连]")
+		require.NotContains(t, renamed, "[DRT]")
+	}
 	// 逐 Stack 暂停、到期、停用和撤销授权均在下次发布后生效。
 	_, err = h.svc.SetUserPause(ctx, h.actor, bob.ID, true, []string{"usa1"})
 	require.NoError(t, err)
 	subs.deliver(t, publish(t, h))
 	_, body, _ := get(t, subs.http, "/s/"+bob.SubToken+"/clash")
-	require.NotContains(t, body, "[DRT]")
+	require.NotContains(t, body, "[直连]")
 	_, err = h.svc.SetUserPause(ctx, h.actor, bob.ID, true, nil)
 	require.NoError(t, err)
 	for _, state := range []string{"expired", "disabled", "revoked"} {
@@ -82,9 +93,9 @@ func TestDirectUpstreamsSubscription(t *testing.T) {
 		require.NoError(t, err)
 		subs.deliver(t, publish(t, h))
 		_, body, _ = get(t, subs.http, "/s/"+bob.SubToken+"/clash")
-		require.NotContains(t, body, "[DRT]", state)
+		require.NotContains(t, body, "[直连]", state)
 		require.NotContains(t, body, "upstream-password", state)
 	}
 	_, body, _ = get(t, subs.http, "/s/alice-token/clash")
-	require.Contains(t, body, "[DRT]", "revocation must not remove another user's grant")
+	require.Contains(t, body, "[直连]", "revocation must not remove another user's grant")
 }

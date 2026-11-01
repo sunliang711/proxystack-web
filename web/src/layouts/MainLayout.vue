@@ -143,7 +143,7 @@ const groups: { key: string; label: string; items: NavItem[] }[] = [
       { name: 'notifications', label: '通知记录', icon: NotificationsOutline },
       { name: 'audit', label: '审计日志', icon: ReceiptOutline },
       { name: 'history', label: '配置历史', icon: GitCommitOutline },
-      { name: 'backup', label: '备份', icon: ArchiveOutline },
+      { name: 'backup', label: '备份与还原', icon: ArchiveOutline },
     ],
   },
   {

@@ -15,6 +15,10 @@ func StackDirectNodes(doc *Document) ([]sub.Node, error) {
 		if !stack.Enabled || len(stack.DirectUsers) == 0 {
 			continue
 		}
+		suffix := stack.DirectSuffix
+		if suffix == "" {
+			suffix = DefaultDirectSuffix
+		}
 		externalCount := 0
 		for _, upstream := range stack.Mihomo.Upstreams {
 			if upstream.Type == "raw" {
@@ -42,7 +46,7 @@ func StackDirectNodes(doc *Document) ([]sub.Node, error) {
 				if externalCount > 1 {
 					remark += " · " + upstream.Name
 				}
-				remark += "[DRT]"
+				remark += suffix
 				id := stack.Name + ":direct:" + upstream.Name + ":" + name
 				config := RawMapping{Node: cloneNode(upstream.Config.Node)}
 				// 服务器上的拨号链、网卡和路由标记不能带到用户设备，直连只使用上游自身参数。

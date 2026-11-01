@@ -133,7 +133,7 @@ func (q *Queries) ExemptUserDaily(ctx context.Context, arg ExemptUserDailyParams
 }
 
 const getNotification = `-- name: GetNotification :one
-SELECT id, at, event, user_id, user_name, dedup_key, subject, body, status, error, attempts, next_attempt_at FROM notifications WHERE id = ?
+SELECT id, at, event, user_id, user_name, dedup_key, subject, body, status, error, attempts, next_attempt_at, stack_id, stack_name, incident FROM notifications WHERE id = ?
 `
 
 func (q *Queries) GetNotification(ctx context.Context, id int64) (Notification, error) {
@@ -152,6 +152,9 @@ func (q *Queries) GetNotification(ctx context.Context, id int64) (Notification, 
 		&i.Error,
 		&i.Attempts,
 		&i.NextAttemptAt,
+		&i.StackID,
+		&i.StackName,
+		&i.Incident,
 	)
 	return i, err
 }
@@ -188,8 +191,8 @@ func (q *Queries) InsertAutoPause(ctx context.Context, arg InsertAutoPauseParams
 }
 
 const insertNotification = `-- name: InsertNotification :execrows
-INSERT OR IGNORE INTO notifications (at, event, user_id, user_name, dedup_key, subject, body, status, next_attempt_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT OR IGNORE INTO notifications (at, event, user_id, user_name, dedup_key, subject, body, status, next_attempt_at, stack_id, stack_name, incident)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertNotificationParams struct {
@@ -202,6 +205,9 @@ type InsertNotificationParams struct {
 	Body          string `json:"body"`
 	Status        string `json:"status"`
 	NextAttemptAt int64  `json:"next_attempt_at"`
+	StackID       int64  `json:"stack_id"`
+	StackName     string `json:"stack_name"`
+	Incident      int64  `json:"incident"`
 }
 
 func (q *Queries) InsertNotification(ctx context.Context, arg InsertNotificationParams) (int64, error) {
@@ -215,6 +221,9 @@ func (q *Queries) InsertNotification(ctx context.Context, arg InsertNotification
 		arg.Body,
 		arg.Status,
 		arg.NextAttemptAt,
+		arg.StackID,
+		arg.StackName,
+		arg.Incident,
 	)
 	if err != nil {
 		return 0, err
@@ -250,7 +259,7 @@ func (q *Queries) ListAutoPauses(ctx context.Context) ([]UserAutoPause, error) {
 }
 
 const listDueNotifications = `-- name: ListDueNotifications :many
-SELECT id, at, event, user_id, user_name, dedup_key, subject, body, status, error, attempts, next_attempt_at FROM notifications WHERE status = 'pending' AND next_attempt_at <= ? ORDER BY id LIMIT 20
+SELECT id, at, event, user_id, user_name, dedup_key, subject, body, status, error, attempts, next_attempt_at, stack_id, stack_name, incident FROM notifications WHERE status = 'pending' AND next_attempt_at <= ? ORDER BY id LIMIT 20
 `
 
 func (q *Queries) ListDueNotifications(ctx context.Context, nextAttemptAt int64) ([]Notification, error) {
@@ -275,6 +284,9 @@ func (q *Queries) ListDueNotifications(ctx context.Context, nextAttemptAt int64)
 			&i.Error,
 			&i.Attempts,
 			&i.NextAttemptAt,
+			&i.StackID,
+			&i.StackName,
+			&i.Incident,
 		); err != nil {
 			return nil, err
 		}
@@ -290,7 +302,7 @@ func (q *Queries) ListDueNotifications(ctx context.Context, nextAttemptAt int64)
 }
 
 const listNotifications = `-- name: ListNotifications :many
-SELECT id, at, event, user_id, user_name, dedup_key, subject, body, status, error, attempts, next_attempt_at FROM notifications ORDER BY id DESC LIMIT ?
+SELECT id, at, event, user_id, user_name, dedup_key, subject, body, status, error, attempts, next_attempt_at, stack_id, stack_name, incident FROM notifications ORDER BY id DESC LIMIT ?
 `
 
 func (q *Queries) ListNotifications(ctx context.Context, limit int64) ([]Notification, error) {
@@ -315,6 +327,9 @@ func (q *Queries) ListNotifications(ctx context.Context, limit int64) ([]Notific
 			&i.Error,
 			&i.Attempts,
 			&i.NextAttemptAt,
+			&i.StackID,
+			&i.StackName,
+			&i.Incident,
 		); err != nil {
 			return nil, err
 		}

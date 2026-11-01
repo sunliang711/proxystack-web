@@ -36,6 +36,8 @@ var eventLabels = map[string]string{
 	configdoc.EventQuotaWarning: "额度预警",
 	configdoc.EventExpired:      "用户已到期",
 	configdoc.EventExpiring:     "用户即将到期",
+	configdoc.EventEgressDown: "Stack 出口异常",
+	configdoc.EventEgressRecovered: "Stack 出口恢复",
 }
 
 type notifyUser struct {
@@ -147,8 +149,32 @@ func (s *Service) DeliverNotifications(ctx context.Context) {
 		return
 	}
 	for _, item := range due {
+		s.deliverNotification(ctx, settings, item.ID)
+	}
+}
+
+func (s *Service) deliverNotification(ctx context.Context, settings configdoc.Settings, id int64) {
+	s.notificationMu.Lock()
+	defer s.notificationMu.Unlock()
+	// 队列读取后可能已经恢复、被替换或被另一发送器处理，发送前必须重新读取。
+	item, err := s.Store.Q.GetNotification(ctx, id)
+	if err != nil || item.Status != NotifyPending || item.NextAttemptAt > s.Now().Unix() {
+		return
+	}
+	obsolete, err := s.obsoleteEgressNotification(ctx, item)
+	if err != nil {
+		slog.Warn("check egress notification", "err", err)
+		return
+	}
+	if item.StackID != 0 && (!settings.Notify.Enabled || !slices.Contains(settings.Notify.Events, item.Event)) {
+		obsolete = true
+	}
+	params := dbq.UpdateNotificationParams{ID: item.ID, Attempts: item.Attempts, Status: NotifySkipped}
+	if obsolete {
+		params.Error = "Superseded or disabled egress notification"
+	} else {
 		sendErr := s.sendMail(ctx, smtpConfig(settings.Notify), item.Subject, item.Body)
-		params := dbq.UpdateNotificationParams{ID: item.ID, Attempts: item.Attempts + 1, Status: NotifySent}
+		params.Attempts, params.Status = item.Attempts+1, NotifySent
 		if sendErr != nil {
 			params.Error = sendErr.Error()
 			if int(item.Attempts) < len(notifyRetryDelays) {
@@ -159,9 +185,9 @@ func (s *Service) DeliverNotifications(ctx context.Context) {
 			}
 			slog.Warn("send notification", "event", item.Event, "attempt", params.Attempts, "err", sendErr)
 		}
-		if err := s.Store.InTx(ctx, func(q *dbq.Queries) error { return q.UpdateNotification(ctx, params) }); err != nil {
-			slog.Warn("update notification", "err", err)
-		}
+	}
+	if err := s.Store.InTx(ctx, func(q *dbq.Queries) error { return q.UpdateNotification(ctx, params) }); err != nil {
+		slog.Warn("update notification", "err", err)
 	}
 }
 
@@ -193,6 +219,8 @@ type Notification struct {
 	Label    string    `json:"label"`
 	UserID   int64     `json:"user_id"`
 	UserName string    `json:"user_name"`
+	StackID int64 `json:"stack_id"`
+	StackName string `json:"stack_name"`
 	Subject  string    `json:"subject"`
 	Status   string    `json:"status" enum:"pending,sent,failed,skipped"`
 	Error    string    `json:"error"`
@@ -210,7 +238,7 @@ func (s *Service) ListNotifications(ctx context.Context, limit int64) ([]Notific
 	for _, row := range rows {
 		out = append(out, Notification{
 			ID: row.ID, At: time.Unix(row.At, 0), Event: row.Event, Label: eventLabels[row.Event], UserID: row.UserID,
-			UserName: row.UserName, Subject: row.Subject, Status: row.Status, Error: row.Error, Attempts: row.Attempts,
+			UserName: row.UserName, StackID: row.StackID, StackName: row.StackName, Subject: row.Subject, Status: row.Status, Error: row.Error, Attempts: row.Attempts,
 		})
 	}
 	return out, err
@@ -218,7 +246,23 @@ func (s *Service) ListNotifications(ctx context.Context, limit int64) ([]Notific
 
 // ResendNotification 把一条失败的记录放回发送队列。
 func (s *Service) ResendNotification(ctx context.Context, id int64) error {
-	err := s.Store.InTx(ctx, func(q *dbq.Queries) error {
+	s.notificationMu.Lock()
+	defer s.notificationMu.Unlock()
+	item, err := s.Store.Q.GetNotification(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	obsolete, err := s.obsoleteEgressNotification(ctx, item)
+	if err != nil {
+		return err
+	}
+	if obsolete {
+		return &FieldError{Field: "notification", Message: "egress notification was superseded by a newer state"}
+	}
+	err = s.Store.InTx(ctx, func(q *dbq.Queries) error {
 		if _, err := q.GetNotification(ctx, id); err != nil {
 			return err
 		}

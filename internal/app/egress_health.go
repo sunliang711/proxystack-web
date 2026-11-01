@@ -1,0 +1,420 @@
+package app
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"net"
+	"os"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+
+	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/deps"
+	"proxystack-web/internal/store/dbq"
+	"proxystack-web/internal/units"
+)
+
+const egressConcurrency = 4
+
+// EgressHealth 是独立于浏览器出口缓存的后台检测结果。
+type EgressHealth struct {
+	StackID      int64     `json:"stack_id"`
+	StackName    string    `json:"stack_name"`
+	Status       string    `json:"status" enum:"unknown,healthy,failing,down,stopped,unsupported,paused,unavailable"`
+	CheckedAt    time.Time `json:"checked_at"`
+	FailureSince time.Time `json:"failure_since"`
+	Failures     int64     `json:"failures"`
+	IPv4         string    `json:"ipv4"`
+	IPv6         string    `json:"ipv6"`
+	IPv4Error    string    `json:"ipv4_error"`
+	IPv6Error    string    `json:"ipv6_error"`
+}
+
+// EgressHealthView 包含检测任务开关及各 Stack 的状态。
+type EgressHealthView struct {
+	Enabled bool           `json:"enabled"`
+	Stacks  []EgressHealth `json:"stacks"`
+}
+
+type egressTarget struct {
+	id          int64
+	name        string
+	mode        string
+	fingerprint string
+	since       time.Time
+	proxy       deps.ProxyConfig
+	stateErr    error
+}
+
+func egressProxy(stack configdoc.Stack) deps.ProxyConfig {
+	listener := stack.Mihomo.Socks
+	host := listener.Listen
+	if host == "0.0.0.0" || host == "::" || host == "" {
+		host = "127.0.0.1"
+	}
+	proxy := deps.ProxyConfig{Kind: deps.ProxySOCKS5, Address: net.JoinHostPort(host, fmt.Sprint(listener.Port)), RemoteDNS: true}
+	if listener.Auth == configdoc.ListenerAuthAccounts && len(listener.Accounts) > 0 {
+		proxy.Username, proxy.Password = listener.Accounts[0].Username, listener.Accounts[0].Password
+	}
+	return proxy
+}
+
+// egressTargets 必须在 runtimeMu 内调用，捕获已应用版本和实际 unit 的同一时点信息。
+func (s *Service) egressTargets(ctx context.Context) ([]egressTarget, error) {
+	doc, err := s.LoadConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	applied, err := s.Store.Q.ListAppliedState(ctx)
+	if err != nil {
+		return nil, err
+	}
+	byName := map[string]dbq.AppliedState{}
+	for _, row := range applied {
+		byName[row.StackName] = row
+	}
+	snapshots := map[int64]*configdoc.Document{}
+	targets := make([]egressTarget, 0, len(doc.Stacks))
+	for _, stack := range doc.Stacks {
+		target := egressTarget{id: stack.ID, name: stack.Name, mode: "unsupported"}
+		if !stack.Enabled {
+			target.mode = "stopped"
+		} else if row, ok := byName[stack.Name]; ok {
+			snapshot := snapshots[row.RevisionID]
+			if snapshot == nil {
+				snapshot, err = s.RevisionSnapshot(ctx, row.RevisionID)
+				if err != nil {
+					return nil, err
+				}
+				snapshots[row.RevisionID] = snapshot
+			}
+			index := snapshot.StackByName(stack.Name)
+			if index >= 0 {
+				actual := snapshot.Stacks[index]
+				if actual.Mihomo.Enabled && actual.Mihomo.Socks.Enabled {
+					target.fingerprint = row.MihomoSha
+					target.proxy = egressProxy(actual)
+					// 仅查询具备已应用检测通道的 unit，并隔离单个 Stack 的查询错误。
+					name := units.Name(units.Mihomo, stack.Name)
+					states, stateErr := s.Units.States(ctx, []string{name})
+					state, exists := states[name]
+					if stateErr != nil || !exists {
+						target.mode = "unavailable"
+						target.stateErr = stateErr
+						if target.stateErr == nil {
+							target.stateErr = fmt.Errorf("missing unit state: %s", name)
+						}
+					} else {
+						target.since = state.Since
+						target.mode = "stopped"
+						if state.Active == "active" {
+							target.mode = "ready"
+						}
+					}
+				}
+			}
+		}
+		targets = append(targets, target)
+	}
+	return targets, nil
+}
+
+// StackEgressHealth 只读取状态，不发起网络探测或累加失败次数。
+func (s *Service) StackEgressHealth(ctx context.Context) (*EgressHealthView, error) {
+	s.runtimeMu.Lock()
+	defer s.runtimeMu.Unlock()
+	targets, err := s.egressTargets(ctx)
+	if err != nil {
+		return nil, err
+	}
+	jobs, err := s.ListJobs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := &EgressHealthView{Stacks: []EgressHealth{}}
+	for _, job := range jobs {
+		if job.Kind == JobEgressCheck {
+			out.Enabled = job.Enabled
+		}
+	}
+	rows, err := s.Store.Q.ListStackEgressHealth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	byID := map[int64]dbq.StackEgressHealth{}
+	for _, row := range rows {
+		byID[row.StackID] = row
+	}
+	for _, target := range targets {
+		row := byID[target.id]
+		view := EgressHealth{StackID: target.id, StackName: target.name, Status: row.Status, Failures: row.Failures,
+			IPv4: row.Ipv4, IPv6: row.Ipv6, IPv4Error: row.Ipv4Error, IPv6Error: row.Ipv6Error}
+		if row.CheckedAt != 0 {
+			view.CheckedAt = time.Unix(row.CheckedAt, 0)
+		}
+		if row.FailureSince != 0 {
+			view.FailureSince = time.Unix(row.FailureSince, 0)
+		}
+		switch {
+		case target.mode != "ready":
+			view.Status = target.mode
+		case !out.Enabled:
+			view.Status = "paused"
+		case row.Status == "" || row.Fingerprint != target.fingerprint || row.Status == "stopped" || row.Status == "unsupported":
+			view.Status = "unknown"
+		}
+		out.Stacks = append(out.Stacks, view)
+	}
+	return out, nil
+}
+
+func (s *Service) probeStackEgress(ctx context.Context, target egressTarget, seconds int) ([]EgressResult, error) {
+	timeout := time.Duration(seconds) * time.Second
+	probeCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	if s.ProbeEgress != nil {
+		return s.ProbeEgress(probeCtx, target.proxy, timeout)
+	}
+	fetcher, err := deps.NewHTTPFetcher(target.proxy)
+	if err != nil {
+		return nil, err
+	}
+	defer fetcher.CloseIdleConnections()
+	results := make([]EgressResult, 2)
+	var wg sync.WaitGroup
+	for index, family := range []string{"ipv4", "ipv6"} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// 为三个回退源预留时间，同时限制每个 Stack 的整体检测时长。
+			results[index] = queryEgress(probeCtx, fetcher, family, timeout/3)
+		}()
+	}
+	wg.Wait()
+	return results, nil
+}
+
+func runEgressCheckJob(ctx context.Context, s *Service, params JobParams, logf Logf) error {
+	if params.FailureThreshold < 1 || params.FailureThreshold > 100 || params.ProbeTimeout < 1 || params.ProbeTimeout > 60 {
+		return errors.New("invalid egress check parameters")
+	}
+	// 与手动执行、测试入口共用互斥，数据库中的每轮结果只能被累计一次。
+	s.egressMu.Lock()
+	defer s.egressMu.Unlock()
+	s.runtimeMu.Lock()
+	targets, err := s.egressTargets(ctx)
+	s.runtimeMu.Unlock()
+	if err != nil {
+		return err
+	}
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var failures []error
+	semaphore := make(chan struct{}, egressConcurrency)
+targetsLoop:
+	for _, target := range targets {
+		if ctx.Err() != nil {
+			break
+		}
+		select {
+		case semaphore <- struct{}{}:
+		case <-ctx.Done():
+			break targetsLoop
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { <-semaphore }()
+			// 运行状态读取失败属于采集异常，保留已有出口状态与失败计数。
+			if target.stateErr != nil {
+				mu.Lock()
+				failures = append(failures, fmt.Errorf("Stack %s: %w", target.name, target.stateErr))
+				mu.Unlock()
+				return
+			}
+			var results []EgressResult
+			var probeErr error
+			if target.mode == "ready" {
+				results, probeErr = s.probeStackEgress(ctx, target, params.ProbeTimeout)
+			}
+			if err := ctx.Err(); err != nil {
+				return
+			}
+			if err := s.recordEgressResult(ctx, target, results, probeErr, params.FailureThreshold); err != nil {
+				mu.Lock()
+				failures = append(failures, err)
+				mu.Unlock()
+				return
+			}
+			logf("Stack %s: %s", target.name, target.mode)
+		}()
+	}
+	wg.Wait()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return errors.Join(failures...)
+}
+
+func egressFamily(results []EgressResult, family string, probeErr error) (string, string) {
+	for _, result := range results {
+		if result.Family != family {
+			continue
+		}
+		if matchesFamily(result.IP, family) {
+			return result.IP, ""
+		}
+		messages := []string{}
+		for _, source := range result.Sources {
+			if source.Error != "" {
+				messages = append(messages, source.URL+": "+source.Error)
+			}
+		}
+		if len(messages) > 0 {
+			return "", strings.Join(messages, "; ")
+		}
+	}
+	if probeErr != nil {
+		return "", probeErr.Error()
+	}
+	return "", "No valid IP address returned"
+}
+
+func (s *Service) recordEgressResult(ctx context.Context, target egressTarget, results []EgressResult, probeErr error, threshold int) error {
+	// 等待正在发送的邮件时不占用运行时锁，保持应用和启停操作可用。
+	s.notificationMu.Lock()
+	defer s.notificationMu.Unlock()
+	s.runtimeMu.Lock()
+	defer s.runtimeMu.Unlock()
+	// 探测过程中可能应用配置、停止或删除 Stack；丢弃这些过期结果，避免误报。
+	current, err := s.egressTargets(ctx)
+	if err != nil {
+		return err
+	}
+	index := slices.IndexFunc(current, func(item egressTarget) bool { return item.id == target.id })
+	if index < 0 {
+		return nil
+	}
+	fresh := current[index]
+	if fresh.mode != target.mode || fresh.fingerprint != target.fingerprint || !fresh.since.Equal(target.since) {
+		return nil
+	}
+	settings, err := s.loadSettings(ctx)
+	if err != nil {
+		return err
+	}
+	if settings.Basic.PanelURL == "" {
+		if info, err := s.Info(ctx); err == nil {
+			settings.Basic.PanelURL = info.PanelURL
+		}
+	}
+	return s.Store.InTx(ctx, func(q *dbq.Queries) error {
+		row, err := q.GetStackEgressHealth(ctx, target.id)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		row.StackID = target.id
+		if target.mode != "ready" {
+			row.Status = target.mode
+			row.Failures = 0
+			if row.Alarmed == 0 {
+				row.FailureSince = 0
+			}
+		} else {
+			if row.Fingerprint != target.fingerprint && row.Alarmed == 0 {
+				row.Failures, row.FailureSince = 0, 0
+			}
+			row.Fingerprint = target.fingerprint
+			row.CheckedAt = s.Now().Unix()
+			row.Ipv4, row.Ipv4Error = egressFamily(results, "ipv4", probeErr)
+			row.Ipv6, row.Ipv6Error = egressFamily(results, "ipv6", probeErr)
+			event := ""
+			if row.Ipv4 != "" || row.Ipv6 != "" {
+				row.Status, row.Failures = "healthy", 0
+				if row.Alarmed != 0 {
+					event = configdoc.EventEgressRecovered
+				}
+				row.Alarmed = 0
+			} else {
+				if row.FailureSince == 0 {
+					row.FailureSince = row.CheckedAt
+				}
+				row.Failures++
+				row.Status = "failing"
+				if row.Failures >= int64(threshold) && row.Alarmed == 0 {
+					row.Incident++
+					row.Alarmed, event = 1, configdoc.EventEgressDown
+				}
+				if row.Alarmed != 0 {
+					row.Status = "down"
+				}
+			}
+			if event != "" {
+				if err := q.SupersedeStackNotifications(ctx, target.id); err != nil {
+					return err
+				}
+				if err := s.enqueueEgressNotification(ctx, q, settings, target, row, event); err != nil {
+					return err
+				}
+			}
+			if row.Status == "healthy" {
+				row.FailureSince = 0
+			}
+		}
+		return q.UpsertStackEgressHealth(ctx, dbq.UpsertStackEgressHealthParams{
+			StackID: row.StackID, Status: row.Status, CheckedAt: row.CheckedAt, Failures: row.Failures,
+			FailureSince: row.FailureSince, Incident: row.Incident, Alarmed: row.Alarmed, Fingerprint: row.Fingerprint,
+			Ipv4: row.Ipv4, Ipv6: row.Ipv6, Ipv4Error: row.Ipv4Error, Ipv6Error: row.Ipv6Error,
+		})
+	})
+}
+
+func (s *Service) enqueueEgressNotification(ctx context.Context, q *dbq.Queries, settings configdoc.Settings, target egressTarget, row dbq.StackEgressHealth, event string) error {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return err
+	}
+	label := eventLabels[event]
+	loc := location(settings)
+	lines := []string{"事件：" + label, "实例：" + hostname, "Stack：" + target.name,
+		"首次失败：" + time.Unix(row.FailureSince, 0).In(loc).Format(time.DateTime),
+		"检测时间：" + s.Now().In(loc).Format(time.DateTime)}
+	if event == configdoc.EventEgressDown {
+		lines = append(lines, fmt.Sprintf("连续失败次数：%d", row.Failures), "IPv4："+row.Ipv4Error, "IPv6："+row.Ipv6Error)
+	} else {
+		lines = append(lines, "故障持续时间："+s.Now().Sub(time.Unix(row.FailureSince, 0)).Round(time.Second).String(),
+			"IPv4："+row.Ipv4, "IPv6："+row.Ipv6)
+	}
+	if settings.Basic.PanelURL != "" {
+		lines = append(lines, fmt.Sprintf("Stack 详情：%s/stacks/%d", strings.TrimRight(settings.Basic.PanelURL, "/"), target.id))
+	}
+	status := NotifySkipped
+	if settings.Notify.Enabled && slices.Contains(settings.Notify.Events, event) {
+		status = NotifyPending
+	}
+	_, err = q.InsertNotification(ctx, dbq.InsertNotificationParams{
+		At: s.Now().Unix(), Event: event, DedupKey: fmt.Sprintf("%s:stack:%d:%d", event, target.id, row.Incident),
+		Subject: fmt.Sprintf("[proxystack-web] %s：%s", label, target.name), Body: strings.Join(lines, "\n") + "\n", Status: status,
+		StackID: target.id, StackName: target.name, Incident: row.Incident,
+	})
+	return err
+}
+
+// obsoleteEgressNotification 阻止旧故障、旧恢复和已删除 Stack 的事件重新发送。
+func (s *Service) obsoleteEgressNotification(ctx context.Context, item dbq.Notification) (bool, error) {
+	if item.StackID == 0 {
+		return false, nil
+	}
+	row, err := s.Store.Q.GetStackEgressHealth(ctx, item.StackID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return row.Incident != item.Incident || (item.Event == configdoc.EventEgressDown) != (row.Alarmed != 0), nil
+}

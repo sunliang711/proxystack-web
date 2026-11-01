@@ -23,6 +23,7 @@ func TestDirectUsersRoundTrip(t *testing.T) {
 	doc, err := configdoc.Parse(data)
 	require.NoError(t, err)
 	doc.Stacks[1].DirectUsers = []string{"alice"}
+	doc.Stacks[1].DirectSuffix = "  [直连]"
 	saveAndLoad := func() {
 		t.Helper()
 		require.NoError(t, st.InTx(ctx, func(q *dbq.Queries) error { return store.SaveDocument(ctx, q, doc) }))
@@ -35,6 +36,13 @@ func TestDirectUsersRoundTrip(t *testing.T) {
 		saveAndLoad()
 		require.Equal(t, []string{"alice"}, doc.Stacks[1].DirectUsers)
 		require.Empty(t, doc.Stacks[0].DirectUsers)
+		require.Equal(t, "  [直连]", doc.Stacks[1].DirectSuffix)
+		require.Equal(t, configdoc.DefaultDirectSuffix, doc.Stacks[0].DirectSuffix)
+		encoded, err := configdoc.Marshal(doc, configdoc.FormatYAML)
+		require.NoError(t, err)
+		doc, err = configdoc.Parse(encoded)
+		require.NoError(t, err)
+		require.Equal(t, "  [直连]", doc.Stacks[1].DirectSuffix)
 	}
 	configdoc.RenameUser(doc, "alice", "renamed")
 	doc.Users[0].Name = "renamed"

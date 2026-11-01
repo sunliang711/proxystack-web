@@ -823,6 +823,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runtime/egress-health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 后台出口检测状态（只读） */
+        get: operations["getStackEgressHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runtime/logs": {
         parameters: {
             query?: never;
@@ -1763,6 +1780,27 @@ export interface components {
             stack: string;
             username: string;
         };
+        EgressHealth: {
+            /** Format: date-time */
+            checked_at: string;
+            /** Format: date-time */
+            failure_since: string;
+            /** Format: int64 */
+            failures: number;
+            ipv4: string;
+            ipv4_error: string;
+            ipv6: string;
+            ipv6_error: string;
+            /** Format: int64 */
+            stack_id: number;
+            stack_name: string;
+            /** @enum {string} */
+            status: "unknown" | "healthy" | "failing" | "down" | "stopped" | "unsupported" | "paused" | "unavailable";
+        };
+        EgressHealthView: {
+            enabled: boolean;
+            stacks: components["schemas"]["EgressHealth"][];
+        };
         EgressResult: {
             city: string;
             /** @description 两位国家代码 */
@@ -1961,9 +1999,19 @@ export interface components {
         JobParams: {
             /**
              * Format: int64
+             * @description 出口连续失败告警阈值
+             */
+            failure_threshold?: number;
+            /**
+             * Format: int64
              * @description 数据库备份保留份数
              */
             keep?: number;
+            /**
+             * Format: int64
+             * @description 每个 Stack 出口检测总超时（秒）
+             */
+            probe_timeout?: number;
         };
         JobRun: {
             /** Format: date-time */
@@ -2118,6 +2166,9 @@ export interface components {
             /** Format: int64 */
             id: number;
             label: string;
+            /** Format: int64 */
+            stack_id: number;
+            stack_name: string;
             /** @enum {string} */
             status: "pending" | "sent" | "failed" | "skipped";
             subject: string;
@@ -2384,6 +2435,8 @@ export interface components {
         };
         Stack: {
             desired_running: boolean;
+            /** @description 直连节点后缀，留空使用默认值（前导空格加 [DRT]） */
+            direct_suffix?: string;
             direct_users?: string[];
             enabled: boolean;
             /** Format: int64 */
@@ -4454,6 +4507,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskIDOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getStackEgressHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EgressHealthView"];
                 };
             };
             /** @description Error */

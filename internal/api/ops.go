@@ -84,6 +84,10 @@ type egressInput struct {
 	Timeout int    `query:"timeout" minimum:"1" maximum:"60" default:"8" doc:"单个数据源的超时（秒）"`
 }
 
+type egressHealthOutput struct {
+	Body app.EgressHealthView
+}
+
 type egressOutput struct {
 	Body []app.EgressResult
 }
@@ -240,6 +244,13 @@ func registerOps(api huma.API, s *Server) {
 	huma.Register(api, reg(huma.Operation{OperationID: "getHealthChecks", Method: http.MethodGet, Path: "/api/health-checks", Summary: "健康检查"}),
 		func(ctx context.Context, _ *struct{}) (*healthOutput, error) {
 			return &healthOutput{Body: s.svc.HealthChecks(ctx)}, nil
+		})
+
+	huma.Register(api, reg(huma.Operation{OperationID: "getStackEgressHealth", Method: http.MethodGet, Path: "/api/runtime/egress-health", Summary: "后台出口检测状态（只读）"}),
+		func(ctx context.Context, _ *struct{}) (*egressHealthOutput, error) {
+			view, err := s.svc.StackEgressHealth(ctx)
+			if err != nil { return nil, toHTTPError(err) }
+			return &egressHealthOutput{Body: *view}, nil
 		})
 
 	huma.Register(api, reg(huma.Operation{OperationID: "getStackEgress", Method: http.MethodGet, Path: "/api/stacks/{id}/egress", Summary: "经 stack 的 mihomo 查询出口 IP"}),

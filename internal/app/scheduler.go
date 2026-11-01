@@ -28,6 +28,7 @@ const (
 	JobDepsUpgrade  = "deps_upgrade"
 	JobRemoteSync   = "remote_sync"
 	JobReconcile    = "reconcile"
+	JobEgressCheck  = "egress_check"
 )
 
 // 执行状态。
@@ -66,9 +67,11 @@ type jobType struct {
 	Run    func(ctx context.Context, s *Service, params JobParams, logf Logf) error
 }
 
-// JobParams 是任务参数。目前只有备份任务的保留份数。
+// JobParams 是备份保留和出口检测任务的参数。
 type JobParams struct {
 	Keep int `json:"keep,omitempty" minimum:"0" doc:"数据库备份保留份数"`
+	FailureThreshold int `json:"failure_threshold,omitempty" minimum:"0" maximum:"100" doc:"出口连续失败告警阈值"`
+	ProbeTimeout int `json:"probe_timeout,omitempty" minimum:"0" maximum:"60" doc:"每个 Stack 出口检测总超时（秒）"`
 }
 
 // jobTypes 是任务注册表，顺序决定列表页的显示顺序。
@@ -119,6 +122,8 @@ var jobTypes = []jobType{
 			}
 			return nil
 		}},
+	{Kind: JobEgressCheck, Name: "Stack 出口检测", Description: "检测运行中 Stack 的 IPv4/IPv6 出口，连续失败告警、恢复后通知；仅支持已应用的 Mihomo SOCKS 监听",
+		Schedule: "* * * * *", Timeout: 120, Params: JobParams{FailureThreshold: 2, ProbeTimeout: 12}, Run: runEgressCheckJob},
 }
 
 func jobTypeOf(kind string) *jobType {
@@ -470,6 +475,14 @@ func (s *Service) UpdateJob(ctx context.Context, actor Actor, id int64, update J
 		}
 		if definition.Params.Keep > 0 && update.Params.Keep < 1 {
 			return &FieldError{Field: "params.keep", Message: "must be at least 1"}
+		}
+		if kind == JobEgressCheck {
+			if update.Params.FailureThreshold < 1 || update.Params.FailureThreshold > 100 {
+				return &FieldError{Field: "params.failure_threshold", Message: "must be between 1 and 100"}
+			}
+			if update.Params.ProbeTimeout < 1 || update.Params.ProbeTimeout > 60 {
+				return &FieldError{Field: "params.probe_timeout", Message: "must be between 1 and 60 seconds"}
+			}
 		}
 		params, err := json.Marshal(update.Params)
 		if err != nil {

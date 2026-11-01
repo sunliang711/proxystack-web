@@ -165,6 +165,8 @@ const (
 	EventQuotaWarning = "quota_warning"
 	EventExpired      = "expired"
 	EventExpiring     = "expiring"
+	EventEgressDown = "egress_down"
+	EventEgressRecovered = "egress_recovered"
 )
 
 // NotifySettings 是邮件通知设置。
@@ -339,6 +341,8 @@ type Stack struct {
 	Mihomo         Mihomo   `json:"mihomo" yaml:"mihomo"`
 	// DirectUsers 可获取外部上游直连节点，与入站用户列表独立。
 	DirectUsers []string `json:"direct_users" yaml:"direct_users,omitempty" required:"false"`
+	// DirectSuffix 原样追加到直连节点名，空值使用默认后缀。
+	DirectSuffix string `json:"direct_suffix" yaml:"direct_suffix,omitempty" required:"false" doc:"直连节点后缀，留空使用默认值（前导空格加 [DRT]）"`
 }
 
 // Xray 是 stack 的 xray 部分。

@@ -120,6 +120,7 @@ func LoadDocument(ctx context.Context, q *dbq.Queries) (*configdoc.Document, err
 	for _, row := range stacks {
 		stack := configdoc.Stack{
 			ID: row.ID, Name: row.Name, Enabled: row.Enabled != 0, DesiredRunning: row.DesiredRunning != 0, Role: row.Role,
+			DirectSuffix: row.DirectSuffix,
 			Xray: configdoc.Xray{
 				AccessLog: row.XrayAccessLog,
 				Enabled:   row.XrayEnabled != 0, LogLevel: row.XrayLoglevel, API: row.XrayApi, Stats: row.XrayStats,
@@ -446,6 +447,7 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 		id, err := q.UpsertStack(ctx, dbq.UpsertStackParams{
 			NULLIF: stack.ID, Position: int64(index), Name: stack.Name, Enabled: boolInt(stack.Enabled),
 			DesiredRunning: boolInt(stack.DesiredRunning), Role: stack.Role, Labels: labels,
+			DirectSuffix: stack.DirectSuffix,
 			XrayEnabled: boolInt(xray.Enabled), XrayLoglevel: xray.LogLevel, XrayApi: xray.API,
 			XrayAccessLog: xray.AccessLog,
 			XrayStats:     xray.Stats, XrayPolicy: xray.Policy, XrayApiPort: int64(xray.APIPort),

@@ -44,8 +44,8 @@ INSERT OR IGNORE INTO user_auto_pause (user_id, reason, since) VALUES (?, ?, ?);
 DELETE FROM user_auto_pause WHERE user_id = ? AND reason = ?;
 
 -- name: InsertNotification :execrows
-INSERT OR IGNORE INTO notifications (at, event, user_id, user_name, dedup_key, subject, body, status, next_attempt_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT OR IGNORE INTO notifications (at, event, user_id, user_name, dedup_key, subject, body, status, next_attempt_at, stack_id, stack_name, incident)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: ListDueNotifications :many
 SELECT * FROM notifications WHERE status = 'pending' AND next_attempt_at <= ? ORDER BY id LIMIT 20;

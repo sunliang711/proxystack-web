@@ -129,7 +129,7 @@ async function save(): Promise<boolean> {
 }
 
 function tabFor(path: string): string {
-  if (path.startsWith('direct_users')) return 'upstreams'
+  if (path.startsWith('direct_users') || path === 'direct_suffix') return 'upstreams'
   if (path.startsWith('xray.inbounds')) return 'inbounds'
   if (path.startsWith('xray.outbound')) return 'outbound'
   if (path.startsWith('xray')) return 'xray'

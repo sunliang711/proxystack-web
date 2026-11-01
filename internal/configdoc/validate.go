@@ -338,6 +338,9 @@ func validateUsers(issues *Issues, doc *Document) {
 
 func validateStack(issues *Issues, doc *Document, path string, stack *Stack) {
 	checkIdentifier(issues, path+".name", stack.Name)
+	if strings.ContainsAny(stack.DirectSuffix, "\r\n\t") {
+		issues.add(path+".direct_suffix", "must not contain line breaks or tabs")
+	}
 	directUsers := map[string]bool{}
 	for index, user := range stack.DirectUsers {
 		field := fmt.Sprintf("%s.direct_users[%d]", path, index)
@@ -758,7 +761,7 @@ func validateTrafficNotify(issues *Issues, settings Settings) {
 	}
 	for index, event := range notify.Events {
 		checkEnum(issues, fmt.Sprintf("settings.notify.events[%d]", index), event,
-			EventDailyLimit, EventDailyWarning, EventQuotaLimit, EventQuotaWarning, EventExpired, EventExpiring)
+			EventDailyLimit, EventDailyWarning, EventQuotaLimit, EventQuotaWarning, EventExpired, EventExpiring, EventEgressDown, EventEgressRecovered)
 	}
 	if notify.From != "" {
 		if _, err := mail.ParseAddress(notify.From); err != nil {
