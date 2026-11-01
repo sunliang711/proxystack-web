@@ -292,7 +292,7 @@ async function remove() {
         <NList v-else>
           <NListItem v-for="stack in stacks" :key="stack.id">
             <NSpace justify="space-between" align="center">
-              <span>{{ stack.name }}</span>
+              <RouterLink :to="{ name: 'stack', params: { id: stack.id } }">{{ stack.name }}</RouterLink>
               <NSwitch
                 :value="!(user.paused_stacks ?? []).includes(stack.name)"
                 :disabled="!user.enabled || pausing"

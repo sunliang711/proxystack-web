@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { NAlert, NButton, NCard, NEmpty, NGrid, NGridItem, NSelect, NSpace, NStatistic, NTable, NTag, NText, useMessage } from 'naive-ui'
 import { api, problemMessage, type Schemas } from '../api/client'
 import TrafficChart from '../components/TrafficChart.vue'
+import EntityLink from '../components/EntityLink.vue'
 import { onTrafficEvent } from '../runtime'
 import { formatBytes, formatRate } from '../util/format'
 
@@ -78,7 +79,7 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
         <span class="section-label" style="margin: 0">统计范围</span>
         <NSelect v-model:value="userId" :options="users.map((user) => ({ label: user.name, value: user.id! }))" clearable filterable placeholder="全部流量（可指定用户）" />
         <NButton size="small" :loading="loading" @click="load">刷新</NButton>
-        <NText class="filter-note">{{ userId ? '当前只统计所选用户及其档案的流量。' : '全部流量按各 Stack 的入站计数汇总。' }}</NText>
+        <NText class="filter-note">{{ userId ? '当前只统计所选用户及其档案的流量。' : '全部流量按各 Stack 的入站计数汇总。' }} <EntityLink v-if="userId" kind="user" :id="userId" label="查看用户" /></NText>
       </div>
     </NCard>
     <template v-if="overview">
@@ -86,7 +87,7 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
     <NAlert v-if="overview.failed_notifications" type="error" :bordered="false">
       有 {{ overview.failed_notifications }} 封通知发送失败，请查看<RouterLink :to="{ name: 'notifications' }">通知记录</RouterLink>。
     </NAlert>
-    <NAlert v-for="stack in collectErrors" :key="stack.stack_id" type="warning" :bordered="false">stack {{ stack.stack }} 采集失败：{{ stack.error }}</NAlert>
+    <NAlert v-for="stack in collectErrors" :key="stack.stack_id" type="warning" :bordered="false">Stack <EntityLink kind="stack" :id="stack.stack_id" :name="stack.stack" /> 采集失败：{{ stack.error }}</NAlert>
 
     <NGrid cols="2 m:4" responsive="screen" :x-gap="20" :y-gap="20">
       <NGridItem><NCard size="small" class="metric-card"><NStatistic label="今日流量" :value="formatBytes(total(overview.today))" /></NCard></NGridItem>
@@ -108,7 +109,7 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
         <thead><tr><th>Stack</th><th>今日上行 / 下行</th><th>今日合计</th><th>本月上行 / 下行</th><th>本月合计</th><th>当前上行 / 下行</th></tr></thead>
         <tbody>
           <tr v-for="stack in overview.by_stack" :key="stack.stack_id">
-            <td>{{ stack.stack }}</td>
+            <td><EntityLink kind="stack" :id="stack.stack_id" :name="stack.stack" /></td>
             <td>{{ formatBytes(stack.today.up) }} / {{ formatBytes(stack.today.down) }}</td>
             <td>{{ formatBytes(total(stack.today)) }}</td>
             <td>{{ formatBytes(stack.month.up) }} / {{ formatBytes(stack.month.down) }}</td>
@@ -127,7 +128,7 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
         <thead><tr><th>用户</th><th>上行</th><th>下行</th><th style="width: 45%">合计</th></tr></thead>
         <tbody>
           <tr v-for="user in overview.top_users" :key="user.id">
-            <td><RouterLink :to="{ name: 'user', params: { id: user.id } }">{{ user.name }}</RouterLink></td>
+            <td><EntityLink kind="user" :id="user.id" :name="user.name" /></td>
             <td>{{ formatBytes(user.up) }}</td>
             <td>{{ formatBytes(user.down) }}</td>
             <td>
@@ -143,9 +144,11 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
 
     <NCard v-if="overview.stacks.length" title="采集状态" size="small">
       <NSpace>
-        <NTag v-for="stack in overview.stacks" :key="stack.stack_id" :type="stack.error ? 'warning' : 'success'" size="small">
-          {{ stack.stack }}：{{ stack.error ? '异常' : '正常' }}
-        </NTag>
+        <RouterLink v-for="stack in overview.stacks" :key="stack.stack_id" :to="{ name: 'stack', params: { id: stack.stack_id } }" class="collection-link" :aria-label="`查看 ${stack.stack} 的详情，采集${stack.error ? '异常' : '正常'}`">
+          <NTag :type="stack.error ? 'warning' : 'success'" size="small" class="collection-tag">
+            {{ stack.stack }}：{{ stack.error ? '异常' : '正常' }} <span aria-hidden="true">↗</span>
+          </NTag>
+        </RouterLink>
       </NSpace>
     </NCard>
     </template>
@@ -153,6 +156,9 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
 </template>
 
 <style scoped>
+.collection-link { text-decoration: none; border-radius: 6px; }
+.collection-tag { cursor: pointer; }
+.collection-link:hover .collection-tag { filter: brightness(1.15); text-decoration: underline; }
 .overview-filters > .n-select { width: 260px; }
 @media (max-width: 767px) {
   .overview-filters { display: grid; grid-template-columns: minmax(0, 1fr) auto; }

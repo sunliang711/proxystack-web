@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { NButton, NPopover, NSpace, NTable, NTag, NText } from 'naive-ui'
 import type { Schemas } from '../api/client'
+import EntityLink from './EntityLink.vue'
 
 const props = defineProps<{ stack: Schemas['StackSummary'] }>()
 const listeners = computed(() => [
@@ -22,7 +23,7 @@ const listeners = computed(() => [
         <NButton text type="primary" size="small" :aria-label="`查看 ${stack.name} 的 ${listeners.length} 个 Mihomo 监听`">查看 {{ listeners.length }} 个监听</NButton>
       </template>
       <div style="max-width: calc(100vw - 56px); overflow: auto">
-        <NText strong>{{ stack.name }} · Mihomo 监听</NText>
+        <NText strong><EntityLink kind="stack" :id="stack.id" :name="stack.name" tab="mihomo" /> · Mihomo 监听</NText>
         <NTable size="small" :bordered="false" style="margin-top: 8px">
           <thead><tr><th>协议</th><th>监听地址</th></tr></thead>
           <tbody>

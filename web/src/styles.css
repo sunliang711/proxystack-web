@@ -28,6 +28,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 * { box-sizing: border-box; }
+/* 二维码的 size 仅包含画布，留白须额外占据空间，避免画布溢出被裁切。 */
+.n-qr-code { box-sizing: content-box; flex-shrink: 0; }
 ::selection { background: var(--ps-accent-soft); color: var(--ps-accent); }
 :focus-visible { outline: 2px solid var(--ps-accent); outline-offset: 3px; }
 .page-body { min-width: 0; }

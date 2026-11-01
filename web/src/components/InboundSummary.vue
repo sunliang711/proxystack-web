@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { NButton, NPopover, NSpace, NTable, NTag, NText } from 'naive-ui'
 import type { Schemas } from '../api/client'
+import EntityLink from './EntityLink.vue'
 
 const props = defineProps<{ stack: Schemas['StackSummary'] }>()
 const protocols = computed(() => {
@@ -25,7 +26,7 @@ const address = (listen: string, port: number) => `${listen.includes(':') ? `[${
         <NButton text type="primary" size="small" :aria-label="`查看 ${stack.name} 的 ${stack.inbounds.length} 个入站`">查看 {{ stack.inbounds.length }} 个入站</NButton>
       </template>
       <div style="max-width: calc(100vw - 56px); max-height: 360px; overflow: auto">
-        <NText strong>{{ stack.name }} · Xray 入站</NText>
+        <NText strong><EntityLink kind="stack" :id="stack.id" :name="stack.name" tab="inbounds" /> · Xray 入站</NText>
         <NTable size="small" :bordered="false" style="margin-top: 8px">
           <thead><tr><th>名称</th><th>协议</th><th>监听地址</th></tr></thead>
           <tbody>

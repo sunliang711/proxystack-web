@@ -90,9 +90,9 @@ const columns: DataTableColumns<User> = [
       return h(NTag, { size: 'small', type: row.enabled ? 'success' : 'default' }, { default: () => (row.enabled ? '启用' : '停用') })
     },
   },
-  { title: '备注', key: 'remark' },
   { title: '今日用量', key: 'today', render: (row) => used(usage.value[row.id ?? 0]?.today) },
   { title: '本周期用量', key: 'period', render: (row) => used(usage.value[row.id ?? 0]?.period) },
+  { title: '每日阈值', key: 'daily_limit_bytes', width: 100, render: (row) => (row.daily_limit_bytes ? formatBytes(row.daily_limit_bytes) : '不限') },
   { title: '额度', key: 'quota_bytes', width: 90, render: (row) => (row.quota_bytes ? formatBytes(row.quota_bytes) : '不限') },
   { title: '重置', key: 'reset_mode', width: 100, render: (row) => (row.reset_mode === 'monthly' ? `每月 ${row.reset_day} 日` : '不重置') },
   { title: '到期', key: 'expire_at', render: (row) => (row.expire_at ? new Date(row.expire_at).toLocaleString() : '—') },
@@ -103,6 +103,7 @@ const columns: DataTableColumns<User> = [
     width: 100,
     render: (row) => h(NButton, { text: true, type: 'primary', size: 'small', 'aria-label': `查看 ${row.name} 的订阅`, onClick: () => { subscriptionUser.value = row } }, { default: () => '查看链接' }),
   },
+  { title: '备注', key: 'remark' },
 ]
 
 const rowKey = (row: User) => row.name
@@ -149,7 +150,7 @@ async function create() {
       :data="rows"
       :loading="loading"
       :row-key="rowKey"
-      :scroll-x="1100"
+      :scroll-x="1200"
       :pagination="{ pageSize: 50 }"
     />
   </NCard>

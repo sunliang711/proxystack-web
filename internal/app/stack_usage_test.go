@@ -44,6 +44,7 @@ func TestStackUsageScopes(t *testing.T) {
 			{stackID, "user", subject, 10, 20},
 			{stackID, "user", subject + ".7", 2, 3},
 			{stackID, "user", "999", 50, 60},
+			{stackID, "user", "unknown", 4, 5},
 			{stackID, "inbound", "vmess", 100, 200},
 			{stackID, "inbound", "shared", 5, 7},
 			{otherID, "user", subject, 900, 900},
@@ -74,6 +75,23 @@ func TestStackUsageScopes(t *testing.T) {
 			require.Equal(t, "2026-12-31", usage.Daily[29].Day)
 			require.Equal(t, usage.Today, usage.Daily[29].Bytes)
 			require.Zero(t, usage.Daily[1].Total())
+			if tc.userID == 0 {
+				require.Len(t, usage.ByUser, 3)
+				for index, want := range []struct {
+					id   int64
+					name string
+					sum  int64
+				}{{999, "#999", 110}, {userID, "alice", 35}, {0, "未识别用户", 9}} {
+					item := usage.ByUser[index]
+					require.Equal(t, want.id, item.UserID)
+					require.Equal(t, want.name, item.User)
+					require.Equal(t, want.sum, item.Today.Total())
+					require.Equal(t, want.sum*8, item.Month.Total())
+					require.Equal(t, want.sum*3, item.Recent.Total())
+				}
+			} else {
+				require.Empty(t, usage.ByUser)
+			}
 		})
 	}
 	// 空 Stack 仍返回完整的零值日序列，未知实体应明确返回不存在。
@@ -86,6 +104,9 @@ func TestStackUsageScopes(t *testing.T) {
 	require.Len(t, empty.Daily, 30)
 	require.Zero(t, empty.Today.Total()+empty.Month.Total()+empty.Recent.Total())
 	require.Equal(t, otherID, empty.Collection.StackID)
+	emptyAll, err := h.svc.StackUsageDetail(ctx, otherID, 0)
+	require.NoError(t, err)
+	require.Empty(t, emptyAll.ByUser)
 	_, err = h.svc.StackUsageDetail(ctx, 9999, 0)
 	require.ErrorIs(t, err, app.ErrNotFound)
 	_, err = h.svc.StackUsageDetail(ctx, stackID, 9999)
@@ -117,6 +138,13 @@ func TestStackUsagePending(t *testing.T) {
 		require.Equal(t, usage.Today, usage.Recent)
 		require.False(t, usage.Collection.LastAt.IsZero())
 		before[userID] = usage
+		if userID == 0 {
+			require.Len(t, usage.ByUser, 1)
+			require.Equal(t, h.alice(t).ID, usage.ByUser[0].UserID)
+			require.EqualValues(t, 325, usage.ByUser[0].Today.Total())
+			require.Equal(t, usage.ByUser[0].Today, usage.ByUser[0].Month)
+			require.Equal(t, usage.ByUser[0].Today, usage.ByUser[0].Recent)
+		}
 	}
 	h.now = h.now.Add(time.Minute)
 	h.svc.TrafficTick(ctx)
@@ -126,5 +154,6 @@ func TestStackUsagePending(t *testing.T) {
 		require.Equal(t, usage.Today, after.Today)
 		require.Equal(t, usage.Month, after.Month)
 		require.Equal(t, usage.Daily, after.Daily)
+		require.Equal(t, usage.ByUser, after.ByUser)
 	}
 }

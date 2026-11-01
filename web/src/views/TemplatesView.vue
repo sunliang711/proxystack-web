@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { NAlert, NButton, NCard, NGrid, NGridItem, NPopconfirm, NSelect, NSpace, NTab, NTabs, NTag, NText, useMessage } from 'naive-ui'
 import { api, saveBlob, splitProblem, type Schemas } from '../api/client'
 import CodeEditor from '../components/CodeEditor.vue'
+import EntityLink from '../components/EntityLink.vue'
 
 type Format = 'clash' | 'premium' | 'surge'
 const message = useMessage()
@@ -116,6 +117,7 @@ async function save() {
         <NSpace align="center" style="min-height: 36px; margin: 16px 0 12px">
           <span>预览用户</span>
           <NSelect v-model:value="userId" :options="users.map((u) => ({ label: u.name, value: u.id! }))" style="width: 180px" />
+          <EntityLink v-if="userId" kind="user" :id="userId" label="查看用户 ↗" target="_blank" rel="noopener" />
           <NButton size="small" :loading="previewing" :disabled="!preview || !!previewError || previewing" @click="downloadPreview">下载到文件</NButton>
         </NSpace>
         <NAlert v-if="previewError" type="error" :bordered="false" style="margin-bottom: 8px">{{ previewError }}</NAlert>

@@ -154,9 +154,13 @@ const scale = computed(() => (available.value ? Math.min(1, Math.max(MIN_SCALE, 
         v-for="node in layout.nodes"
         :key="node.id"
         :class="['node', { clickable: node.clickable, faded: related && !related.has(node.id), dim: node.dim }]"
+        :role="node.clickable ? 'link' : undefined"
+        :tabindex="node.clickable ? 0 : undefined"
+        :aria-label="node.clickable ? `查看 Stack ${node.title} 的详情` : undefined"
         @mouseenter="hovered = node.id"
         @mouseleave="hovered = null"
         @click="node.clickable && emit('select', node)"
+        @keydown.enter="node.clickable && emit('select', node)"
       >
         <title>{{ [node.title, node.subtitle, ...(node.lines ?? []), node.hint].filter(Boolean).join('\n') }}</title>
         <rect :x="node.x" :y="node.y" :width="NODE_WIDTH" :height="node.height" rx="10" :fill="theme.cardColor" :stroke="theme.borderColor" />

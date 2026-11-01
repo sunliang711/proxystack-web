@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { NAlert, NButton, NForm, NFormItem, NInput, NModal, NRadioButton, NRadioGroup, NSpace, NSwitch, useMessage } from 'naive-ui'
 import { api, problemMessage, saveBlob } from '../api/client'
+import EntityLink from './EntityLink.vue'
 
 const props = defineProps<{
   scope: 'all' | 'stacks' | 'users' | 'manual_nodes' | 'templates'
@@ -82,7 +83,13 @@ async function download() {
 <template>
   <NModal v-model:show="show" preset="card" title="导出配置" style="max-width: 560px">
     <NForm label-placement="left" label-width="110">
-      <NFormItem label="范围">{{ scopeLabel }}</NFormItem>
+      <NFormItem label="范围">
+        <NSpace v-if="scope === 'stacks' || scope === 'users'" :size="8">
+          <span>{{ scope === 'stacks' ? 'Stack：' : '用户：' }}</span>
+          <EntityLink v-for="name in scope === 'stacks' ? stacks : users" :key="name" :kind="scope === 'stacks' ? 'stack' : 'user'" :name="name" target="_blank" rel="noopener" />
+        </NSpace>
+        <template v-else>{{ scopeLabel }}</template>
+      </NFormItem>
       <NFormItem v-if="scope === 'stacks'" label="附带引用的用户">
         <NSwitch v-model:value="includeUsers" />
       </NFormItem>

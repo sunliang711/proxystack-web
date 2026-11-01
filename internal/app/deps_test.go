@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	goruntime "runtime"
 	"testing"
 
@@ -16,12 +17,78 @@ import (
 
 	"proxystack-web/internal/app"
 	"proxystack-web/internal/deps"
+	"proxystack-web/internal/store"
+	"proxystack-web/internal/store/dbq"
 	"proxystack-web/internal/units"
 )
 
 // fakeXray 是一个冒充 xray 的脚本：version 输出版本号，run -test 总是通过。
 func fakeXray(version string) string {
 	return fmt.Sprintf("#!/bin/sh\nif [ \"$1\" = version ]; then echo 'Xray %s (Xray, Penetrates Everything.)'; fi\nexit 0\n", version)
+}
+
+// TestDepUpdateAvailability 验证状态接口只把严格较新的依赖版本标为可升级。
+func TestDepUpdateAvailability(t *testing.T) {
+	h := newRuntimeHarness(t)
+	ctx := context.Background()
+	path := h.svc.DepFiles(deps.Xray)[deps.Xray]
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
+	for _, tc := range []struct {
+		current, latest string
+		want            bool
+	}{
+		{"1.9.0", "v1.10.0", true},
+		{"1.10.0", "v1.10.0", false},
+		{"1.11.0", "v1.10.0", false},
+		{"1.10.0-rc.1", "v1.10.0", true},
+		{"unknown", "v1.10.0", false},
+		{"1.10.0", "", false},
+	} {
+		t.Run(tc.current+"/"+tc.latest, func(t *testing.T) {
+			require.NoError(t, os.WriteFile(path, []byte(fakeXray(tc.current)), 0o750))
+			require.NoError(t, h.svc.Store.InTx(ctx, func(q *dbq.Queries) error {
+				return store.PutJSON(ctx, q, "deps_latest", map[string]any{"versions": map[string]string{deps.Xray: tc.latest}})
+			}))
+			statuses, err := h.svc.DepsStatus(ctx)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, statuses[0].UpdateAvailable)
+			require.False(t, statuses[1].UpdateAvailable)
+			require.False(t, statuses[2].UpdateAvailable)
+		})
+	}
+}
+
+// TestGeoUpdateAvailability 验证 Geo 按数字发布标识比较，未安装时保留安装入口。
+func TestGeoUpdateAvailability(t *testing.T) {
+	h := newRuntimeHarness(t)
+	ctx := context.Background()
+	for _, path := range h.svc.DepFiles(deps.Geo) {
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
+		require.NoError(t, os.WriteFile(path, []byte("geo"), 0o640))
+	}
+	require.NoError(t, h.svc.Store.InTx(ctx, func(q *dbq.Queries) error {
+		return q.InsertDepInstall(ctx, dbq.InsertDepInstallParams{Component: deps.Geo, Version: "202610312203", Result: "succeeded", FinishedAt: 1})
+	}))
+	for _, tc := range []struct {
+		latest string
+		want   bool
+	}{{"202611012203", true}, {"202610312203", false}, {"202610302203", false}, {"", false}} {
+		t.Run(tc.latest, func(t *testing.T) {
+			require.NoError(t, h.svc.Store.InTx(ctx, func(q *dbq.Queries) error {
+				return store.PutJSON(ctx, q, "deps_latest", map[string]any{"versions": map[string]string{deps.Geo: tc.latest}})
+			}))
+			statuses, err := h.svc.DepsStatus(ctx)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, statuses[2].UpdateAvailable)
+		})
+	}
+	for _, path := range h.svc.DepFiles(deps.Geo) {
+		require.NoError(t, os.Remove(path))
+	}
+	statuses, err := h.svc.DepsStatus(ctx)
+	require.NoError(t, err)
+	require.False(t, statuses[2].Installed)
+	require.False(t, statuses[2].UpdateAvailable)
 }
 
 // fakeGitHub 提供 xray 的 latest 发布信息、zip 资产和 .dgst 摘要。

@@ -10,6 +10,7 @@ import { randomString } from '../util/generate'
 import SecretInput from '../components/SecretInput.vue'
 import ErrorList from '../components/ErrorList.vue'
 import SettingsSection from '../components/SettingsSection.vue'
+import EntityLink from '../components/EntityLink.vue'
 import { useSettingsSections } from '../composables/useSettingsSections'
 import { useDirty } from '../composables/useDirty'
 import { mihomoLogLevels, xrayLogLevels } from '../util/options'
@@ -464,7 +465,10 @@ async function save() {
         </NFormItem>
         <template v-if="form.download_proxy.mode === 'stack'">
           <NFormItem label="stack" v-bind="f('download_proxy.stack', '该 stack 未运行时，下载作业会直接报错')">
-            <NSelect v-model:value="form.download_proxy.stack" :options="stacks.map((s) => ({ label: s.name, value: s.name }))" filterable />
+            <NSpace vertical style="width: 100%">
+              <NSelect v-model:value="form.download_proxy.stack" :options="stacks.map((s) => ({ label: s.name, value: s.name }))" filterable />
+              <EntityLink v-if="form.download_proxy.stack" kind="stack" :name="form.download_proxy.stack" label="查看 Stack ↗" target="_blank" rel="noopener" />
+            </NSpace>
           </NFormItem>
           <NFormItem label="监听" v-bind="f('download_proxy.listener', '监听要求认证时自动使用其账号')">
             <NRadioGroup v-model:value="form.download_proxy.listener">

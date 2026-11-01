@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { use } from 'echarts/core'
 import { BarChart, LineChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, MarkLineComponent, TooltipComponent } from 'echarts/components'
@@ -7,6 +8,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import VChart from 'vue-echarts'
 import { isDark } from '../theme'
 import { chartTokens, seriesColors, type ChartSeries } from '../util/chart'
+import { useEntityDirectory } from '../composables/useEntityReference'
 
 use([BarChart, LineChart, GridComponent, LegendComponent, MarkLineComponent, TooltipComponent, CanvasRenderer])
 
@@ -21,6 +23,13 @@ const props = defineProps<{
 }>()
 
 const mode = computed(() => (isDark.value ? 'dark' : 'light'))
+const router = useRouter()
+const resolve = useEntityDirectory(() => props.series.flatMap((series) => series.entity ? [series.entity.kind] : []))
+function openSeries(event: { seriesIndex?: number }) {
+  const entity = event.seriesIndex === undefined ? undefined : props.series[event.seriesIndex]?.entity
+  const record = entity && resolve(entity)
+  if (record) router.push({ name: entity!.kind, params: { id: record.id! } })
+}
 
 const option = computed(() => {
   const tokens = chartTokens[mode.value]
@@ -54,6 +63,7 @@ const option = computed(() => {
     },
     series: props.series.map((series, index) => {
       const color = series.slot === undefined ? tokens.other : palette[series.slot]
+      const cursor = series.entity && resolve(series.entity) ? 'pointer' : 'default'
       const reference = index === 0 && props.reference
         ? {
             markLine: {
@@ -66,12 +76,12 @@ const option = computed(() => {
         : {}
       if (props.kind === 'bar') {
         return {
-          ...reference, name: series.name, type: 'bar', stack: 'total', data: series.data, barMaxWidth: 24,
+          ...reference, name: series.name, type: 'bar', stack: 'total', data: series.data, barMaxWidth: 24, cursor,
           itemStyle: { color, borderColor: tokens.surface, borderWidth: 1, borderRadius: index === last ? [4, 4, 0, 0] : 0 },
         }
       }
       return {
-        ...reference, name: series.name, type: 'line', data: series.data, showSymbol: false, symbolSize: 8,
+        ...reference, name: series.name, type: 'line', data: series.data, showSymbol: false, symbolSize: 8, cursor,
         lineStyle: { width: 2, color }, itemStyle: { color },
       }
     }),
@@ -80,5 +90,5 @@ const option = computed(() => {
 </script>
 
 <template>
-  <VChart :option="option" autoresize :style="{ height: height ?? '280px', width: '100%' }" />
+  <VChart :option="option" autoresize :style="{ height: height ?? '280px', width: '100%' }" @click="openSeries" />
 </template>

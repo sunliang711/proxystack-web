@@ -157,8 +157,7 @@ func (s *Service) DepsStatus(ctx context.Context) ([]DepStatus, error) {
 			}
 		}
 		status.Latest, status.LatestCheckedAt = latest.Versions[component], latest.CheckedAt
-		status.UpdateAvailable = status.Installed && status.Latest != "" && component != deps.Geo &&
-			strings.TrimPrefix(status.Latest, "v") != strings.TrimPrefix(status.Version, "v")
+		status.UpdateAvailable = status.Installed && deps.IsNewerVersion(status.Version, status.Latest)
 		for _, stack := range doc.Stacks {
 			if !stack.Enabled || !stack.DesiredRunning {
 				continue

@@ -3,6 +3,7 @@ import { computed, h, onMounted, ref } from 'vue'
 import { NButton, NCard, NDataTable, NRadioButton, NRadioGroup, NTag, useMessage, type DataTableColumns } from 'naive-ui'
 import { api, problemMessage, type Schemas } from '../api/client'
 import { formatTime } from '../util/format'
+import EntityLink from '../components/EntityLink.vue'
 
 type Item = Schemas['Notification']
 
@@ -40,7 +41,7 @@ const rows = computed(() => (status.value === 'all' ? items.value : items.value.
 const columns: DataTableColumns<Item> = [
   { title: '时间', key: 'at', width: 180, render: (row) => formatTime(row.at) },
   { title: '事件', key: 'label' },
-  { title: '用户', key: 'user_name' },
+  { title: '用户', key: 'user_name', render: (row) => h(EntityLink, { kind: 'user', id: row.user_id, label: row.user_name }) },
   {
     title: '状态', key: 'status', width: 100,
     render: (row) => h(NTag, { size: 'small', type: statusView[row.status].type }, { default: () => statusView[row.status].label }),

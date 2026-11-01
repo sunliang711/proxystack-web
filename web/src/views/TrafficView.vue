@@ -1,24 +1,30 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, h, onMounted, ref, watch } from 'vue'
 import {
   NButton, NCard, NDataTable, NDatePicker, NEmpty, NGrid, NGridItem, NRadioButton, NRadioGroup, NSelect, NSpace, NStatistic, NText, useMessage,
   type DataTableColumns,
 } from 'naive-ui'
 import { api, problemMessage, saveBlob, type Schemas } from '../api/client'
 import TrafficChart from '../components/TrafficChart.vue'
+import EntityLink from '../components/EntityLink.vue'
 import type { ChartSeries } from '../util/chart'
 import { formatBytes } from '../util/format'
+import { defaultTrafficRange, trafficBounds, trafficRangeLabel, type TrafficLevel, type TrafficRange } from '../util/traffic-range'
 
-type Level = 'hour' | 'day' | 'month' | 'year'
+type Level = TrafficLevel
 type Scope = 'user' | 'inbound' | 'outbound'
 type Series = Schemas['TrafficSeries']
 
-const DAY = 86400_000
 const message = useMessage()
 const level = ref<Level>('day')
 const scope = ref<Scope>('inbound')
 const groupBy = ref<'stack' | 'subject'>('stack')
-const range = ref<[number, number]>(defaultRange('day'))
+const timezone = ref('UTC')
+const ready = ref(false)
+const range = ref<TrafficRange>(defaultTrafficRange('day', timezone.value))
+const pickerType = computed(() => ({ hour: 'datetimerange', day: 'daterange', month: 'monthrange', year: 'yearrange' } as const)[level.value])
+const bounds = computed(() => trafficBounds(level.value, range.value, timezone.value))
+const rangeLabel = computed(() => trafficRangeLabel(bounds.value, timezone.value))
 const stacks = ref<number[]>([])
 const subjects = ref<string[]>([])
 const stackOptions = ref<{ label: string; value: number }[]>([])
@@ -26,24 +32,20 @@ const subjectOptions = ref<{ label: string; value: string }[]>([])
 const result = ref<Schemas['TrafficResult'] | null>(null)
 const loading = ref(false)
 
-function defaultRange(next: Level): [number, number] {
-  const now = Date.now()
-  const span = { hour: DAY, day: 30 * DAY, month: 365 * DAY, year: 5 * 365 * DAY }[next]
-  return [now - span, now]
-}
-
 function params() {
   return {
     level: level.value, scope: scope.value, group_by: groupBy.value,
-    from: Math.floor(range.value[0] / 1000), to: Math.ceil(range.value[1] / 1000) + 3600,
+    ...bounds.value,
     stacks: stacks.value.join(','), subjects: subjects.value.join(','),
   }
 }
 
 let loadVersion = 0
 async function load() {
+  if (!ready.value) return
   const version = ++loadVersion
   loading.value = true
+  result.value = null
   const { data, error } = await api.GET('/api/traffic/query', { params: { query: params() } })
   if (version !== loadVersion) return
   loading.value = false
@@ -61,13 +63,20 @@ async function loadSubjects() {
 }
 
 onMounted(async () => {
-  const { data } = await api.GET('/api/stacks')
+  const [{ data }, { data: settings, error }] = await Promise.all([api.GET('/api/stacks'), api.GET('/api/config/settings')])
+  if (!settings) {
+    message.error(problemMessage(error, '无法读取统计时区'))
+    return
+  }
+  timezone.value = settings.basic.timezone || 'UTC'
+  range.value = defaultTrafficRange(level.value, timezone.value)
   stackOptions.value = (data?.stacks ?? []).map((stack) => ({ label: stack.name, value: stack.id }))
   await loadSubjects()
+  ready.value = true
   await load()
 })
 watch(level, (next) => {
-  range.value = defaultRange(next)
+  range.value = defaultTrafficRange(next, timezone.value)
 })
 watch(scope, () => {
   subjects.value = []
@@ -92,7 +101,7 @@ const chartSeries = computed<ChartSeries[]>(() => {
     const data = series.up.map((up, index) => up + series.down[index]!)
     const slot = slotOf(series.subject)
     if (slot !== undefined) {
-      out.push({ name: series.label, data, slot })
+      out.push({ name: series.label, data, slot, entity: groupBy.value === 'stack' || scope.value === 'user' ? { kind: groupBy.value === 'stack' ? 'stack' : 'user', id: series.subject } : undefined })
     } else {
       other = other ? other.map((value, index) => value + data[index]!) : data
     }
@@ -115,7 +124,12 @@ const labels = computed(() => {
 })
 
 const columns: DataTableColumns<Series> = [
-  { title: () => groupBy.value === 'stack' ? 'Stack' : '对象', key: 'label' },
+  {
+    title: () => groupBy.value === 'stack' ? 'Stack' : '对象', key: 'label',
+    render: (row) => groupBy.value === 'stack' || scope.value === 'user'
+      ? h(EntityLink, { kind: groupBy.value === 'stack' ? 'stack' : 'user', id: row.subject, label: row.label })
+      : row.label,
+  },
   { title: '上行', key: 'up', render: (row) => formatBytes(row.up.reduce((a, b) => a + b, 0)) },
   { title: '下行', key: 'down', render: (row) => formatBytes(row.down.reduce((a, b) => a + b, 0)) },
   {
@@ -151,13 +165,19 @@ async function exportCSV() {
           <NRadioButton value="inbound">入站</NRadioButton>
           <NRadioButton value="outbound">出站</NRadioButton>
         </NRadioGroup>
-        <NDatePicker v-model:value="range" type="daterange" size="small" :clearable="false" />
+        <NDatePicker v-model:formatted-value="range" :type="pickerType" value-format="yyyy-MM-dd HH:mm:ss" size="small" :clearable="false" :disabled="!ready" />
         <NSelect v-model:value="stacks" :options="stackOptions" multiple clearable size="small" placeholder="全部 stack" style="min-width: 0" />
         <NSelect v-model:value="subjects" :options="subjectOptions" multiple clearable filterable size="small" :placeholder="scope === 'user' ? '全部用户（可指定）' : '全部对象'" style="min-width: 0" />
-        <NButton size="small" @click="exportCSV">导出 CSV</NButton>
+        <NButton size="small" :disabled="!ready" @click="exportCSV">导出 CSV</NButton>
       </div>
     </NCard>
+    <NSpace v-if="stacks.length || (scope === 'user' && subjects.length)" align="center" :size="8">
+      <NText depth="3">已筛选：</NText>
+      <EntityLink v-for="id in stacks" :key="`stack:${id}`" kind="stack" :id="id" />
+      <template v-if="scope === 'user'"><EntityLink v-for="id in subjects" :key="`user:${id}`" kind="user" :id="id" :label="subjectOptions.find((option) => option.value === id)?.label" /></template>
+    </NSpace>
     <NText depth="3">当前{{ scope === 'user' ? '按用户计数' : scope === 'inbound' ? '按入站计数' : '按出站计数' }}；总和与下方 Stack 明细使用相同筛选条件。切换「用户」可指定用户；共享账号流量可能无法归属到用户。</NText>
+    <NText v-if="ready" depth="3">统计范围：{{ rangeLabel }}；按完整{{ level === 'hour' ? '小时' : level === 'day' ? '自然日' : level === 'month' ? '自然月' : '自然年' }}汇总，当前周期统计至最近一次采集。</NText>
     <NGrid cols="2 s:3" responsive="screen" :x-gap="20" :y-gap="20" item-responsive>
       <NGridItem span="2 s:1"><NCard size="small" class="metric-card"><NStatistic label="所选范围合计" :value="formatBytes((result?.total.up ?? 0) + (result?.total.down ?? 0))" /></NCard></NGridItem>
       <NGridItem><NCard size="small" class="metric-card"><NStatistic label="上行合计" :value="formatBytes(result?.total.up ?? 0)" /></NCard></NGridItem>
@@ -174,12 +194,14 @@ async function exportCSV() {
       <NEmpty v-else description="所选范围内没有数据" />
     </NCard>
     <NCard :title="groupBy === 'stack' ? '各 Stack 流量明细' : '对象流量明细'" size="small">
+      <p v-if="ready" class="traffic-range"><NText depth="3">{{ rangeLabel }}</NText></p>
       <NDataTable :columns="columns" :data="result?.series ?? []" :loading="loading" :row-key="(row: Series) => row.subject" :pagination="{ pageSize: 20 }" size="small" />
     </NCard>
   </NSpace>
 </template>
 
 <style scoped>
+.traffic-range { margin: 0 0 16px; font-size: 12px; }
 .traffic-filters {
   display: grid;
   grid-template-columns: auto auto minmax(240px, 1fr);

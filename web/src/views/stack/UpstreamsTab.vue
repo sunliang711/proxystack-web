@@ -8,6 +8,7 @@ import {
 } from 'naive-ui'
 import { fieldState, hasErrorsUnder, type FormErrors, type Schemas } from '../../api/client'
 import CodeEditor from '../../components/CodeEditor.vue'
+import EntityLink from '../../components/EntityLink.vue'
 import { ssMethods } from '../../util/options'
 
 type Upstream = Schemas['Upstream']
@@ -38,7 +39,7 @@ const columns = computed<DataTableColumns<Upstream & { _index: number }>>(() => 
     title: '目标',
     key: 'target',
     render: (row) => {
-      if (row.type === 'xray-socks5') return `${row.stack}.${row.inbound}`
+      if (row.type === 'xray-socks5') return h(EntityLink, { kind: 'stack', name: row.stack, label: `${row.stack}.${row.inbound}`, tab: 'inbounds', target: '_blank', rel: 'noopener' })
       const config = (row.config ?? {}) as RawConfig
       return `${config.type ?? '?'} ${config.server ?? ''}:${config.port ?? ''}`
     },
@@ -258,7 +259,10 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
           </NRadioGroup>
         </NFormItem>
         <NFormItem v-if="editing.draft.type === 'xray-socks5'" label="引用" v-bind="f('inbound')">
-          <NCascader v-model:value="refValue" :options="cascaderOptions" check-strategy="child" filterable />
+          <NSpace vertical style="width: 100%">
+            <NCascader v-model:value="refValue" :options="cascaderOptions" check-strategy="child" filterable />
+            <EntityLink v-if="editing.draft.stack" kind="stack" :name="editing.draft.stack" label="查看目标入站 ↗" tab="inbounds" target="_blank" rel="noopener" />
+          </NSpace>
         </NFormItem>
         <template v-else>
           <NFormItem label="节点协议">

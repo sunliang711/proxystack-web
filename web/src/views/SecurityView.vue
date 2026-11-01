@@ -102,14 +102,14 @@ const feedback = (key: string) => ({
       <template v-else-if="!enabled && setup">
         <NSteps vertical :current="enableCode.length === 6 ? 2 : 1" size="small">
           <NStep title="用验证器应用扫描二维码">
-            <NSpace align="center" :size="20" style="margin: 8px 0 4px">
+            <div class="totp-setup">
               <div class="qr"><NQrCode :value="setup.uri" :size="168" :padding="8" error-correction-level="M" /></div>
-              <NSpace vertical :size="4">
+              <NSpace vertical :size="4" class="setup-help">
                 <NText depth="3">无法扫码时，手工输入密钥：</NText>
                 <NText code class="secret">{{ setup.secret }}</NText>
                 <NText depth="3" style="font-size: 12px">类型选「基于时间」，6 位，30 秒</NText>
               </NSpace>
-            </NSpace>
+            </div>
           </NStep>
           <NStep title="输入应用显示的验证码">
             <NForm style="max-width: 320px; margin-top: 8px" @submit.prevent="enable">
@@ -154,7 +154,17 @@ const feedback = (key: string) => ({
 </template>
 
 <style scoped>
+.totp-setup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px;
+  margin: 8px 0 4px;
+}
+.setup-help { flex: 1 1 260px; min-width: 0; }
 .qr {
+  display: inline-flex;
+  flex-shrink: 0;
   background: #fff;
   border-radius: 8px;
   line-height: 0;

@@ -2405,6 +2405,7 @@ export interface components {
             today: components["schemas"]["Bytes"];
         };
         StackUsage: {
+            by_user: components["schemas"]["StackUserUsage"][];
             collection: components["schemas"]["CollectStatus"];
             daily: components["schemas"]["DayUsage"][];
             enabled: boolean;
@@ -2414,6 +2415,14 @@ export interface components {
             /** Format: int64 */
             stack_id: number;
             today: components["schemas"]["Bytes"];
+        };
+        StackUserUsage: {
+            month: components["schemas"]["Bytes"];
+            recent: components["schemas"]["Bytes"];
+            today: components["schemas"]["Bytes"];
+            user: string;
+            /** Format: int64 */
+            user_id: number;
         };
         SubscriptionLinks: {
             base_url: string;

@@ -5,6 +5,7 @@ import { api, problemMessage, type Schemas } from '../api/client'
 import { refreshPending } from '../runtime'
 import DiffView from './DiffView.vue'
 import TaskDialog from './TaskDialog.vue'
+import EntityLink from './EntityLink.vue'
 
 const show = defineModel<boolean>('show', { required: true })
 const pending = ref<Schemas['PendingView'] | null>(null)
@@ -54,7 +55,7 @@ async function apply(stacks: string[]) {
         <NEmpty v-if="pending && !pending.changes.length && !pending.error" description="生成物与当前配置一致，没有待应用的变更" />
         <template v-for="(changes, stack) in byStack" :key="stack">
           <NSpace justify="space-between" align="center" style="margin: 12px 0 6px">
-            <strong>{{ stack }}</strong>
+            <strong><EntityLink kind="stack" :name="String(stack)" @navigate="show = false" /></strong>
             <NButton size="small" @click="apply([String(stack)])">只应用此 stack</NButton>
           </NSpace>
           <NCollapse>

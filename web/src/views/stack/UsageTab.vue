@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { NAlert, NButton, NCard, NEmpty, NGrid, NGridItem, NSelect, NSpace, NStatistic, NText } from 'naive-ui'
+import { computed, h, ref } from 'vue'
+import { NAlert, NButton, NCard, NDataTable, NEmpty, NGrid, NGridItem, NSelect, NSpace, NStatistic, NText, type DataTableColumns } from 'naive-ui'
 import { api, problemMessage, type Schemas } from '../../api/client'
 import TrafficChart from '../../components/TrafficChart.vue'
+import EntityLink from '../../components/EntityLink.vue'
 import { usePolling } from '../../composables/usePolling'
 import { formatBytes, formatTime } from '../../util/format'
 
@@ -22,6 +23,17 @@ const totals = computed(() => usage.value ? [
 ] : [])
 const days = computed(() => (usage.value?.daily ?? []).map((day) => day.day.slice(5)))
 const series = computed(() => [{ name: '日用量', data: (usage.value?.daily ?? []).map(total), slot: 0 }])
+const userColumns: DataTableColumns<Schemas['StackUserUsage']> = [
+  { title: '用户', key: 'user', minWidth: 160, render: (row) => row.user_id > 0 ? h(EntityLink, { kind: 'user', id: row.user_id, name: row.user }) : row.user },
+  ...(['today', 'month', 'recent'] as const).map((period, index) => ({
+    title: ['今日用量', '本月用量', '近 30 天用量'][index], key: period, minWidth: 200,
+    sorter: (a: Schemas['StackUserUsage'], b: Schemas['StackUserUsage']) => total(a[period]) - total(b[period]),
+    render: (row: Schemas['StackUserUsage']) => h('div', [
+      h(NText, { strong: true }, () => formatBytes(total(row[period]))),
+      h('div', [h(NText, { depth: 3 }, () => `上行 ${formatBytes(row[period].up)} / 下行 ${formatBytes(row[period].down)}`)]),
+    ]),
+  })),
+]
 </script>
 
 <template>
@@ -31,6 +43,7 @@ const series = computed(() => [{ name: '日用量', data: (usage.value?.daily ??
         <NSpace align="center">
           <NText>统计用户</NText>
           <NSelect v-model:value="userId" :options="userOptions" clearable filterable placeholder="全部用户" style="width: 240px" />
+          <EntityLink v-if="userId" kind="user" :id="userId" label="查看用户" />
         </NSpace>
         <NSpace align="center" :size="8">
           <NText depth="3">每 10 秒更新<template v-if="updatedAt"> · {{ formatTime(updatedAt) }}</template></NText>
@@ -53,6 +66,10 @@ const series = computed(() => [{ name: '日用量', data: (usage.value?.daily ??
           </NCard>
         </NGridItem>
       </NGrid>
+      <NCard v-if="!userId" title="各用户用量明细" size="small">
+        <NText depth="3" style="display: block; margin-bottom: 12px">仅显示本 Stack 在这些时间段内有统计记录的用户，合并同一用户的全部凭据档案。共享认证或无法归属的入站流量不一定包含在用户明细中，因此各用户合计可能与上方入站总量不同；历史已删除用户保留记录。</NText>
+        <NDataTable :columns="userColumns" :data="usage.by_user" :row-key="(row: Schemas['StackUserUsage']) => row.user_id" :pagination="{ pageSize: 10 }" :scroll-x="760" size="small" />
+      </NCard>
       <NCard title="近 30 天用量趋势" size="small">
         <TrafficChart v-if="usage.daily.some((day) => total(day) > 0)" kind="bar" :labels="days" :series="series" :format="formatBytes" height="280px" />
         <NEmpty v-else description="最近 30 天没有用量" />

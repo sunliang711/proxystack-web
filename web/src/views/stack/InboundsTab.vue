@@ -8,6 +8,7 @@ import { fieldState, hasErrorsUnder, type FormErrors, type Schemas } from '../..
 import PortInput from '../../components/PortInput.vue'
 import SecretInput from '../../components/SecretInput.vue'
 import TemplateInput from '../../components/TemplateInput.vue'
+import EntityLink from '../../components/EntityLink.vue'
 import { randomString, shadowsocksKey } from '../../util/generate'
 import { listenOptions, protocolLabels, regions, ssMethods } from '../../util/options'
 import { stackPorts } from './ports'
@@ -38,7 +39,7 @@ const columns = computed<DataTableColumns<Inbound & { _index: number }>>(() => [
   { title: '协议', key: 'protocol', render: (row) => protocolLabels[row.protocol] ?? row.protocol },
   { title: '监听', key: 'listen', render: (row) => `${row.listen}:${row.port}` },
   { title: '订阅', key: 'sub', width: 60, render: (row) => (row.sub ? '是' : '否') },
-  { title: '用户', key: 'users', render: (row) => row.users.map((u) => (u.profile ? `${u.user}/${u.profile}` : u.user)).join('、') || '—' },
+  { title: '用户', key: 'users', render: (row) => row.users.length ? h(NSpace, { size: [8, 4] }, () => row.users.map((u) => h(EntityLink, { kind: 'user', name: u.user, label: u.profile ? `${u.user}/${u.profile}` : u.user }))) : '—' },
   {
     title: '操作',
     key: 'actions',
@@ -232,7 +233,7 @@ const showUsers = computed(() => isUserProtocol.value || (isAuthProtocol.value &
             <NCollapseItem v-for="(ref, index) in editing.draft.users" :key="ref.user" :name="ref.user">
               <template #header>
                 <NSpace align="center" :size="4">
-                  <span>{{ ref.user }}</span>
+                  <EntityLink kind="user" :name="ref.user" target="_blank" rel="noopener" />
                   <NTag v-if="ref.profile" size="small">{{ ref.profile }}</NTag>
                   <NText v-if="f(`users[${index}].user`).feedback || f(`users[${index}].profile`).feedback" type="error">
                     {{ f(`users[${index}].user`).feedback || f(`users[${index}].profile`).feedback }}

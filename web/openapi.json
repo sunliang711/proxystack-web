@@ -3392,6 +3392,12 @@
       "StackUsage": {
         "additionalProperties": false,
         "properties": {
+          "by_user": {
+            "items": {
+              "$ref": "#/components/schemas/StackUserUsage"
+            },
+            "type": "array"
+          },
           "collection": {
             "$ref": "#/components/schemas/CollectStatus"
           },
@@ -3429,7 +3435,37 @@
           "month",
           "recent",
           "daily",
-          "collection"
+          "collection",
+          "by_user"
+        ],
+        "type": "object"
+      },
+      "StackUserUsage": {
+        "additionalProperties": false,
+        "properties": {
+          "month": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "recent": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "today": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "user": {
+            "type": "string"
+          },
+          "user_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "user",
+          "today",
+          "month",
+          "recent"
         ],
         "type": "object"
       },

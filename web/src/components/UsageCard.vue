@@ -4,7 +4,9 @@ import { NAlert, NButton, NCard, NEmpty, NPopconfirm, NProgress, NSelect, NSpace
 import { api, problemMessage, type Schemas } from '../api/client'
 import { usePolling } from '../composables/usePolling'
 import { formatBytes, formatTime } from '../util/format'
+import type { ChartSeries } from '../util/chart'
 import TrafficChart from './TrafficChart.vue'
+import EntityLink from './EntityLink.vue'
 
 const props = defineProps<{ userId: number; dailyLimit: number; quota: number }>()
 const message = useMessage()
@@ -41,7 +43,7 @@ const daily = computed(() => stackId.value ? selectedStacks.value[0]?.daily ?? [
 const series = computed(() => {
   const stacks = selectedStacks.value
   if (!stacks.length) return [{ name: '日用量', data: daily.value.map(total), slot: 0 }]
-  const shown = stacks.slice(0, 7).map((stack, index) => ({ name: stack.stack, data: stack.daily.map(total), slot: index as number | undefined }))
+  const shown: ChartSeries[] = stacks.slice(0, 7).map((stack, index) => ({ name: stack.stack, data: stack.daily.map(total), slot: index, entity: { kind: 'stack', id: stack.stack_id } }))
   const rest = stacks.slice(7)
   if (rest.length) shown.push({ name: '其他 Stack', data: daily.value.map((_, index) => rest.reduce((sum, stack) => sum + total(stack.daily[index]!), 0)), slot: undefined })
   return shown
@@ -92,7 +94,7 @@ const reference = computed(() => (!stackId.value && props.dailyLimit ? { value: 
         <thead><tr><th>Stack</th><th>今日上行 / 下行</th><th>今日合计</th><th>近 30 天上行 / 下行</th><th>近 30 天合计</th></tr></thead>
         <tbody>
           <tr v-for="stack in selectedStacks" :key="stack.stack_id">
-            <td>{{ stack.stack }}</td>
+            <td><EntityLink kind="stack" :id="stack.stack_id" :name="stack.stack" /></td>
             <td>{{ formatBytes(stack.today.up) }} / {{ formatBytes(stack.today.down) }}</td>
             <td>{{ formatBytes(total(stack.today)) }}</td>
             <td>{{ formatBytes(stack.recent.up) }} / {{ formatBytes(stack.recent.down) }}</td>

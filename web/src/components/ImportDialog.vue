@@ -6,6 +6,7 @@ import {
 } from 'naive-ui'
 import { api, problemMessage, type Schemas } from '../api/client'
 import CodeEditor from './CodeEditor.vue'
+import EntityLink from './EntityLink.vue'
 
 type Entry = Schemas['ImportEntry']
 type Preview = Schemas['ImportOutputBody']
@@ -134,7 +135,14 @@ const columns: DataTableColumns<Entry> = [
       }),
   },
   { title: '类型', key: 'kind', width: 80, render: (row) => (({ settings: '系统设置', user: '用户', stack: 'Stack', manual_node: '手工节点', remote_source: '远端节点源', templates: '订阅模板' }) as Record<string, string>)[row.kind] ?? row.kind },
-  { title: '名称', key: 'name', render: (row) => (row.new_name ? `${row.name} → ${row.new_name}` : row.name) },
+  {
+    title: '名称', key: 'name',
+    render: (row) => {
+      const name = row.kind === 'stack' || row.kind === 'user'
+        ? h(EntityLink, { kind: row.kind, name: row.name, target: '_blank', rel: 'noopener' }) : row.name
+      return row.new_name ? h('span', [name, ` → ${row.new_name}`]) : name
+    },
+  },
   {
     title: '动作',
     key: 'action',

@@ -169,7 +169,7 @@ function onFile({ file }: { file: UploadFileInfo }) {
             <NSpace>
               <NTag v-if="!dep.installed" type="warning" size="small">未安装</NTag>
               <NTag v-else-if="dep.update_available" type="info" size="small">有新版本 {{ dep.latest }}</NTag>
-              <NButton size="small" type="primary" @click="open(dep.component, 'latest')">{{ dep.installed ? '升级到最新' : '安装最新版' }}</NButton>
+              <NButton size="small" type="primary" :disabled="dep.installed && !dep.update_available" @click="open(dep.component, 'latest')">{{ dep.installed ? '升级到最新' : '安装最新版' }}</NButton>
               <NButton v-if="dep.component !== 'geo'" size="small" @click="open(dep.component, 'version')">安装指定版本</NButton>
               <NButton size="small" @click="open(dep.component, 'upload')">上传安装包</NButton>
               <NPopconfirm v-if="dep.previous" @positive-click="rollback(dep.component)">

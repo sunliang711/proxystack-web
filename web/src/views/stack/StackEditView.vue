@@ -9,6 +9,7 @@ import {
   api, emptyErrors, fieldState, MASKED, splitProblem, type FormErrors, type Schemas,
 } from '../../api/client'
 import ErrorList from '../../components/ErrorList.vue'
+import EntityLink from '../../components/EntityLink.vue'
 import PortInput from '../../components/PortInput.vue'
 import SecretInput from '../../components/SecretInput.vue'
 import TriStateSelect from '../../components/TriStateSelect.vue'
@@ -372,7 +373,10 @@ async function saveMembers() {
         <NTabPane v-if="stack.role === 'auto'" name="members" tab="成员">
           <NForm label-placement="top" style="max-width: 640px">
             <NFormItem label="成员 stack" :feedback="'只列出带 relay SOCKS5 入站的 edge stack；保存后同步上游和代理组成员'">
-              <NSelect v-model:value="members" :options="memberOptions" multiple filterable />
+              <NSpace vertical style="width: 100%">
+                <NSelect v-model:value="members" :options="memberOptions" multiple filterable />
+                <NSpace :size="8"><EntityLink v-for="name in members" :key="name" kind="stack" :name="name" target="_blank" rel="noopener" /></NSpace>
+              </NSpace>
             </NFormItem>
             <NButton type="primary" @click="saveMembers">保存成员</NButton>
           </NForm>

@@ -6,6 +6,7 @@ import {
 } from 'naive-ui'
 import { api, problemMessage, type Schemas } from '../api/client'
 import ExportDialog from '../components/ExportDialog.vue'
+import EntityLink from '../components/EntityLink.vue'
 import { formatTime } from '../util/format'
 
 type Revision = Schemas['RevisionItem']
@@ -116,7 +117,7 @@ const showExport = computed({
         <template #header>
           <NSpace align="center" :size="6">
             <NTag size="small" :type="changeLabels[entry.change][1]">{{ changeLabels[entry.change][0] }}</NTag>
-            <NText>{{ kindLabels[entry.kind] }} {{ entry.name }}</NText>
+            <NText>{{ kindLabels[entry.kind] }} <EntityLink v-if="entry.kind === 'stack' || entry.kind === 'user'" :kind="entry.kind" :name="entry.name" @navigate="diff = null" /><template v-else>{{ entry.name }}</template></NText>
             <NText v-if="entry.fields.length" depth="3">{{ entry.fields.length }} 处字段</NText>
           </NSpace>
         </template>

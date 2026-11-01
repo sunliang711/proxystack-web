@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { h, onMounted, ref, watch } from 'vue'
 import { NCard, NDataTable, NInput, NSelect, NSpace, type DataTableColumns } from 'naive-ui'
 import { api, type Schemas } from '../api/client'
 import { formatTime } from '../util/format'
+import EntityLink from '../components/EntityLink.vue'
 
 type Entry = Schemas['AuditEntry']
 
@@ -47,7 +48,13 @@ const columns: DataTableColumns<Entry> = [
   { title: '操作者', key: 'actor', width: 100 },
   { title: '来源 IP', key: 'source_ip', width: 130 },
   { title: '动作', key: 'action', width: 160 },
-  { title: '对象', key: 'object', width: 180, ellipsis: { tooltip: true } },
+  {
+    title: '对象', key: 'object', width: 180, ellipsis: { tooltip: true },
+    render: (row) => {
+      const match = /^(stack|user):(.+)$/.exec(row.object)
+      return match ? h(EntityLink, { kind: match[1] as 'stack' | 'user', name: match[2], label: row.object }) : row.object
+    },
+  },
   { title: '摘要', key: 'summary', minWidth: 280, ellipsis: { tooltip: true } },
 ]
 </script>

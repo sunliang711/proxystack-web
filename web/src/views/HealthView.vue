@@ -2,6 +2,7 @@
 import { computed, h, onMounted, ref } from 'vue'
 import { NButton, NCard, NDataTable, NSpace, NTag, NText, type DataTableColumns } from 'naive-ui'
 import { api, type Schemas } from '../api/client'
+import EntityLink from '../components/EntityLink.vue'
 
 type Check = Schemas['HealthCheck']
 
@@ -30,7 +31,13 @@ const rows = computed(() => {
 const columns: DataTableColumns<Check> = [
   { title: '状态', key: 'status', width: 80, render: (row) => h(NTag, { size: 'small', type: view[row.status].type }, { default: () => view[row.status].label }) },
   { title: '分组', key: 'group', width: 80 },
-  { title: '检查项', key: 'title', width: 220 },
+  {
+    title: '检查项', key: 'title', width: 220,
+    render: (row) => {
+      const match = /^(HandlerService|采集)：(.+)$/.exec(row.title)
+      return match ? h(EntityLink, { kind: 'stack', name: match[2], label: row.title }) : row.title
+    },
+  },
   { title: '结果', key: 'detail' },
   { title: '处理建议', key: 'hint' },
 ]

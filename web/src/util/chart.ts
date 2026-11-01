@@ -1,3 +1,5 @@
+import type { EntityReference } from '../composables/useEntityReference'
+
 /** 图表分类色：固定顺序分配给对象，深色主题提高亮度以突出数据。 */
 export const seriesColors = {
   light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'],
@@ -15,4 +17,6 @@ export interface ChartSeries {
   data: number[]
   /** 分类色槽位；未设置时使用「其他」的中性色。 */
   slot?: number
+  /** 具体对象的数据支持点击打开详情；合计和「其他」不设置。 */
+  entity?: EntityReference
 }

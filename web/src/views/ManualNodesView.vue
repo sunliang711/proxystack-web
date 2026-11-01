@@ -9,6 +9,7 @@ import {
 import { api, emptyErrors, fieldState, MASKED, splitProblem, type FormErrors, type Schemas } from '../api/client'
 import CodeEditor from '../components/CodeEditor.vue'
 import ErrorList from '../components/ErrorList.vue'
+import EntityLink from '../components/EntityLink.vue'
 import ExportDialog from '../components/ExportDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
 import SecretInput from '../components/SecretInput.vue'
@@ -76,7 +77,7 @@ const rowErrors = (index: number) => Object.keys(errors.value.fields).some((path
 
 const columns: DataTableColumns<Node & { _index: number }> = [
   { type: 'selection' },
-  { title: '用户', key: 'user', width: 100 },
+  { title: '用户', key: 'user', width: 100, render: (row) => h(EntityLink, { kind: 'user', name: row.user }) },
   {
     title: '名称',
     key: 'remark',
@@ -281,7 +282,10 @@ function cloneChecked() {
     <NDrawerContent v-if="editing" :title="editing.draft.remark || '新节点'" closable>
       <NForm label-placement="left" label-width="120">
         <NFormItem label="所属用户" v-bind="f('user')">
-          <NSelect v-model:value="editing.draft.user" :options="users.map((u) => ({ label: u.name, value: u.name }))" filterable />
+          <NSpace vertical style="width: 100%">
+            <NSelect v-model:value="editing.draft.user" :options="users.map((u) => ({ label: u.name, value: u.name }))" filterable />
+            <EntityLink v-if="editing.draft.user" kind="user" :name="editing.draft.user" label="查看用户 ↗" target="_blank" rel="noopener" />
+          </NSpace>
         </NFormItem>
         <NFormItem label="模式" v-bind="f('mode', modeHints[editing.draft.mode])">
           <NRadioGroup v-model:value="editing.draft.mode">
