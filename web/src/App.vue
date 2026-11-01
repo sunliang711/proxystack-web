@@ -80,6 +80,7 @@ const overrides = computed<GlobalThemeOverrides>(() => ({
   Form: { labelTextColor: dark.value ? '#c5d1e2' : '#40516a', feedbackTextColor: dark.value ? '#94a6bf' : '#65758b' },
   Tabs: { tabFontWeightActive: '600', tabGapMediumLine: '28px' },
   Statistic: { labelTextColor: dark.value ? '#94a6bf' : '#65758b', valueFontWeight: '600' },
+  Tag: { borderRadius: '6px' },
   Button: { fontWeight: '500' },
   Tooltip: { borderRadius: '8px' },
 }))

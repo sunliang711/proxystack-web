@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { NButton, NDropdown, NSpace, NTag, NTooltip, useMessage } from 'naive-ui'
+import { computed, ref } from 'vue'
+import { NButton, NDropdown, NIcon, NSpace, NTag, NTooltip, useMessage } from 'naive-ui'
+import { ChevronDownOutline } from '@vicons/ionicons5'
 import { api, problemMessage } from '../api/client'
 import { runtime, unitLabel } from '../runtime'
 
 const props = defineProps<{ stack: string; actions?: boolean; prominent?: boolean }>()
 const message = useMessage()
 const state = computed(() => runtime.stacks[props.stack])
+const showMenu = ref(false)
 
 const options = [
   { label: '启动全部', key: 'start:all' },
@@ -31,7 +33,7 @@ async function run(key: string) {
 </script>
 
 <template>
-  <NSpace :size="4" align="center" :wrap="false">
+  <NSpace :size="4" align="center" :wrap="false" :class="{ 'unit-status-prominent': prominent }">
     <template v-if="state">
       <NTooltip v-for="unit in state.units" :key="unit.unit">
         <template #trigger>
@@ -44,10 +46,18 @@ async function run(key: string) {
       <NTag v-if="state.drift" size="small" type="error">生成物被改动</NTag>
       <NTag v-if="!state.applied_revision" size="small">未应用</NTag>
     </template>
-    <NDropdown v-if="actions" :options="options" trigger="click" @select="run">
-      <NButton :type="prominent ? 'primary' : undefined" :secondary="prominent" :size="prominent ? 'small' : 'tiny'" :quaternary="!prominent">
+    <NDropdown v-if="actions" v-model:show="showMenu" :options="options" trigger="click" @select="run">
+      <NButton :class="{ 'runtime-menu': prominent }" :size="prominent ? 'small' : 'tiny'" :quaternary="!prominent" icon-placement="right" aria-haspopup="menu" :aria-expanded="showMenu">
         {{ prominent ? '运行操作' : '操作' }}
+        <template v-if="prominent" #icon><NIcon :size="14"><ChevronDownOutline /></NIcon></template>
       </NButton>
     </NDropdown>
   </NSpace>
 </template>
+
+<style scoped>
+.unit-status-prominent :deep(.n-tag),
+.runtime-menu { height: 28px; }
+.runtime-menu { background: var(--ps-surface-raised); }
+.runtime-menu:hover { background: var(--ps-accent-soft); }
+</style>
