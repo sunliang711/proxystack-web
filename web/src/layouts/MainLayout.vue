@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, onBeforeUnmount, onMounted, ref, type Component } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   NBadge,
@@ -30,6 +30,7 @@ import {
   InformationCircleOutline,
   LayersOutline,
   MoonOutline,
+  MenuOutline,
   NotificationsOutline,
   PaperPlaneOutline,
   PeopleOutline,
@@ -47,11 +48,20 @@ import { themePreference, type ThemePreference } from '../theme'
 import PendingDrawer from '../components/PendingDrawer.vue'
 import { connectEvents, disconnectEvents, refreshPending, runtime } from '../runtime'
 import { api, type Schemas } from '../api/client'
+import brandLogo from '/favicon.svg?url'
 
 const route = useRoute()
 const router = useRouter()
-// 侧栏的 breakpoint 只在窗口尺寸变化时触发，首次进入时按当前宽度决定是否收起。
-const collapsed = ref(window.matchMedia('(max-width: 767px)').matches)
+// 窄屏侧栏覆盖正文，关闭后不占宽度；桌面仍支持收起为图标导航。
+const mobileQuery = window.matchMedia('(max-width: 767px)')
+const mobile = ref(mobileQuery.matches)
+const collapsed = ref(mobile.value)
+function resizeNavigation(event: MediaQueryListEvent) {
+  mobile.value = event.matches
+  collapsed.value = event.matches
+}
+mobileQuery.addEventListener('change', resizeNavigation)
+watch(() => route.fullPath, () => { if (mobile.value) collapsed.value = true })
 const buildInfo = ref<Schemas['SystemInfo'] | null>(null)
 const versionLoaded = ref(false)
 const versionLabel = computed(() => {
@@ -174,7 +184,10 @@ onMounted(() => {
   connectEvents()
   refreshPending()
 })
-onBeforeUnmount(disconnectEvents)
+onBeforeUnmount(() => {
+  disconnectEvents()
+  mobileQuery.removeEventListener('change', resizeNavigation)
+})
 // 任何页面保存后都可能产生待应用变更：路由切换时顺便刷新。
 router.afterEach(() => refreshPending())
 
@@ -212,25 +225,25 @@ async function onAccount(key: string) {
 </script>
 
 <template>
-  <NLayout has-sider style="height: 100vh">
+  <NLayout has-sider class="app-shell" :class="{ 'is-mobile': mobile }">
+    <button v-if="mobile && !collapsed" class="nav-backdrop" aria-label="关闭导航" @click="collapsed = true" />
     <NLayoutSider
+      class="app-sidebar"
+      :inert="mobile && collapsed"
       bordered
       collapse-mode="width"
-      :collapsed-width="64"
-      :width="220"
+      :collapsed-width="mobile ? 0 : 68"
+      :width="232"
       :collapsed="collapsed"
       :native-scrollbar="false"
-      show-trigger="bar"
-      breakpoint="md"
+      :show-trigger="mobile ? false : 'bar'"
       @collapse="collapsed = true"
       @expand="collapsed = false"
     >
       <NTooltip placement="bottom-start" style="max-width: min(420px, calc(100vw - 32px)); box-sizing: border-box; overflow-wrap: anywhere">
         <template #trigger>
           <RouterLink :to="{ name: 'system' }" class="brand" :class="{ collapsed }" :aria-label="`系统信息，${versionLabel}`">
-            <div class="brand-mark">
-              <NIcon :size="18"><LayersOutline /></NIcon>
-            </div>
+            <img class="brand-mark" :src="brandLogo" alt="" width="34" height="34" />
             <div v-if="!collapsed" class="brand-text">
               <span class="brand-name">proxystack</span>
               <span class="brand-sub">管理面板 · {{ versionLabel }}</span>
@@ -246,7 +259,7 @@ async function onAccount(key: string) {
         :options="menu"
         :value="active"
         :collapsed="collapsed"
-        :collapsed-width="64"
+        :collapsed-width="mobile ? 0 : 68"
         :collapsed-icon-size="20"
         :icon-size="18"
         :indent="20"
@@ -255,6 +268,9 @@ async function onAccount(key: string) {
     </NLayoutSider>
     <NLayout>
       <NLayoutHeader bordered class="header">
+        <NButton v-if="mobile" quaternary circle aria-label="打开导航" @click="collapsed = !collapsed">
+          <template #icon><NIcon><MenuOutline /></NIcon></template>
+        </NButton>
         <NBreadcrumb class="crumbs">
           <NBreadcrumbItem v-for="(crumb, i) in crumbs" :key="i" :clickable="!!crumb.to">
             <RouterLink v-if="crumb.to" :to="{ name: crumb.to }" class="crumb-link">{{ crumb.label }}</RouterLink>
@@ -268,9 +284,9 @@ async function onAccount(key: string) {
             </NButton>
           </NDropdown>
           <NBadge :value="runtime.pendingCount" :show="runtime.pendingCount > 0 || !!runtime.pendingError" :dot="!!runtime.pendingError && !runtime.pendingCount">
-            <NButton :type="runtime.pendingCount ? 'warning' : 'default'" secondary size="small" @click="showPending = true">
+            <NButton :type="runtime.pendingCount ? 'warning' : 'default'" secondary size="small" class="pending-button" aria-label="待应用变更" @click="showPending = true">
               <template #icon><NIcon><GitPullRequestOutline /></NIcon></template>
-              待应用变更
+              <span class="pending-label">待应用变更</span>
             </NButton>
           </NBadge>
           <NDropdown :options="accountOptions" trigger="click" placement="bottom-end" @select="onAccount">
@@ -284,14 +300,14 @@ async function onAccount(key: string) {
           </NDropdown>
         </div>
       </NLayoutHeader>
-      <NLayoutContent :native-scrollbar="false" style="height: calc(100vh - 57px)">
-        <div class="page">
+      <NLayoutContent :native-scrollbar="false" class="workspace-content">
+        <main class="page" :data-page="route.name">
           <div class="page-head">
             <h1 class="page-title">{{ title }}</h1>
             <p v-if="description" class="page-desc">{{ description }}</p>
           </div>
-          <RouterView />
-        </div>
+          <div class="page-body"><RouterView /></div>
+        </main>
       </NLayoutContent>
     </NLayout>
   </NLayout>
@@ -299,12 +315,22 @@ async function onAccount(key: string) {
 </template>
 
 <style scoped>
+.app-shell {
+  height: 100vh;
+  height: 100dvh;
+}
+.app-shell > :deep(.n-layout) { min-width: 0; }
+.app-sidebar { z-index: 25; }
 .brand {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--n-color);
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 56px;
-  padding: 0 18px;
+  height: 76px;
+  padding: 0 22px;
   box-sizing: border-box;
   white-space: nowrap;
   overflow: hidden;
@@ -317,15 +343,9 @@ async function onAccount(key: string) {
 }
 .brand-mark {
   flex: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  background: linear-gradient(135deg, #36ad6a, #18a058 55%, #0c7a43);
-  box-shadow: 0 2px 6px rgba(24, 160, 88, 0.35);
+  width: 34px;
+  height: 34px;
+  display: block;
 }
 .brand-text {
   display: flex;
@@ -336,27 +356,30 @@ async function onAccount(key: string) {
 }
 .brand-name {
   font-weight: 600;
-  font-size: 15px;
+  font-size: 17px;
   letter-spacing: 0.2px;
 }
 .brand-sub {
   font-size: 12px;
-  opacity: 0.55;
+  color: var(--ps-muted);
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .nav {
-  padding-bottom: 16px;
+  padding: 0 6px 20px;
 }
+.nav :deep(.n-menu-item) { margin-top: 3px; }
+.nav :deep(.n-menu-item-group-title) { height: 30px; line-height: 30px; font-size: 11px; letter-spacing: 1px; }
 .header {
-  height: 56px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 0 20px;
+  padding: 0 32px;
 }
 .crumbs {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -379,34 +402,49 @@ async function onAccount(key: string) {
   text-decoration: none;
 }
 .page {
-  padding: 20px 24px 32px;
+  padding: 28px 32px 48px;
+  max-width: 1680px;
+  margin: 0 auto;
 }
+.workspace-content { height: calc(100vh - 64px); height: calc(100dvh - 64px); }
+.page:is([data-page='user'], [data-page='settings'], [data-page='backup'], [data-page='sub-publish'], [data-page='system'], [data-page='security']) { max-width: 1160px; }
 .page-head {
-  margin-bottom: 16px;
+  margin-bottom: 24px;
 }
 .page-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 26px;
   font-weight: 600;
-  line-height: 28px;
+  line-height: 36px;
+  letter-spacing: -0.5px;
 }
 .page-desc {
-  margin: 4px 0 0;
-  max-width: 820px;
+  margin: 8px 0 0;
+  max-width: 960px;
   font-size: 13px;
   line-height: 1.7;
-  opacity: 0.65;
+  color: var(--ps-muted);
 }
 @media (max-width: 640px) {
   .page {
-    padding: 16px 12px 24px;
+    padding: 20px 16px 32px;
   }
   .header {
     padding: 0 12px;
   }
+  .header-actions { gap: 4px; }
+  .pending-label { display: none; }
+  .pending-button :deep(.n-button__icon) { margin: 0; }
+  .page-title { font-size: 23px; }
+}
+
+@media (max-width: 1023px) {
+  .crumbs :deep(.n-breadcrumb-item:not(:last-child)) { display: none; }
 }
 
 @media (max-width: 767px) {
+  .is-mobile > .app-sidebar { position: fixed; top: 0; bottom: 0; left: 0; height: 100dvh; }
+  .nav-backdrop { position: fixed; inset: 0; z-index: 24; border: 0; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(3px); }
   .page :deep(.n-form) {
     max-width: none !important;
   }
@@ -415,10 +453,14 @@ async function onAccount(key: string) {
     display: block;
   }
 
-  .page :deep(.n-form-item-label) {
+  .page :deep(.n-form-item .n-form-item-label) {
+    display: flex;
     width: auto !important;
     height: auto !important;
+    min-height: 0;
     padding: 0 0 4px !important;
+    justify-content: flex-start;
+    text-align: left;
   }
 
   .page :deep(.n-form-item-blank) {

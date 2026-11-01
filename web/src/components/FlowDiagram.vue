@@ -188,7 +188,10 @@ const scale = computed(() => (available.value ? Math.min(1, Math.max(MIN_SCALE, 
 .flow {
   overflow-x: auto;
   overflow-y: hidden;
-  padding-bottom: 4px;
+  padding: 20px 8px;
+  border: 1px solid var(--ps-border);
+  border-radius: 10px;
+  background: radial-gradient(circle, var(--ps-border) 0.7px, transparent 0.7px) 0 0 / 18px 18px, var(--ps-bg);
 }
 svg {
   display: block;

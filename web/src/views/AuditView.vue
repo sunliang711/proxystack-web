@@ -53,8 +53,8 @@ const columns: DataTableColumns<Entry> = [
 </script>
 
 <template>
-  <NCard>
-    <template #header>
+  <NCard title="操作记录" class="table-panel">
+    <template #header-extra>
       <NSpace>
         <NSelect v-model:value="action" :options="actions" size="small" style="width: 140px" />
         <NInput v-model:value="actor" size="small" clearable placeholder="操作者" style="width: 140px" />

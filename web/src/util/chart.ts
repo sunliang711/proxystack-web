@@ -1,13 +1,13 @@
-/** 图表分类色：固定顺序分配给对象，已通过 CVD 和对比度校验（亮色面 #ffffff，暗色面 #18181c）。 */
+/** 图表分类色：固定顺序分配给对象，深色主题提高亮度以突出数据。 */
 export const seriesColors = {
   light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'],
-  dark: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'],
+  dark: ['#52d6b4', '#6aa8f5', '#f3b76b', '#b59bf5', '#ec8cac', '#90ce7f', '#78cfdf', '#ef8383'],
 }
 
 /** 坐标轴、网格等次要元素的颜色，图表文字不使用系列色。 */
 export const chartTokens = {
   light: { surface: '#ffffff', text: '#52514e', muted: '#8a8984', grid: '#ecebe7', other: '#a3a29c' },
-  dark: { surface: '#18181c', text: '#c3c2b7', muted: '#8f8e86', grid: '#2e2e33', other: '#6d6c66' },
+  dark: { surface: '#131d2b', text: '#c5d1e2', muted: '#94a6bf', grid: '#243247', other: '#71859f' },
 }
 
 export interface ChartSeries {

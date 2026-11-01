@@ -99,7 +99,7 @@ async function showHistory(job: Job) {
 
 const columns: DataTableColumns<Job> = [
   { title: '任务', key: 'name', minWidth: 260, render: (row) => h('div', [h('div', row.name), h(NText, { depth: 3, style: 'font-size: 12px' }, { default: () => row.description })]) },
-  { title: '计划', key: 'schedule', width: 130, render: (row) => h(NText, { code: true }, { default: () => row.schedule }) },
+  { title: '计划', key: 'schedule', width: 130, render: (row) => h(NText, { code: true, style: 'white-space: nowrap' }, { default: () => row.schedule }) },
   { title: '下次执行', key: 'next', width: 180, render: (row) => (row.enabled && row.next_runs[0] ? formatTime(row.next_runs[0]) : '—') },
   {
     title: '最近一次', key: 'last', width: 200,
@@ -111,7 +111,7 @@ const columns: DataTableColumns<Job> = [
   },
   { title: '启用', key: 'enabled', width: 70, render: (row) => h(NSwitch, { size: 'small', value: row.enabled, onUpdateValue: (value: boolean) => toggle(row, value) }) },
   {
-    title: '', key: 'actions', width: 200, fixed: 'right',
+    title: '', key: 'actions', width: 200,
     render: (row) => h(NSpace, { size: 6 }, {
       default: () => [
         h(NButton, { size: 'tiny', onClick: () => run(row) }, { default: () => '立即执行' }),
@@ -124,7 +124,7 @@ const columns: DataTableColumns<Job> = [
 </script>
 
 <template>
-  <NCard>
+  <NCard title="任务计划" class="table-panel">
     <NDataTable :columns="columns" :data="jobs" :loading="loading" :row-key="(row: Job) => row.id" :scroll-x="1040" />
   </NCard>
 

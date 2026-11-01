@@ -70,15 +70,15 @@ function move(index: number, delta: number) {
           <NAlert v-if="parseError" type="error" :bordered="false">{{ parseError }}</NAlert>
         </template>
         <template v-else>
-          <NSpace v-for="(rule, index) in rules.extra" :key="index" :wrap="false" align="start" style="width: 100%">
-            <NSelect v-model:value="rule.type" :options="typeOptions" filterable style="width: 170px" :status="f(`extra[${index}].type`).validationStatus" />
-            <NInput v-model:value="rule.value" placeholder="匹配值" style="width: 260px" :status="f(`extra[${index}].value`).validationStatus" />
-            <NSelect v-model:value="rule.target" :options="targets" filterable style="width: 170px" :status="f(`extra[${index}].target`).validationStatus" />
+          <div v-for="(rule, index) in rules.extra" :key="index" class="rule-row">
+            <NSelect v-model:value="rule.type" :options="typeOptions" filterable class="rule-type" :status="f(`extra[${index}].type`).validationStatus" />
+            <NInput v-model:value="rule.value" placeholder="匹配值" class="rule-value" :status="f(`extra[${index}].value`).validationStatus" />
+            <NSelect v-model:value="rule.target" :options="targets" filterable class="rule-target" :status="f(`extra[${index}].target`).validationStatus" />
             <NCheckbox v-if="ipRuleTypes.includes(rule.type)" v-model:checked="rule.no_resolve">no-resolve</NCheckbox>
             <NButton quaternary size="small" :disabled="index === 0" @click="move(index, -1)">上移</NButton>
             <NButton quaternary size="small" :disabled="index === rules.extra.length - 1" @click="move(index, 1)">下移</NButton>
             <NButton quaternary size="small" type="error" @click="rules.extra.splice(index, 1)">删除</NButton>
-          </NSpace>
+          </div>
           <NButton size="small" @click="rules.extra.push({ type: 'DOMAIN-SUFFIX', value: '', target: rules.final, no_resolve: false })">添加规则</NButton>
           <NText v-for="(message, path) in Object.fromEntries(Object.entries(errors.fields).filter(([p]) => p.startsWith('mihomo.rules.extra')))" :key="path" type="error" tag="div">
             {{ path.replace('mihomo.rules.extra', '第') }}：{{ message }}
@@ -88,3 +88,9 @@ function move(index: number, delta: number) {
     </NFormItem>
   </NForm>
 </template>
+
+<style scoped>
+.rule-row { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; border: 1px solid var(--ps-border); border-radius: 10px; background: var(--ps-surface-raised); }
+.rule-type, .rule-target { flex: 1 1 160px; min-width: 0; }
+.rule-value { flex: 2 1 220px; min-width: 0; }
+</style>

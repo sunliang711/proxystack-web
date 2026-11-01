@@ -57,8 +57,8 @@ const columns: DataTableColumns<Item> = [
 </script>
 
 <template>
-  <NCard>
-    <template #header>
+  <NCard title="发送记录" class="table-panel">
+    <template #header-extra>
       <NRadioGroup v-model:value="status" size="small">
         <NRadioButton value="all">全部</NRadioButton>
         <NRadioButton value="failed">发送失败</NRadioButton>
@@ -67,6 +67,6 @@ const columns: DataTableColumns<Item> = [
         <NRadioButton value="skipped">未发送</NRadioButton>
       </NRadioGroup>
     </template>
-    <NDataTable :columns="columns" :data="rows" :loading="loading" :row-key="(row: Item) => row.id" :pagination="{ pageSize: 50 }" />
+    <NDataTable :columns="columns" :data="rows" :loading="loading" :row-key="(row: Item) => row.id" :scroll-x="960" :pagination="{ pageSize: 50 }" />
   </NCard>
 </template>

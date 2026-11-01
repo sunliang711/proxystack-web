@@ -37,13 +37,13 @@ const columns: DataTableColumns<Check> = [
 </script>
 
 <template>
-  <NCard>
-    <template #header>
+  <NCard title="检查结果" class="table-panel">
+    <template #header-extra>
       <NSpace align="center" justify="space-between">
         <NText v-if="!loading" depth="3" class="header-note">{{ summary }}</NText>
         <NButton size="small" :loading="loading" @click="load">重新检查</NButton>
       </NSpace>
     </template>
-    <NDataTable :columns="columns" :data="rows" :loading="loading" :row-key="(row: Check) => row.group + row.title" />
+    <NDataTable :columns="columns" :data="rows" :loading="loading" :row-key="(row: Check) => row.group + row.title" :scroll-x="1100" />
   </NCard>
 </template>

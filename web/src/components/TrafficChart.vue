@@ -36,6 +36,9 @@ const option = computed(() => {
     },
     tooltip: {
       trigger: 'axis',
+      backgroundColor: tokens.surface,
+      borderColor: tokens.grid,
+      textStyle: { color: tokens.text },
       axisPointer: { type: props.kind === 'line' ? 'line' : 'shadow' },
       valueFormatter: (value: number) => props.format(value ?? 0),
     },

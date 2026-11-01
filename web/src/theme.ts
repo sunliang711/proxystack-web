@@ -8,11 +8,11 @@ const STORAGE_KEY = 'psw-theme'
 function load(): ThemePreference {
   try {
     const value = localStorage.getItem(STORAGE_KEY)
-    if (value === 'light' || value === 'dark') return value
+    if (value === 'system' || value === 'light' || value === 'dark') return value
   } catch {
-    // 浏览器禁用存储时按跟随系统处理。
+    // 浏览器禁用存储时使用默认深色主题。
   }
-  return 'system'
+  return 'dark'
 }
 
 const media = window.matchMedia('(prefers-color-scheme: dark)')
@@ -24,8 +24,7 @@ export const isDark = computed(() => themePreference.value === 'dark' || (themeP
 
 watch(themePreference, (value) => {
   try {
-    if (value === 'system') localStorage.removeItem(STORAGE_KEY)
-    else localStorage.setItem(STORAGE_KEY, value)
+    localStorage.setItem(STORAGE_KEY, value)
   } catch {
     // 存不下时只在本次会话生效。
   }

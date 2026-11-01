@@ -91,8 +91,8 @@ const showExport = computed({
 </script>
 
 <template>
-  <NCard>
-    <template #header>
+  <NCard title="版本记录" class="table-panel">
+    <template #header-extra>
       <NSpace justify="end">
         <NButton :disabled="checked.length !== 2" @click="compareChecked">比较所选两个版本</NButton>
       </NSpace>
@@ -102,6 +102,7 @@ const showExport = computed({
       remote
       :columns="columns"
       :data="items"
+      :scroll-x="1000"
       :loading="loading"
       :row-key="(row: Revision) => row.id"
       :pagination="{ page, pageSize, itemCount: total, onChange: (p: number) => ((page = p), load()) }"

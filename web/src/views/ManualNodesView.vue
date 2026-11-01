@@ -214,15 +214,15 @@ function cloneChecked() {
 </script>
 
 <template>
-  <NCard>
-    <template #header>
+  <NCard title="节点列表" class="table-panel">
+    <template #header-extra>
       <NSpace justify="end">
         <NSelect v-model:value="filterUser" :options="users.map((u) => ({ label: u.name, value: u.name }))" clearable placeholder="全部用户" style="width: 160px" />
         <NButton @click="showImport = true">导入</NButton>
         <NButton type="primary" :disabled="!users.length" @click="open(nodes.length)">添加节点</NButton>
       </NSpace>
     </template>
-    <NCollapse :default-expanded-names="['help']" style="margin-bottom: 12px">
+    <NCollapse style="margin-bottom: 12px">
       <NCollapseItem title="填写说明与示例" name="help">
         <div class="help">
           <p><NText strong>两种模式。</NText>{{ modeHints.standard }}；Mihomo 原生节点则{{ modeHints.direct }}。</p>
@@ -264,7 +264,7 @@ function cloneChecked() {
         删除选中的 {{ checked.length }} 个节点？
       </NPopconfirm>
     </NSpace>
-    <NDataTable v-model:checked-row-keys="checked" :columns="columns" :data="rows" :row-key="(row: Node) => row.id ?? -1" size="small" />
+    <NDataTable v-model:checked-row-keys="checked" :columns="columns" :data="rows" :scroll-x="900" :row-key="(row: Node) => row.id ?? -1" size="small" />
   </NCard>
 
   <NModal :show="batchServer !== null" preset="card" title="批量设置 server" style="max-width: 420px" @update:show="(v) => !v && (batchServer = null)">

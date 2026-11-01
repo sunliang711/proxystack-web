@@ -137,9 +137,9 @@ async function exportCSV() {
 </script>
 
 <template>
-  <NSpace vertical :size="12">
+  <NSpace vertical :size="20">
     <NCard size="small">
-      <NSpace align="center">
+      <div class="traffic-filters">
         <NRadioGroup v-model:value="level" size="small">
           <NRadioButton value="hour">小时</NRadioButton>
           <NRadioButton value="day">日</NRadioButton>
@@ -152,16 +152,16 @@ async function exportCSV() {
           <NRadioButton value="outbound">出站</NRadioButton>
         </NRadioGroup>
         <NDatePicker v-model:value="range" type="daterange" size="small" :clearable="false" />
-        <NSelect v-model:value="stacks" :options="stackOptions" multiple clearable size="small" placeholder="全部 stack" style="min-width: 160px" />
-        <NSelect v-model:value="subjects" :options="subjectOptions" multiple clearable filterable size="small" :placeholder="scope === 'user' ? '全部用户（可指定）' : '全部对象'" style="min-width: 160px" />
+        <NSelect v-model:value="stacks" :options="stackOptions" multiple clearable size="small" placeholder="全部 stack" style="min-width: 0" />
+        <NSelect v-model:value="subjects" :options="subjectOptions" multiple clearable filterable size="small" :placeholder="scope === 'user' ? '全部用户（可指定）' : '全部对象'" style="min-width: 0" />
         <NButton size="small" @click="exportCSV">导出 CSV</NButton>
-      </NSpace>
+      </div>
     </NCard>
     <NText depth="3">当前{{ scope === 'user' ? '按用户计数' : scope === 'inbound' ? '按入站计数' : '按出站计数' }}；总和与下方 Stack 明细使用相同筛选条件。切换「用户」可指定用户；共享账号流量可能无法归属到用户。</NText>
-    <NGrid cols="1 s:3" responsive="screen" :x-gap="12" :y-gap="12">
-      <NGridItem><NCard size="small"><NStatistic label="所选范围合计" :value="formatBytes((result?.total.up ?? 0) + (result?.total.down ?? 0))" /></NCard></NGridItem>
-      <NGridItem><NCard size="small"><NStatistic label="上行合计" :value="formatBytes(result?.total.up ?? 0)" /></NCard></NGridItem>
-      <NGridItem><NCard size="small"><NStatistic label="下行合计" :value="formatBytes(result?.total.down ?? 0)" /></NCard></NGridItem>
+    <NGrid cols="2 s:3" responsive="screen" :x-gap="20" :y-gap="20" item-responsive>
+      <NGridItem span="2 s:1"><NCard size="small" class="metric-card"><NStatistic label="所选范围合计" :value="formatBytes((result?.total.up ?? 0) + (result?.total.down ?? 0))" /></NCard></NGridItem>
+      <NGridItem><NCard size="small" class="metric-card"><NStatistic label="上行合计" :value="formatBytes(result?.total.up ?? 0)" /></NCard></NGridItem>
+      <NGridItem><NCard size="small" class="metric-card"><NStatistic label="下行合计" :value="formatBytes(result?.total.down ?? 0)" /></NCard></NGridItem>
     </NGrid>
     <NCard title="流量趋势" size="small">
       <template #header-extra>
@@ -178,3 +178,21 @@ async function exportCSV() {
     </NCard>
   </NSpace>
 </template>
+
+<style scoped>
+.traffic-filters {
+  display: grid;
+  grid-template-columns: auto auto minmax(240px, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+.traffic-filters > :last-child { justify-self: end; }
+@media (max-width: 1100px) {
+  .traffic-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .traffic-filters > .n-date-picker { grid-column: 1 / -1; }
+}
+@media (max-width: 600px) {
+  .traffic-filters { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .traffic-filters > :last-child { justify-self: start; }
+}
+</style>

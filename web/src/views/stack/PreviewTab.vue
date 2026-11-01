@@ -24,21 +24,21 @@ watch(() => [props.stackId, props.version], load)
 
 <template>
   <NSpin :show="loading">
-    <NSpace justify="space-between" align="center" style="margin-bottom: 8px">
+    <NSpace justify="space-between" align="center" style="margin-bottom: 16px">
       <NText depth="3">预览按已保存的配置生成{{ dirty ? '，当前有未保存的修改' : '' }}。</NText>
       <NButton size="small" @click="load">刷新</NButton>
     </NSpace>
-    <NAlert v-if="errors.length" type="error" style="margin-bottom: 8px">
+    <NAlert v-if="errors.length" type="error" style="margin-bottom: 16px">
       <div v-for="(e, i) in errors" :key="i">{{ e }}</div>
     </NAlert>
-    <NGrid :cols="2" :x-gap="12" responsive="screen" item-responsive>
+    <NGrid :cols="2" :x-gap="24" :y-gap="24" responsive="screen" item-responsive>
       <NGridItem span="2 l:1">
-        <NText strong>xray JSON</NText>
+        <NText strong tag="div" class="section-label">xray JSON</NText>
         <CodeEditor v-if="xray" :value="xray" language="json" readonly min-height="400px" />
         <NText v-else depth="3" tag="div">Xray 未启用</NText>
       </NGridItem>
       <NGridItem span="2 l:1">
-        <NText strong>mihomo YAML</NText>
+        <NText strong tag="div" class="section-label">mihomo YAML</NText>
         <CodeEditor v-if="mihomo" :value="mihomo" language="yaml" readonly min-height="400px" />
         <NText v-else depth="3" tag="div">Mihomo 未启用</NText>
       </NGridItem>

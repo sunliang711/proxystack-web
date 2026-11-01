@@ -25,7 +25,7 @@ const series = computed(() => [{ name: '日用量', data: (usage.value?.daily ??
 </script>
 
 <template>
-  <NSpace vertical :size="12">
+  <NSpace vertical :size="20">
     <NCard size="small">
       <NSpace justify="space-between" align="center">
         <NSpace align="center">
@@ -45,9 +45,9 @@ const series = computed(() => [{ name: '日用量', data: (usage.value?.daily ??
     <template v-if="usage">
       <NAlert v-if="!usage.enabled" type="info" :bordered="false">流量监控已关闭，当前显示历史统计。开启流量监控后恢复采集。</NAlert>
       <NAlert v-else-if="usage.collection.error" type="warning" :bordered="false">采集异常：{{ usage.collection.error }}</NAlert>
-      <NGrid cols="1 s:3" responsive="screen" :x-gap="12" :y-gap="12">
+      <NGrid cols="1 s:3" responsive="screen" :x-gap="20" :y-gap="20">
         <NGridItem v-for="item in totals" :key="item.label">
-          <NCard size="small">
+          <NCard size="small" class="metric-card">
             <NStatistic :label="item.label" :value="formatBytes(total(item.bytes))" />
             <NText depth="3">上行 {{ formatBytes(item.bytes.up) }} / 下行 {{ formatBytes(item.bytes.down) }}</NText>
           </NCard>

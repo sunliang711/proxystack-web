@@ -125,8 +125,8 @@ async function create() {
 </script>
 
 <template>
-  <NCard>
-    <template #header>
+  <NCard title="用户列表" class="table-panel">
+    <template #header-extra>
       <NSpace justify="end">
         <NSelect
           v-model:value="filter"
@@ -149,6 +149,7 @@ async function create() {
       :data="rows"
       :loading="loading"
       :row-key="rowKey"
+      :scroll-x="1100"
       :pagination="{ pageSize: 50 }"
     />
   </NCard>

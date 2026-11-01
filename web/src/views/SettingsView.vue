@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import {
   NButton, NCheckbox, NCheckboxGroup, NCollapse, NCollapseItem, NDynamicTags, NForm, NFormItem, NGrid, NFormItemGi,
-  NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NSwitch, NTimePicker, NAlert,
+  NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NSwitch, NTimePicker, NAlert, NText,
   useDialog, useMessage,
 } from 'naive-ui'
 import { api, emptyErrors, fieldState, MASKED, problemMessage, splitProblem, type FormErrors, type Schemas } from '../api/client'
@@ -206,7 +206,7 @@ async function save() {
 
 <template>
   <NSpin :show="!settings">
-    <NForm v-if="settings" label-placement="left" label-width="160" style="max-width: 860px">
+    <NForm v-if="settings" label-placement="left" label-width="180" class="settings-form">
       <ErrorList :errors="errors.global" />
       <NAlert type="info" :bordered="false" style="margin-bottom: 12px">
         下载代理、通知和采集设置保存后立即影响后续后台任务；涉及 xray / mihomo 生成物的设置会进入“待应用变更”，需要再执行应用。
@@ -225,11 +225,11 @@ async function save() {
 
       <SettingsSection title="端口池" name="port_pools" v-model:expanded-names="expanded">
         <NFormItem v-for="pool in pools" :key="pool.key" :label="pool.label" v-bind="f(`port_pools.${pool.key}`)">
-          <NSpace align="center">
+          <div class="range-inputs">
             <NInputNumber v-model:value="form.port_pools[pool.key].start" :min="1" :max="65535" :show-button="false" />
             <span>—</span>
             <NInputNumber v-model:value="form.port_pools[pool.key].end" :min="1" :max="65535" :show-button="false" />
-          </NSpace>
+          </div>
         </NFormItem>
       </SettingsSection>
 
@@ -446,11 +446,11 @@ async function save() {
           <NSwitch v-model:value="form.deps.auto_upgrade_mihomo" />
         </NFormItem>
         <NFormItem label="维护时间窗" v-bind="f('deps.window_start')">
-          <NSpace align="center">
+          <div class="range-inputs">
             <NTimePicker :value="timeValue(form.deps.window_start)" format="HH:mm" @update:value="(v) => (form.deps.window_start = timeText(v))" />
             <span>—</span>
             <NTimePicker :value="timeValue(form.deps.window_end)" format="HH:mm" @update:value="(v) => (form.deps.window_end = timeText(v))" />
-          </NSpace>
+          </div>
         </NFormItem>
       </SettingsSection>
 
@@ -519,9 +519,22 @@ async function save() {
 </template>
 
 <style scoped>
+.range-inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 420px;
+}
 .actions {
   position: sticky;
-  bottom: 0;
-  padding: 8px 0;
+  bottom: 16px;
+  z-index: 10;
+  padding: 14px 20px;
+  border: 1px solid var(--ps-border);
+  border-radius: 12px;
+  background: var(--ps-surface);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
 }
 </style>

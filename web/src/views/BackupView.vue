@@ -138,7 +138,7 @@ function waitForRestart() {
 </script>
 
 <template>
-  <NSpace vertical :size="12" style="max-width: 960px">
+  <NSpace vertical :size="20">
     <NCard title="整机迁移" size="small">
       <NText depth="3" tag="p">
         迁移包包含数据库中的全部数据：配置、凭据、订阅 token、流量历史、审计日志和管理员账号。不含 xray、mihomo 和 geo 文件，恢复后按源实例的版本重新安装。
@@ -148,7 +148,7 @@ function waitForRestart() {
 
     <NCard title="备份文件" size="small">
       <NText depth="3" tag="p">这些文件包含全部凭据。下载记入审计日志。</NText>
-      <NDataTable :columns="columns" :data="files" :row-key="(row: BackupFile) => row.name" size="small" :pagination="{ pageSize: 10 }" />
+      <NDataTable :columns="columns" :data="files" :row-key="(row: BackupFile) => row.name" :scroll-x="760" size="small" :pagination="{ pageSize: 10 }" />
     </NCard>
 
     <NCard title="恢复迁移包" size="small">

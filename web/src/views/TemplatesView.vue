@@ -89,8 +89,8 @@ async function save() {
 </script>
 
 <template>
-  <NCard>
-    <template #header>
+  <NCard title="模板编辑与预览" class="templates-panel">
+    <template #header-extra>
       <NSpace justify="end" align="center">
         <NText v-if="dirty" type="warning" class="header-note">未保存</NText>
         <NButton type="primary" :disabled="!dirty" :loading="saving" @click="save">保存</NButton>
@@ -99,9 +99,9 @@ async function save() {
     <NTabs v-model:value="format" type="line">
       <NTab v-for="item in formats" :key="item.value" :name="item.value">{{ item.label }}</NTab>
     </NTabs>
-    <NGrid v-if="view" :cols="2" :x-gap="12" responsive="screen" item-responsive>
+    <NGrid v-if="view" :cols="2" :x-gap="24" :y-gap="24" responsive="screen" item-responsive>
       <NGridItem span="2 l:1">
-        <NSpace align="center" style="margin-bottom: 8px">
+        <NSpace align="center" style="min-height: 36px; margin: 16px 0 12px">
           <NTag :type="customized ? 'warning' : 'default'" size="small">{{ customized ? '自定义模板' : '内置模板' }}</NTag>
           <NButton v-if="!customized" size="small" @click="drafts[format] = view.builtin[format]">基于内置模板修改</NButton>
           <NPopconfirm v-else @positive-click="drafts[format] = ''">
@@ -109,18 +109,25 @@ async function save() {
             清空自定义内容，恢复使用内置模板？
           </NPopconfirm>
         </NSpace>
-        <CodeEditor v-if="customized" v-model:value="drafts[format]" language="text" min-height="520px" />
-        <CodeEditor v-else :value="view.builtin[format]" language="text" readonly min-height="520px" />
+        <CodeEditor v-if="customized" v-model:value="drafts[format]" language="text" min-height="var(--template-editor-height)" />
+        <CodeEditor v-else :value="view.builtin[format]" language="text" readonly min-height="var(--template-editor-height)" />
       </NGridItem>
       <NGridItem span="2 l:1">
-        <NSpace align="center" style="margin-bottom: 8px">
+        <NSpace align="center" style="min-height: 36px; margin: 16px 0 12px">
           <span>预览用户</span>
           <NSelect v-model:value="userId" :options="users.map((u) => ({ label: u.name, value: u.id! }))" style="width: 180px" />
           <NButton size="small" :loading="previewing" :disabled="!preview || !!previewError || previewing" @click="downloadPreview">下载到文件</NButton>
         </NSpace>
         <NAlert v-if="previewError" type="error" :bordered="false" style="margin-bottom: 8px">{{ previewError }}</NAlert>
-        <CodeEditor :value="preview" :language="format === 'surge' ? 'text' : 'yaml'" readonly min-height="520px" />
+        <CodeEditor :value="preview" :language="format === 'surge' ? 'text' : 'yaml'" readonly min-height="var(--template-editor-height)" />
       </NGridItem>
     </NGrid>
   </NCard>
 </template>
+
+<style scoped>
+.templates-panel {
+  --template-editor-height: clamp(320px, 60vh, 600px);
+  --code-editor-max-height: var(--template-editor-height);
+}
+</style>

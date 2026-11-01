@@ -48,7 +48,7 @@ function addAccount() {
     </NFormItem>
     <NFormItem v-if="listener.auth === 'accounts'" label="账号" v-bind="f('accounts')">
       <NSpace vertical style="width: 100%">
-        <NSpace v-for="(account, index) in listener.accounts" :key="index" :wrap="false" style="width: 100%">
+        <NSpace v-for="(account, index) in listener.accounts" :key="index" :wrap="false" class="listener-account" style="width: 100%">
           <NInput v-model:value="account.username" placeholder="用户名" :status="errors.fields[`${prefix}.accounts[${index}].username`] ? 'error' : undefined" />
           <SecretInput v-model:value="account.password" :generate="() => randomString(24)" :reveal="reveal" />
           <NButton quaternary type="error" @click="listener.accounts.splice(index, 1)">删除</NButton>
@@ -58,3 +58,11 @@ function addAccount() {
     </NFormItem>
   </template>
 </template>
+
+<style scoped>
+@media (max-width: 767px) {
+  /* 覆盖 NSpace 内联设置的横向排列，避免账号和密码控件被挤窄。 */
+  .listener-account { flex-direction: column !important; }
+  .listener-account :deep(> div) { width: 100%; min-width: 0; }
+}
+</style>

@@ -159,10 +159,10 @@ function onFile({ file }: { file: UploadFileInfo }) {
       <template v-else>依赖已就绪，正在重新生成配置。</template>
     </NAlert>
     <NSpace justify="space-between" align="center" style="margin-bottom: 12px">
-      <NText depth="3">安装和升级走系统设置中的下载代理；新版本先在暂存目录验证能接受当前全部配置，再替换并逐个重启使用它的服务，失败时自动回滚。</NText>
+      <NText depth="3">安装和升级使用「系统设置 → 下载代理」。</NText>
       <NButton :loading="checking" @click="checkUpdates">检查更新</NButton>
     </NSpace>
-    <NGrid :cols="1" :y-gap="12">
+    <NGrid :cols="1" :y-gap="20">
       <NGridItem v-for="dep in components" :key="dep.component">
         <NCard :title="titles[dep.component]" size="small">
           <template #header-extra>
@@ -187,7 +187,7 @@ function onFile({ file }: { file: UploadFileInfo }) {
             <NDescriptionsItem label="使用中的 stack">{{ dep.used_by.join('、') || '无' }}</NDescriptionsItem>
             <NDescriptionsItem label="sha256" :span="2"><code style="word-break: break-all">{{ dep.sha256 || '—' }}</code></NDescriptionsItem>
           </NDescriptions>
-          <NDataTable v-if="dep.history.length" :columns="historyColumns" :data="dep.history" size="small" :max-height="200" style="margin-top: 8px" />
+          <NDataTable v-if="dep.history.length" :columns="historyColumns" :data="dep.history" :scroll-x="960" size="small" :max-height="200" style="margin-top: 8px" />
         </NCard>
       </NGridItem>
     </NGrid>

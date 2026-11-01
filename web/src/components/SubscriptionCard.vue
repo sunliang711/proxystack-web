@@ -94,7 +94,7 @@ watch([format, () => props.userId, expanded], (_, __, onCleanup) => {
 </script>
 
 <template>
-  <NCard :title="linksOnly ? undefined : '订阅'" size="small" :bordered="!linksOnly" :content-style="linksOnly ? 'padding: 0' : undefined" :style="linksOnly ? undefined : 'margin-bottom: 12px'">
+  <NCard :title="linksOnly ? undefined : '订阅'" size="small" :bordered="!linksOnly" :content-style="linksOnly ? 'padding: 0' : undefined" :style="linksOnly ? undefined : 'margin-bottom: 20px'">
     <NSpace vertical style="width: 100%">
       <NText depth="3">订阅只包含已应用的 stack 节点、该用户的手工节点和远端节点源同步来的节点；改动在下一次发布订阅包并导入订阅端后生效。</NText>
       <NButton v-if="!links" size="small" :loading="linksLoading" @click="showLinks">显示订阅链接</NButton>

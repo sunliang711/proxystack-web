@@ -58,7 +58,7 @@ const reference = computed(() => (!stackId.value && props.dailyLimit ? { value: 
         <NButton size="tiny" :loading="loading" @click="load">刷新</NButton>
       </NSpace>
     </template>
-    <NAlert v-if="error" type="warning" :bordered="false" style="margin-bottom: 12px">{{ error }}<template v-if="usage">；当前显示上次成功获取的数据</template></NAlert>
+    <NAlert v-if="error" type="warning" :bordered="false" style="margin-bottom: 20px">{{ error }}<template v-if="usage">；当前显示上次成功获取的数据</template></NAlert>
     <NSpace v-if="usage" vertical :size="12">
       <NSpace v-if="usage.auto_pauses.length" vertical>
         <NSpace v-for="pause in usage.auto_pauses" :key="pause.reason" align="center">
@@ -88,7 +88,7 @@ const reference = computed(() => (!stackId.value && props.dailyLimit ? { value: 
         <NSelect v-model:value="stackId" :options="usage.by_stack.map((stack) => ({ label: stack.stack, value: stack.stack_id }))" clearable filterable placeholder="全部 Stack" style="width: 220px" />
       </NSpace>
       <NText depth="3">下方展示各 Stack 的今日用量和最近 30 天已保留的流量明细；额度和暂停仍以全部 Stack 的总用量判定。</NText>
-      <NTable v-if="selectedStacks.length" :bordered="false" size="small">
+      <div v-if="selectedStacks.length" class="table-scroll"><NTable :bordered="false" size="small">
         <thead><tr><th>Stack</th><th>今日上行 / 下行</th><th>今日合计</th><th>近 30 天上行 / 下行</th><th>近 30 天合计</th></tr></thead>
         <tbody>
           <tr v-for="stack in selectedStacks" :key="stack.stack_id">
@@ -104,7 +104,7 @@ const reference = computed(() => (!stackId.value && props.dailyLimit ? { value: 
             <td><NText strong>{{ formatBytes(selectedTotal.recent) }}</NText></td>
           </tr>
         </tbody>
-      </NTable>
+      </NTable></div>
       <TrafficChart v-if="daily.some((day) => total(day) > 0)" kind="bar" :labels="days" :series="series" :format="formatBytes" :reference="reference" height="220px" />
       <NEmpty v-else size="small" description="最近 30 天没有用量" />
     </NSpace>

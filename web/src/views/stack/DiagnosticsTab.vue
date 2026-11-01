@@ -54,7 +54,7 @@ const delayColumns: DataTableColumns<Delay> = [
 </script>
 
 <template>
-  <NSpace vertical :size="12">
+  <NSpace vertical :size="20">
     <NCard title="出口 IP" size="small">
       <NSpace vertical>
         <NText depth="3">经该 stack 的 mihomo socks 监听查询，mihomo 需要在运行。</NText>

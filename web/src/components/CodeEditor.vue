@@ -64,9 +64,12 @@ onBeforeUnmount(() => view?.destroy())
 
 <style scoped>
 .code-editor {
-  border: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.3));
-  border-radius: 3px;
+  border: 1px solid var(--ps-border);
+  border-radius: 10px;
   overflow: hidden;
   width: 100%;
+}
+.code-editor :deep(.cm-scroller) {
+  max-height: var(--code-editor-max-height, max(400px, min(65vh, 640px)));
 }
 </style>

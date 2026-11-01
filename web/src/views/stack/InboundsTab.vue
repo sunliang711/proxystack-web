@@ -139,10 +139,10 @@ const showUsers = computed(() => isUserProtocol.value || (isAuthProtocol.value &
     点击入站的「编辑」可设置用户列表；将「进入订阅」设为「是」后，还可设置地区（region）。
     region 用于 Surge / Premium Clash 的地区分组（如 US 美国、DE 德国），用户列表决定哪些用户能在订阅中看到该节点。修改后请保存并应用 Stack。
   </NAlert>
-  <NSpace justify="end" style="margin-bottom: 8px">
+  <NSpace justify="end" style="margin: 20px 0 16px">
     <NButton type="primary" @click="open(stack.xray.inbounds.length)">添加入站</NButton>
   </NSpace>
-  <NDataTable :columns="columns" :data="rows" size="small" />
+  <NDataTable :columns="columns" :data="rows" :scroll-x="940" size="small" />
 
   <NDrawer :show="!!editing" :width="620" @update:show="(v) => !v && (editing = null)">
     <NDrawerContent v-if="editing" :title="editing.draft.name ? `入站 ${editing.draft.name}` : '新入站'" closable>
@@ -228,7 +228,7 @@ const showUsers = computed(() => isUserProtocol.value || (isAuthProtocol.value &
               </NSpace>
             </NSpace>
           </NFormItem>
-          <NCollapse v-if="editing.draft.users.length" style="margin: -8px 0 12px 120px">
+          <NCollapse v-if="editing.draft.users.length" class="inbound-user-overrides">
             <NCollapseItem v-for="(ref, index) in editing.draft.users" :key="ref.user" :name="ref.user">
               <template #header>
                 <NSpace align="center" :size="4">
@@ -286,3 +286,10 @@ const showUsers = computed(() => isUserProtocol.value || (isAuthProtocol.value &
     </NDrawerContent>
   </NDrawer>
 </template>
+
+<style scoped>
+.inbound-user-overrides { margin: -8px 0 12px 120px; }
+@media (max-width: 767px) {
+  .inbound-user-overrides { margin-left: 0; }
+}
+</style>

@@ -85,7 +85,7 @@ const feedback = (key: string) => ({
 </script>
 
 <template>
-  <NSpace vertical :size="12" style="max-width: 760px">
+  <NSpace vertical :size="20">
     <NCard title="两步验证" size="small">
       <template #header-extra>
         <NTag :type="enabled ? 'success' : 'default'" size="small">{{ enabled ? '已开启' : '未开启' }}</NTag>

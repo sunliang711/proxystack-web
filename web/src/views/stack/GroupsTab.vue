@@ -95,10 +95,10 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
 </script>
 
 <template>
-  <NSpace justify="end" style="margin-bottom: 8px">
+  <NSpace justify="end" style="margin-bottom: 16px">
     <NButton type="primary" @click="open(stack.mihomo.groups.length)">添加代理组</NButton>
   </NSpace>
-  <NDataTable :columns="columns" :data="rows" size="small" />
+  <NDataTable :columns="columns" :data="rows" :scroll-x="760" size="small" />
 
   <NDrawer :show="!!editing" :width="560" @update:show="(v) => !v && (editing = null)">
     <NDrawerContent v-if="editing" :title="editing.draft.name ? `代理组 ${editing.draft.name}` : '新代理组'" closable>

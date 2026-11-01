@@ -72,7 +72,7 @@ async function runUpdate() {
       </NDescriptions>
     </NSpin>
   </NCard>
-  <NCard title="面板监听" style="margin-top: 12px">
+  <NCard title="面板监听" style="margin-top: 20px">
     <NSpace vertical>
       <NText depth="3">修改后管理服务会重启，xray 和 mihomo 不受影响。改错连不上时，在本机执行 proxystack-web admin set-listen 恢复。</NText>
       <NForm label-placement="left" label-width="90" style="max-width: 420px">
@@ -86,7 +86,7 @@ async function runUpdate() {
       <NAlert v-if="listenResult" :type="listenResult.type" :bordered="false">{{ listenResult.text }}</NAlert>
     </NSpace>
   </NCard>
-  <NCard title="管理服务更新" style="margin-top: 12px">
+  <NCard title="管理服务更新" style="margin-top: 20px">
     <NSpace vertical>
       <NText depth="3">更新只替换管理服务本身；xray 和 mihomo 由独立的服务承载，代理流量不受影响。下载走系统设置中的下载代理。</NText>
       <NSpace>

@@ -41,7 +41,7 @@ const level = (priority: number) => (priority <= 3 ? 'error' : priority === 4 ? 
 </script>
 
 <template>
-  <NSpace align="center" style="margin-bottom: 8px">
+  <NSpace align="center" style="margin-bottom: 16px">
     <NRadioGroup v-model:value="component" size="small">
       <NRadioButton value="all">全部</NRadioButton>
       <NRadioButton value="xray">xray</NRadioButton>
@@ -52,7 +52,7 @@ const level = (priority: number) => (priority <= 3 ? 'error' : priority === 4 ? 
     <NButton size="small" @click="entries = []">清除当前视图</NButton>
     <NText depth="3">{{ visible.length }} 行</NText>
   </NSpace>
-  <NScrollbar ref="scroller" style="max-height: 560px; border: 1px solid rgba(128, 128, 128, 0.25); border-radius: 3px">
+  <NScrollbar ref="scroller" style="max-height: 560px; border: 1px solid var(--ps-border); border-radius: 10px; background: var(--ps-bg)">
     <pre class="logs"><span v-for="(entry, i) in visible" :key="i" :class="level(entry.priority)">{{ new Date(entry.time).toLocaleTimeString() }} {{ entry.unit.replace('psw-', '').replace('.service', '') }} {{ entry.message }}
 </span></pre>
   </NScrollbar>
@@ -61,9 +61,10 @@ const level = (priority: number) => (priority <= 3 ? 'error' : priority === 4 ? 
 <style scoped>
 .logs {
   margin: 0;
-  padding: 6px 8px;
+  padding: 16px;
   font-family: ui-monospace, monospace;
   font-size: 12px;
+  line-height: 1.9;
   white-space: pre-wrap;
   word-break: break-all;
 }

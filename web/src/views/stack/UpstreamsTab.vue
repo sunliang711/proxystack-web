@@ -239,11 +239,11 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
 </script>
 
 <template>
-  <NSpace justify="space-between" align="center" style="margin-bottom: 8px">
+  <NSpace justify="space-between" align="center" style="margin-bottom: 16px">
     <NText depth="3">新增的上游会自动加入代理组，排在 DIRECT 之前；顺序和成员可以在「代理组」标签页调整。</NText>
     <NButton type="primary" @click="open(stack.mihomo.upstreams.length)">添加上游</NButton>
   </NSpace>
-  <NDataTable :columns="columns" :data="rows" size="small" />
+  <NDataTable :columns="columns" :data="rows" :scroll-x="840" size="small" />
 
   <NDrawer :show="!!editing" :width="640" @update:show="(v) => !v && (editing = null)">
     <NDrawerContent v-if="editing" :title="editing.draft.name ? `上游 ${editing.draft.name}` : '新上游'" closable>

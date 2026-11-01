@@ -147,9 +147,9 @@ async function remove() {
 
 <template>
   <NSpin :show="!user">
-    <NForm v-if="user" label-placement="left" label-width="120" style="max-width: 900px">
+    <NForm v-if="user" label-placement="top" class="user-form">
       <ErrorList :errors="errors.global" />
-      <NCard :title="`用户 ${user.name}`" size="small" class="card">
+      <NCard :title="`用户 ${user.name}`" size="small" class="card user-basics">
         <template #header-extra>
           <NSpace>
             <NPopconfirm @positive-click="remove">
@@ -242,7 +242,7 @@ async function remove() {
         <NText depth="3">default 档案即用户本身；入站引用用户时可以改选其他档案，使用不同的凭据。</NText>
         <NEmpty v-if="!user.profiles.length" size="small" description="没有额外档案" style="margin: 12px 0" />
         <div v-for="(profile, index) in user.profiles" :key="profile.id ?? `new-${index}`" class="profile">
-          <NGrid :cols="2" :x-gap="12">
+          <NGrid cols="1 m:2" responsive="screen" :x-gap="24">
             <NGridItem>
               <NFormItem label="档案名" label-width="70" v-bind="f(`profiles[${index}].name`)">
                 <NInput v-model:value="profile.name" />
@@ -320,8 +320,18 @@ async function remove() {
 </template>
 
 <style scoped>
+.user-basics :deep(.n-card-content) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  column-gap: 24px;
+}
+.user-basics :deep(.n-collapse) { grid-column: 1 / -1; }
+@media (max-width: 1023px) {
+  .user-basics :deep(.n-card-content) { grid-template-columns: minmax(0, 1fr); }
+}
 .card {
-  margin-bottom: 12px;
+  margin-bottom: 20px;
 }
 .profile {
   border-top: 1px dashed rgba(128, 128, 128, 0.3);

@@ -10,8 +10,8 @@ function update(names: Array<string | number>) {
 </script>
 
 <template>
-  <NCard size="small" class="settings-section" content-style="padding: 0">
-    <NCollapse :expanded-names="expandedNames.includes(name) ? [name] : []" @update:expanded-names="update">
+  <NCard size="small" class="settings-section" :class="{ 'is-expanded': expandedNames.includes(name) }" content-style="padding: 0">
+    <NCollapse class="settings-collapse" :expanded-names="expandedNames.includes(name) ? [name] : []" @update:expanded-names="update">
       <NCollapseItem :title="title" :name="name" display-directive="show">
         <slot />
       </NCollapseItem>
@@ -21,12 +21,17 @@ function update(names: Array<string | number>) {
 
 <style scoped>
 .settings-section {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  transition: border-color 0.2s;
 }
-.settings-section :deep(.n-collapse-item__header) {
-  padding: 12px 16px;
+.settings-section.is-expanded { border-color: var(--ps-accent); }
+.settings-section :deep(.settings-collapse > .n-collapse-item > .n-collapse-item__header:hover) { background: var(--ps-accent-soft); }
+.settings-section :deep(.settings-collapse > .n-collapse-item > .n-collapse-item__header) {
+  padding: 18px 20px;
+  font-size: 15px;
+  font-weight: 600;
 }
 .settings-section :deep(.n-collapse-item__content-inner) {
-  padding: 0 16px 4px;
+  padding: 12px 20px 4px;
 }
 </style>

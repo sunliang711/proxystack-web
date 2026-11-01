@@ -239,7 +239,7 @@ async function saveMembers() {
       </NCard>
       <ErrorList :errors="errors.global" />
 
-      <NTabs v-model:value="tab" type="line" animated>
+      <NTabs v-model:value="tab" type="line" animated class="detail-tabs">
         <NTabPane name="basic" :tab="tabLabel('basic', '基本')">
           <NForm label-placement="left" label-width="110" style="max-width: 720px">
             <NFormItem label="名称" required v-bind="f('name', '改名会同步更新其他 stack 中的引用')">
@@ -419,13 +419,14 @@ async function saveMembers() {
   position: sticky;
   top: 0;
   z-index: 10;
-  margin-bottom: 12px;
+  margin-bottom: 20px;
   background: var(--n-color);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
 @media (max-width: 767px) {
-  .stack-toolbar :deep(.n-card__content) {
-    padding: 10px;
+  .stack-toolbar :deep(.n-card-content) {
+    padding: 12px;
   }
 
   .stack-toolbar :deep(.n-space) {

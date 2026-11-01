@@ -199,7 +199,7 @@ async function create() {
 </script>
 
 <template>
-  <NCard title="流量拓扑" size="small" style="margin-bottom: 12px">
+  <NCard title="流量拓扑" size="small" style="margin-bottom: 20px">
     <template #header-extra>
       <NButton text size="small" @click="showTopology = !showTopology">{{ showTopology ? '收起' : '展开' }}</NButton>
     </template>
@@ -212,8 +212,8 @@ async function create() {
     </template>
   </NCard>
 
-  <NCard>
-    <template #header>
+  <NCard title="Stack 列表" class="table-panel">
+    <template #header-extra>
       <NSpace justify="end">
         <NButton :loading="egress.refreshing.value" :disabled="!egressTargets.length" @click="egress.refresh(egressTargets)">
           <template #icon><NIcon><RefreshOutline /></NIcon></template>
@@ -221,7 +221,7 @@ async function create() {
         </NButton>
         <NButton @click="showImport = true">导入</NButton>
         <NButton :disabled="!checked.length" @click="showExport = true">导出所选</NButton>
-        <NButton type="primary" @click="openWizard">新建</NButton>
+        <NButton type="primary" @click="openWizard">新建 Stack</NButton>
       </NSpace>
     </template>
     <NDataTable

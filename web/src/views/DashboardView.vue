@@ -72,13 +72,14 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
 </script>
 
 <template>
-  <NSpace vertical :size="12">
-    <NCard title="流量统计" size="small">
-      <NSpace align="center">
-        <NSelect v-model:value="userId" :options="users.map((user) => ({ label: user.name, value: user.id! }))" clearable filterable placeholder="全部流量（可指定用户）" style="width: 260px" />
+  <NSpace vertical :size="20">
+    <NCard size="small">
+      <div class="filter-bar overview-filters">
+        <span class="section-label" style="margin: 0">统计范围</span>
+        <NSelect v-model:value="userId" :options="users.map((user) => ({ label: user.name, value: user.id! }))" clearable filterable placeholder="全部流量（可指定用户）" />
         <NButton size="small" :loading="loading" @click="load">刷新</NButton>
-        <NText depth="3">{{ userId ? '当前只统计所选用户及其档案的流量。' : '全部流量按各 Stack 的入站计数汇总。' }}</NText>
-      </NSpace>
+        <NText class="filter-note">{{ userId ? '当前只统计所选用户及其档案的流量。' : '全部流量按各 Stack 的入站计数汇总。' }}</NText>
+      </div>
     </NCard>
     <template v-if="overview">
     <NAlert v-if="!overview.enabled" type="info" :bordered="false">流量监控未开启，可以在「系统设置 → 流量」中开启。</NAlert>
@@ -87,11 +88,11 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
     </NAlert>
     <NAlert v-for="stack in collectErrors" :key="stack.stack_id" type="warning" :bordered="false">stack {{ stack.stack }} 采集失败：{{ stack.error }}</NAlert>
 
-    <NGrid cols="2 m:4" responsive="screen" :x-gap="12" :y-gap="12">
-      <NGridItem><NCard size="small"><NStatistic label="今日流量" :value="formatBytes(total(overview.today))" /></NCard></NGridItem>
-      <NGridItem><NCard size="small"><NStatistic label="本月流量" :value="formatBytes(total(overview.month))" /></NCard></NGridItem>
-      <NGridItem><NCard size="small"><NStatistic label="当前上行" :value="formatRate(latest?.up ?? 0)" /></NCard></NGridItem>
-      <NGridItem><NCard size="small"><NStatistic label="当前下行" :value="formatRate(latest?.down ?? 0)" /></NCard></NGridItem>
+    <NGrid cols="2 m:4" responsive="screen" :x-gap="20" :y-gap="20">
+      <NGridItem><NCard size="small" class="metric-card"><NStatistic label="今日流量" :value="formatBytes(total(overview.today))" /></NCard></NGridItem>
+      <NGridItem><NCard size="small" class="metric-card"><NStatistic label="本月流量" :value="formatBytes(total(overview.month))" /></NCard></NGridItem>
+      <NGridItem><NCard size="small" class="metric-card"><NStatistic label="当前上行" :value="formatRate(latest?.up ?? 0)" /></NCard></NGridItem>
+      <NGridItem><NCard size="small" class="metric-card"><NStatistic label="当前下行" :value="formatRate(latest?.down ?? 0)" /></NCard></NGridItem>
     </NGrid>
 
     <NCard title="实时速率（最近 1 小时）" size="small">
@@ -103,7 +104,7 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
 
     <NCard title="各 Stack 用量" size="small">
       <NEmpty v-if="!overview.by_stack.length" description="还没有 Stack 流量数据" />
-      <NTable v-else :bordered="false" size="small" :single-line="false">
+      <div v-else class="table-scroll"><NTable :bordered="false" size="small" :single-line="false">
         <thead><tr><th>Stack</th><th>今日上行 / 下行</th><th>今日合计</th><th>本月上行 / 下行</th><th>本月合计</th><th>当前上行 / 下行</th></tr></thead>
         <tbody>
           <tr v-for="stack in overview.by_stack" :key="stack.stack_id">
@@ -115,14 +116,14 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
             <td>{{ formatRate(latest?.stacks[stack.stack]?.up ?? 0) }} / {{ formatRate(latest?.stacks[stack.stack]?.down ?? 0) }}</td>
           </tr>
         </tbody>
-      </NTable>
+      </NTable></div>
     </NCard>
 
     <NCard :title="userId ? '所选用户本月用量' : '本月用量排行'" size="small">
       <NEmpty v-if="!overview.top_users.length" description="本月还没有用量">
         <template #extra><RouterLink :to="{ name: 'users' }">查看用户用量</RouterLink></template>
       </NEmpty>
-      <NTable v-else :bordered="false" size="small">
+      <div v-else class="table-scroll"><NTable :bordered="false" size="small">
         <thead><tr><th>用户</th><th>上行</th><th>下行</th><th style="width: 45%">合计</th></tr></thead>
         <tbody>
           <tr v-for="user in overview.top_users" :key="user.id">
@@ -137,7 +138,7 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
             </td>
           </tr>
         </tbody>
-      </NTable>
+      </NTable></div>
     </NCard>
 
     <NCard v-if="overview.stacks.length" title="采集状态" size="small">
@@ -152,6 +153,12 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
 </template>
 
 <style scoped>
+.overview-filters > .n-select { width: 260px; }
+@media (max-width: 767px) {
+  .overview-filters { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .overview-filters > .n-select { width: 100%; }
+  .overview-filters > .section-label, .overview-filters > .filter-note { grid-column: 1 / -1; }
+}
 .bar-cell {
   display: flex;
   align-items: center;
@@ -160,10 +167,7 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
 .bar {
   height: 8px;
   min-width: 2px;
-  border-radius: 0 4px 4px 0;
-  background: #2a78d6;
-}
-:root[data-theme='dark'] .bar {
-  background: #3987e5;
+  border-radius: 4px;
+  background: var(--ps-accent);
 }
 </style>

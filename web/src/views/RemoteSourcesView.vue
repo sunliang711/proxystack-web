@@ -94,8 +94,8 @@ const f = (path: string, hint?: string) => fieldState(errors.value, `[${editing.
 </script>
 
 <template>
-  <NCard>
-    <template #header>
+  <NCard title="节点来源" class="table-panel">
+    <template #header-extra>
       <NSpace justify="end">
         <NButton :loading="syncing === 0" @click="sync(0)">全部同步</NButton>
         <NButton type="primary" @click="open(sources.length)">添加</NButton>
@@ -106,7 +106,7 @@ const f = (path: string, hint?: string) => fieldState(errors.value, `[${editing.
       拉取到的节点按用户名分给本机同名用户，每 30 分钟自动同步一次。
     </NAlert>
     <ErrorList :errors="errors.global" />
-    <NDataTable :columns="columns" :data="sources" size="small" />
+    <NDataTable :columns="columns" :data="sources" :scroll-x="860" size="small" />
   </NCard>
 
   <NDrawer :show="!!editing" :width="520" @update:show="(v) => !v && (editing = null)">

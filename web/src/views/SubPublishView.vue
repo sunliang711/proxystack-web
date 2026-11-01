@@ -49,9 +49,9 @@ const skipped = computed(() => status.value?.build_warnings.length ?? 0)
 </script>
 
 <template>
-  <NSpace vertical :size="12">
-    <NCard>
-      <template #header>
+  <NSpace vertical :size="20">
+    <NCard title="订阅包状态">
+      <template #header-extra>
         <NSpace justify="end">
           <NPopconfirm v-if="skipped" @positive-click="publish">
             <template #trigger>
