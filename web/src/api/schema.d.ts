@@ -1064,6 +1064,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stacks/{id}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stack 的用量和日用量趋势，可指定用户 */
+        get: operations["getStackUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sub-bundle": {
         parameters: {
             query?: never;
@@ -2382,6 +2399,17 @@ export interface components {
         };
         StackTraffic: {
             month: components["schemas"]["Bytes"];
+            stack: string;
+            /** Format: int64 */
+            stack_id: number;
+            today: components["schemas"]["Bytes"];
+        };
+        StackUsage: {
+            collection: components["schemas"]["CollectStatus"];
+            daily: components["schemas"]["DayUsage"][];
+            enabled: boolean;
+            month: components["schemas"]["Bytes"];
+            recent: components["schemas"]["Bytes"];
             stack: string;
             /** Format: int64 */
             stack_id: number;
@@ -4883,6 +4911,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Stack"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getStackUsage: {
+        parameters: {
+            query?: {
+                /** @description 用户 ID，0 表示本 Stack 的全部入站流量 */
+                user_id?: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StackUsage"];
                 };
             };
             /** @description Error */

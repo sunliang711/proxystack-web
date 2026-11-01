@@ -8,7 +8,9 @@
     "build": "vue-tsc --noEmit && vite build && touch dist/.keep",
     "gen:api": "cd .. && go run ./cmd/proxystack-web openapi > web/openapi.json && cd web && openapi-typescript openapi.json -o src/api/schema.d.ts",
     "typecheck": "vue-tsc --noEmit",
-    "test:egress": "node --test tests/egress.test.mjs"
+    "test:egress": "node --test tests/egress.test.mjs",
+    "test:polling": "node --test tests/polling.test.mjs",
+    "test:inbounds": "node --test tests/inbounds.test.mjs"
   },
   "dependencies": {
     "@codemirror/lang-json": "^6.0.2",

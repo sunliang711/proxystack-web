@@ -3389,6 +3389,50 @@
         ],
         "type": "object"
       },
+      "StackUsage": {
+        "additionalProperties": false,
+        "properties": {
+          "collection": {
+            "$ref": "#/components/schemas/CollectStatus"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/DayUsage"
+            },
+            "type": "array"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "month": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "recent": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "stack": {
+            "type": "string"
+          },
+          "stack_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "today": {
+            "$ref": "#/components/schemas/Bytes"
+          }
+        },
+        "required": [
+          "stack_id",
+          "stack",
+          "enabled",
+          "today",
+          "month",
+          "recent",
+          "daily",
+          "collection"
+        ],
+        "type": "object"
+      },
       "SubscriptionLinks": {
         "additionalProperties": false,
         "properties": {
@@ -7843,6 +7887,66 @@
         "summary": "查看 stack 明文凭据（记入审计日志）",
         "tags": [
           "config"
+        ]
+      }
+    },
+    "/api/stacks/{id}/usage": {
+      "get": {
+        "operationId": "getStackUsage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "用户 ID，0 表示本 Stack 的全部入站流量",
+            "explode": false,
+            "in": "query",
+            "name": "user_id",
+            "schema": {
+              "description": "用户 ID，0 表示本 Stack 的全部入站流量",
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackUsage"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Stack 的用量和日用量趋势，可指定用户",
+        "tags": [
+          "traffic"
         ]
       }
     },

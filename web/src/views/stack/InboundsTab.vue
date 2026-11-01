@@ -111,6 +111,12 @@ const selectedUsers = computed({
     draft.users = names.map((name) => draft.users.find((u) => u.user === name) ?? { user: name, profile: '', remark: '', display_template: '', tag: '' })
   },
 })
+const missingUsers = computed(() => props.users.filter((user) => !selectedUsers.value.includes(user.name)))
+const selectedUserCount = computed(() => new Set(selectedUsers.value).size)
+function addAllUsers() {
+  // 仅追加缺少的用户，保留已有凭据档案及覆盖设置。
+  editing.value!.draft.users.push(...missingUsers.value.map((user) => ({ user: user.name, profile: '', remark: '', display_template: '', tag: '' })))
+}
 function profileOptions(ref: UserRef) {
   const user = props.users.find((u) => u.name === ref.user)
   return [{ label: 'default', value: '' }, ...(user?.profiles ?? []).map((p) => ({ label: p.name, value: p.name }))]
@@ -214,7 +220,13 @@ const showUsers = computed(() => isUserProtocol.value || (isAuthProtocol.value &
 
         <template v-if="showUsers">
           <NFormItem :label="isAuthProtocol ? '订阅用户' : '用户'" v-bind="f('users')">
-            <NSelect v-model:value="selectedUsers" :options="userOptions" multiple filterable />
+            <NSpace vertical :size="6" style="width: 100%">
+              <NSelect v-model:value="selectedUsers" :options="userOptions" multiple filterable />
+              <NSpace justify="space-between" align="center">
+                <NText depth="3">已选 {{ selectedUserCount }} / 共 {{ users.length }}</NText>
+                <NButton size="tiny" secondary :disabled="!missingUsers.length" @click="addAllUsers">{{ !users.length ? '暂无用户' : missingUsers.length ? '添加全部' : '已全部添加' }}</NButton>
+              </NSpace>
+            </NSpace>
           </NFormItem>
           <NCollapse v-if="editing.draft.users.length" style="margin: -8px 0 12px 120px">
             <NCollapseItem v-for="(ref, index) in editing.draft.users" :key="ref.user" :name="ref.user">

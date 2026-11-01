@@ -1,27 +1,25 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { NButton, NCard, NEmpty, NPopconfirm, NProgress, NSelect, NSpace, NTable, NTag, NText, useMessage } from 'naive-ui'
+import { NAlert, NButton, NCard, NEmpty, NPopconfirm, NProgress, NSelect, NSpace, NTable, NTag, NText, useMessage } from 'naive-ui'
 import { api, problemMessage, type Schemas } from '../api/client'
+import { usePolling } from '../composables/usePolling'
 import { formatBytes, formatTime } from '../util/format'
 import TrafficChart from './TrafficChart.vue'
 
 const props = defineProps<{ userId: number; dailyLimit: number; quota: number }>()
 const message = useMessage()
-const usage = ref<Schemas['UserUsage'] | null>(null)
 const stackId = ref<number | null>(null)
 const labels = { daily: '每日阈值', quota: '月度额度', expired: '到期' } as const
 
-let loadVersion = 0
-async function load() {
-  const version = ++loadVersion
-  const { data, error } = await api.GET('/api/users/{id}/usage', { params: { path: { id: props.userId } } })
-  if (version !== loadVersion) return
-  usage.value = data ?? null
-  if (error) message.error(problemMessage(error))
-  if (!data?.by_stack.some((stack) => stack.stack_id === stackId.value)) stackId.value = null
-}
+const { data: usage, loading, error, updatedAt, refresh: load } = usePolling<Schemas['UserUsage']>(() => props.userId, async (signal) => {
+  const { data, error } = await api.GET('/api/users/{id}/usage', { params: { path: { id: props.userId } }, signal })
+  if (!data) throw new Error(problemMessage(error, '用量刷新失败'))
+  return data
+})
 watch(() => props.userId, () => { stackId.value = null })
-watch(() => [props.userId, props.dailyLimit, props.quota], load, { immediate: true })
+watch(usage, (data) => {
+  if (data && !data.by_stack.some((stack) => stack.stack_id === stackId.value)) stackId.value = null
+})
 
 const total = (bytes: { up: number; down: number }) => bytes.up + bytes.down
 const percent = (used: number, limit: number) => Math.min(100, Math.round((used / limit) * 100))
@@ -54,6 +52,13 @@ const reference = computed(() => (!stackId.value && props.dailyLimit ? { value: 
 
 <template>
   <NCard title="用量" size="small" class="card">
+    <template #header-extra>
+      <NSpace align="center" :size="8">
+        <NText depth="3">每 10 秒更新<template v-if="updatedAt"> · {{ formatTime(updatedAt) }}</template></NText>
+        <NButton size="tiny" :loading="loading" @click="load">刷新</NButton>
+      </NSpace>
+    </template>
+    <NAlert v-if="error" type="warning" :bordered="false" style="margin-bottom: 12px">{{ error }}<template v-if="usage">；当前显示上次成功获取的数据</template></NAlert>
     <NSpace v-if="usage" vertical :size="12">
       <NSpace v-if="usage.auto_pauses.length" vertical>
         <NSpace v-for="pause in usage.auto_pauses" :key="pause.reason" align="center">
@@ -103,5 +108,6 @@ const reference = computed(() => (!stackId.value && props.dailyLimit ? { value: 
       <TrafficChart v-if="daily.some((day) => total(day) > 0)" kind="bar" :labels="days" :series="series" :format="formatBytes" :reference="reference" height="220px" />
       <NEmpty v-else size="small" description="最近 30 天没有用量" />
     </NSpace>
+    <NEmpty v-else size="small" :description="loading ? '正在加载用量' : '暂无用量数据'" />
   </NCard>
 </template>

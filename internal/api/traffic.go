@@ -69,6 +69,15 @@ type userUsageOutput struct {
 	Body app.UserUsage
 }
 
+type stackUsageInput struct {
+	ID     int64 `path:"id" minimum:"1"`
+	UserID int64 `query:"user_id" minimum:"0" doc:"用户 ID，0 表示本 Stack 的全部入站流量"`
+}
+
+type stackUsageOutput struct {
+	Body app.StackUsage
+}
+
 type releasePauseInput struct {
 	ID     int64  `path:"id"`
 	Reason string `path:"reason" enum:"daily,quota,expired"`
@@ -153,6 +162,14 @@ func registerTraffic(api huma.API, s *Server) {
 				return nil, toHTTPError(err)
 			}
 			return &usersUsageOutput{Body: usage}, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "getStackUsage", Method: http.MethodGet, Path: "/api/stacks/{id}/usage", Summary: "Stack 的用量和日用量趋势，可指定用户"}),
+		func(ctx context.Context, in *stackUsageInput) (*stackUsageOutput, error) {
+			usage, err := s.svc.StackUsageDetail(ctx, in.ID, in.UserID)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &stackUsageOutput{Body: *usage}, nil
 		})
 	huma.Register(api, reg(huma.Operation{OperationID: "getUserUsage", Method: http.MethodGet, Path: "/api/users/{id}/usage", Summary: "用户的用量、自动暂停和日用量趋势"}),
 		func(ctx context.Context, in *idPath) (*userUsageOutput, error) {
