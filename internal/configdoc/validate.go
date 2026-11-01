@@ -338,6 +338,17 @@ func validateUsers(issues *Issues, doc *Document) {
 
 func validateStack(issues *Issues, doc *Document, path string, stack *Stack) {
 	checkIdentifier(issues, path+".name", stack.Name)
+	directUsers := map[string]bool{}
+	for index, user := range stack.DirectUsers {
+		field := fmt.Sprintf("%s.direct_users[%d]", path, index)
+		if doc.UserByName(user) < 0 {
+			issues.add(field, "user does not exist: %s", user)
+		}
+		if directUsers[user] {
+			issues.add(field, "duplicate direct user: %s", user)
+		}
+		directUsers[user] = true
+	}
 	if stack.Role != "edge" && stack.Role != "auto" {
 		issues.add(path+".role", "must be edge or auto")
 	}

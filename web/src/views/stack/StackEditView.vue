@@ -129,6 +129,7 @@ async function save(): Promise<boolean> {
 }
 
 function tabFor(path: string): string {
+  if (path.startsWith('direct_users')) return 'upstreams'
   if (path.startsWith('xray.inbounds')) return 'inbounds'
   if (path.startsWith('xray.outbound')) return 'outbound'
   if (path.startsWith('xray')) return 'xray'
@@ -362,7 +363,7 @@ async function saveMembers() {
         </NTabPane>
 
         <NTabPane name="upstreams" :tab="tabLabel('upstreams', '上游')">
-          <UpstreamsTab :stack="stack" :summaries="summaries" :errors="errors" />
+          <UpstreamsTab :stack="stack" :summaries="summaries" :users="users" :errors="errors" />
         </NTabPane>
 
         <NTabPane name="groups" :tab="tabLabel('groups', '代理组')">

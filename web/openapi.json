@@ -3151,6 +3151,12 @@
           "desired_running": {
             "type": "boolean"
           },
+          "direct_users": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "enabled": {
             "type": "boolean"
           },

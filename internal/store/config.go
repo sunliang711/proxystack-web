@@ -145,6 +145,15 @@ func LoadDocument(ctx context.Context, q *dbq.Queries) (*configdoc.Document, err
 		doc.Stacks = append(doc.Stacks, stack)
 	}
 
+	directUsers, err := q.ListStackDirectUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range directUsers {
+		stack := &doc.Stacks[stackIndex[row.StackID]]
+		stack.DirectUsers = append(stack.DirectUsers, doc.Users[userIndex[row.UserID]].Name)
+	}
+
 	inbounds, err := q.ListInbounds(ctx)
 	if err != nil {
 		return nil, err
@@ -364,6 +373,7 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 		}
 	}
 	for _, clear := range []func(context.Context) error{
+		q.DeleteStackDirectUsers,
 		q.DeleteUserPausedStacks, q.DeleteManualNodes, q.DeleteMihomoUpstreams, q.DeleteMihomoGroups, q.DeleteMihomoListeners,
 		q.DeleteInboundUserRefs, q.DeleteInbounds, q.DeleteUserProfiles,
 	} {
@@ -450,6 +460,15 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 			return fmt.Errorf("save stack %s: %w", stack.Name, err)
 		}
 		stack.ID = id
+		for position, user := range stack.DirectUsers {
+			userID, ok := userIDByName[user]
+			if !ok {
+				return fmt.Errorf("stack %s references a missing direct user: %s", stack.Name, user)
+			}
+			if err := q.InsertStackDirectUser(ctx, dbq.InsertStackDirectUserParams{StackID: id, UserID: userID, Position: int64(position)}); err != nil {
+				return err
+			}
+		}
 		for position := range stack.Xray.Inbounds {
 			inbound := &stack.Xray.Inbounds[position]
 			headers, err := encodeColumn(inbound.WSHeaders)

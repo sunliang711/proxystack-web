@@ -160,6 +160,9 @@ func (u *User) Normalize() {
 
 // Normalize 补齐 stack 的空列表和缺省枚举值。
 func (s *Stack) Normalize() {
+	if s.DirectUsers == nil {
+		s.DirectUsers = []string{}
+	}
 	if s.Labels == nil {
 		s.Labels = []string{}
 	}

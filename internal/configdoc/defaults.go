@@ -115,6 +115,7 @@ func NewStack(doc *Document, settings Settings, opts NewStackOptions) (Stack, er
 		DesiredRunning: true,
 		Role:           "edge",
 		Labels:         append([]string{}, opts.Labels...),
+		DirectUsers:    []string{},
 		Xray: Xray{
 			AccessLog: Inherit,
 			Enabled:   true,

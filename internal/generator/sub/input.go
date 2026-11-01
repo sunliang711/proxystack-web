@@ -282,6 +282,11 @@ func subscriptionServer(stackSet domain.StackSet, inbound domain.Inbound) string
 	return stackSet.Config.ExternalHost
 }
 
+// SubscriptionRemark 供直连上游节点复用入站订阅的展示名规则。
+func SubscriptionRemark(stackName string, inbound domain.Inbound, user, profile, remark, displayTemplate string) (string, error) {
+	return subscriptionRemark(stackName, inbound, user, profile, remark, displayTemplate)
+}
+
 // subscriptionRemark 生成订阅节点展示名；display_template 优先，其次使用显式 remark，未配置时使用稳定的 stack/protocol 名称。
 func subscriptionRemark(stackName string, inbound domain.Inbound, user string, profile string, configuredRemark string, displayTemplate string) (string, error) {
 	baseRemark := configuredRemark

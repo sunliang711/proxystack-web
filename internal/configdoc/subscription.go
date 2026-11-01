@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -194,6 +195,24 @@ func validateSubscriptionNodes(issues *Issues, doc *Document, set domain.StackSe
 	for _, node := range input.Nodes {
 		tags[node.Tag] = "stack node " + node.ID
 		names[node.User+"\x00"+node.Remark] = "stack node " + node.ID
+	}
+	direct, err := StackDirectNodes(doc)
+	if err != nil {
+		issues.add("", "direct subscription nodes: %s", err.Error())
+		return
+	}
+	for _, node := range direct {
+		stackName, _, _ := strings.Cut(node.ID, ":")
+		path := fmt.Sprintf("stacks[%d].direct_users", doc.StackByName(stackName))
+		if first, ok := tags[node.Tag]; ok {
+			issues.add(path, "duplicate node tag %s, also used by %s", node.Tag, first)
+		}
+		tags[node.Tag] = path
+		key := node.User + "\x00" + node.Remark
+		if first, ok := names[key]; ok {
+			issues.add(path, "user %s already has a proxy named %s (%s)", node.User, node.Remark, first)
+		}
+		names[key] = path
 	}
 	for index, manual := range doc.ManualNodes {
 		node, err := manual.SubNode(index)

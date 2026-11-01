@@ -13,6 +13,15 @@ SELECT * FROM stacks ORDER BY position, id;
 -- name: ListInbounds :many
 SELECT * FROM inbounds ORDER BY stack_id, position, id;
 
+-- name: ListStackDirectUsers :many
+SELECT * FROM stack_direct_users ORDER BY stack_id, position;
+
+-- name: DeleteStackDirectUsers :exec
+DELETE FROM stack_direct_users;
+
+-- name: InsertStackDirectUser :exec
+INSERT INTO stack_direct_users (stack_id, user_id, position) VALUES (?, ?, ?);
+
 -- name: ListInboundUserRefs :many
 SELECT * FROM inbound_user_refs ORDER BY inbound_id, position;
 

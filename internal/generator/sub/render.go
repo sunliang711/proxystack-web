@@ -403,6 +403,36 @@ func nodeWSHeaders(node Node) string {
 
 // RenderDirectSurgeProxy 把 direct 节点中常见 Clash vmess 扩展映射为 Surge 参数。
 func RenderDirectSurgeProxy(node Node) string {
+	if node.Protocol == "socks5" || node.Protocol == "http" {
+		protocol := node.Protocol
+		if directNodeBool(node, "tls") {
+			if protocol == "http" {
+				protocol = "https"
+			} else {
+				protocol = "socks5-tls"
+			}
+		}
+		parts := []string{fmt.Sprintf("%s = %s", node.Remark, protocol), node.Server, strconv.Itoa(node.Port)}
+		username, password := directNodeString(node, "username"), directNodeString(node, "password")
+		if node.Auth != nil && node.Auth.Type == "password" {
+			username, password = node.Auth.Username, node.Auth.Password
+		}
+		if username != "" || password != "" {
+			parts = append(parts, "username="+strconv.Quote(username), "password="+strconv.Quote(password))
+		}
+		if node.Protocol == "socks5" && node.UDP != nil && *node.UDP {
+			parts = append(parts, "udp-relay=true")
+		}
+		if directNodeBool(node, "tls") {
+			if directNodeBool(node, "skip-cert-verify") {
+				parts = append(parts, "skip-cert-verify=true")
+			}
+			if sni := firstNonEmpty(directNodeString(node, "sni"), directNodeString(node, "servername")); sni != "" {
+				parts = append(parts, "sni="+sni)
+			}
+		}
+		return strings.Join(parts, ", ")
+	}
 	if node.Protocol != "vmess" {
 		normal := node
 		normal.Direct = false
@@ -456,6 +486,16 @@ func filterSurgeSupportedNodes(nodes []Node) []Node {
 
 // unsupportedSurgeNodeReason 返回节点不能安全渲染为 Surge proxy 的原因。
 func unsupportedSurgeNodeReason(node Node) string {
+	if node.Direct {
+		if plugin := directNodeString(node, "plugin"); plugin != "" {
+			return "unsupported upstream plugin: " + plugin
+		}
+		if node.Protocol == "vmess" {
+			if alterID := directNodeString(node, "alterId"); alterID != "" && alterID != "0" {
+				return "unsupported non-AEAD vmess upstream"
+			}
+		}
+	}
 	switch node.Protocol {
 	case "vmess":
 		network := node.Network

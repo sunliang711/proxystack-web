@@ -163,6 +163,12 @@ func (s *Service) buildSubscription(ctx context.Context) (*subSnapshot, error) {
 		}
 		snapshot.local = append(snapshot.local, input.Nodes...)
 	}
+	// 直连不依赖本机进程，始终按当前授权生成，撤销授权无需重新应用运行配置。
+	direct, err := configdoc.StackDirectNodes(doc)
+	if err != nil {
+		return nil, err
+	}
+	snapshot.local = append(snapshot.local, direct...)
 	// 手动暂停：用户关闭时不提供订阅（由响应规则处理），逐 stack 暂停时去掉该 stack 的节点。
 	paused := map[string][]string{}
 	for _, user := range doc.Users {
@@ -313,6 +319,16 @@ func (s *Service) PreviewSubscription(ctx context.Context, userID int64, format 
 func (snapshot *subSnapshot) explainNoNodes(user configdoc.User) string {
 	var reasons []string
 	for _, stack := range snapshot.doc.Stacks {
+		if slices.Contains(stack.DirectUsers, user.Name) {
+			switch {
+			case !stack.Enabled:
+				reasons = append(reasons, fmt.Sprintf("stack %s 已停用，未提供直连节点", stack.Name))
+			case slices.Contains(user.PausedStacks, stack.Name):
+				reasons = append(reasons, fmt.Sprintf("该用户在 stack %s 上已暂停", stack.Name))
+			case !slices.ContainsFunc(stack.Mihomo.Upstreams, func(upstream configdoc.Upstream) bool { return upstream.Type == "raw" }):
+				reasons = append(reasons, fmt.Sprintf("stack %s 没有可直连的外部上游", stack.Name))
+			}
+		}
 		if !servesUser(stack, user.Name) {
 			continue
 		}
@@ -336,7 +352,7 @@ func (snapshot *subSnapshot) explainNoNodes(user configdoc.User) string {
 	}
 	reasons = append(reasons, snapshot.manualSkipped[user.Name]...)
 	if len(reasons) == 0 {
-		return fmt.Sprintf("用户 %s 不在任何进入订阅的入站中：在 stack 的「入站」里把该用户加入用户列表并把「进入订阅」设为是，或在「手工节点」中为该用户添加节点", user.Name)
+		return fmt.Sprintf("用户 %s 不在任何进入订阅的入站中：在 stack 的「入站」里把该用户加入用户列表并把「进入订阅」设为是，或在「上游」中授权直连，或在「手工节点」中为该用户添加节点", user.Name)
 	}
 	return fmt.Sprintf("用户 %s 目前没有订阅节点：%s", user.Name, strings.Join(reasons, "；"))
 }

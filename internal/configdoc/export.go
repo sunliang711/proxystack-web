@@ -57,6 +57,11 @@ func Subset(doc *Document, scope ExportScope, exportedAt time.Time) (*Document, 
 			}
 			stack := source.Stacks[index]
 			out.Stacks = append(out.Stacks, stack)
+			for _, user := range stack.DirectUsers {
+				if !slices.Contains(users, user) {
+					users = append(users, user)
+				}
+			}
 			for _, inbound := range stack.Xray.Inbounds {
 				for _, ref := range inbound.Users {
 					if !slices.Contains(users, ref.User) {

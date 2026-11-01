@@ -86,6 +86,19 @@ func (r RawMapping) Get(key string) (string, bool) {
 	return "", false
 }
 
+// Delete 删除不应下发到客户端的顶层字段。
+func (r *RawMapping) Delete(key string) {
+	if r.Node == nil {
+		return
+	}
+	for index := 0; index+1 < len(r.Node.Content); index += 2 {
+		if r.Node.Content[index].Value == key {
+			r.Node.Content = append(r.Node.Content[:index], r.Node.Content[index+2:]...)
+			return
+		}
+	}
+}
+
 // Set 设置顶层字段的字符串值，不存在时追加。
 func (r *RawMapping) Set(key string, value string) {
 	if r.Node == nil {

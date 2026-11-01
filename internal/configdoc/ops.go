@@ -23,6 +23,13 @@ func RenameUser(doc *Document, oldName, newName string) {
 			doc.ManualNodes[index].User = newName
 		}
 	}
+	for index := range doc.Stacks {
+		for position, user := range doc.Stacks[index].DirectUsers {
+			if user == oldName {
+				doc.Stacks[index].DirectUsers[position] = newName
+			}
+		}
+	}
 }
 
 // RemoveUserNodes 删除用户的全部手工节点。
@@ -54,6 +61,7 @@ func RemoveProfileRefs(doc *Document, user, profile string) {
 // RemoveUserRefs 删除全部入站对 user 的引用。
 func RemoveUserRefs(doc *Document, user string) {
 	for stackIndex := range doc.Stacks {
+		doc.Stacks[stackIndex].DirectUsers = slices.DeleteFunc(doc.Stacks[stackIndex].DirectUsers, func(name string) bool { return name == user })
 		inbounds := doc.Stacks[stackIndex].Xray.Inbounds
 		for inboundIndex := range inbounds {
 			inbounds[inboundIndex].Users = slices.DeleteFunc(inbounds[inboundIndex].Users, func(ref UserRef) bool {

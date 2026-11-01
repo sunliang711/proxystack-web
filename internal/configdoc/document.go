@@ -337,6 +337,8 @@ type Stack struct {
 	Labels         []string `json:"labels" yaml:"labels,omitempty"`
 	Xray           Xray     `json:"xray" yaml:"xray"`
 	Mihomo         Mihomo   `json:"mihomo" yaml:"mihomo"`
+	// DirectUsers 可获取外部上游直连节点，与入站用户列表独立。
+	DirectUsers []string `json:"direct_users" yaml:"direct_users,omitempty" required:"false"`
 }
 
 // Xray 是 stack 的 xray 部分。

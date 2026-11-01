@@ -244,6 +244,12 @@ type Stack struct {
 	XrayAccessLog         string `json:"xray_access_log"`
 }
 
+type StackDirectUser struct {
+	StackID  int64 `json:"stack_id"`
+	UserID   int64 `json:"user_id"`
+	Position int64 `json:"position"`
+}
+
 type SubTemplate struct {
 	Format  string `json:"format"`
 	Content string `json:"content"`

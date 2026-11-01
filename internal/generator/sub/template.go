@@ -41,7 +41,8 @@ func renderTemplateText(templateName string, source string, context map[string]a
 	if err := registerTemplateFilters(); err != nil {
 		return "", err
 	}
-	template, err := pongo2.FromString(source)
+	// 输出的是客户端配置文本，HTML 转义会破坏上游认证串；使用局部模板块避免修改全局开关。
+	template, err := pongo2.FromString("{% autoescape off %}" + source + "{% endautoescape %}")
 	if err != nil {
 		return "", TemplateError{Message: fmt.Sprintf("subscription template parse failed: %s", templateName)}
 	}

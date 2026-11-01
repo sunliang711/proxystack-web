@@ -2,7 +2,7 @@
 import { computed, h, ref, watch } from 'vue'
 import YAML from 'yaml'
 import {
-  NAlert, NButton, NCascader, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NInputNumber,
+  NAlert, NButton, NCard, NCascader, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NInputNumber,
   NPopconfirm, NRadioButton, NRadioGroup, NSelect, NSpace, NSwitch, NTabPane, NTabs, NTag, NText, useMessage,
   type DataTableColumns,
 } from 'naive-ui'
@@ -14,8 +14,20 @@ import { ssMethods } from '../../util/options'
 type Upstream = Schemas['Upstream']
 type RawConfig = Record<string, unknown>
 
-const props = defineProps<{ stack: Schemas['Stack']; summaries: Schemas['StackSummary'][]; errors: FormErrors }>()
+const props = defineProps<{ stack: Schemas['Stack']; summaries: Schemas['StackSummary'][]; users: Schemas['User'][]; errors: FormErrors }>()
 const message = useMessage()
+
+const directUsers = computed({
+  get: () => props.stack.direct_users ?? [],
+  set: (value: string[]) => { props.stack.direct_users = value },
+})
+const userOptions = computed(() => props.users.map((user) => ({ label: user.remark ? `${user.name}（${user.remark}）` : user.name, value: user.name })))
+const missingDirectUsers = computed(() => props.users.filter((user) => !directUsers.value.includes(user.name)))
+const externalCount = computed(() => props.stack.mihomo.upstreams.filter((upstream) => upstream.type === 'raw').length)
+
+function selectAllDirectUsers() {
+  directUsers.value = [...directUsers.value, ...missingDirectUsers.value.map((user) => user.name)]
+}
 
 const editing = ref<{ index: number; draft: Upstream; config: RawConfig } | null>(null)
 const yamlText = ref('')
@@ -240,6 +252,28 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
 </script>
 
 <template>
+  <NCard title="直连上游订阅" size="small" style="margin-bottom: 20px">
+    <NForm label-placement="top">
+      <NFormItem label="允许直连的用户" v-bind="fieldState(errors, 'direct_users')">
+        <NSpace vertical style="width: 100%">
+          <NSelect v-model:value="directUsers" :options="userOptions" multiple filterable clearable placeholder="未选择时不生成直连节点" />
+          <NSpace align="center" :size="8">
+            <NText depth="3">已选 {{ directUsers.length }} / 共 {{ users.length }}</NText>
+            <NButton size="tiny" :disabled="!missingDirectUsers.length" @click="selectAllDirectUsers">选择所有用户</NButton>
+            <NButton size="tiny" :disabled="!directUsers.length" @click="directUsers = []">清空</NButton>
+          </NSpace>
+        </NSpace>
+      </NFormItem>
+    </NForm>
+    <NText depth="3">
+      保留原订阅节点，为授权用户额外提供 {{ externalCount }} 个外部上游的直连节点，名称追加 [DRT]；多个上游会同时标注上游名。
+      不包含引用其他 Stack 入站的上游，无需加入入站用户列表。保存后即可预览，发布订阅包后下发，无需应用运行配置。
+      各订阅格式沿用现有协议转换能力，Surge 不支持的节点会被跳过。
+    </NText>
+    <NAlert v-if="directUsers.length" type="info" :show-icon="false" style="margin-top: 12px">
+      直连会向授权用户下发上游连接凭据，流量不经过本机，无法计入本机用量统计或由本机限额阻断。取消授权并发布后停止下发，已下载配置需在上游更换凭据才能失效。
+    </NAlert>
+  </NCard>
   <NSpace justify="space-between" align="center" style="margin-bottom: 16px">
     <NText depth="3">新增的上游会自动加入代理组，排在 DIRECT 之前；顺序和成员可以在「代理组」标签页调整。</NText>
     <NButton type="primary" @click="open(stack.mihomo.upstreams.length)">添加上游</NButton>

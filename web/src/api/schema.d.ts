@@ -2384,6 +2384,7 @@ export interface components {
         };
         Stack: {
             desired_running: boolean;
+            direct_users?: string[];
             enabled: boolean;
             /** Format: int64 */
             id?: number;

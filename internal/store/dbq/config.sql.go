@@ -85,6 +85,15 @@ func (q *Queries) DeleteMihomoUpstreams(ctx context.Context) error {
 	return err
 }
 
+const deleteStackDirectUsers = `-- name: DeleteStackDirectUsers :exec
+DELETE FROM stack_direct_users
+`
+
+func (q *Queries) DeleteStackDirectUsers(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteStackDirectUsers)
+	return err
+}
+
 const deleteStacksExcept = `-- name: DeleteStacksExcept :exec
 DELETE FROM stacks WHERE id NOT IN (/*SLICE:ids*/?)
 `
@@ -362,6 +371,21 @@ func (q *Queries) InsertMihomoUpstream(ctx context.Context, arg InsertMihomoUpst
 	return id, err
 }
 
+const insertStackDirectUser = `-- name: InsertStackDirectUser :exec
+INSERT INTO stack_direct_users (stack_id, user_id, position) VALUES (?, ?, ?)
+`
+
+type InsertStackDirectUserParams struct {
+	StackID  int64 `json:"stack_id"`
+	UserID   int64 `json:"user_id"`
+	Position int64 `json:"position"`
+}
+
+func (q *Queries) InsertStackDirectUser(ctx context.Context, arg InsertStackDirectUserParams) error {
+	_, err := q.db.ExecContext(ctx, insertStackDirectUser, arg.StackID, arg.UserID, arg.Position)
+	return err
+}
+
 const insertUserProfile = `-- name: InsertUserProfile :one
 INSERT INTO user_profiles (id, user_id, position, name, uuid, ss_password, remark, display_template, tag)
 VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?)
@@ -634,6 +658,33 @@ func (q *Queries) ListMihomoUpstreams(ctx context.Context) ([]MihomoUpstream, er
 			&i.RefInboundID,
 			&i.RawConfig,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStackDirectUsers = `-- name: ListStackDirectUsers :many
+SELECT stack_id, user_id, position FROM stack_direct_users ORDER BY stack_id, position
+`
+
+func (q *Queries) ListStackDirectUsers(ctx context.Context) ([]StackDirectUser, error) {
+	rows, err := q.db.QueryContext(ctx, listStackDirectUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []StackDirectUser
+	for rows.Next() {
+		var i StackDirectUser
+		if err := rows.Scan(&i.StackID, &i.UserID, &i.Position); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
