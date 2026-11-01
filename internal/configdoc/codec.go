@@ -94,6 +94,10 @@ func (d *Document) Normalize() {
 // Normalize 用默认值补齐设置中缺失的分组和字段（例如较早版本导出的文件）。
 func (s *Settings) Normalize() {
 	defaults := DefaultSettings()
+	// 旧配置未包含访问日志开关时，保留原有的开启行为。
+	if s.Defaults.Xray.AccessLog == nil {
+		s.Defaults.Xray.AccessLog = defaults.Defaults.Xray.AccessLog
+	}
 	if s.Defaults.Xray.APIServices == nil {
 		s.Defaults.Xray.APIServices = []string{}
 	}
@@ -162,7 +166,7 @@ func (s *Stack) Normalize() {
 	if s.Role == "" {
 		s.Role = "edge"
 	}
-	for _, field := range []*string{&s.Xray.LogLevel, &s.Xray.API, &s.Xray.Stats, &s.Xray.Policy, &s.Mihomo.Mode, &s.Mihomo.LogLevel} {
+	for _, field := range []*string{&s.Xray.LogLevel, &s.Xray.AccessLog, &s.Xray.API, &s.Xray.Stats, &s.Xray.Policy, &s.Mihomo.Mode, &s.Mihomo.LogLevel} {
 		if *field == "" {
 			*field = Inherit
 		}

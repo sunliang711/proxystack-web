@@ -78,8 +78,8 @@ INSERT INTO stacks (id, position, name, enabled, desired_running, role, labels,
                     xray_enabled, xray_loglevel, xray_api, xray_stats, xray_policy, xray_api_port,
                     outbound_type, outbound_server, outbound_port, outbound_username, outbound_password,
                     outbound_private_direct, mihomo_enabled, mihomo_mode, mihomo_loglevel,
-                    controller_port, controller_secret, rule_profile, rule_final, rule_extra)
-VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    controller_port, controller_secret, rule_profile, rule_final, rule_extra, xray_access_log)
+VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (id) DO UPDATE SET
     position = excluded.position, name = excluded.name, enabled = excluded.enabled,
     desired_running = excluded.desired_running, role = excluded.role, labels = excluded.labels,
@@ -91,7 +91,7 @@ ON CONFLICT (id) DO UPDATE SET
     mihomo_enabled = excluded.mihomo_enabled, mihomo_mode = excluded.mihomo_mode,
     mihomo_loglevel = excluded.mihomo_loglevel, controller_port = excluded.controller_port,
     controller_secret = excluded.controller_secret, rule_profile = excluded.rule_profile,
-    rule_final = excluded.rule_final, rule_extra = excluded.rule_extra
+    rule_final = excluded.rule_final, rule_extra = excluded.rule_extra, xray_access_log = excluded.xray_access_log
 RETURNING id;
 
 -- name: InsertInbound :one

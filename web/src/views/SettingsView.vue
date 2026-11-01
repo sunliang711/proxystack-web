@@ -248,6 +248,9 @@ async function save() {
         <NFormItem label="Xray 日志级别">
           <NSelect v-model:value="form.defaults.xray.loglevel" :options="xrayLogLevels.map((v) => ({ label: v, value: v }))" />
         </NFormItem>
+        <NFormItem label="Xray 记录访问日志" v-bind="f('defaults.xray.access_log', '记录客户端请求日志，独立于错误日志级别；日志级别为 none 时关闭全部日志。')">
+          <NSwitch :value="form.defaults.xray.access_log ?? true" @update:value="(value) => (form.defaults.xray.access_log = value)" aria-label="Xray 记录访问日志" />
+        </NFormItem>
         <NFormItem label="Xray API">
           <NSwitch v-model:value="form.defaults.xray.api_enabled" />
         </NFormItem>

@@ -279,6 +279,9 @@ async function saveMembers() {
                 :options="[{ label: '继承全局', value: 'inherit' }, ...xrayLogLevels.map((v) => ({ label: v, value: v }))]"
               />
             </NFormItem>
+            <NFormItem label="记录访问日志" v-bind="f('xray.access_log', '记录客户端请求日志，独立于错误日志级别；日志级别为 none 时关闭全部日志。')">
+              <TriStateSelect :value="stack.xray.access_log ?? 'inherit'" @update:value="(value) => (stack!.xray.access_log = value as Stack['xray']['access_log'])" />
+            </NFormItem>
             <NFormItem label="API" v-bind="f('xray.api')"><TriStateSelect v-model:value="stack.xray.api" /></NFormItem>
             <NFormItem label="stats" v-bind="f('xray.stats')"><TriStateSelect v-model:value="stack.xray.stats" /></NFormItem>
             <NFormItem label="policy" v-bind="f('xray.policy')"><TriStateSelect v-model:value="stack.xray.policy" /></NFormItem>

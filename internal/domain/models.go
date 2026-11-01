@@ -184,10 +184,11 @@ func DefaultXrayPolicyConfig() XrayPolicyConfig {
 
 // DefaultXrayConfig 保存 xray 默认值。
 type DefaultXrayConfig struct {
-	LogLevel string           `json:"loglevel"`
-	API      XrayAPIConfig    `json:"api"`
-	Stats    XrayStatsConfig  `json:"stats"`
-	Policy   XrayPolicyConfig `json:"policy"`
+	AccessLog *bool            `json:"access_log,omitempty"`
+	LogLevel  string           `json:"loglevel"`
+	API       XrayAPIConfig    `json:"api"`
+	Stats     XrayStatsConfig  `json:"stats"`
+	Policy    XrayPolicyConfig `json:"policy"`
 }
 
 // DefaultsConfig 保存全局默认值配置。
@@ -666,13 +667,14 @@ func (x XrayOutbound) Validate() error {
 
 // XrayConfig 保存单个 stack 的 xray 配置。
 type XrayConfig struct {
-	Enabled  bool                `json:"enabled"`
-	LogLevel string              `json:"loglevel"`
-	Outbound XrayOutbound        `json:"outbound"`
-	Inbounds []Inbound           `json:"inbounds"`
-	API      *XrayAPIOverride    `json:"api"`
-	Stats    *XrayStatsOverride  `json:"stats"`
-	Policy   *XrayPolicyOverride `json:"policy"`
+	AccessLog *bool               `json:"access_log,omitempty"`
+	Enabled   bool                `json:"enabled"`
+	LogLevel  string              `json:"loglevel"`
+	Outbound  XrayOutbound        `json:"outbound"`
+	Inbounds  []Inbound           `json:"inbounds"`
+	API       *XrayAPIOverride    `json:"api"`
+	Stats     *XrayStatsOverride  `json:"stats"`
+	Policy    *XrayPolicyOverride `json:"policy"`
 }
 
 // XrayAPIOverride 保存 stack 级 API 覆盖，nil 字段表示沿用全局默认值。
@@ -1102,6 +1104,14 @@ func ResolveXrayLogLevel(defaults DefaultXrayConfig, xray XrayConfig) string {
 		return defaults.LogLevel
 	}
 	return defaultXrayLogLevel
+}
+
+// ResolveXrayAccessLog 读取 Stack 的访问日志开关，未覆盖时继承全局，旧配置默认开启。
+func ResolveXrayAccessLog(defaults DefaultXrayConfig, xray XrayConfig) bool {
+	if xray.AccessLog != nil {
+		return *xray.AccessLog
+	}
+	return defaults.AccessLog == nil || *defaults.AccessLog
 }
 
 // ResolveClashLogLevel 读取 stack 级 mihomo 日志级别覆盖，未配置时使用全局默认。

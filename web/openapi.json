@@ -4600,6 +4600,15 @@
       "Xray": {
         "additionalProperties": false,
         "properties": {
+          "access_log": {
+            "description": "记录客户端访问日志，缺省继承全局",
+            "enum": [
+              "inherit",
+              "on",
+              "off"
+            ],
+            "type": "string"
+          },
           "api": {
             "enum": [
               "inherit",
@@ -4669,6 +4678,10 @@
       "XrayDefaults": {
         "additionalProperties": false,
         "properties": {
+          "access_log": {
+            "description": "记录客户端访问日志，缺省开启",
+            "type": "boolean"
+          },
           "api_enabled": {
             "type": "boolean"
           },

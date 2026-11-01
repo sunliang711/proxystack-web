@@ -48,9 +48,10 @@ type Config struct {
 	Outbounds []any          `json:"outbounds"`
 }
 
-// LogConfig 保存 Xray 日志级别。
+// LogConfig 保存 Xray 错误日志级别和独立的访问日志开关。
 type LogConfig struct {
 	LogLevel string `json:"loglevel"`
+	Access   string `json:"access,omitempty"`
 }
 
 // APIConfig 保存 Xray API 输出配置。
@@ -223,6 +224,9 @@ func RenderConfig(stackSet domain.StackSet, stackName string) (Config, error) {
 	}
 	config := Config{
 		Log: LogConfig{LogLevel: domain.ResolveXrayLogLevel(defaults, stack.Xray)},
+	}
+	if !domain.ResolveXrayAccessLog(defaults, stack.Xray) {
+		config.Log.Access = "none"
 	}
 	if apiConfig.Enabled {
 		config.API = RenderAPI(apiConfig)

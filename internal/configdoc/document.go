@@ -267,6 +267,7 @@ type MihomoDefaults struct {
 
 // XrayDefaults 是 xray 默认值。
 type XrayDefaults struct {
+	AccessLog   *bool    `json:"access_log,omitempty" yaml:"access_log,omitempty" required:"false" doc:"记录客户端访问日志，缺省开启"`
 	LogLevel    string   `json:"loglevel" yaml:"loglevel" enum:"debug,info,warning,error,none"`
 	APIEnabled  bool     `json:"api_enabled" yaml:"api_enabled"`
 	APIServices []string `json:"api_services" yaml:"api_services" enum:"HandlerService,StatsService"`
@@ -340,14 +341,15 @@ type Stack struct {
 
 // Xray 是 stack 的 xray 部分。
 type Xray struct {
-	Enabled  bool      `json:"enabled" yaml:"enabled"`
-	LogLevel string    `json:"loglevel" yaml:"loglevel" enum:"inherit,debug,info,warning,error,none"`
-	API      string    `json:"api" yaml:"api" enum:"inherit,on,off"`
-	Stats    string    `json:"stats" yaml:"stats" enum:"inherit,on,off"`
-	Policy   string    `json:"policy" yaml:"policy" enum:"inherit,on,off"`
-	APIPort  int       `json:"api_port" yaml:"api_port" minimum:"1" maximum:"65535"`
-	Outbound Outbound  `json:"outbound" yaml:"outbound"`
-	Inbounds []Inbound `json:"inbounds" yaml:"inbounds"`
+	AccessLog string    `json:"access_log" yaml:"access_log" enum:"inherit,on,off" required:"false" doc:"记录客户端访问日志，缺省继承全局"`
+	Enabled   bool      `json:"enabled" yaml:"enabled"`
+	LogLevel  string    `json:"loglevel" yaml:"loglevel" enum:"inherit,debug,info,warning,error,none"`
+	API       string    `json:"api" yaml:"api" enum:"inherit,on,off"`
+	Stats     string    `json:"stats" yaml:"stats" enum:"inherit,on,off"`
+	Policy    string    `json:"policy" yaml:"policy" enum:"inherit,on,off"`
+	APIPort   int       `json:"api_port" yaml:"api_port" minimum:"1" maximum:"65535"`
+	Outbound  Outbound  `json:"outbound" yaml:"outbound"`
+	Inbounds  []Inbound `json:"inbounds" yaml:"inbounds"`
 }
 
 // Outbound 是 xray 唯一的出站。

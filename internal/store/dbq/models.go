@@ -241,6 +241,7 @@ type Stack struct {
 	RuleProfile           string `json:"rule_profile"`
 	RuleFinal             string `json:"rule_final"`
 	RuleExtra             string `json:"rule_extra"`
+	XrayAccessLog         string `json:"xray_access_log"`
 }
 
 type SubTemplate struct {

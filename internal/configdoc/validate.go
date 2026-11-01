@@ -346,7 +346,7 @@ func validateStack(issues *Issues, doc *Document, path string, stack *Stack) {
 	}
 	xray := stack.Xray
 	checkEnum(issues, path+".xray.loglevel", xray.LogLevel, Inherit, "debug", "info", "warning", "error", "none")
-	for field, value := range map[string]string{"api": xray.API, "stats": xray.Stats, "policy": xray.Policy} {
+	for field, value := range map[string]string{"access_log": xray.AccessLog, "api": xray.API, "stats": xray.Stats, "policy": xray.Policy} {
 		checkEnum(issues, path+".xray."+field, value, Inherit, On, Off)
 	}
 	checkPort(issues, path+".xray.api_port", xray.APIPort)

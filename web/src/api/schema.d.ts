@@ -2771,6 +2771,11 @@ export interface components {
             user_id: number;
         };
         Xray: {
+            /**
+             * @description 记录客户端访问日志，缺省继承全局
+             * @enum {string}
+             */
+            access_log?: "inherit" | "on" | "off";
             /** @enum {string} */
             api: "inherit" | "on" | "off";
             /** Format: int64 */
@@ -2786,6 +2791,8 @@ export interface components {
             stats: "inherit" | "on" | "off";
         };
         XrayDefaults: {
+            /** @description 记录客户端访问日志，缺省开启 */
+            access_log?: boolean;
             api_enabled: boolean;
             api_services: ("HandlerService" | "StatsService")[];
             /** @enum {string} */

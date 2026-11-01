@@ -121,7 +121,8 @@ func LoadDocument(ctx context.Context, q *dbq.Queries) (*configdoc.Document, err
 		stack := configdoc.Stack{
 			ID: row.ID, Name: row.Name, Enabled: row.Enabled != 0, DesiredRunning: row.DesiredRunning != 0, Role: row.Role,
 			Xray: configdoc.Xray{
-				Enabled: row.XrayEnabled != 0, LogLevel: row.XrayLoglevel, API: row.XrayApi, Stats: row.XrayStats,
+				AccessLog: row.XrayAccessLog,
+				Enabled:   row.XrayEnabled != 0, LogLevel: row.XrayLoglevel, API: row.XrayApi, Stats: row.XrayStats,
 				Policy: row.XrayPolicy, APIPort: int(row.XrayApiPort),
 				Outbound: configdoc.Outbound{
 					Type: row.OutboundType, Server: row.OutboundServer, Port: int(row.OutboundPort),
@@ -436,7 +437,8 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 			NULLIF: stack.ID, Position: int64(index), Name: stack.Name, Enabled: boolInt(stack.Enabled),
 			DesiredRunning: boolInt(stack.DesiredRunning), Role: stack.Role, Labels: labels,
 			XrayEnabled: boolInt(xray.Enabled), XrayLoglevel: xray.LogLevel, XrayApi: xray.API,
-			XrayStats: xray.Stats, XrayPolicy: xray.Policy, XrayApiPort: int64(xray.APIPort),
+			XrayAccessLog: xray.AccessLog,
+			XrayStats:     xray.Stats, XrayPolicy: xray.Policy, XrayApiPort: int64(xray.APIPort),
 			OutboundType: outbound.Type, OutboundServer: outbound.Server, OutboundPort: int64(outbound.Port),
 			OutboundUsername: outbound.Username, OutboundPassword: outbound.Password,
 			OutboundPrivateDirect: boolInt(outbound.PrivateDirect), MihomoEnabled: boolInt(mihomo.Enabled),

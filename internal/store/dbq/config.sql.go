@@ -648,7 +648,7 @@ func (q *Queries) ListMihomoUpstreams(ctx context.Context) ([]MihomoUpstream, er
 }
 
 const listStacks = `-- name: ListStacks :many
-SELECT id, position, name, enabled, desired_running, role, labels, xray_enabled, xray_loglevel, xray_api, xray_stats, xray_policy, xray_api_port, outbound_type, outbound_server, outbound_port, outbound_username, outbound_password, outbound_private_direct, mihomo_enabled, mihomo_mode, mihomo_loglevel, controller_port, controller_secret, rule_profile, rule_final, rule_extra FROM stacks ORDER BY position, id
+SELECT id, position, name, enabled, desired_running, role, labels, xray_enabled, xray_loglevel, xray_api, xray_stats, xray_policy, xray_api_port, outbound_type, outbound_server, outbound_port, outbound_username, outbound_password, outbound_private_direct, mihomo_enabled, mihomo_mode, mihomo_loglevel, controller_port, controller_secret, rule_profile, rule_final, rule_extra, xray_access_log FROM stacks ORDER BY position, id
 `
 
 func (q *Queries) ListStacks(ctx context.Context) ([]Stack, error) {
@@ -688,6 +688,7 @@ func (q *Queries) ListStacks(ctx context.Context) ([]Stack, error) {
 			&i.RuleProfile,
 			&i.RuleFinal,
 			&i.RuleExtra,
+			&i.XrayAccessLog,
 		); err != nil {
 			return nil, err
 		}
@@ -801,8 +802,8 @@ INSERT INTO stacks (id, position, name, enabled, desired_running, role, labels,
                     xray_enabled, xray_loglevel, xray_api, xray_stats, xray_policy, xray_api_port,
                     outbound_type, outbound_server, outbound_port, outbound_username, outbound_password,
                     outbound_private_direct, mihomo_enabled, mihomo_mode, mihomo_loglevel,
-                    controller_port, controller_secret, rule_profile, rule_final, rule_extra)
-VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    controller_port, controller_secret, rule_profile, rule_final, rule_extra, xray_access_log)
+VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (id) DO UPDATE SET
     position = excluded.position, name = excluded.name, enabled = excluded.enabled,
     desired_running = excluded.desired_running, role = excluded.role, labels = excluded.labels,
@@ -814,7 +815,7 @@ ON CONFLICT (id) DO UPDATE SET
     mihomo_enabled = excluded.mihomo_enabled, mihomo_mode = excluded.mihomo_mode,
     mihomo_loglevel = excluded.mihomo_loglevel, controller_port = excluded.controller_port,
     controller_secret = excluded.controller_secret, rule_profile = excluded.rule_profile,
-    rule_final = excluded.rule_final, rule_extra = excluded.rule_extra
+    rule_final = excluded.rule_final, rule_extra = excluded.rule_extra, xray_access_log = excluded.xray_access_log
 RETURNING id
 `
 
@@ -846,6 +847,7 @@ type UpsertStackParams struct {
 	RuleProfile           string      `json:"rule_profile"`
 	RuleFinal             string      `json:"rule_final"`
 	RuleExtra             string      `json:"rule_extra"`
+	XrayAccessLog         string      `json:"xray_access_log"`
 }
 
 func (q *Queries) UpsertStack(ctx context.Context, arg UpsertStackParams) (int64, error) {
@@ -877,6 +879,7 @@ func (q *Queries) UpsertStack(ctx context.Context, arg UpsertStackParams) (int64
 		arg.RuleProfile,
 		arg.RuleFinal,
 		arg.RuleExtra,
+		arg.XrayAccessLog,
 	)
 	var id int64
 	err := row.Scan(&id)

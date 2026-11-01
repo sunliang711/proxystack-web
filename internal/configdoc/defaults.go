@@ -24,6 +24,7 @@ func DefaultSettings() Settings {
 		Defaults: DefaultsSettings{
 			Mihomo: MihomoDefaults{Mode: "Rule", LogLevel: "info"},
 			Xray: XrayDefaults{
+				AccessLog:   triState(On),
 				LogLevel:    "warning",
 				APIEnabled:  true,
 				APIServices: []string{"HandlerService", "StatsService"},
@@ -115,12 +116,13 @@ func NewStack(doc *Document, settings Settings, opts NewStackOptions) (Stack, er
 		Role:           "edge",
 		Labels:         append([]string{}, opts.Labels...),
 		Xray: Xray{
-			Enabled:  true,
-			LogLevel: Inherit,
-			API:      Inherit,
-			Stats:    Inherit,
-			Policy:   Inherit,
-			Outbound: Outbound{Type: "mihomo"},
+			AccessLog: Inherit,
+			Enabled:   true,
+			LogLevel:  Inherit,
+			API:       Inherit,
+			Stats:     Inherit,
+			Policy:    Inherit,
+			Outbound:  Outbound{Type: "mihomo"},
 		},
 		Mihomo: Mihomo{
 			Enabled:          true,

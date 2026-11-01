@@ -62,9 +62,10 @@ func compileGlobal(settings Settings, users []User) domain.GlobalConfig {
 				RuleProfile: domain.DefaultUserProfile,
 			},
 			Xray: domain.DefaultXrayConfig{
-				LogLevel: settings.Defaults.Xray.LogLevel,
-				API:      domain.DefaultXrayAPIConfig(),
-				Stats:    domain.XrayStatsConfig{Enabled: settings.Defaults.Xray.Stats},
+				AccessLog: settings.Defaults.Xray.AccessLog,
+				LogLevel:  settings.Defaults.Xray.LogLevel,
+				API:       domain.DefaultXrayAPIConfig(),
+				Stats:     domain.XrayStatsConfig{Enabled: settings.Defaults.Xray.Stats},
 				Policy: domain.XrayPolicyConfig{
 					Enabled: policy.Enabled,
 					Levels: map[string]domain.XrayPolicyLevelConfig{
@@ -137,10 +138,11 @@ func compileStack(settings Settings, stack *Stack) (domain.Stack, error) {
 	xray := stack.Xray
 	apiListen := hostPort(loopback, xray.APIPort)
 	result.Xray = domain.XrayConfig{
-		Enabled:  xray.Enabled,
-		LogLevel: inheritToEmpty(xray.LogLevel),
-		Outbound: compileOutbound(stack.Name, xray.Outbound),
-		API:      &domain.XrayAPIOverride{Enabled: triState(xray.API), Listen: &apiListen},
+		AccessLog: triState(xray.AccessLog),
+		Enabled:   xray.Enabled,
+		LogLevel:  inheritToEmpty(xray.LogLevel),
+		Outbound:  compileOutbound(stack.Name, xray.Outbound),
+		API:       &domain.XrayAPIOverride{Enabled: triState(xray.API), Listen: &apiListen},
 	}
 	if enabled := triState(xray.Stats); enabled != nil {
 		result.Xray.Stats = &domain.XrayStatsOverride{Enabled: enabled}
