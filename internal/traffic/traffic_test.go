@@ -47,3 +47,18 @@ func TestPeriodStart(t *testing.T) {
 	require.Equal(t, at(2026, 2, 20, 0), traffic.NextPeriodStart(at(2026, 1, 25, 8), loc, "monthly", 20))
 	require.Equal(t, "2026-01-05", traffic.Day(at(2026, 1, 5, 23).UTC(), loc))
 }
+
+// TestParseReadableEmails 验证新旧 email 和改名前后的计数都合并到同一用户和档案。
+func TestParseReadableEmails(t *testing.T) {
+	delta := traffic.Parse(7, []xrayapi.Stat{
+		{Name: "user>>>u7>>>traffic>>>uplink", Value: 100},
+		{Name: "user>>>eagle.u7>>>traffic>>>uplink", Value: 200},
+		{Name: "user>>>renamed.u7>>>traffic>>>downlink", Value: 300},
+		{Name: "user>>>u7.p3>>>traffic>>>uplink", Value: 10},
+		{Name: "user>>>eagle.u7.p3>>>traffic>>>downlink", Value: 20},
+	}, func(id int64) bool { return id == 7 })
+	require.Equal(t, traffic.Bytes{Up: 310, Down: 320}, delta.Users[7])
+	require.Equal(t, traffic.Bytes{Up: 300, Down: 300}, delta.Details[traffic.Key{StackID: 7, Scope: "user", Subject: "7"}])
+	require.Equal(t, traffic.Bytes{Up: 10, Down: 20}, delta.Details[traffic.Key{StackID: 7, Scope: "user", Subject: "7.3"}])
+	require.Len(t, delta.Details, 2)
+}

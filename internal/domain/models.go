@@ -344,21 +344,28 @@ func (u InboundUser) StatsEmail() string {
 	return u.User
 }
 
-// UserStatsEmail 返回用户（或其档案）在 xray 中的 email。按 ID 而不是用户名生成，用户改名后统计仍然连续。
-// userID 为 0（尚未入库）时返回空字符串。
-func UserStatsEmail(userID, profileID int64) string {
-	switch {
-	case userID == 0:
+// UserStatsEmail 返回用户（或其档案）在 xray 中的 email。用户名方便查看日志，ID 后缀保证改名后统计仍然连续。
+// userID 为 0（尚未入库）时返回空字符串；用户名为空时返回旧格式，供运行中实例兼容使用。
+func UserStatsEmail(userName string, userID, profileID int64) string {
+	if userID == 0 {
 		return ""
-	case profileID == 0:
-		return "u" + strconv.FormatInt(userID, 10)
-	default:
-		return "u" + strconv.FormatInt(userID, 10) + ".p" + strconv.FormatInt(profileID, 10)
 	}
+	email := "u" + strconv.FormatInt(userID, 10)
+	if profileID != 0 {
+		email += ".p" + strconv.FormatInt(profileID, 10)
+	}
+	if userName != "" {
+		email = userName + "." + email
+	}
+	return email
 }
 
 // ParseUserStatsEmail 解析 UserStatsEmail 生成的 email；其他内容（例如占位用户）返回 false。
 func ParseUserStatsEmail(email string) (userID, profileID int64, ok bool) {
+	// 只解析最后的 ID 后缀，用户名中的点号不影响归属，并兼容旧的 u7 / u7.p3 格式。
+	if index := strings.LastIndex(email, ".u"); index >= 0 {
+		email = email[index+1:]
+	}
 	rest, ok := strings.CutPrefix(email, "u")
 	if !ok {
 		return 0, 0, false

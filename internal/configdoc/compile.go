@@ -105,7 +105,7 @@ func compileGlobal(settings Settings, users []User) domain.GlobalConfig {
 		config.Users = append(config.Users, domain.UserProfile{
 			User:            user.Name,
 			Profile:         DefaultProfile,
-			Email:           domain.UserStatsEmail(user.ID, 0),
+			Email:           domain.UserStatsEmail(user.Name, user.ID, 0),
 			UUID:            user.UUID,
 			Password:        user.SSPassword,
 			DisplayTemplate: user.DisplayTemplate,
@@ -115,7 +115,7 @@ func compileGlobal(settings Settings, users []User) domain.GlobalConfig {
 			config.Users = append(config.Users, domain.UserProfile{
 				User:            user.Name,
 				Profile:         profile.Name,
-				Email:           domain.UserStatsEmail(user.ID, profile.ID),
+				Email:           domain.UserStatsEmail(user.Name, user.ID, profile.ID),
 				UUID:            profile.UUID,
 				Password:        profile.SSPassword,
 				Remark:          profile.Remark,

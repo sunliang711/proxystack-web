@@ -650,7 +650,19 @@ func (s *Service) hotToggle(ctx context.Context, set domain.StackSet, stackName 
 		for _, user := range inbound.Users {
 			switch {
 			case slices.Contains(paused, user.User):
-				if err := s.XrayAPI.RemoveUser(ctx, api.Listen, inbound.TagOrDefault(), user.StatsEmail()); err != nil {
+				email := user.StatsEmail()
+				err := s.XrayAPI.RemoveUser(ctx, api.Listen, inbound.TagOrDefault(), email)
+				if userID, profileID, ok := domain.ParseUserStatsEmail(email); err != nil && ok {
+					// 升级前启动的实例仍可能使用不含用户名的 email，暂停时兼容移除旧标识。
+					if legacy := domain.UserStatsEmail("", userID, profileID); legacy != email {
+						if legacyErr := s.XrayAPI.RemoveUser(ctx, api.Listen, inbound.TagOrDefault(), legacy); legacyErr != nil {
+							err = fmt.Errorf("%v; legacy email: %w", err, legacyErr)
+						} else {
+							err = nil
+						}
+					}
+				}
+				if err != nil {
 					notes = append(notes, fmt.Sprintf("stack %s 移除用户 %s 失败，重启该 stack 后生效：%v", stackName, user.User, err))
 				}
 			case slices.Contains(resumed, user.User):

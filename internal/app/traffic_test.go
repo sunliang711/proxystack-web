@@ -200,7 +200,7 @@ func TestDailyLimitPausesAndRecoversNextDay(t *testing.T) {
 	require.Empty(t, h.pauses(t))
 	h.use(t, 300, 200)
 	require.Equal(t, []string{app.PauseDaily}, h.pauses(t))
-	require.Contains(t, h.calls(), "rmu "+usa1API+" vmess:24101:vmess u1")
+	require.Contains(t, h.calls(), "rmu "+usa1API+" vmess:24101:vmess alice.u1")
 	require.Contains(t, h.generated(t), "psw-placeholder")
 	require.True(t, h.alice(t).Enabled, "an automatic pause does not touch the config")
 	require.Equal(t, before, h.revisions(t), "an automatic pause adds no config revision")
