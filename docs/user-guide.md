@@ -21,7 +21,7 @@ proxystack-web 用于在一台 Linux 服务器上集中管理 xray 与 mihomo �
 | 角色 | 安装内容 |
 | --- | --- |
 | `panel`（默认） | 管理端：服务账号 `proxystack-web`、目录 `/opt/proxystack-web`、systemd unit 与 polkit 规则，初始化数据库并启动服务 |
-| `sub` | 订阅端：服务账号 `proxystack-sub`、目录 `/opt/proxystack-sub` 与 systemd unit |
+| `sub` | 订阅端：服务账号 `proxystack-web-sub`、目录 `/opt/proxystack-web-sub` 与 systemd unit |
 | `all` | 管理端与订阅端安装在同一台机器上，订阅端自动信任本机管理端的签名公钥 |
 
 ### 2.1 安装管理端
@@ -71,6 +71,33 @@ curl -fsSL https://raw.githubusercontent.com/sunliang711/proxystack-web/refs/hea
 
 订阅端默认监听 `127.0.0.1:9444`，可以用 `--sub-listen` 和 `--sub-port` 指定。在已经安装订阅端的机器上再次执行 `--role sub` 时，脚本只升级订阅端的二进制并重启订阅服务，配置和已导入的订阅包保持不变。
 
+本项目使用 `/opt/proxystack-web-sub`、账号 `proxystack-web-sub` 和 `proxystack-web-sub.service`，与 proxystack-go 的 pssub（`/opt/proxystack-sub`、`proxystack-sub.service`）独立，可以同时安装。管理订阅服务使用：
+
+```bash
+sudo systemctl status proxystack-web-sub.service
+sudo systemctl restart proxystack-web-sub.service
+sudo journalctl -u proxystack-web-sub.service
+```
+
+安装和卸载会检查服务实际执行的命令、配置和安装标记，遇到归属不明的目录或同名服务时退出。普通卸载保留 `.proxystack-web-sub` 标记，便于之后重装或执行 `--purge`；不要手工复制该标记到其他项目目录。
+
+#### 旧版订阅端迁移
+
+如果本项目的订阅端安装在旧目录 `/opt/proxystack-sub`，使用新版脚本显式迁移。先下载脚本，再执行：
+
+```bash
+curl -fsSL -o install.sh https://raw.githubusercontent.com/sunliang711/proxystack-web/refs/heads/main/deploy/install.sh
+sudo bash install.sh --role sub --migrate-sub
+```
+
+离线安装可加 `--binary /path/to/proxystack-web`，并使用同一发布包的 `deploy` 目录。迁移保持监听地址、端口、受信任公钥、订阅 token、已导入订阅包和 inbox 不变，不接受 `--public-key`、`--sub-listen` 或 `--sub-port` 覆盖；订阅链接无需修改。
+
+迁移要求旧服务的实际命令是 `/opt/proxystack-sub/bin/proxystack-web sub --dir /opt/proxystack-sub serve`，配置能通过本项目校验，且目标目录不存在。它不会迁移 pssub。旧服务缺失、配置无法识别、目录含符号链接或存在 systemd drop-in 时，脚本退出，需要先人工核对并处理；不会自动套用旧服务的本地覆盖配置。
+
+迁移过程中会短暂停止旧服务以复制一致的数据，新服务通过启动和 HTTP 检查后停用并移除旧 unit，释放旧目录名。失败时自动恢复旧服务原来的运行和启用状态。备份位于终端打印的 `/opt/proxystack-web-sub-migration.XXXXXX`：`original/` 保存停止服务后的副本，成功后 `retired/` 保存原目录，另有旧 unit 和 `service-state`。该目录仅 root 可访问，普通卸载和 `--purge` 均保留它。
+
+需要人工回退时，先停用新服务，确认旧目录和旧 unit 没有被 pssub 或其他安装占用，再从备份的 `retired/`（失败时可用 `original/`）恢复旧目录和旧 unit，执行 `systemctl daemon-reload`，按 `service-state` 恢复旧服务的运行和启用状态。若 `/usr/local/bin/proxystack-web` 原先指向旧订阅端，也需恢复该软链接。订阅端运维账号需要重新加入 `proxystack-web-sub` 组，旧组成员关系不会自动复制。
+
 ### 2.3 配置 nginx 反向代理
 
 管理端和订阅端都只提供明文 HTTP，TLS 应由 nginx 终结。反向代理管理端时需要满足以下要求：
@@ -114,7 +141,7 @@ curl -fsSL https://raw.githubusercontent.com/sunliang711/proxystack-web/refs/hea
 3. 把订阅包拷贝到订阅端机器，执行以下命令导入，或者直接放入订阅端的 `inbox` 目录，运行中的订阅服务会在数秒内自动导入：
 
 ```bash
-sudo proxystack-web sub --dir /opt/proxystack-sub import FILE
+sudo proxystack-web sub --dir /opt/proxystack-web-sub import FILE
 ```
 
 订阅端拒收签名不符的订阅包，也拒收序号不新于已导入版本的旧包。订阅内容在上次发布之后发生变化时，「发布订阅包」页面会给出提示。暂停用户在代理端立即生效，订阅中对应节点的移除要等下次发布并导入后才生效。
@@ -239,4 +266,4 @@ curl -fsSL https://raw.githubusercontent.com/sunliang711/proxystack-web/refs/hea
 | 修改监听地址后无法访问面板 | 在服务器上执行 `sudo proxystack-web admin set-listen` 恢复，然后重启管理服务 |
 | 依赖下载失败 | 在「系统设置 → 下载代理」中配置并测试代理 |
 | stack 未运行或配置异常 | 查看「健康检查」页面和 stack 编辑页的「诊断」「日志」标签页 |
-| 订阅端返回 404 或旧内容 | 执行 `proxystack-web sub --dir /opt/proxystack-sub status` 查看已导入的订阅包，重新发布并导入 |
+| 订阅端返回 404 或旧内容 | 执行 `proxystack-web sub --dir /opt/proxystack-web-sub status` 查看已导入的订阅包，重新发布并导入 |

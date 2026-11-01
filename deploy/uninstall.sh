@@ -6,8 +6,9 @@ set -euo pipefail
 
 BASE=/opt/proxystack-web
 SERVICE_USER=proxystack-web
-SUB_BASE=/opt/proxystack-sub
-SUB_USER=proxystack-sub
+SUB_BASE=/opt/proxystack-web-sub
+SUB_USER=proxystack-web-sub
+SUB_UNIT=proxystack-web-sub.service
 ROLE=all
 PURGE=0
 
@@ -26,6 +27,54 @@ case "$ROLE" in
 esac
 
 [[ $(id -u) -eq 0 ]] || { echo "error: run as root" >&2; exit 1; }
+
+die() { echo "error: $*" >&2; exit 1; }
+
+# 与安装脚本采用相同的归属判定；脚本可独立下载运行，不依赖额外的公共脚本。
+sub_unit_owned() {
+    local dir=$1 unit=$2 command
+    command=$(systemctl show --value -p ExecStart "$unit" 2>/dev/null) || return 1
+    [[ $command == "{ path=$dir/bin/proxystack-web ; argv[]=$dir/bin/proxystack-web sub --dir $dir serve ; "* ]]
+}
+
+check_sub_ownership() {
+    local links
+    [[ ! -L $SUB_BASE ]] || die "refusing symbolic link: $SUB_BASE"
+    [[ ! -L /etc/systemd/system/$SUB_UNIT ]] || die "refusing a symbolic link for $SUB_UNIT"
+    if [[ -e $SUB_BASE ]]; then
+        [[ -d $SUB_BASE ]] || die "not a directory: $SUB_BASE"
+        links=$(find "$SUB_BASE" -type l -print -quit) || die "cannot inspect $SUB_BASE"
+        [[ -z $links ]] || die "refusing symbolic links inside $SUB_BASE"
+    fi
+    local state marker=$SUB_BASE/.proxystack-web-sub
+    state=$(systemctl show --value -p LoadState "$SUB_UNIT" 2>/dev/null) || true
+    if [[ -n $state && $state != not-found ]]; then
+        sub_unit_owned "$SUB_BASE" "$SUB_UNIT" || die "$SUB_UNIT belongs to another installation; refusing to remove it"
+    elif [[ -e $SUB_BASE ]]; then
+        [[ -f $marker && $(cat "$marker") == proxystack-web-sub-v1 ]] || die "cannot confirm ownership of $SUB_BASE"
+    else
+        if sub_unit_owned /opt/proxystack-sub proxystack-sub.service; then
+            die "old proxystack-web subscription installation found; migrate it with install.sh --role sub --migrate-sub first"
+        fi
+        return
+    fi
+    if [[ -e $SUB_BASE/config.yaml ]]; then
+        if [[ -x $SUB_BASE/bin/proxystack-web ]]; then
+            "$SUB_BASE/bin/proxystack-web" sub --dir "$SUB_BASE" config >/dev/null || die "invalid subscription configuration; refusing to remove $SUB_BASE"
+        else
+            # 普通卸载会保留此标记，后续 --purge 无需重新安装二进制即可确认归属。
+            [[ -f $marker && $(cat "$marker") == proxystack-web-sub-v1 ]] || die "cannot verify the retained subscription data in $SUB_BASE"
+        fi
+    fi
+    if getent passwd "$SUB_USER" >/dev/null; then
+        [[ $(getent passwd "$SUB_USER" | cut -d: -f6) == "$SUB_BASE" ]] || die "service account $SUB_USER has an unexpected home directory"
+    fi
+}
+
+# 在卸载任一角色前检查，避免 --role all 在发现冲突之前已删除管理端。
+if [[ $ROLE != panel ]]; then
+    check_sub_ownership
+fi
 
 uninstall_panel() {
     [[ -d $BASE || -e /etc/systemd/system/proxystack-web.service ]] || return 0
@@ -49,10 +98,10 @@ uninstall_panel() {
 }
 
 uninstall_sub() {
-    [[ -d $SUB_BASE || -e /etc/systemd/system/proxystack-sub.service ]] || return 0
+    [[ -d $SUB_BASE || -e /etc/systemd/system/proxystack-web-sub.service ]] || return 0
     echo "==> stopping the subscription server"
-    systemctl disable --now proxystack-sub.service 2>/dev/null || true
-    rm -f /etc/systemd/system/proxystack-sub.service
+    systemctl disable --now proxystack-web-sub.service 2>/dev/null || true
+    rm -f /etc/systemd/system/proxystack-web-sub.service
     if [[ $PURGE -eq 1 ]]; then
         echo "==> purging $SUB_BASE and service account $SUB_USER"
         rm -rf "${SUB_BASE:?}"
@@ -77,5 +126,5 @@ if [[ -L $link && ! -e $link ]]; then
     fi
 fi
 systemctl daemon-reload
-systemctl reset-failed 'psw-*' 'proxystack-*' 2>/dev/null || true
+systemctl reset-failed 'psw-*' proxystack-web.service "$SUB_UNIT" 2>/dev/null || true
 echo "proxystack-web uninstalled ($ROLE)."

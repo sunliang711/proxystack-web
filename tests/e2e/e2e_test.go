@@ -41,7 +41,7 @@ const (
 	// clientPort 是机器内作为客户端运行的 mihomo 的混合代理端口。
 	clientPort = 17890
 	probeURL   = "http://www.gstatic.com/generate_204"
-	subDir     = "/opt/proxystack-sub"
+	subDir     = "/opt/proxystack-web-sub"
 )
 
 type env struct {
@@ -228,7 +228,7 @@ func TestEndToEnd(t *testing.T) {
 }
 
 func stepServices(e *env) {
-	out := e.mustSh("systemctl is-active proxystack-web.service proxystack-sub.service polkit.service")
+	out := e.mustSh("systemctl is-active proxystack-web.service proxystack-web-sub.service polkit.service")
 	require.Equal(e.t, "active\nactive\nactive", out)
 	require.Contains(e.t, e.mustSh(". /etc/os-release && echo $PRETTY_NAME"), os.Getenv("PSW_E2E_EXPECT_OS"))
 }

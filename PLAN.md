@@ -39,7 +39,7 @@ proxystack-web 只运行在 Linux（systemd）上，由两个服务组成：
 | `proxystack-web.service` | `proxystack-web` | 管理服务本体：Web 管理端、调度器、流量采集器 |
 | `psw-xray@<stack>.service` | `proxystack-web` | 单个 stack 的 xray 进程（模板 unit） |
 | `psw-mihomo@<stack>.service` | `proxystack-web` | 单个 stack 的 mihomo 进程（模板 unit） |
-| `proxystack-sub.service` | `proxystack-sub` | 订阅端：导入订阅包并对外提供订阅，可单独部署在另一台机器 |
+| `proxystack-web-sub.service` | `proxystack-web-sub` | 订阅端：导入订阅包并对外提供订阅，可单独部署在另一台机器 |
 
 设计要点：
 
@@ -69,10 +69,10 @@ proxystack-web 只运行在 Linux（systemd）上，由两个服务组成：
 └── downloads/           下载缓存
 ```
 
-订阅端的数据位于 `/opt/proxystack-sub`，属主为 `proxystack-sub:proxystack-sub`：
+订阅端的数据位于 `/opt/proxystack-web-sub`，属主为 `proxystack-web-sub:proxystack-web-sub`：
 
 ```text
-/opt/proxystack-sub/
+/opt/proxystack-web-sub/
 ├── bin/proxystack-web   与管理端同一个二进制，以 sub 子命令运行
 ├── config.yaml          本机配置：监听地址、端口、受信任的来源及其公钥
 ├── data/<来源名>.bundle  每个来源当前生效的订阅包
@@ -856,13 +856,15 @@ StatsService 返回的计数名格式为 `user>>>EMAIL>>>traffic>>>uplink`、`in
 
 `--role` 选择安装的服务，默认 `panel`（上述步骤）。`--role sub` 安装订阅端：
 
-1. 创建系统用户 `proxystack-sub`（无登录 shell）和 `/opt/proxystack-sub` 目录树，收件目录允许同组写入。
-2. 安装二进制到 `/opt/proxystack-sub/bin/`。
+1. 创建系统用户 `proxystack-web-sub`（无登录 shell）和 `/opt/proxystack-web-sub` 目录树，收件目录允许同组写入。
+2. 安装二进制到 `/opt/proxystack-web-sub/bin/`。
 3. 以服务账号执行 `proxystack-web sub init`，写入本机配置，信任 `--source` 和 `--public-key` 指定的主来源（管理端「发布订阅包」页给出完整的安装命令）。
-4. 写入 `proxystack-sub.service` 并 `systemctl enable --now`。
+4. 写入 `proxystack-web-sub.service` 并 `systemctl enable --now`。
 5. 打印订阅端状态和导入方法。
 
 订阅端参数：`--source`、`--public-key`、`--sub-listen`、`--sub-port`。订阅端已安装时，`--role sub` 只替换二进制并重启服务。`--role all` 在同一台机器上依次安装管理端和订阅端，订阅端自动信任本机管理端的公钥。
+
+订阅端目录、服务和账号统一使用 `proxystack-web-sub`，与 proxystack-go 的 pssub 隔离。安装与卸载校验实际 ExecStart、配置及安装标记，拒绝认领未知目录或同名服务；普通卸载保留标记供重装或清理使用。旧版本项目订阅端通过 `--role sub --migrate-sub` 显式迁移：校验旧服务和配置，停止旧服务后备份并复制数据，调整权限并启动新服务，启动及 HTTP 检查通过后停用和移除旧 unit，将原目录保留在迁移备份中。失败恢复旧服务，拒绝迁移 pssub、含符号链接的目录或有本地 drop-in 的旧 unit。迁移备份不受卸载或 `--purge` 影响。
 
 传入 `--restore FILE` 时，第 6 步改为用迁移包初始化数据库（口令从终端交互读取），不生成初始管理员密码；第 8 步只打印面板地址。恢复细节见 5.6。
 

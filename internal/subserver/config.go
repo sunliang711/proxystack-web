@@ -17,7 +17,7 @@ import (
 )
 
 // DefaultDir 是订阅端的默认目录。
-const DefaultDir = "/opt/proxystack-sub"
+const DefaultDir = "/opt/proxystack-web-sub"
 
 // Layout 是订阅端目录布局。
 type Layout struct {
@@ -138,7 +138,7 @@ func SaveConfig(layout Layout, config Config) error {
 	if err != nil {
 		return err
 	}
-	header := []byte("# proxystack-web 订阅端配置。修改监听地址或端口后需要重启 proxystack-sub 服务；来源变化自动生效。\n")
+	header := []byte("# proxystack-web 订阅端配置。修改监听地址或端口后需要重启 proxystack-web-sub 服务；来源变化自动生效。\n")
 	return writeFileAtomic(layout.ConfigPath(), append(header, data...), 0o640)
 }
 

@@ -7,8 +7,11 @@ set -euo pipefail
 
 BASE=/opt/proxystack-web
 SERVICE_USER=proxystack-web
-SUB_BASE=/opt/proxystack-sub
-SUB_USER=proxystack-sub
+SUB_BASE=/opt/proxystack-web-sub
+SUB_USER=proxystack-web-sub
+SUB_UNIT=proxystack-web-sub.service
+LEGACY_SUB_BASE=/opt/proxystack-sub
+LEGACY_SUB_UNIT=proxystack-sub.service
 RELEASE_BASE=${PSW_RELEASE_BASE:-https://github.com/sunliang711/proxystack-web/releases/download}
 ROLE=panel
 VERSION=latest
@@ -20,6 +23,7 @@ SOURCE=main
 PUBLIC_KEY=""
 SUB_LISTEN=""
 SUB_PORT=""
+MIGRATE_SUB=0
 
 usage() {
     cat <<USAGE
@@ -39,6 +43,7 @@ Subscription server options:
   --public-key KEY      the panel's subscription public key (ed25519:...), shown on its 发布订阅包 page
   --sub-listen ADDR     listen address (default 127.0.0.1)
   --sub-port PORT       listen port (default 9444)
+  --migrate-sub         migrate this project's old /opt/proxystack-sub installation (requires --role sub)
 
 Running with --role sub on a machine that already has a subscription server upgrades its binary.
 USAGE
@@ -56,6 +61,7 @@ while [[ $# -gt 0 ]]; do
         --public-key) PUBLIC_KEY=$2; shift 2 ;;
         --sub-listen) SUB_LISTEN=$2; shift 2 ;;
         --sub-port) SUB_PORT=$2; shift 2 ;;
+        --migrate-sub) MIGRATE_SUB=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -68,6 +74,10 @@ case "$ROLE" in
     panel|sub|all) ;;
     *) die "--role must be panel, sub or all" ;;
 esac
+[[ $MIGRATE_SUB -eq 0 || $ROLE == sub ]] || die "--migrate-sub requires --role sub"
+if [[ $MIGRATE_SUB -eq 1 && ( -n $PUBLIC_KEY || -n $SUB_LISTEN || -n $SUB_PORT ) ]]; then
+    die "--migrate-sub preserves the existing configuration; do not specify --public-key, --sub-listen or --sub-port"
+fi
 
 [[ $(id -u) -eq 0 ]] || die "run as root"
 command -v systemctl >/dev/null || die "systemd is required"
@@ -79,16 +89,9 @@ SUB_UPGRADE=0
 if [[ $ROLE != sub ]]; then
     [[ -e $BASE/data/proxystack.db ]] && die "$BASE is already initialized; use the panel to upgrade"
 fi
-if [[ $ROLE != panel && -e $SUB_BASE/config.yaml ]]; then
-    [[ $ROLE == all ]] && die "$SUB_BASE is already initialized"
-    SUB_UPGRADE=1
-fi
 if [[ -n $RESTORE ]]; then
     [[ $ROLE != sub ]] || die "--restore applies to the panel"
     [[ -r $RESTORE ]] || die "cannot read $RESTORE"
-fi
-if [[ $ROLE == sub && $SUB_UPGRADE -eq 0 && -z $PUBLIC_KEY ]]; then
-    die "--public-key is required (copy it from the panel's 发布订阅包 page)"
 fi
 
 case "$(uname -m)" in
@@ -167,6 +170,173 @@ create_account() {
     fi
 }
 
+# 读取 systemd 生效后的命令，避免仅凭同名目录或 unit 文件认领其他项目。
+sub_unit_exists() {
+    local state
+    state=$(systemctl show --value -p LoadState "$1" 2>/dev/null) || true
+    [[ -n $state && $state != not-found ]]
+}
+
+sub_unit_owned() {
+    local dir=$1 unit=$2 command
+    command=$(systemctl show --value -p ExecStart "$unit" 2>/dev/null) || return 1
+    [[ $command == "{ path=$dir/bin/proxystack-web ; argv[]=$dir/bin/proxystack-web sub --dir $dir serve ; "* ]]
+}
+
+check_sub_paths() {
+    local dir=$1 links
+    [[ ! -L $dir ]] || die "refusing symbolic link: $dir"
+    if [[ -e $dir ]]; then
+        [[ -d $dir ]] || die "not a directory: $dir"
+        links=$(find "$dir" -type l -print -quit) || die "cannot inspect $dir"
+        [[ -z $links ]] || die "refusing symbolic links inside $dir"
+    fi
+}
+
+write_sub_marker() {
+    printf '%s\n' proxystack-web-sub-v1 > "$SUB_BASE/.proxystack-web-sub"
+    chown root:root "$SUB_BASE/.proxystack-web-sub"
+    chmod 0644 "$SUB_BASE/.proxystack-web-sub"
+}
+
+prepare_sub() {
+    check_sub_paths "$SUB_BASE"
+    [[ ! -L /etc/systemd/system/$SUB_UNIT ]] || die "refusing a symbolic link for $SUB_UNIT"
+    local marker=$SUB_BASE/.proxystack-web-sub
+    if sub_unit_exists "$SUB_UNIT"; then
+        sub_unit_owned "$SUB_BASE" "$SUB_UNIT" || die "$SUB_UNIT belongs to another installation; refusing to overwrite it"
+    elif [[ -e $SUB_BASE && -n $(find "$SUB_BASE" -mindepth 1 -print -quit) ]]; then
+        [[ -f $marker && $(cat "$marker") == proxystack-web-sub-v1 ]] || die "cannot confirm ownership of $SUB_BASE"
+    fi
+    if [[ -e $SUB_BASE/config.yaml ]]; then
+        "$WORK/proxystack-web" sub --dir "$SUB_BASE" config >/dev/null || die "invalid proxystack-web subscription configuration in $SUB_BASE"
+        [[ $ROLE != all ]] || die "$SUB_BASE is already initialized"
+        SUB_UPGRADE=1
+    elif [[ -e $SUB_BASE && -n $(find "$SUB_BASE" -mindepth 1 -print -quit) ]] || sub_unit_exists "$SUB_UNIT"; then
+        die "$SUB_BASE has no configuration; refusing to overwrite an incomplete installation"
+    fi
+
+    if [[ $MIGRATE_SUB -eq 1 ]]; then
+        command -v curl >/dev/null || die "curl is required to verify the migrated service"
+        [[ ! -e $SUB_BASE ]] || die "migration destination already exists: $SUB_BASE"
+        check_sub_paths "$LEGACY_SUB_BASE"
+        sub_unit_owned "$LEGACY_SUB_BASE" "$LEGACY_SUB_UNIT" || die "$LEGACY_SUB_UNIT is not this project's old subscription service; pssub cannot be migrated"
+        local fragment
+        fragment=$(systemctl show --value -p FragmentPath "$LEGACY_SUB_UNIT")
+        [[ $fragment == /etc/systemd/system/"$LEGACY_SUB_UNIT" && -f $fragment && ! -L $fragment ]] || die "migration requires a regular /etc/systemd/system/$LEGACY_SUB_UNIT"
+        [[ ! -L /etc/systemd/system/$LEGACY_SUB_UNIT.d ]] || die "refusing a symbolic link in the legacy unit drop-ins"
+        if [[ -d /etc/systemd/system/$LEGACY_SUB_UNIT.d ]]; then
+            die "legacy unit has local overrides; merge them into the new unit manually before migrating"
+        fi
+        "$WORK/proxystack-web" sub --dir "$LEGACY_SUB_BASE" config >/dev/null || die "legacy configuration is not a valid proxystack-web subscription configuration"
+    elif sub_unit_owned "$LEGACY_SUB_BASE" "$LEGACY_SUB_UNIT"; then
+        die "old proxystack-web subscription installation found; run --role sub --migrate-sub first"
+    fi
+    if [[ $ROLE == sub && $SUB_UPGRADE -eq 0 && $MIGRATE_SUB -eq 0 && -z $PUBLIC_KEY ]]; then
+        die "--public-key is required (copy it from the panel's 发布订阅包 page)"
+    fi
+    # 在修改账号、目录或旧服务之前下载好 unit，避免迁移中途依赖网络。
+    asset_file systemd/proxystack-web-sub.service "$WORK/$SUB_UNIT"
+    if getent passwd "$SUB_USER" >/dev/null; then
+        [[ $(getent passwd "$SUB_USER" | cut -d: -f6) == "$SUB_BASE" ]] || die "service account $SUB_USER has an unexpected home directory"
+    fi
+}
+
+# 迁移在子 shell 内执行，任何失败都会触发回滚；旧目录在成功前始终保留。
+migrate_sub() (
+    local backup active=0 enabled complete=0 new_created=0 unit_written=0 legacy_stopped=0
+    backup=$(mktemp -d /opt/proxystack-web-sub-migration.XXXXXX)
+    enabled=$(systemctl is-enabled "$LEGACY_SUB_UNIT" 2>/dev/null) || true
+    if systemctl is-active --quiet "$LEGACY_SUB_UNIT"; then active=1; fi
+    log "migration backup: $backup"
+    cp -a /etc/systemd/system/"$LEGACY_SUB_UNIT" "$backup/$LEGACY_SUB_UNIT"
+    printf 'active=%s\nenabled=%s\n' "$active" "$enabled" > "$backup/service-state"
+
+    # shellcheck disable=SC2329 # 由 EXIT trap 调用。
+    rollback_sub_migration() {
+        local status=$?
+        trap - EXIT
+        if [[ $complete -eq 0 ]]; then
+            log "migration failed; restoring the old subscription service (backup: $backup)"
+            if [[ $unit_written -eq 1 ]]; then
+                systemctl disable --now "$SUB_UNIT" || true
+                rm -f /etc/systemd/system/"$SUB_UNIT"
+            fi
+            if [[ $new_created -eq 1 && -d $SUB_BASE ]]; then
+                mv "$SUB_BASE" "$backup/failed-installation" || true
+            fi
+            if [[ -d $backup/retired && ! -e $LEGACY_SUB_BASE ]]; then
+                mv "$backup/retired" "$LEGACY_SUB_BASE" || true
+            elif [[ -d $backup/original && ! -e $LEGACY_SUB_BASE ]]; then
+                mv "$backup/original" "$LEGACY_SUB_BASE" || true
+            fi
+            if [[ -L /usr/local/bin/proxystack-web && $(readlink /usr/local/bin/proxystack-web) == "$SUB_BASE/bin/proxystack-web" ]]; then
+                ln -sfn "$LEGACY_SUB_BASE/bin/proxystack-web" /usr/local/bin/proxystack-web || true
+            fi
+            cp -a "$backup/$LEGACY_SUB_UNIT" /etc/systemd/system/"$LEGACY_SUB_UNIT" || true
+            systemctl daemon-reload || true
+            case "$enabled" in
+                enabled) systemctl enable "$LEGACY_SUB_UNIT" || true ;;
+                enabled-runtime) systemctl enable --runtime "$LEGACY_SUB_UNIT" || true ;;
+            esac
+            if [[ $active -eq 1 && $legacy_stopped -eq 1 ]]; then
+                systemctl start "$LEGACY_SUB_UNIT" || true
+            fi
+            [[ $status -ne 0 ]] || status=1
+        fi
+        exit "$status"
+    }
+    trap rollback_sub_migration EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+
+    legacy_stopped=1
+    systemctl stop "$LEGACY_SUB_UNIT"
+    cp -a "$LEGACY_SUB_BASE" "$backup/original"
+    create_account "$SUB_USER" "$SUB_BASE"
+    new_created=1
+    cp -a "$backup/original" "$SUB_BASE"
+    chown -hR "$SUB_USER:$SUB_USER" "$SUB_BASE"
+    install -d -m 0750 -o "$SUB_USER" -g "$SUB_USER" "$SUB_BASE/bin" "$SUB_BASE/data"
+    install -d -m 2770 -o "$SUB_USER" -g "$SUB_USER" "$SUB_BASE/inbox"
+    install -m 0755 -o "$SUB_USER" -g "$SUB_USER" "$WORK/proxystack-web" "$SUB_BASE/bin/proxystack-web"
+    write_sub_marker
+    unit_written=1
+    install -m 0644 "$WORK/$SUB_UNIT" /etc/systemd/system/"$SUB_UNIT"
+    systemctl daemon-reload
+    systemctl enable --now "$SUB_UNIT"
+
+    local addr code attempt ready=0
+    addr=$("$SUB_BASE/bin/proxystack-web" sub --dir "$SUB_BASE" config | sed -n 's/^Listen: //p')
+    [[ -n $addr ]] || die "could not read the migrated listen address"
+    addr=${addr/#0.0.0.0:/127.0.0.1:}
+    addr=${addr/#\[::\]:/[::1]:}
+    for ((attempt = 1; attempt <= 10; attempt++)); do
+        code=$(curl --noproxy '*' -sS --max-time 2 -o "$WORK/sub-health" -w '%{http_code}' "http://$addr/health") || code=000
+        # 尚未导入主来源时 /health 返回 503，也表示新进程已正常启动。
+        if [[ $code == 200 || $code == 503 ]] && systemctl is-active --quiet "$SUB_UNIT" \
+            && grep -Eq '"status":"(ok|degraded|unavailable)"' "$WORK/sub-health"; then
+            ready=1
+            break
+        fi
+        sleep 1
+    done
+    [[ $ready -eq 1 ]] || die "the migrated subscription service did not become ready"
+
+    systemctl disable "$LEGACY_SUB_UNIT"
+    rm /etc/systemd/system/"$LEGACY_SUB_UNIT"
+    systemctl daemon-reload
+    # 释放旧目录名供 pssub 使用，备份完整保留配置、订阅包、inbox 和旧二进制。
+    mv "$LEGACY_SUB_BASE" "$backup/retired"
+    if [[ -L /usr/local/bin/proxystack-web && $(readlink /usr/local/bin/proxystack-web) == "$LEGACY_SUB_BASE/bin/proxystack-web" ]]; then
+        ln -sfn "$SUB_BASE/bin/proxystack-web" /usr/local/bin/proxystack-web
+    elif [[ ! -e /usr/local/bin/proxystack-web && ! -L /usr/local/bin/proxystack-web ]]; then
+        ln -s "$SUB_BASE/bin/proxystack-web" /usr/local/bin/proxystack-web
+    fi
+    complete=1
+    log "migration complete; old files and rollback information are retained in $backup"
+)
+
 # restore_panel 用迁移包初始化数据库：口令从终端读取（不回显），未加密的迁移包不需要口令。
 # 不生成初始管理员密码，恢复后使用源实例的管理员账号登录。
 restore_panel() {
@@ -229,6 +399,11 @@ install_panel() {
 }
 
 install_sub() {
+    if [[ $MIGRATE_SUB -eq 1 ]]; then
+        migrate_sub
+        SUB_OUTPUT=$("$SUB_BASE/bin/proxystack-web" sub --dir "$SUB_BASE" status)
+        return
+    fi
     if [[ $SUB_UPGRADE -eq 1 ]]; then
         # 卸载时保留配置和订阅包后重新安装也走这里，bin 目录和 unit 可能已不存在。
         log "upgrading the subscription server binary"
@@ -236,10 +411,11 @@ install_sub() {
         install -d -m 0750 -o "$SUB_USER" -g "$SUB_USER" "$SUB_BASE/bin"
         install -m 0755 -o "$SUB_USER" -g "$SUB_USER" "$WORK/proxystack-web" "$SUB_BASE/bin/proxystack-web"
         [[ -e /usr/local/bin/proxystack-web ]] || ln -s "$SUB_BASE/bin/proxystack-web" /usr/local/bin/proxystack-web
-        asset_file systemd/proxystack-sub.service /etc/systemd/system/proxystack-sub.service
+        write_sub_marker
+        install -m 0644 "$WORK/$SUB_UNIT" /etc/systemd/system/"$SUB_UNIT"
         systemctl daemon-reload
-        systemctl enable proxystack-sub.service
-        systemctl restart proxystack-sub.service
+        systemctl enable proxystack-web-sub.service
+        systemctl restart proxystack-web-sub.service
         SUB_OUTPUT=$("$SUB_BASE/bin/proxystack-web" sub --dir "$SUB_BASE" status)
         return
     fi
@@ -249,7 +425,7 @@ install_sub() {
 
     log "creating $SUB_BASE"
     install -d -m 0750 -o "$SUB_USER" -g "$SUB_USER" "$SUB_BASE" "$SUB_BASE/bin" "$SUB_BASE/data"
-    # 收件目录允许同组写入，便于把运维账号加入 proxystack-sub 组后直接放入订阅包。
+    # 收件目录允许同组写入，便于把运维账号加入 proxystack-web-sub 组后直接放入订阅包。
     install -d -m 2770 -o "$SUB_USER" -g "$SUB_USER" "$SUB_BASE/inbox"
     install -m 0755 -o "$SUB_USER" -g "$SUB_USER" "$WORK/proxystack-web" "$SUB_BASE/bin/proxystack-web"
     [[ -e /usr/local/bin/proxystack-web ]] || ln -s "$SUB_BASE/bin/proxystack-web" /usr/local/bin/proxystack-web
@@ -259,19 +435,23 @@ install_sub() {
     [[ -n $SUB_LISTEN ]] && args+=(--listen "$SUB_LISTEN")
     [[ -n $SUB_PORT ]] && args+=(--port "$SUB_PORT")
     runuser -u "$SUB_USER" -- "$SUB_BASE/bin/proxystack-web" "${args[@]}" >/dev/null
+    write_sub_marker
 
     log "writing systemd unit"
-    asset_file systemd/proxystack-sub.service /etc/systemd/system/proxystack-sub.service
+    install -m 0644 "$WORK/$SUB_UNIT" /etc/systemd/system/"$SUB_UNIT"
     systemctl daemon-reload
 
-    log "starting proxystack-sub.service"
-    systemctl enable --now proxystack-sub.service
+    log "starting proxystack-web-sub.service"
+    systemctl enable --now proxystack-web-sub.service
     SUB_OUTPUT=$("$SUB_BASE/bin/proxystack-web" sub --dir "$SUB_BASE" status)
 }
 
 PANEL_OUTPUT=""
 SUB_OUTPUT=""
 fetch_binary
+if [[ $ROLE != panel ]]; then
+    prepare_sub
+fi
 if [[ $ROLE != sub ]]; then
     install_panel
 fi

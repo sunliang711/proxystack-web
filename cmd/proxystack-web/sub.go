@@ -127,7 +127,7 @@ func newSubConfigCommand(layout func() subserver.Layout) *cobra.Command {
 			if err := subserver.SaveConfig(l, config); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Listen address set to %s. Run `systemctl restart proxystack-sub` to apply it.\n", config.Addr())
+			fmt.Fprintf(cmd.OutOrStdout(), "Listen address set to %s. Run `systemctl restart proxystack-web-sub` to apply it.\n", config.Addr())
 			return nil
 		},
 	}

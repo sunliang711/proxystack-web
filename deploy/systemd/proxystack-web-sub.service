@@ -5,10 +5,10 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=proxystack-sub
-Group=proxystack-sub
-ExecStart=/opt/proxystack-sub/bin/proxystack-web sub --dir /opt/proxystack-sub serve
-WorkingDirectory=/opt/proxystack-sub
+User=proxystack-web-sub
+Group=proxystack-web-sub
+ExecStart=/opt/proxystack-web-sub/bin/proxystack-web sub --dir /opt/proxystack-web-sub serve
+WorkingDirectory=/opt/proxystack-web-sub
 UMask=0027
 Restart=on-failure
 RestartSec=2
@@ -23,7 +23,7 @@ ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
-ReadWritePaths=/opt/proxystack-sub
+ReadWritePaths=/opt/proxystack-web-sub
 
 [Install]
 WantedBy=multi-user.target

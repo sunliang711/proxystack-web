@@ -136,7 +136,7 @@ func (s *Server) poll(running Config) {
 		return
 	}
 	if config.Addr() != running.Addr() {
-		slog.Warn("listen address changed; restart proxystack-sub to apply")
+		slog.Warn("listen address changed; restart proxystack-web-sub to apply")
 	}
 	s.reload(config)
 }
