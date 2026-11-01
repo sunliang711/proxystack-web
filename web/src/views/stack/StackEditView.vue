@@ -26,7 +26,7 @@ import LogsTab from './LogsTab.vue'
 import DiagnosticsTab from './DiagnosticsTab.vue'
 import FlowTab from './FlowTab.vue'
 import UsageTab from './UsageTab.vue'
-import TaskDialog from '../../components/TaskDialog.vue'
+import { useBackgroundTask } from '../../composables/useBackgroundTask'
 import UnitStatus from '../../components/UnitStatus.vue'
 import { refreshPending } from '../../runtime'
 import { stackPorts } from './ports'
@@ -95,7 +95,7 @@ async function reveal() {
   if (!wasDirty) markClean()
 }
 
-const taskId = ref<number | null>(null)
+const trackTask = useBackgroundTask(refreshPending)
 
 /** 保存后只应用本 stack。 */
 async function saveAndApply() {
@@ -105,7 +105,7 @@ async function saveAndApply() {
     message.error(splitProblem(error, '应用失败').global.join('；'))
     return
   }
-  taskId.value = data!.task_id
+  trackTask(data!.task_id)
 }
 
 async function save(): Promise<boolean> {
@@ -399,7 +399,6 @@ async function saveMembers() {
     </template>
   </NSpin>
 
-  <TaskDialog :task-id="taskId" @close="taskId = null" @finished="refreshPending" />
 
   <NModal v-model:show="cloning" preset="card" title="克隆 stack" style="max-width: 480px">
     <ErrorList :errors="cloneErrors.global" title="克隆失败" />

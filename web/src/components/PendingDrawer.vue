@@ -4,14 +4,14 @@ import { NAlert, NButton, NCollapse, NCollapseItem, NDrawer, NDrawerContent, NEm
 import { api, problemMessage, type Schemas } from '../api/client'
 import { refreshPending } from '../runtime'
 import DiffView from './DiffView.vue'
-import TaskDialog from './TaskDialog.vue'
+import { useBackgroundTask } from '../composables/useBackgroundTask'
 import EntityLink from './EntityLink.vue'
 
 const show = defineModel<boolean>('show', { required: true })
 const pending = ref<Schemas['PendingView'] | null>(null)
 const loading = ref(false)
 const error = ref('')
-const taskId = ref<number | null>(null)
+const trackTask = useBackgroundTask(load)
 
 async function load() {
   loading.value = true
@@ -42,7 +42,8 @@ async function apply(stacks: string[]) {
     error.value = problemMessage(problem, '应用失败')
     return
   }
-  taskId.value = data!.task_id
+  trackTask(data!.task_id)
+  show.value = false
 }
 </script>
 
@@ -85,5 +86,4 @@ async function apply(stacks: string[]) {
       </template>
     </NDrawerContent>
   </NDrawer>
-  <TaskDialog :task-id="taskId" @close="taskId = null" @finished="load" />
 </template>

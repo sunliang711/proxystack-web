@@ -13,6 +13,13 @@ export const runtime = reactive({
 })
 
 const taskListeners = new Set<(event: TaskEvent) => void>()
+const jobTaskListeners = new Set<(event: Schemas['JobTaskEvent']) => void>()
+
+/** 定时任务执行事件，与后台作业分开标识，避免 ID 冲突。 */
+export function onJobTaskEvent(listener: (event: Schemas['JobTaskEvent']) => void): () => void {
+  jobTaskListeners.add(listener)
+  return () => jobTaskListeners.delete(listener)
+}
 
 /** 订阅作业进度事件，返回取消函数。 */
 export function onTaskEvent(listener: (event: TaskEvent) => void): () => void {
@@ -47,6 +54,10 @@ export function connectEvents() {
     const data = JSON.parse((message as MessageEvent).data) as TaskEvent
     for (const listener of taskListeners) listener(data)
     if (data.status !== 'running') refreshPending()
+  })
+  source.addEventListener('job', (message) => {
+    const data = JSON.parse((message as MessageEvent).data) as Schemas['JobTaskEvent']
+    for (const listener of jobTaskListeners) listener(data)
   })
 }
 

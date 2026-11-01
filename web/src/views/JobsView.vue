@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { h, onMounted, ref, watch } from 'vue'
+import { h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   NButton, NCard, NCode, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NInputNumber, NSelect, NSpace, NSwitch, NTag, NText,
   useMessage, type DataTableColumns,
@@ -7,6 +7,8 @@ import {
 import { api, emptyErrors, fieldState, problemMessage, splitProblem, type FormErrors, type Schemas } from '../api/client'
 import ErrorList from '../components/ErrorList.vue'
 import { formatTime } from '../util/format'
+import { onJobTaskEvent } from '../runtime'
+import { taskCenter } from '../tasks'
 
 type Job = Schemas['JobView']
 type Run = Schemas['JobRun']
@@ -42,6 +44,8 @@ async function load() {
   loading.value = false
 }
 onMounted(load)
+const stopEvents = onJobTaskEvent((event) => { if (event.status !== 'running') void load() })
+onBeforeUnmount(stopEvents)
 
 async function run(job: Job) {
   const { error } = await api.POST('/api/jobs/{id}/run', { params: { path: { id: job.id } } })
@@ -50,6 +54,7 @@ async function run(job: Job) {
     return
   }
   message.success('已开始执行')
+  void taskCenter.refresh()
   window.setTimeout(load, 1000)
 }
 
@@ -163,6 +168,7 @@ const columns: DataTableColumns<Job> = [
           <NTag size="small" :type="statusView[item.status].type">{{ statusView[item.status].label }}</NTag>
           <NText>{{ formatTime(item.started_at) }}</NText>
           <NText depth="3">{{ item.trigger === 'manual' ? '手动' : '计划' }}</NText>
+          <NButton size="tiny" @click="taskCenter.open({ source: 'job', id: item.id }); history = null">查看详情</NButton>
         </NSpace>
         <NCode v-if="item.log" :code="item.log" style="display: block; margin-top: 6px; white-space: pre-wrap" />
       </div>

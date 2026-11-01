@@ -1202,6 +1202,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/task-center": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 统一后台作业与定时任务执行记录 */
+        get: operations["listTaskCenter"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/task-center/{source}/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 任务状态和完整日志 */
+        get: operations["getTaskCenterDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks": {
         parameters: {
             query?: never;
@@ -1570,6 +1604,25 @@ export interface components {
             /** Format: int64 */
             up: number;
         };
+        CenterTask: {
+            actor: string;
+            error: string;
+            /** Format: date-time */
+            finished_at: string;
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            job_id: number;
+            kind: string;
+            log: string[];
+            /** @enum {string} */
+            source: "task" | "job";
+            /** Format: date-time */
+            started_at: string;
+            /** @enum {string} */
+            status: "running" | "succeeded" | "failed" | "skipped" | "timeout";
+            title: string;
+        };
         Change: {
             /** @enum {string} */
             component: "xray" | "mihomo";
@@ -1924,6 +1977,12 @@ export interface components {
             status: "running" | "succeeded" | "failed" | "skipped" | "timeout";
             /** @enum {string} */
             trigger: "schedule" | "manual";
+        };
+        JobTaskEvent: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            status: "running" | "succeeded" | "failed" | "skipped" | "timeout";
         };
         JobUpdate: {
             enabled: boolean;
@@ -2489,6 +2548,13 @@ export interface components {
             /** @enum {string} */
             status: "running" | "succeeded" | "failed";
             title: string;
+        };
+        TaskCenterPage: {
+            items: components["schemas"]["CenterTask"][];
+            /** Format: int64 */
+            running: number;
+            /** Format: int64 */
+            total: number;
         };
         TaskEvent: {
             error?: string;
@@ -3680,6 +3746,17 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": ({
+                        data: components["schemas"]["JobTaskEvent"];
+                        /**
+                         * @description The event name.
+                         * @constant
+                         */
+                        event: "job";
+                        /** @description The event ID. */
+                        id?: number | string;
+                        /** @description The retry time in milliseconds. */
+                        retry?: number;
+                    } | {
                         data: components["schemas"]["RuntimeEvent"];
                         /**
                          * @description The event name.
@@ -5229,6 +5306,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskIDOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listTaskCenter: {
+        parameters: {
+            query?: {
+                source?: "all" | "task" | "job";
+                status?: "all" | "running" | "succeeded" | "failed" | "skipped" | "timeout";
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskCenterPage"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getTaskCenterDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source: "task" | "job";
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CenterTask"];
                 };
             };
             /** @description Error */

@@ -135,6 +135,7 @@ type schedulerState struct {
 	mu      sync.Mutex
 	next    map[string]time.Time
 	running map[string]bool
+	logs    map[int64]string
 	wg      sync.WaitGroup
 }
 
@@ -176,7 +177,7 @@ func (s *Service) seedJobs(ctx context.Context) error {
 				return err
 			}
 		}
-		return q.MarkInterruptedJobRuns(ctx, s.Now().Unix())
+		return nil
 	})
 }
 
@@ -246,8 +247,10 @@ func (s *Service) startJob(ctx context.Context, job dbq.Job, trigger string) {
 
 func (s *Service) recordRun(ctx context.Context, jobID int64, status, trigger, message string) {
 	now := s.Now().Unix()
+	var runID int64
 	err := s.Store.InTx(ctx, func(q *dbq.Queries) error {
-		if _, err := q.InsertJobRun(ctx, dbq.InsertJobRunParams{
+		var err error
+		if runID, err = q.InsertJobRun(ctx, dbq.InsertJobRunParams{
 			JobID: jobID, StartedAt: now, FinishedAt: now, Status: status, TriggerBy: trigger, Log: message + "\n",
 		}); err != nil {
 			return err
@@ -256,6 +259,8 @@ func (s *Service) recordRun(ctx context.Context, jobID int64, status, trigger, m
 	})
 	if err != nil {
 		slog.Warn("record job run", "err", err)
+	} else {
+		s.publish("job", JobTaskEvent{ID: runID, Status: status})
 	}
 }
 
@@ -275,6 +280,18 @@ func (s *Service) executeJob(ctx context.Context, job dbq.Job, trigger string) {
 		slog.Warn("start job", "job", job.Kind, "err", err)
 		return
 	}
+	s.scheduler.mu.Lock()
+	if s.scheduler.logs == nil {
+		s.scheduler.logs = map[int64]string{}
+	}
+	s.scheduler.logs[runID] = ""
+	s.scheduler.mu.Unlock()
+	defer func() {
+		s.scheduler.mu.Lock()
+		delete(s.scheduler.logs, runID)
+		s.scheduler.mu.Unlock()
+	}()
+	s.publish("job", JobTaskEvent{ID: runID, Status: RunRunning})
 	var log bytes.Buffer
 	var logMu sync.Mutex
 	logf := func(format string, args ...any) {
@@ -282,6 +299,10 @@ func (s *Service) executeJob(ctx context.Context, job dbq.Job, trigger string) {
 		defer logMu.Unlock()
 		if log.Len() < jobLogLimit {
 			fmt.Fprintf(&log, format+"\n", args...)
+			s.scheduler.mu.Lock()
+			s.scheduler.logs[runID] = log.String()
+			s.scheduler.mu.Unlock()
+			s.publish("job", JobTaskEvent{ID: runID, Status: RunRunning})
 		}
 	}
 	params := kind.Params
@@ -312,12 +333,18 @@ func (s *Service) executeJob(ctx context.Context, job dbq.Job, trigger string) {
 	})
 	if err != nil {
 		slog.Warn("finish job", "job", job.Kind, "err", err)
+	} else {
+		s.publish("job", JobTaskEvent{ID: runID, Status: status})
 	}
 }
 
 func (s *Service) runScheduler(ctx context.Context) {
 	if err := s.seedJobs(ctx); err != nil {
 		slog.Error("seed jobs", "err", err)
+	}
+	// 中断恢复只在调度器启动时执行，读取计划列表不能终止运行中的任务记录。
+	if err := s.Store.InTx(ctx, func(q *dbq.Queries) error { return q.MarkInterruptedJobRuns(ctx, s.Now().Unix()) }); err != nil {
+		slog.Error("recover interrupted jobs", "err", err)
 	}
 	ticker := time.NewTicker(schedulerInterval)
 	defer ticker.Stop()

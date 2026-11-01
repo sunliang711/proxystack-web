@@ -14,6 +14,7 @@ import {
   NLayoutSider,
   NMenu,
   NTooltip,
+  useMessage,
   type MenuOption,
 } from 'naive-ui'
 import {
@@ -29,6 +30,7 @@ import {
   GridOutline,
   InformationCircleOutline,
   LayersOutline,
+  ListOutline,
   MoonOutline,
   MenuOutline,
   NotificationsOutline,
@@ -49,9 +51,21 @@ import PendingDrawer from '../components/PendingDrawer.vue'
 import { connectEvents, disconnectEvents, refreshPending, runtime } from '../runtime'
 import { api, type Schemas } from '../api/client'
 import brandLogo from '/favicon.svg?url'
+import TaskCenterDrawer from '../components/TaskCenterDrawer.vue'
+import { taskCenter } from '../tasks'
 
 const route = useRoute()
 const router = useRouter()
+const message = useMessage()
+const taskState = taskCenter.state
+const stopNotices = taskCenter.onNotice(({ kind, task }) => {
+  const failed = task.status === 'failed' || task.status === 'timeout'
+  const text = kind === 'started' ? `已提交：${task.title}` : `${task.title}：${failed ? '执行失败' : task.status === 'skipped' ? '已跳过' : '已完成'}`
+  const content = () => h('span', [text, h(NButton, { text: true, type: 'primary', style: 'margin-left: 12px', onClick: () => taskCenter.open(task) }, () => '查看详情')])
+  if (kind === 'started') message.info(content, { duration: 4000, closable: true })
+  else if (failed) message.error(content, { duration: 8000, closable: true })
+  else message.success(content, { duration: 4000, closable: true })
+})
 // 窄屏侧栏覆盖正文，关闭后不占宽度；桌面仍支持收起为图标导航。
 const mobileQuery = window.matchMedia('(max-width: 767px)')
 const mobile = ref(mobileQuery.matches)
@@ -123,6 +137,7 @@ const groups: { key: string; label: string; items: NavItem[] }[] = [
     label: '运维',
     items: [
       { name: 'deps', label: '依赖', icon: CubeOutline },
+      { name: 'tasks', label: '任务中心', icon: ListOutline },
       { name: 'jobs', label: '定时任务', icon: TimerOutline },
       { name: 'health', label: '健康检查', icon: PulseOutline },
       { name: 'notifications', label: '通知记录', icon: NotificationsOutline },
@@ -154,7 +169,7 @@ const menu: MenuOption[] = groups.map((group) => ({
   })),
 }))
 
-const parents: Record<string, string> = { stack: 'stacks', user: 'users' }
+const parents: Record<string, string> = { stack: 'stacks', user: 'users', 'task-detail': 'tasks' }
 const active = computed(() => {
   const name = String(route.name ?? '')
   return parents[name] ?? name
@@ -179,15 +194,20 @@ const crumbs = computed(() => {
 })
 
 const showPending = ref(false)
+watch(() => taskState.drawer, (show) => { if (show) showPending.value = false })
 onMounted(() => {
   loadVersion()
+  taskCenter.start(session.admin!.username)
   connectEvents()
   refreshPending()
 })
 onBeforeUnmount(() => {
+  stopNotices()
+  taskCenter.stop()
   disconnectEvents()
   mobileQuery.removeEventListener('change', resizeNavigation)
 })
+watch(() => runtime.connected, (connected) => { if (connected) void taskCenter.refresh() })
 // 任何页面保存后都可能产生待应用变更：路由切换时顺便刷新。
 router.afterEach(() => refreshPending())
 
@@ -283,8 +303,14 @@ async function onAccount(key: string) {
               <template #icon><NIcon><component :is="themeIcons[themePreference]" /></NIcon></template>
             </NButton>
           </NDropdown>
+          <NBadge :value="taskState.running" :show="taskState.running > 0 || taskState.unread.length > 0" :dot="!taskState.running && taskState.unread.length > 0" :type="taskState.unread.length ? 'error' : 'info'">
+            <NButton secondary size="small" class="task-button" aria-label="后台任务" :title="`${taskState.running} 个运行中，${taskState.unread.length} 个未读失败提醒`" @click="showPending = false; taskCenter.open()">
+              <template #icon><NIcon><ListOutline /></NIcon></template>
+              <span class="task-label">后台任务</span>
+            </NButton>
+          </NBadge>
           <NBadge :value="runtime.pendingCount" :show="runtime.pendingCount > 0 || !!runtime.pendingError" :dot="!!runtime.pendingError && !runtime.pendingCount">
-            <NButton :type="runtime.pendingCount ? 'warning' : 'default'" secondary size="small" class="pending-button" aria-label="待应用变更" @click="showPending = true">
+            <NButton :type="runtime.pendingCount ? 'warning' : 'default'" secondary size="small" class="pending-button" aria-label="待应用变更" @click="taskState.drawer = false; showPending = true">
               <template #icon><NIcon><GitPullRequestOutline /></NIcon></template>
               <span class="pending-label">待应用变更</span>
             </NButton>
@@ -312,6 +338,7 @@ async function onAccount(key: string) {
     </NLayout>
   </NLayout>
   <PendingDrawer v-model:show="showPending" />
+  <TaskCenterDrawer />
 </template>
 
 <style scoped>
@@ -433,8 +460,8 @@ async function onAccount(key: string) {
     padding: 0 12px;
   }
   .header-actions { gap: 4px; }
-  .pending-label { display: none; }
-  .pending-button :deep(.n-button__icon) { margin: 0; }
+  .pending-label, .task-label { display: none; }
+  .pending-button :deep(.n-button__icon), .task-button :deep(.n-button__icon) { margin: 0; }
   .page-title { font-size: 23px; }
 }
 

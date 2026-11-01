@@ -7,7 +7,7 @@ import {
 import { api, getCSRFToken, panelBase, problemMessage, type Schemas } from '../api/client'
 import ExportDialog from '../components/ExportDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
-import TaskDialog from '../components/TaskDialog.vue'
+import { useBackgroundTask } from '../composables/useBackgroundTask'
 import { formatBytes, formatTime } from '../util/format'
 
 type BackupFile = Schemas['BackupFile']
@@ -16,7 +16,7 @@ const message = useMessage()
 const showExport = ref(false)
 const showImport = ref(false)
 const files = ref<BackupFile[]>([])
-const taskId = ref<number | null>(null)
+const trackTask = useBackgroundTask(load)
 
 async function load() {
   files.value = (await api.GET('/api/backup/files')).data ?? []
@@ -50,7 +50,7 @@ async function startPacking() {
     return
   }
   packing.value = null
-  taskId.value = data!.task_id
+  trackTask(data!.task_id)
 }
 
 const columns: DataTableColumns<BackupFile> = [
@@ -228,7 +228,6 @@ function waitForRestart() {
   </NSpace>
   <ExportDialog v-model:show="showExport" scope="all" />
   <ImportDialog v-model:show="showImport" scope="all" />
-  <TaskDialog :task-id="taskId" @close="taskId = null" @finished="load" />
 
   <NModal :show="!!packing" preset="card" title="导出迁移包" style="max-width: 500px" @update:show="(value: boolean) => !value && (packing = null)">
     <NForm v-if="packing" label-placement="left" label-width="100">

@@ -4,7 +4,7 @@ import {
   NAlert, NButton, NCard, NDescriptions, NDescriptionsItem, NForm, NFormItem, NInputNumber, NPopconfirm, NSelect, NSpace, NSpin, NTag, NText, NTooltip,
 } from 'naive-ui'
 import { api, problemMessage, type Schemas } from '../api/client'
-import TaskDialog from '../components/TaskDialog.vue'
+import { useBackgroundTask } from '../composables/useBackgroundTask'
 
 const info = ref<Schemas['SystemInfo'] | null>(null)
 
@@ -32,7 +32,7 @@ async function saveListen() {
 const update = ref<Schemas['SelfVersion'] | null>(null)
 const updateError = ref('')
 const checking = ref(false)
-const taskId = ref<number | null>(null)
+const trackTask = useBackgroundTask()
 
 async function checkUpdate() {
   checking.value = true
@@ -52,7 +52,7 @@ async function runUpdate() {
     updateError.value = problemMessage(error, '更新失败')
     return
   }
-  taskId.value = data!.task_id
+  trackTask(data!.task_id)
 }
 
 </script>
@@ -103,5 +103,4 @@ async function runUpdate() {
       <NAlert v-if="listenResult" :type="listenResult.type" :bordered="false">{{ listenResult.text }}</NAlert>
     </NSpace>
   </NCard>
-  <TaskDialog :task-id="taskId" @close="taskId = null" />
 </template>

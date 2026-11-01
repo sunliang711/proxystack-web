@@ -59,6 +59,26 @@ type taskListOutput struct {
 	}
 }
 
+type taskCenterInput struct {
+	Source string `query:"source" enum:"all,task,job" default:"all"`
+	Status string `query:"status" enum:"all,running,succeeded,failed,skipped,timeout" default:"all"`
+	Limit  int64  `query:"limit" minimum:"1" maximum:"200" default:"50"`
+	Offset int64  `query:"offset" minimum:"0" default:"0"`
+}
+
+type taskCenterOutput struct {
+	Body app.TaskCenterPage
+}
+
+type taskCenterDetailInput struct {
+	Source string `path:"source" enum:"task,job"`
+	ID     int64  `path:"id" minimum:"1"`
+}
+
+type taskCenterDetailOutput struct {
+	Body app.CenterTask
+}
+
 type pauseInput struct {
 	ID   int64 `path:"id"`
 	Body struct {
@@ -151,6 +171,22 @@ func registerRuntime(api huma.API, s *Server) {
 			}
 			return &taskOutput{Body: *task}, nil
 		})
+	huma.Register(api, reg(huma.Operation{OperationID: "listTaskCenter", Method: http.MethodGet, Path: "/api/task-center", Summary: "统一后台作业与定时任务执行记录"}),
+		func(ctx context.Context, in *taskCenterInput) (*taskCenterOutput, error) {
+			page, err := s.svc.TaskCenter(ctx, in.Source, in.Status, in.Limit, in.Offset)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &taskCenterOutput{Body: *page}, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "getTaskCenterDetail", Method: http.MethodGet, Path: "/api/task-center/{source}/{id}", Summary: "任务状态和完整日志"}),
+		func(ctx context.Context, in *taskCenterDetailInput) (*taskCenterDetailOutput, error) {
+			task, err := s.svc.TaskCenterDetail(ctx, in.Source, in.ID)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &taskCenterDetailOutput{Body: *task}, nil
+		})
 	huma.Register(api, reg(huma.Operation{OperationID: "setUserPause", Method: http.MethodPut, Path: "/api/users/{id}/pause", Summary: "暂停或恢复用户（当场生效）"}),
 		func(ctx context.Context, in *pauseInput) (*pauseOutput, error) {
 			result, err := s.svc.SetUserPause(ctx, actorFrom(ctx), in.ID, in.Body.Enabled, in.Body.PausedStacks)
@@ -165,7 +201,7 @@ func registerRuntime(api huma.API, s *Server) {
 		})
 
 	sse.Register(api, reg(huma.Operation{OperationID: "events", Method: http.MethodGet, Path: "/api/events", Summary: "运行状态与作业进度事件流"}),
-		map[string]any{"runtime": RuntimeEvent{}, "task": app.TaskEvent{}, "traffic": app.LivePoint{}},
+		map[string]any{"runtime": RuntimeEvent{}, "task": app.TaskEvent{}, "job": app.JobTaskEvent{}, "traffic": app.LivePoint{}},
 		func(ctx context.Context, _ *struct{}, send sse.Sender) {
 			events, cancel := s.svc.Events.Subscribe()
 			defer cancel()
@@ -191,6 +227,8 @@ func registerRuntime(api huma.API, s *Server) {
 					case []app.StackRuntime:
 						err = send.Data(RuntimeEvent{Stacks: data})
 					case app.TaskEvent:
+						err = send.Data(data)
+					case app.JobTaskEvent:
 						err = send.Data(data)
 					case app.LivePoint:
 						err = send.Data(data)

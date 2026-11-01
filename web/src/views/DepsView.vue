@@ -6,7 +6,7 @@ import {
   NUpload, NUploadDragger, useMessage, type DataTableColumns, type UploadFileInfo,
 } from 'naive-ui'
 import { api, getCSRFToken, panelBase, problemMessage, type Schemas } from '../api/client'
-import TaskDialog from '../components/TaskDialog.vue'
+import { useBackgroundTask } from '../composables/useBackgroundTask'
 import { formatTime } from '../util/format'
 
 type Dep = Schemas['DepStatus']
@@ -17,7 +17,7 @@ const message = useMessage()
 const components = ref<Dep[]>([])
 const loading = ref(true)
 const checking = ref(false)
-const taskId = ref<number | null>(null)
+const trackTask = useBackgroundTask(load)
 const restore = ref<Schemas['RestoreStatus'] | null>(null)
 const titles: Record<string, string> = { xray: 'Xray', mihomo: 'Mihomo', geo: 'Geo 数据' }
 
@@ -84,7 +84,7 @@ async function install() {
       message.error(problemMessage(body, '上传失败') + (body.errors?.map((e: { message: string }) => `：${e.message}`).join('') ?? ''))
       return
     }
-    taskId.value = body.task_id
+    trackTask(body.task_id)
   } else {
     const { data, error } = await api.POST('/api/deps/{component}/install', {
       params: { path: { component: d.component } },
@@ -94,7 +94,7 @@ async function install() {
       message.error(problemMessage(error, '安装失败'))
       return
     }
-    taskId.value = data!.task_id
+    trackTask(data!.task_id)
   }
   dialog.value = null
 }
@@ -108,7 +108,7 @@ async function installSource(component: Component) {
     message.error(problemMessage(error, '安装失败'))
     return
   }
-  taskId.value = data!.task_id
+  trackTask(data!.task_id)
 }
 
 async function rollback(component: Component) {
@@ -120,7 +120,7 @@ async function rollback(component: Component) {
     message.error(problemMessage(error, '回滚失败'))
     return
   }
-  taskId.value = data!.task_id
+  trackTask(data!.task_id)
 }
 
 const historyColumns: DataTableColumns<Schemas['DepInstall']> = [
@@ -250,5 +250,4 @@ function onFile({ file }: { file: UploadFileInfo }) {
     </NDrawerContent>
   </NDrawer>
 
-  <TaskDialog :task-id="taskId" @close="taskId = null" @finished="load" />
 </template>
