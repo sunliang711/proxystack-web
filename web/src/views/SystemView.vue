@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   NAlert, NButton, NCard, NDescriptions, NDescriptionsItem, NForm, NFormItem, NInputNumber, NPopconfirm, NSelect, NSpace, NSpin, NTag, NText, NTooltip,
 } from 'naive-ui'
 import { api, problemMessage, type Schemas } from '../api/client'
 import { useBackgroundTask } from '../composables/useBackgroundTask'
+import { taskCenter } from '../tasks'
+import { VersionCheckTimeoutError, waitForVersion } from '../util/self-update'
 
 const info = ref<Schemas['SystemInfo'] | null>(null)
 
@@ -32,7 +34,34 @@ async function saveListen() {
 const update = ref<Schemas['SelfVersion'] | null>(null)
 const updateError = ref('')
 const checking = ref(false)
-const trackTask = useBackgroundTask()
+type UpdatePhase = 'idle' | 'submitting' | 'unknown' | 'updating' | 'restarting' | 'verifying' | 'complete'
+const updatePhase = ref<UpdatePhase>('idle')
+const updateTarget = ref('')
+const updateTaskID = ref<number | null>(null)
+const updateBusy = computed(() => updatePhase.value !== 'idle')
+const updatePhaseText = computed(() => ({
+  idle: '',
+  submitting: '正在提交更新任务…',
+  unknown: '提交结果未知，请先在任务中心确认是否已创建自更新任务',
+  updating: `正在下载并校验 ${updateTarget.value}…`,
+  restarting: '管理服务正在重启…',
+  verifying: `服务已恢复，正在确认 ${updateTarget.value}…`,
+  complete: '更新完成，正在刷新页面…',
+}[updatePhase.value]))
+let updateController: AbortController | null = null
+let submitController: AbortController | null = null
+let reloadTimer: number | undefined
+const trackTask = useBackgroundTask((status) => {
+  if (updatePhase.value === 'complete') return
+  if (status !== 'succeeded') {
+    stopUpdateMonitor()
+    updatePhase.value = 'idle'
+    updateError.value = '更新任务失败，请打开任务详情查看日志'
+  } else if (status === 'succeeded' && updatePhase.value === 'updating') {
+    updatePhase.value = 'restarting'
+    startUpdateMonitor(updateTarget.value)
+  }
+})
 
 async function checkUpdate() {
   checking.value = true
@@ -47,14 +76,81 @@ async function checkUpdate() {
 }
 
 async function runUpdate() {
-  const { data, error } = await api.POST('/api/system/update')
-  if (error) {
-    updateError.value = problemMessage(error, '更新失败')
+  if (!update.value?.update_available || updateBusy.value) return
+  if (info.value?.dev_mode) {
+    updateError.value = '开发模式不能自动重启管理服务，请在正式部署环境中执行更新'
     return
   }
-  trackTask(data!.task_id)
+  updateError.value = ''
+  updateTarget.value = update.value.latest
+  updateTaskID.value = null
+  updatePhase.value = 'submitting'
+  const controller = new AbortController()
+  submitController = controller
+  try {
+    const { data, error } = await api.POST('/api/system/update', { signal: controller.signal })
+    if (submitController !== controller) return
+    submitController = null
+    if (error) {
+      updatePhase.value = 'idle'
+      updateError.value = problemMessage(error, '更新失败')
+      return
+    }
+    updateTaskID.value = data!.task_id
+    updatePhase.value = 'updating'
+    trackTask(data!.task_id)
+  } catch {
+    if (controller.signal.aborted || submitController !== controller) return
+    submitController = null
+    updatePhase.value = 'unknown'
+    return
+  }
 }
 
+function stopUpdateMonitor() {
+  updateController?.abort()
+  updateController = null
+}
+
+function startUpdateMonitor(targetVersion: string) {
+  stopUpdateMonitor()
+  const controller = new AbortController()
+  updateController = controller
+  void waitForVersion({
+    targetVersion,
+    signal: controller.signal,
+    probe: async (signal) => {
+      const { data } = await api.GET('/api/system/info', { signal })
+      if (!data) throw new Error('system info unavailable')
+      return data.version
+    },
+    onReachable: () => {
+      if (updatePhase.value === 'restarting') updatePhase.value = 'verifying'
+    },
+    onUnavailable: () => {
+      if (updatePhase.value !== 'complete') updatePhase.value = 'restarting'
+    },
+  }).then(() => {
+    if (updateController !== controller) return
+    updateController = null
+    updatePhase.value = 'complete'
+    reloadTimer = window.setTimeout(() => window.location.reload(), 800)
+  }).catch((cause) => {
+    if (controller.signal.aborted || updateController !== controller) return
+    updateController = null
+    updatePhase.value = 'idle'
+    updateError.value = cause instanceof VersionCheckTimeoutError
+      ? `自动确认 ${targetVersion} 超时，请检查服务状态后手动刷新页面`
+      : '检查更新结果失败，请手动刷新页面'
+  })
+}
+
+onBeforeUnmount(() => {
+  submitController?.abort()
+  submitController = null
+  stopUpdateMonitor()
+  if (reloadTimer !== undefined) window.clearTimeout(reloadTimer)
+})
 </script>
 
 <template>
@@ -74,15 +170,24 @@ async function runUpdate() {
     <NSpace vertical style="margin-top: 20px">
       <NSpace>
         <NTooltip placement="top-start" style="max-width: min(360px, calc(100vw - 32px))">
-          <template #trigger><NButton :loading="checking" @click="checkUpdate">检查新版本</NButton></template>
+          <template #trigger><NButton :loading="checking" :disabled="updateBusy" @click="checkUpdate">检查新版本</NButton></template>
           更新只替换管理服务本身；xray 和 mihomo 由独立的服务承载，代理流量不受影响。下载走系统设置中的下载代理。
         </NTooltip>
         <NPopconfirm v-if="update?.update_available" @positive-click="runUpdate">
-          <template #trigger><NButton type="primary">更新到 {{ update.latest }}</NButton></template>
+          <template #trigger><NButton type="primary" :loading="updateBusy" :disabled="updateBusy || info?.dev_mode">更新到 {{ update.latest }}</NButton></template>
           下载并校验新版本后替换并重启管理服务，页面会短暂断开。继续？
         </NPopconfirm>
       </NSpace>
+      <NAlert v-if="updateBusy" :type="updatePhase === 'complete' ? 'success' : updatePhase === 'unknown' ? 'warning' : 'info'" :bordered="false">
+        <NSpace align="center">
+          <NSpin v-if="updatePhase !== 'complete' && updatePhase !== 'unknown'" size="small" />
+          <NText>{{ updatePhaseText }}</NText>
+          <NButton v-if="updateTaskID" text size="small" @click="taskCenter.open({ source: 'task', id: updateTaskID })">查看任务</NButton>
+          <NButton v-else-if="updatePhase === 'unknown'" text size="small" @click="taskCenter.open()">打开任务中心</NButton>
+        </NSpace>
+      </NAlert>
       <NAlert v-if="update && !update.update_available" type="success" :bordered="false">当前已是最新版本（{{ update.current }}）</NAlert>
+      <NAlert v-if="info?.dev_mode && update?.update_available" type="warning" :bordered="false">开发模式不能自动重启管理服务，请在正式部署环境中执行更新。</NAlert>
       <NAlert v-if="update?.update_available && update.notes" type="info" :title="`${update.latest} 更新说明`" :bordered="false">
         <pre style="white-space: pre-wrap; font-family: inherit; margin: 0">{{ update.notes }}</pre>
       </NAlert>
