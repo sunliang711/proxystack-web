@@ -47,7 +47,8 @@ func compileGlobal(settings Settings, users []User) domain.GlobalConfig {
 	yes := func(value bool) *bool { return &value }
 	policy := settings.Defaults.Xray.Policy
 	config := domain.GlobalConfig{
-		ExternalHost: settings.Basic.ExternalHost,
+		ExternalHost:                settings.Basic.ExternalHost,
+		SubscriptionDisplayTemplate: settings.Subscription.DisplayTemplate,
 		PortRanges: domain.PortRanges{
 			XrayInbound:    domain.PortRange(settings.PortPools.XrayInbound),
 			ClashSocks:     domain.PortRange(settings.PortPools.MihomoSocks),

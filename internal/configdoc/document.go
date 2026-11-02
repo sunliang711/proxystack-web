@@ -124,6 +124,7 @@ const (
 type SubscriptionSettings struct {
 	SourceName       string `json:"source_name" yaml:"source_name" doc:"本机在订阅端的来源名，订阅端按它找到验签用的公钥"`
 	PublicBaseURL    string `json:"public_base_url" yaml:"public_base_url,omitempty" doc:"订阅端的对外地址，用于订阅链接和 Surge managed 首行；为空时订阅端用请求地址"`
+	DisplayTemplate  string `json:"display_template" yaml:"display_template,omitempty" doc:"用户档案和入站均未配置展示名模板时使用的全局模板"`
 	SurgeManaged     bool   `json:"surge_managed" yaml:"surge_managed"`
 	Interval         int    `json:"interval" yaml:"interval" minimum:"0" doc:"Surge managed config 的更新间隔（秒）"`
 	Strict           bool   `json:"strict" yaml:"strict"`

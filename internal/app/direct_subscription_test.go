@@ -99,3 +99,48 @@ func TestDirectUpstreamsSubscription(t *testing.T) {
 	_, body, _ = get(t, subs.http, "/s/alice-token/clash")
 	require.Contains(t, body, "[直连]", "revocation must not remove another user's grant")
 }
+
+// TestDirectAndAppliedNodesUseCurrentDisplayTemplates 验证普通节点与直连节点共用当前命名优先级，连接参数仍来自已应用版本。
+func TestDirectAndAppliedNodesUseCurrentDisplayTemplates(t *testing.T) {
+	ctx := context.Background()
+	h := newRuntimeHarness(t)
+	doc, err := h.svc.LoadConfig(ctx)
+	require.NoError(t, err)
+	alice := doc.Users[doc.UserByName("alice")]
+	stack := doc.Stacks[doc.StackByName("usa1")]
+	stack.Xray.Inbounds[0].Sub = false
+	stack.Xray.Inbounds[1].DisplayTemplate = "{{ .stack | toUpper }} {{ .user }}"
+	stack.DirectUsers = []string{"alice"}
+	_, err = h.svc.UpdateStack(ctx, h.actor, stack.ID, stack)
+	require.NoError(t, err)
+	alice.DisplayTemplate = "{{ .stack | toUpper }}"
+	_, err = h.svc.UpdateUser(ctx, h.actor, alice.ID, alice)
+	require.NoError(t, err)
+	id, err := h.svc.Apply(ctx, h.actor, []string{"usa1"})
+	require.NoError(t, err)
+	require.Equal(t, app.TaskSucceeded, h.waitTask(t, id).Status)
+
+	// 清空用户模板后不重新应用，普通节点和直连节点都应立即使用当前入站模板。
+	alice.DisplayTemplate = ""
+	_, err = h.svc.UpdateUser(ctx, h.actor, alice.ID, alice)
+	require.NoError(t, err)
+	preview, err := h.svc.PreviewSubscription(ctx, alice.ID, "clash", nil)
+	require.NoError(t, err)
+	require.Contains(t, preview, "name: USA1 alice\n")
+	require.Contains(t, preview, "name: USA1 alice [DRT]\n")
+
+	// 入站模板也清空时，两类节点共同回退到当前全局模板。
+	stack.Xray.Inbounds[1].DisplayTemplate = ""
+	_, err = h.svc.UpdateStack(ctx, h.actor, stack.ID, stack)
+	require.NoError(t, err)
+	doc, err = h.svc.LoadConfig(ctx)
+	require.NoError(t, err)
+	settings := *doc.Settings
+	settings.Subscription.DisplayTemplate = "GLOBAL {{ .stack }} {{ .user }}"
+	_, err = h.svc.UpdateSettings(ctx, h.actor, settings)
+	require.NoError(t, err)
+	preview, err = h.svc.PreviewSubscription(ctx, alice.ID, "clash", nil)
+	require.NoError(t, err)
+	require.Contains(t, preview, "name: GLOBAL usa1 alice\n")
+	require.Contains(t, preview, "name: GLOBAL usa1 alice [DRT]\n")
+}

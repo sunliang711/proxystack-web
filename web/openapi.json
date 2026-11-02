@@ -3719,6 +3719,10 @@
             ],
             "type": "string"
           },
+          "display_template": {
+            "description": "用户档案和入站均未配置展示名模板时使用的全局模板",
+            "type": "string"
+          },
           "interval": {
             "description": "Surge managed config 的更新间隔（秒）",
             "format": "int64",
@@ -3743,6 +3747,7 @@
         "required": [
           "source_name",
           "public_base_url",
+          "display_template",
           "surge_managed",
           "interval",
           "strict",

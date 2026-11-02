@@ -116,6 +116,7 @@ func validateSubscription(issues *Issues, doc *Document) {
 				issues.add(path+".public_base_url", "must be an http(s) URL without query or fragment")
 			}
 		}
+		checkDisplayTemplate(issues, path+".display_template", settings.DisplayTemplate)
 		checkEnum(issues, path+".disabled_response", settings.DisabledResponse, DisabledNotFound, DisabledEmpty)
 		if doc.Settings.NodeExport.Enabled && len(doc.Settings.NodeExport.Token) < 16 {
 			issues.add("settings.node_export.token", "a token of at least 16 characters is required")

@@ -227,11 +227,12 @@ func DefaultSecurityConfig() SecurityConfig {
 
 // GlobalConfig 保存生成器需要的全局设置和全部订阅用户档案。
 type GlobalConfig struct {
-	ExternalHost string         `json:"external_host"`
-	Users        []UserProfile  `json:"users"`
-	PortRanges   PortRanges     `json:"port_ranges"`
-	Defaults     DefaultsConfig `json:"defaults"`
-	Security     SecurityConfig `json:"security"`
+	ExternalHost                string         `json:"external_host"`
+	SubscriptionDisplayTemplate string         `json:"subscription_display_template"`
+	Users                       []UserProfile  `json:"users"`
+	PortRanges                  PortRanges     `json:"port_ranges"`
+	Defaults                    DefaultsConfig `json:"defaults"`
+	Security                    SecurityConfig `json:"security"`
 }
 
 // Validate 校验全局配置字段和默认值枚举。

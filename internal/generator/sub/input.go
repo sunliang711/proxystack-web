@@ -146,7 +146,8 @@ func renderSingleInboundNode(stackSet domain.StackSet, stack domain.Stack, inbou
 	if user == "" {
 		user = "default"
 	}
-	remark, err := subscriptionRemark(stack.Name, inbound, user, domain.DefaultUserProfile, inbound.Remark, inbound.DisplayTemplate)
+	remark, err := subscriptionRemark(stack.Name, inbound, user, domain.DefaultUserProfile, inbound.Remark,
+		inbound.DisplayTemplate, stackSet.Config.SubscriptionDisplayTemplate)
 	if err != nil {
 		return Node{}, err
 	}
@@ -183,7 +184,8 @@ func renderVmessUserNode(stackSet domain.StackSet, stack domain.Stack, inbound d
 	if tag == "" {
 		tag = inbound.TagOrDefault() + ":" + user.User
 	}
-	remark, err := subscriptionRemark(stack.Name, inbound, user.User, user.ProfileOrDefault(), firstNonEmpty(user.Remark, inbound.Remark), firstNonEmpty(user.DisplayTemplate, inbound.DisplayTemplate))
+	remark, err := subscriptionRemark(stack.Name, inbound, user.User, user.ProfileOrDefault(), firstNonEmpty(user.Remark, inbound.Remark),
+		user.DisplayTemplate, inbound.DisplayTemplate, stackSet.Config.SubscriptionDisplayTemplate)
 	if err != nil {
 		return Node{}, err
 	}
@@ -214,7 +216,8 @@ func renderShadowsocksUserNode(stackSet domain.StackSet, stack domain.Stack, inb
 		tag = inbound.TagOrDefault() + ":" + user.User
 	}
 	method := inbound.Method
-	remark, err := subscriptionRemark(stack.Name, inbound, user.User, user.ProfileOrDefault(), firstNonEmpty(user.Remark, inbound.Remark), firstNonEmpty(user.DisplayTemplate, inbound.DisplayTemplate))
+	remark, err := subscriptionRemark(stack.Name, inbound, user.User, user.ProfileOrDefault(), firstNonEmpty(user.Remark, inbound.Remark),
+		user.DisplayTemplate, inbound.DisplayTemplate, stackSet.Config.SubscriptionDisplayTemplate)
 	if err != nil {
 		return Node{}, err
 	}
@@ -244,7 +247,8 @@ func renderGenericUserNode(stackSet domain.StackSet, stack domain.Stack, inbound
 	if tag == "" {
 		tag = inbound.TagOrDefault() + ":" + user.User
 	}
-	remark, err := subscriptionRemark(stack.Name, inbound, user.User, user.ProfileOrDefault(), firstNonEmpty(user.Remark, inbound.Remark), firstNonEmpty(user.DisplayTemplate, inbound.DisplayTemplate))
+	remark, err := subscriptionRemark(stack.Name, inbound, user.User, user.ProfileOrDefault(), firstNonEmpty(user.Remark, inbound.Remark),
+		user.DisplayTemplate, inbound.DisplayTemplate, stackSet.Config.SubscriptionDisplayTemplate)
 	if err != nil {
 		return Node{}, err
 	}
@@ -283,16 +287,17 @@ func subscriptionServer(stackSet domain.StackSet, inbound domain.Inbound) string
 }
 
 // SubscriptionRemark 供直连上游节点复用入站订阅的展示名规则。
-func SubscriptionRemark(stackName string, inbound domain.Inbound, user, profile, remark, displayTemplate string) (string, error) {
-	return subscriptionRemark(stackName, inbound, user, profile, remark, displayTemplate)
+func SubscriptionRemark(stackName string, inbound domain.Inbound, user, profile, remark string, displayTemplates ...string) (string, error) {
+	return subscriptionRemark(stackName, inbound, user, profile, remark, displayTemplates...)
 }
 
-// subscriptionRemark 生成订阅节点展示名；display_template 优先，其次使用显式 remark，未配置时使用稳定的 stack/protocol 名称。
-func subscriptionRemark(stackName string, inbound domain.Inbound, user string, profile string, configuredRemark string, displayTemplate string) (string, error) {
+// subscriptionRemark 按用户、入站、全局顺序选择模板，其次使用显式 remark，最后使用稳定的 stack/protocol 名称。
+func subscriptionRemark(stackName string, inbound domain.Inbound, user string, profile string, configuredRemark string, displayTemplates ...string) (string, error) {
 	baseRemark := configuredRemark
 	if baseRemark == "" {
 		baseRemark = inbound.Name
 	}
+	displayTemplate := firstNonEmpty(displayTemplates...)
 	if displayTemplate != "" {
 		return renderDisplayTemplate(displayTemplate, map[string]any{
 			"stack":    stackName,

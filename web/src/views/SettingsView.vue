@@ -8,6 +8,7 @@ import {
 import { api, emptyErrors, fieldState, MASKED, problemMessage, splitProblem, type FormErrors, type Schemas } from '../api/client'
 import { randomString } from '../util/generate'
 import SecretInput from '../components/SecretInput.vue'
+import TemplateInput from '../components/TemplateInput.vue'
 import ErrorList from '../components/ErrorList.vue'
 import SettingsSection from '../components/SettingsSection.vue'
 import EntityLink from '../components/EntityLink.vue'
@@ -299,6 +300,9 @@ async function save() {
         </NFormItem>
         <NFormItem label="订阅端对外地址" v-bind="f('subscription.public_base_url', '订阅链接和 Surge managed 首行使用的地址，例如 https://sub.example.com；为空时订阅端用请求地址，面板上只显示链接路径')">
           <NInput v-model:value="form.subscription.public_base_url" placeholder="https://sub.example.com" />
+        </NFormItem>
+        <NFormItem label="全局展示名模板" v-bind="f('subscription.display_template', '最低模板优先级；仅当入站用户覆盖、所选用户档案和入站模板均为空时生效')">
+          <TemplateInput v-model:value="form.subscription.display_template" />
         </NFormItem>
         <NFormItem label="Surge managed config" v-bind="f('subscription.surge_managed')">
           <NSwitch v-model:value="form.subscription.surge_managed" />

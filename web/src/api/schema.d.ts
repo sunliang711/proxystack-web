@@ -2550,6 +2550,8 @@ export interface components {
         SubscriptionSettings: {
             /** @enum {string} */
             disabled_response: "not_found" | "empty";
+            /** @description 用户档案和入站均未配置展示名模板时使用的全局模板 */
+            display_template: string;
             /**
              * Format: int64
              * @description Surge managed config 的更新间隔（秒）

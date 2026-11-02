@@ -263,7 +263,7 @@ const showUsers = computed(() => isUserProtocol.value || (isAuthProtocol.value &
           <NFormItem label="remark" v-bind="f('remark')">
             <NInput v-model:value="editing.draft.remark" />
           </NFormItem>
-          <NFormItem label="展示名模板" v-bind="f('display_template', '入站默认模板；仅当用户单独配置和所选用户档案模板均为空时生效')">
+          <NFormItem label="展示名模板" v-bind="f('display_template', '入站默认模板；仅当用户单独配置和所选用户档案模板均为空时生效，留空则使用全局模板')">
             <TemplateInput v-model:value="editing.draft.display_template" />
           </NFormItem>
           <NFormItem label="region" v-bind="f('region')">

@@ -49,6 +49,15 @@ func TestStackDirectNodes(t *testing.T) {
 		{name: "user template", mutate: func(doc *configdoc.Document) {
 			doc.Users[0].DisplayTemplate = "{{ .stack | toUpper }} {{ .user }}"
 		}, want: []string{"USA1 alice [DRT]"}},
+		{name: "global template without user inbound", mutate: func(doc *configdoc.Document) {
+			doc.Stacks[1].Xray.Inbounds[1].Users = nil
+			doc.Stacks[1].Xray.Inbounds[1].DisplayTemplate = "unrelated inbound"
+			doc.Settings.Subscription.DisplayTemplate = "{{ .stack | toUpper }} {{ .user }}"
+		}, want: []string{"USA1 alice [DRT]"}},
+		{name: "unrelated inbound template is ignored", mutate: func(doc *configdoc.Document) {
+			doc.Stacks[1].Xray.Inbounds[1].Users = nil
+			doc.Stacks[1].Xray.Inbounds[1].DisplayTemplate = "unrelated inbound"
+		}, want: []string{"usa1 vmess [DRT]"}},
 		{name: "profile and inbound override", mutate: func(doc *configdoc.Document) {
 			doc.Users[0].Profiles = []configdoc.Profile{{Name: "mobile", UUID: doc.Users[0].UUID, SSPassword: "profile-password", Remark: "Profile"}}
 			doc.Stacks[1].Xray.Inbounds[1].Users[0] = configdoc.UserRef{User: "alice", Profile: "mobile", DisplayTemplate: "{{ .remark }} {{ .profile }}"}

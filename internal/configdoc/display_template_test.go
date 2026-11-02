@@ -16,6 +16,12 @@ func TestDisplayTemplateFieldErrors(t *testing.T) {
 		mutate func(*configdoc.Document)
 	}{
 		{
+			name: "global", path: "settings.subscription.display_template",
+			mutate: func(doc *configdoc.Document) {
+				doc.Settings.Subscription.DisplayTemplate = ".stack | toUpper"
+			},
+		},
+		{
 			name: "unused user", path: "users[0].display_template",
 			mutate: func(doc *configdoc.Document) {
 				doc.Stacks = nil
@@ -59,6 +65,10 @@ func TestDisplayTemplateUniqueNames(t *testing.T) {
 
 	// 同一 Stack 有多个订阅入站时，仅使用 Stack 名仍应被重名校验拦截。
 	doc.Users[0].DisplayTemplate = "{{ .stack | toUpper }}"
+	require.Contains(t, configdoc.Validate(doc).Error(), "duplicate proxy name")
+
+	doc.Users[0].DisplayTemplate = ""
+	doc.Settings.Subscription.DisplayTemplate = "{{ .stack | toUpper }}"
 	require.Contains(t, configdoc.Validate(doc).Error(), "duplicate proxy name")
 
 	doc.Stacks = nil

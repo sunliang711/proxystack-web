@@ -106,7 +106,7 @@ func ValidateStackSet(stackSet domain.StackSet, opts ...Option) error {
 	issues := make([]Issue, 0)
 	issues = append(issues, ValidateUniqueStackNames(stackSet.Stacks)...)
 	issues = append(issues, ValidatePublicInboundAuth(stackSet.Config, stackSet.Stacks)...)
-	issues = append(issues, ValidateSubscriptionProxyNames(stackSet.Stacks)...)
+	issues = append(issues, ValidateSubscriptionProxyNames(stackSet.Config, stackSet.Stacks)...)
 	portBindings := CollectPortBindings(stackSet)
 	issues = append(issues, ValidateUniquePorts(portBindings)...)
 	issues = append(issues, ValidateReferenceGraph(stackSet)...)
@@ -135,7 +135,7 @@ type subscriptionProxyName struct {
 }
 
 // ValidateSubscriptionProxyNames 校验同一订阅 user 下最终节点展示名不重复。
-func ValidateSubscriptionProxyNames(stacks []domain.Stack) []Issue {
+func ValidateSubscriptionProxyNames(config domain.GlobalConfig, stacks []domain.Stack) []Issue {
 	issues := make([]Issue, 0)
 	seen := map[string]subscriptionProxyName{}
 	for _, stack := range stacks {
@@ -146,7 +146,7 @@ func ValidateSubscriptionProxyNames(stacks []domain.Stack) []Issue {
 			if !inbound.Sub {
 				continue
 			}
-			names, nameIssues := collectSubscriptionProxyNames(stack.Name, inboundIndex, inbound)
+			names, nameIssues := collectSubscriptionProxyNames(config, stack.Name, inboundIndex, inbound)
 			issues = append(issues, nameIssues...)
 			for _, name := range names {
 				key := name.User + "\x00" + name.Remark
@@ -165,14 +165,15 @@ func ValidateSubscriptionProxyNames(stacks []domain.Stack) []Issue {
 }
 
 // collectSubscriptionProxyNames 渲染一个 inbound 会贡献的订阅 user/name 对。
-func collectSubscriptionProxyNames(stackName string, inboundIndex int, inbound domain.Inbound) ([]subscriptionProxyName, []Issue) {
+func collectSubscriptionProxyNames(config domain.GlobalConfig, stackName string, inboundIndex int, inbound domain.Inbound) ([]subscriptionProxyName, []Issue) {
 	path := fmt.Sprintf("stacks.%s.xray.inbounds[%d]", stackName, inboundIndex)
 	users := subscriptionInboundUsers(inbound)
 	if len(users) > 0 {
 		names := make([]subscriptionProxyName, 0, len(users))
 		issues := make([]Issue, 0)
 		for userIndex, user := range users {
-			remark, err := subscriptionRemark(stackName, inbound, user.User, user.ProfileOrDefault(), firstNonEmpty(user.Remark, inbound.Remark), firstNonEmpty(user.DisplayTemplate, inbound.DisplayTemplate))
+			remark, err := subscriptionRemark(stackName, inbound, user.User, user.ProfileOrDefault(), firstNonEmpty(user.Remark, inbound.Remark),
+				firstNonEmpty(user.DisplayTemplate, inbound.DisplayTemplate, config.SubscriptionDisplayTemplate))
 			userPath := fmt.Sprintf("%s.user_refs[%d]", path, userIndex)
 			if !inbound.UsesUserRefs() {
 				userPath = fmt.Sprintf("%s.users[%d]", path, userIndex)
@@ -189,7 +190,8 @@ func collectSubscriptionProxyNames(stackName string, inboundIndex int, inbound d
 	if user == "" {
 		user = "default"
 	}
-	remark, err := subscriptionRemark(stackName, inbound, user, domain.DefaultUserProfile, inbound.Remark, inbound.DisplayTemplate)
+	remark, err := subscriptionRemark(stackName, inbound, user, domain.DefaultUserProfile, inbound.Remark,
+		firstNonEmpty(inbound.DisplayTemplate, config.SubscriptionDisplayTemplate))
 	if err != nil {
 		return nil, []Issue{{Path: path + ".display_template", Message: err.Error()}}
 	}

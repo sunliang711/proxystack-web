@@ -39,7 +39,7 @@ func StackDirectNodes(doc *Document) ([]sub.Node, error) {
 					continue
 				}
 				protocol, _ := upstream.Config.Get("type")
-				remark, region, err := directSubscriptionName(stack, user, protocol)
+				remark, region, err := directSubscriptionName(doc, stack, user, protocol)
 				if err != nil {
 					return nil, err
 				}
@@ -64,26 +64,28 @@ func StackDirectNodes(doc *Document) ([]sub.Node, error) {
 	return nodes, nil
 }
 
-// directSubscriptionName 优先沿用该用户第一个订阅入站的名称；仅授权直连时回退到首个订阅入站。
-func directSubscriptionName(stack Stack, user User, protocol string) (string, string, error) {
+// directSubscriptionName 使用包含该用户的首个订阅入站；仅授权直连时不借用无关入站模板。
+func directSubscriptionName(doc *Document, stack Stack, user User, protocol string) (string, string, error) {
 	inbound := Inbound{Name: "direct", Protocol: protocol}
-	for _, candidate := range stack.Xray.Inbounds {
+	var ref *UserRef
+	for candidateIndex := range stack.Xray.Inbounds {
+		candidate := &stack.Xray.Inbounds[candidateIndex]
 		if !candidate.Sub {
 			continue
 		}
-		if !inbound.Sub {
-			inbound = candidate
+		for refIndex := range candidate.Users {
+			if candidate.Users[refIndex].User == user.Name {
+				inbound = *candidate
+				ref = &candidate.Users[refIndex]
+				break
+			}
 		}
-		if slices.ContainsFunc(candidate.Users, func(ref UserRef) bool { return ref.User == user.Name }) {
-			inbound = candidate
+		if ref != nil {
 			break
 		}
 	}
 	remark, display, profile := inbound.Remark, user.DisplayTemplate, DefaultProfile
-	for _, ref := range inbound.Users {
-		if ref.User != user.Name {
-			continue
-		}
+	if ref != nil {
 		if ref.Profile != "" && ref.Profile != DefaultProfile {
 			profile = ref.Profile
 			for _, candidate := range user.Profiles {
@@ -102,11 +104,12 @@ func directSubscriptionName(stack Stack, user User, protocol string) (string, st
 		if ref.DisplayTemplate != "" {
 			display = ref.DisplayTemplate
 		}
-		break
 	}
-	if display == "" {
-		display = inbound.DisplayTemplate
+	globalDisplay := ""
+	if doc.Settings != nil {
+		globalDisplay = doc.Settings.Subscription.DisplayTemplate
 	}
-	name, err := sub.SubscriptionRemark(stack.Name, compileInbound(inbound), user.Name, domain.NormalizeUserProfile(profile), remark, display)
+	name, err := sub.SubscriptionRemark(stack.Name, compileInbound(inbound), user.Name, domain.NormalizeUserProfile(profile), remark,
+		display, inbound.DisplayTemplate, globalDisplay)
 	return name, inbound.Region, err
 }

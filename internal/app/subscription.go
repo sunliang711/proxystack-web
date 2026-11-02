@@ -149,6 +149,7 @@ func (s *Service) buildSubscription(ctx context.Context) (*subSnapshot, error) {
 			skip(revision, err)
 			continue
 		}
+		configdoc.OverlaySubscriptionNames(snapshotDoc, doc)
 		snapshotDoc.Settings.Basic.ExternalHost = doc.Settings.Basic.ExternalHost
 		set, err := configdoc.Compile(snapshotDoc)
 		if err != nil {
