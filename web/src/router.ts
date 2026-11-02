@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { panelBase } from './api/client'
-import { loadSession, session } from './session'
+import { panelBase, setUnauthorizedHandler } from './api/client'
+import { clearSession, loadSession, session } from './session'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -47,6 +47,19 @@ const router = createRouter({
     },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
+})
+
+setUnauthorizedHandler((schemaPath) => {
+  // 首次进入受保护页面时由路由守卫使用目标地址生成回跳参数。
+  if (schemaPath === '/api/auth/session' && !session.loaded) return
+  const current = router.currentRoute.value
+  if (current.meta.public || current.name === 'login') return
+  const redirect = current.fullPath
+  clearSession()
+  void router.replace({
+    name: 'login',
+    query: { expired: '1', ...(redirect !== '/' ? { redirect } : {}) },
+  })
 })
 
 router.beforeEach(async (to) => {

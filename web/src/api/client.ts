@@ -7,6 +7,7 @@ export type Schemas = components['schemas']
 export const panelBase = new URL('.', document.baseURI).pathname
 
 let csrfToken = ''
+let unauthorizedHandler: ((schemaPath: string) => void) | null = null
 
 export function setCSRFToken(token: string) {
   csrfToken = token
@@ -15,6 +16,18 @@ export function setCSRFToken(token: string) {
 /** 不经过 openapi-fetch 的请求（例如文件上传）需要手工带上 CSRF token。 */
 export function getCSRFToken(): string {
   return csrfToken
+}
+
+/** 注册会话失效处理，由路由层负责跳转并保留当前地址。 */
+export function setUnauthorizedHandler(handler: (schemaPath: string) => void) {
+  unauthorizedHandler = handler
+}
+
+/** 统一处理 openapi-fetch 之外的请求返回。 */
+export function handleUnauthorizedResponse(response: Response, schemaPath = ''): boolean {
+  if (response.status !== 401) return false
+  unauthorizedHandler?.(schemaPath)
+  return true
 }
 
 const csrf: Middleware = {
@@ -26,11 +39,18 @@ const csrf: Middleware = {
   },
 }
 
+const unauthorized: Middleware = {
+  onResponse({ response, schemaPath }) {
+    handleUnauthorizedResponse(response, schemaPath)
+    return response
+  },
+}
+
 export const api = createClient<paths>({
   baseUrl: new URL('.', document.baseURI).href.replace(/\/$/, ''),
   credentials: 'same-origin',
 })
-api.use(csrf)
+api.use(csrf, unauthorized)
 
 /** Huma 返回的 RFC 9457 错误体。 */
 export type ProblemDetail = Schemas['ErrorModel']

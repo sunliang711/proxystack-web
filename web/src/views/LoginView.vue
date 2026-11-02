@@ -13,7 +13,7 @@ const form = reactive({ username: 'admin', password: '', totp_code: '' })
 const needCode = ref(false)
 const codeInput = ref<InstanceType<typeof NInput> | null>(null)
 const loading = ref(false)
-const error = ref('')
+const error = ref(route.query.expired === '1' ? '登录已过期，请重新登录' : '')
 
 async function submit() {
   loading.value = true

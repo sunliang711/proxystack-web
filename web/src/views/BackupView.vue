@@ -4,7 +4,7 @@ import {
   NAlert, NButton, NCard, NCheckbox, NDataTable, NDescriptions, NDescriptionsItem, NForm, NFormItem, NInput, NModal, NPopconfirm, NRadioButton, NRadioGroup,
   NSpace, NSwitch, NTag, NText, useMessage, type DataTableColumns,
 } from 'naive-ui'
-import { api, getCSRFToken, panelBase, problemMessage, type Schemas } from '../api/client'
+import { api, getCSRFToken, handleUnauthorizedResponse, panelBase, problemMessage, type Schemas } from '../api/client'
 import ExportDialog from '../components/ExportDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
 import { useBackgroundTask } from '../composables/useBackgroundTask'
@@ -95,6 +95,7 @@ async function uploadPackage() {
     method: 'POST', body: form, headers: { 'X-CSRF-Token': getCSRFToken() }, credentials: 'same-origin',
   })
   uploading.value = false
+  if (handleUnauthorizedResponse(response)) return
   const body = await response.json()
   if (!response.ok) {
     restoreError.value = body.errors?.[0]?.message ?? problemMessage(body, '上传失败')

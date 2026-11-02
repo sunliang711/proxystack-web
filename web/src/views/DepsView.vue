@@ -5,7 +5,7 @@ import {
   NGrid, NGridItem, NInput, NModal, NPopconfirm, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NSwitch, NTag, NText,
   NUpload, NUploadDragger, useMessage, type DataTableColumns, type UploadFileInfo,
 } from 'naive-ui'
-import { api, getCSRFToken, panelBase, problemMessage, type Schemas } from '../api/client'
+import { api, getCSRFToken, handleUnauthorizedResponse, panelBase, problemMessage, type Schemas } from '../api/client'
 import { useBackgroundTask } from '../composables/useBackgroundTask'
 import { formatTime } from '../util/format'
 
@@ -79,6 +79,7 @@ async function install() {
       headers: { 'X-CSRF-Token': getCSRFToken() },
       credentials: 'same-origin',
     })
+    if (handleUnauthorizedResponse(response)) return
     const body = await response.json()
     if (!response.ok) {
       message.error(problemMessage(body, '上传失败') + (body.errors?.map((e: { message: string }) => `：${e.message}`).join('') ?? ''))
