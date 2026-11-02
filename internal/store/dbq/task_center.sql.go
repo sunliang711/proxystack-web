@@ -11,22 +11,24 @@ import (
 
 const countTaskCenter = `-- name: CountTaskCenter :one
 WITH entries AS (
-    SELECT 'task' AS source, status FROM tasks
+    SELECT 'task' AS source, kind, status FROM tasks
     UNION ALL
-    SELECT 'job' AS source, status FROM job_runs
+    SELECT 'job' AS source, j.kind, r.status FROM job_runs r JOIN jobs j ON j.id = r.job_id
 )
 SELECT COUNT(*) FROM entries
 WHERE (CAST(?1 AS TEXT) = 'all' OR source = ?1)
   AND (CAST(?2 AS TEXT) = 'all' OR status = ?2)
+  AND (CAST(?3 AS TEXT) = 'all' OR kind = ?3)
 `
 
 type CountTaskCenterParams struct {
 	Source string `json:"source"`
 	Status string `json:"status"`
+	Kind   string `json:"kind"`
 }
 
 func (q *Queries) CountTaskCenter(ctx context.Context, arg CountTaskCenterParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countTaskCenter, arg.Source, arg.Status)
+	row := q.db.QueryRowContext(ctx, countTaskCenter, arg.Source, arg.Status, arg.Kind)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -73,13 +75,15 @@ WITH entries AS (
 SELECT source, id, kind, title, actor, status, started_at, finished_at, log, error, job_id FROM entries
 WHERE (CAST(?1 AS TEXT) = 'all' OR source = ?1)
   AND (CAST(?2 AS TEXT) = 'all' OR status = ?2)
+  AND (CAST(?3 AS TEXT) = 'all' OR kind = ?3)
 ORDER BY (status = 'running') DESC, started_at DESC, source, id DESC
-LIMIT ?4 OFFSET ?3
+LIMIT ?5 OFFSET ?4
 `
 
 type ListTaskCenterParams struct {
 	Source     string `json:"source"`
 	Status     string `json:"status"`
+	Kind       string `json:"kind"`
 	PageOffset int64  `json:"page_offset"`
 	PageSize   int64  `json:"page_size"`
 }
@@ -102,6 +106,7 @@ func (q *Queries) ListTaskCenter(ctx context.Context, arg ListTaskCenterParams) 
 	rows, err := q.db.QueryContext(ctx, listTaskCenter,
 		arg.Source,
 		arg.Status,
+		arg.Kind,
 		arg.PageOffset,
 		arg.PageSize,
 	)

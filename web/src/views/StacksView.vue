@@ -106,7 +106,7 @@ const columns: DataTableColumns<Summary> = [
         '出口 IP',
         h(NTooltip, null, {
           trigger: () => h(NIcon, { size: 14, style: 'opacity: 0.5; cursor: help' }, () => h(InformationCircleOutline)),
-          default: () => '经该 stack 的 mihomo 并发查询 IPv4 和 IPv6 出口（IPv4 优先用 ipinfo.io），哪个先完成就先显示；另一项继续检测，失败原因可悬停查看。首次查询后保存在当前浏览器，进入页面或刷新页面时优先使用缓存；点「刷新出口 IP」或行内的刷新按钮重新检测并更新缓存。',
+          default: () => '经该 stack 的 mihomo 并发查询 IPv4 和 IPv6 出口（IPv4 优先用 ipinfo.io），哪个先完成就先显示；另一项继续检测，失败原因可悬停查看。首次查询后保存在当前浏览器，进入页面或刷新页面时优先使用缓存；点顶部「出口IP」或行内的刷新按钮重新检测并更新缓存。',
         }),
       ]),
     key: 'egress',
@@ -228,7 +228,7 @@ async function create() {
       <NSpace justify="end">
         <NButton :loading="egress.refreshing.value" :disabled="!egressTargets.length" @click="egress.refresh(egressTargets)">
           <template #icon><NIcon><RefreshOutline /></NIcon></template>
-          刷新出口 IP
+          出口IP
         </NButton>
         <NButton @click="showImport = true">导入</NButton>
         <NButton :disabled="!checked.length" @click="showExport = true">导出所选</NButton>

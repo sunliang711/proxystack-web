@@ -5415,6 +5415,7 @@ export interface operations {
             query?: {
                 source?: "all" | "task" | "job";
                 status?: "all" | "running" | "succeeded" | "failed" | "skipped" | "timeout";
+                kind?: "all" | "apply" | "backup" | "deps" | "self-update" | "db_backup" | "traffic_prune" | "geo_update" | "deps_check" | "deps_upgrade" | "remote_sync" | "reconcile" | "egress_check";
                 limit?: number;
                 offset?: number;
             };

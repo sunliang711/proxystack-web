@@ -42,7 +42,7 @@ func TestTaskCenterLiveLogs(t *testing.T) {
 	}))
 	s.tasks.running = map[int64]*Task{taskID: {Log: []string{"task first", "task second"}}}
 	s.scheduler.logs = map[int64]string{runID: "job first\njob second\n"}
-	page, err := s.TaskCenter(ctx, "all", "running", 20, 0)
+	page, err := s.TaskCenter(ctx, "all", "running", "all", 20, 0)
 	require.NoError(t, err)
 	require.Len(t, page.Items, 2)
 	for _, item := range page.Items {

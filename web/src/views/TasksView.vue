@@ -8,22 +8,45 @@ import { taskCenter, taskKey, taskRoute, type CenterTask } from '../tasks'
 import { formatTime } from '../util/format'
 import { taskActor, taskDuration, taskStatus } from '../util/task'
 
+type TaskKind = 'all' | 'apply' | 'backup' | 'deps' | 'self-update' | 'db_backup' | 'traffic_prune' | 'geo_update' | 'deps_check' | 'deps_upgrade' | 'remote_sync' | 'reconcile' | 'egress_check'
+
 const status = ref<'all' | CenterTask['status']>('all')
 const source = ref<'all' | CenterTask['source']>('all')
+const kind = ref<TaskKind>('all')
 const page = ref(1)
 const pageSize = 20
 const now = ref(Date.now())
 const timer = setInterval(() => { now.value = Date.now() }, 1000)
 onBeforeUnmount(() => clearInterval(timer))
-const { data, loading, error, refresh } = usePolling<Schemas['TaskCenterPage']>(() => [status.value, source.value, page.value], async (signal) => {
-  const { data, error } = await api.GET('/api/task-center', { params: { query: { source: source.value, status: status.value, limit: pageSize, offset: (page.value - 1) * pageSize } }, signal })
+const { data, loading, error, refresh } = usePolling<Schemas['TaskCenterPage']>(() => [status.value, source.value, kind.value, page.value], async (signal) => {
+  const { data, error } = await api.GET('/api/task-center', { params: { query: { source: source.value, status: status.value, kind: kind.value, limit: pageSize, offset: (page.value - 1) * pageSize } }, signal })
   if (!data) throw new Error(problemMessage(error, '任务列表加载失败'))
   return data
 }, 5000)
 const statusOptions = [{ label: '全部状态', value: 'all' }, ...Object.entries(taskStatus).map(([value, view]) => ({ label: view.label, value }))]
 const sourceOptions = [{ label: '全部来源', value: 'all' }, { label: '后台作业', value: 'task' }, { label: '定时任务', value: 'job' }]
+const allKindOptions = [
+  { label: '全部任务', value: 'all' },
+  { label: '应用配置', value: 'apply', source: 'task' },
+  { label: '导出迁移包', value: 'backup', source: 'task' },
+  { label: '依赖操作', value: 'deps', source: 'task' },
+  { label: 'proxystack-web 更新', value: 'self-update', source: 'task' },
+  { label: '数据库备份', value: 'db_backup', source: 'job' },
+  { label: '流量数据清理', value: 'traffic_prune', source: 'job' },
+  { label: 'geo 数据更新', value: 'geo_update', source: 'job' },
+  { label: '依赖版本检查', value: 'deps_check', source: 'job' },
+  { label: '依赖自动升级', value: 'deps_upgrade', source: 'job' },
+  { label: '远端节点源同步', value: 'remote_sync', source: 'job' },
+  { label: '对账', value: 'reconcile', source: 'job' },
+  { label: 'Stack 出口检测', value: 'egress_check', source: 'job' },
+]
+const kindOptions = computed(() => allKindOptions.filter((option) => !option.source || source.value === 'all' || option.source === source.value))
+function onSourceChange() {
+  kind.value = 'all'
+  page.value = 1
+}
 const columns: DataTableColumns<CenterTask> = [
-  { title: '任务', key: 'title', minWidth: 220, render: (task) => h('div', [
+  { title: '任务', key: 'title', width: 260, render: (task) => h('div', [
     h(RouterLink, { to: taskRoute(task) }, () => task.title),
     h('div', [h(NText, { depth: 3 }, () => `${task.source === 'job' ? '定时任务' : '后台作业'} · #${task.id}`)]),
   ]) },
@@ -42,7 +65,8 @@ const pagination = computed(() => ({ page: page.value, pageSize, itemCount: data
     <NSpace justify="space-between" align="center" style="margin-bottom: 20px">
       <NSpace align="center">
         <NSelect v-model:value="status" :options="statusOptions" style="width: 150px" aria-label="任务状态" @update:value="page = 1" />
-        <NSelect v-model:value="source" :options="sourceOptions" style="width: 150px" aria-label="任务来源" @update:value="page = 1" />
+        <NSelect v-model:value="source" :options="sourceOptions" style="width: 150px" aria-label="任务来源" @update:value="onSourceChange" />
+        <NSelect v-model:value="kind" :options="kindOptions" filterable style="width: 190px" aria-label="任务类型" @update:value="page = 1" />
       </NSpace>
       <NSpace align="center"><NText depth="3">{{ data?.running ?? taskCenter.state.running }} 个运行中 · 每 5 秒刷新</NText><NButton size="small" :loading="loading" @click="refresh">刷新</NButton></NSpace>
     </NSpace>

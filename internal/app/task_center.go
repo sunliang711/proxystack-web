@@ -78,21 +78,21 @@ func (s *Service) liveCenterTask(item *CenterTask) {
 }
 
 // TaskCenter 查询历史记录，运行中的任务优先显示，筛选和分页在数据库中完成。
-func (s *Service) TaskCenter(ctx context.Context, source, status string, limit, offset int64) (*TaskCenterPage, error) {
+func (s *Service) TaskCenter(ctx context.Context, source, status, kind string, limit, offset int64) (*TaskCenterPage, error) {
 	out := &TaskCenterPage{Items: []CenterTask{}}
 	err := s.Store.InTx(ctx, func(q *dbq.Queries) error {
-		rows, err := q.ListTaskCenter(ctx, dbq.ListTaskCenterParams{Source: source, Status: status, PageSize: limit, PageOffset: offset})
+		rows, err := q.ListTaskCenter(ctx, dbq.ListTaskCenterParams{Source: source, Status: status, Kind: kind, PageSize: limit, PageOffset: offset})
 		if err != nil {
 			return err
 		}
 		for _, row := range rows {
 			out.Items = append(out.Items, centerTask(row))
 		}
-		out.Total, err = q.CountTaskCenter(ctx, dbq.CountTaskCenterParams{Source: source, Status: status})
+		out.Total, err = q.CountTaskCenter(ctx, dbq.CountTaskCenterParams{Source: source, Status: status, Kind: kind})
 		if err != nil {
 			return err
 		}
-		out.Running, err = q.CountTaskCenter(ctx, dbq.CountTaskCenterParams{Source: "all", Status: TaskRunning})
+		out.Running, err = q.CountTaskCenter(ctx, dbq.CountTaskCenterParams{Source: "all", Status: TaskRunning, Kind: "all"})
 		return err
 	})
 	if err != nil {

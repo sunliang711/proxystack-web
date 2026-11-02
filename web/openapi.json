@@ -8709,6 +8709,30 @@
           {
             "explode": false,
             "in": "query",
+            "name": "kind",
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "apply",
+                "backup",
+                "deps",
+                "self-update",
+                "db_backup",
+                "traffic_prune",
+                "geo_update",
+                "deps_check",
+                "deps_upgrade",
+                "remote_sync",
+                "reconcile",
+                "egress_check"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
             "name": "limit",
             "schema": {
               "default": 50,
