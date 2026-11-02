@@ -6,6 +6,7 @@ import (
 	"net"
 	"slices"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -115,6 +116,41 @@ func TestEgressHealthLifecycle(t *testing.T) {
 		require.Equal(t, "usa1", row.StackName)
 		require.Zero(t, row.UserID)
 	}
+}
+
+// TestEgressFailureNotificationFormat 验证故障邮件按地址族和数据源分行展示错误与详情链接。
+func TestEgressFailureNotificationFormat(t *testing.T) {
+	h, stack := newEgressHarness(t)
+	ctx := context.Background()
+	h.svc.ProbeEgress = func(context.Context, deps.ProxyConfig, time.Duration) ([]app.EgressResult, error) {
+		return []app.EgressResult{
+			{Family: "ipv4", Sources: []app.EgressSource{
+				{URL: "https://ipinfo.io/json", Error: `Get "https://ipinfo.io/json": context deadline exceeded`},
+				{URL: "https://myip.ipip.net", Error: `Get "https://myip.ipip.net": context deadline exceeded`},
+			}},
+			{Family: "ipv6", Sources: []app.EgressSource{
+				{URL: "https://ifconfig.me/all.json", Error: `Get "https://ifconfig.me/all.json": context deadline exceeded`},
+				{URL: "https://ifconfig.co/json", Error: `Get "https://ifconfig.co/json": context deadline exceeded`},
+				{URL: "https://api64.ipify.org?format=json", Error: `Get "https://api64.ipify.org?format=json": context deadline exceeded`},
+			}},
+		}, nil
+	}
+	checkEgress(t, h)
+	rows, err := h.svc.Store.Q.ListNotifications(ctx, 100)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	info, err := h.svc.Info(ctx)
+	require.NoError(t, err)
+	detailURL := strings.TrimRight(info.PanelURL, "/") + "/stacks/" + strconv.FormatInt(stack.ID, 10)
+	require.Contains(t, rows[0].Body, "本轮查询失败次数：1\n\n"+
+		"IPv4：\n"+
+		"- https://ipinfo.io/json：context deadline exceeded\n"+
+		"- https://myip.ipip.net：context deadline exceeded\n\n"+
+		"IPv6：\n"+
+		"- https://ifconfig.me/all.json：context deadline exceeded\n"+
+		"- https://ifconfig.co/json：context deadline exceeded\n"+
+		"- https://api64.ipify.org?format=json：context deadline exceeded\n\n"+
+		"Stack 详情：\n"+detailURL+"\n")
 }
 
 // TestEgressRecoverySupersedesUnsentAlarm 验证发送失败后恢复，不会在恢复邮件后重发旧故障。

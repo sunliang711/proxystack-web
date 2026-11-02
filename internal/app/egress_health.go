@@ -336,6 +336,21 @@ func egressFamily(results []EgressResult, family string, probeErr error) (string
 	return "", "No valid IP address returned"
 }
 
+// egressFailureLines 将存储的来源错误转换为适合纯文本邮件阅读的分行列表。
+func egressFailureLines(family, message string) []string {
+	lines := []string{family + "："}
+	for _, item := range strings.Split(message, "; ") {
+		source, detail, ok := strings.Cut(item, ": ")
+		if !ok {
+			lines = append(lines, "- "+item)
+			continue
+		}
+		detail = strings.TrimPrefix(detail, `Get "`+source+`": `)
+		lines = append(lines, "- "+source+"："+detail)
+	}
+	return lines
+}
+
 func (s *Service) recordEgressResult(ctx context.Context, target egressTarget, probe egressProbe) error {
 	// 等待正在发送的邮件时不占用运行时锁，保持应用和启停操作可用。
 	s.notificationMu.Lock()
@@ -432,13 +447,16 @@ func (s *Service) enqueueEgressNotification(ctx context.Context, q *dbq.Queries,
 		"首次失败：" + time.Unix(row.FailureSince, 0).In(loc).Format(time.DateTime),
 		"检测时间：" + s.Now().In(loc).Format(time.DateTime)}
 	if event == configdoc.EventEgressDown {
-		lines = append(lines, fmt.Sprintf("本轮查询失败次数：%d", row.Failures), "IPv4："+row.Ipv4Error, "IPv6："+row.Ipv6Error)
+		lines = append(lines, fmt.Sprintf("本轮查询失败次数：%d", row.Failures), "")
+		lines = append(lines, egressFailureLines("IPv4", row.Ipv4Error)...)
+		lines = append(lines, "")
+		lines = append(lines, egressFailureLines("IPv6", row.Ipv6Error)...)
 	} else {
 		lines = append(lines, "故障持续时间："+s.Now().Sub(time.Unix(row.FailureSince, 0)).Round(time.Second).String(),
 			"IPv4："+row.Ipv4, "IPv6："+row.Ipv6)
 	}
 	if settings.Basic.PanelURL != "" {
-		lines = append(lines, fmt.Sprintf("Stack 详情：%s/stacks/%d", strings.TrimRight(settings.Basic.PanelURL, "/"), target.id))
+		lines = append(lines, "", "Stack 详情：", fmt.Sprintf("%s/stacks/%d", strings.TrimRight(settings.Basic.PanelURL, "/"), target.id))
 	}
 	status := NotifySkipped
 	if settings.Notify.Enabled && slices.Contains(settings.Notify.Events, event) {
