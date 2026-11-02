@@ -168,7 +168,7 @@ async function remove() {
         <NFormItem label="备注" v-bind="f('remark', '仅用于管理识别，不影响订阅节点名')">
           <NInput v-model:value="user.remark" />
         </NFormItem>
-        <NFormItem label="展示名模板" v-bind="f('display_template')">
+        <NFormItem label="展示名模板" v-bind="f('display_template', '适用于 default 档案，优先级高于入站模板；入站中的用户单独配置仍可覆盖此模板')">
           <TemplateInput v-model:value="user.display_template" />
         </NFormItem>
         <NFormItem label="UUID" required v-bind="f('uuid')">
