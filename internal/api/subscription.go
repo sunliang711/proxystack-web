@@ -13,6 +13,7 @@ import (
 	"proxystack-web/internal/app"
 	"proxystack-web/internal/configdoc"
 	"proxystack-web/internal/generator/sub"
+	"proxystack-web/internal/subpublish"
 )
 
 type manualNodesOutput struct {
@@ -75,6 +76,46 @@ type userPreviewInput struct {
 
 type bundleStatusOutput struct {
 	Body app.BundleStatus
+}
+
+type sshPublishIdentityOutput struct {
+	Body app.SSHPublishIdentityView
+}
+
+type publishTargetsOutput struct {
+	Body []app.PublishTargetView
+}
+
+type publishTargetOutput struct {
+	Body app.PublishTargetView
+}
+
+type publishTargetSetupOutput struct {
+	CacheControl string `header:"Cache-Control"`
+	Body         app.PublishTargetSetup
+}
+
+type publishTargetCreateInput struct {
+	Body app.PublishTargetInput
+}
+
+type publishTargetUpdateInput struct {
+	ID   int64 `path:"id"`
+	Body app.PublishTargetInput
+}
+
+type publishTargetProbeOutput struct {
+	Body subpublish.ProbeResult
+}
+
+type onlinePublishInput struct {
+	Body struct {
+		TargetIDs []int64 `json:"target_ids" minItems:"1"`
+	}
+}
+
+type onlinePublishOutput struct {
+	Body app.OnlinePublishStarted
 }
 
 func registerSubscription(api huma.API, s *Server) {
@@ -215,6 +256,69 @@ func registerSubscription(api huma.API, s *Server) {
 			}
 			return &bundleStatusOutput{Body: *status}, nil
 		})
+	huma.Register(api, reg(huma.Operation{OperationID: "getSSHPublishIdentity", Method: http.MethodGet, Path: "/api/sub-publish/identity", Summary: "SSH 在线发布公钥"}),
+		func(ctx context.Context, _ *struct{}) (*sshPublishIdentityOutput, error) {
+			identity, err := s.svc.SSHPublishIdentity(ctx)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &sshPublishIdentityOutput{Body: *identity}, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "generateSSHPublishIdentity", Method: http.MethodPost, Path: "/api/sub-publish/identity", Summary: "生成 SSH 在线发布密钥"}),
+		func(ctx context.Context, _ *struct{}) (*sshPublishIdentityOutput, error) {
+			identity, err := s.svc.GenerateSSHPublishIdentity(ctx, actorFrom(ctx))
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &sshPublishIdentityOutput{Body: *identity}, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "listSubscriptionPublishTargets", Method: http.MethodGet, Path: "/api/sub-publish/targets", Summary: "SSH 在线发布目标"}),
+		func(ctx context.Context, _ *struct{}) (*publishTargetsOutput, error) {
+			targets, err := s.svc.ListPublishTargets(ctx)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &publishTargetsOutput{Body: targets}, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "createSubscriptionPublishTarget", Method: http.MethodPost, Path: "/api/sub-publish/targets", Summary: "创建 SSH 在线发布目标"}),
+		func(ctx context.Context, in *publishTargetCreateInput) (*publishTargetSetupOutput, error) {
+			setup, err := s.svc.CreatePublishTarget(ctx, actorFrom(ctx), in.Body)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &publishTargetSetupOutput{CacheControl: "no-store", Body: *setup}, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "updateSubscriptionPublishTarget", Method: http.MethodPut, Path: "/api/sub-publish/targets/{id}", Summary: "修改 SSH 在线发布目标"}),
+		func(ctx context.Context, in *publishTargetUpdateInput) (*publishTargetOutput, error) {
+			target, err := s.svc.UpdatePublishTarget(ctx, actorFrom(ctx), in.ID, in.Body)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &publishTargetOutput{Body: *target}, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "deleteSubscriptionPublishTarget", Method: http.MethodDelete, Path: "/api/sub-publish/targets/{id}", Summary: "删除 SSH 在线发布目标", DefaultStatus: http.StatusNoContent}),
+		func(ctx context.Context, in *idPath) (*struct{}, error) {
+			if err := s.svc.DeletePublishTarget(ctx, actorFrom(ctx), in.ID); err != nil {
+				return nil, toHTTPError(err)
+			}
+			return nil, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "rotateSubscriptionPublishTargetSecret", Method: http.MethodPost, Path: "/api/sub-publish/targets/{id}/rotate-secret", Summary: "轮换订阅端发布 Secret"}),
+		func(ctx context.Context, in *idPath) (*publishTargetSetupOutput, error) {
+			setup, err := s.svc.RotatePublishTargetSecret(ctx, actorFrom(ctx), in.ID)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &publishTargetSetupOutput{CacheControl: "no-store", Body: *setup}, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "testSubscriptionPublishTarget", Method: http.MethodPost, Path: "/api/sub-publish/targets/{id}/test", Summary: "测试 SSH 在线发布目标"}),
+		func(ctx context.Context, in *idPath) (*publishTargetProbeOutput, error) {
+			result, err := s.svc.TestPublishTarget(ctx, actorFrom(ctx), in.ID)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &publishTargetProbeOutput{Body: *result}, nil
+		})
 	huma.Register(api, reg(huma.Operation{OperationID: "publishSubscriptionBundle", Method: http.MethodPost, Path: "/api/sub-bundle/publish", Summary: "签发并下载订阅包（含全部用户的 token，记入审计日志）"}),
 		func(ctx context.Context, _ *struct{}) (*exportOutput, error) {
 			bundle, err := s.svc.PublishSubscriptionBundle(ctx, actorFrom(ctx))
@@ -226,6 +330,14 @@ func registerSubscription(api huma.API, s *Server) {
 				ContentDisposition: fmt.Sprintf(`attachment; filename="%s"`, bundle.Filename),
 				Body:               bundle.Data,
 			}, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "publishSubscriptionBundleOnline", Method: http.MethodPost, Path: "/api/sub-bundle/publish-online", Summary: "签发订阅包并通过 SSH 向所选订阅端发布"}),
+		func(ctx context.Context, in *onlinePublishInput) (*onlinePublishOutput, error) {
+			started, err := s.svc.PublishSubscriptionBundleOnline(ctx, actorFrom(ctx), in.Body.TargetIDs)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &onlinePublishOutput{Body: *started}, nil
 		})
 	huma.Register(api, reg(huma.Operation{OperationID: "getSettingsSecrets", Method: http.MethodGet, Path: "/api/config/settings/secrets", Summary: "查看设置中的明文凭据（记入审计日志）"}),
 		func(ctx context.Context, _ *struct{}) (*settingsOutput, error) {

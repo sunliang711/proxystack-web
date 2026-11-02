@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"mime"
 	"net"
 	"net/http"
 	"net/url"
@@ -26,6 +28,8 @@ var formats = map[string]bool{sub.FormatClash: true, sub.FormatPremium: true, su
 const (
 	pollInterval = 2 * time.Second
 	settle       = time.Second
+	// maxHeaders 限制公开订阅端单个 HTTP 请求的头部大小。
+	maxHeaders = 16 << 10
 )
 
 // Server 是订阅端服务：持有当前可用的订阅数据，定期处理收件目录并在订阅包变化后重新加载。
@@ -33,6 +37,7 @@ type Server struct {
 	Layout Layout
 	Now    func() time.Time
 
+	updateMu  sync.Mutex
 	mu        sync.RWMutex
 	config    Config
 	view      *subscription.View
@@ -93,7 +98,7 @@ func (s *Server) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	srv := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
+	srv := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 2 * time.Minute, IdleTimeout: 60 * time.Second, MaxHeaderBytes: maxHeaders}
 	errCh := make(chan error, 1)
 	go func() {
 		slog.Info("subscription server started", "addr", config.Addr(), "dir", s.Layout.Dir)
@@ -121,6 +126,8 @@ func (s *Server) Run(ctx context.Context) error {
 
 // poll 导入收件目录中的订阅包，并在配置或数据目录变化后重新加载。
 func (s *Server) poll(running Config) {
+	s.updateMu.Lock()
+	defer s.updateMu.Unlock()
 	s.processInbox()
 	signature := s.dataSignature()
 	if signature == s.signature {
@@ -139,6 +146,106 @@ func (s *Server) poll(running Config) {
 		slog.Warn("listen address changed; restart proxystack-web-sub to apply")
 	}
 	s.reload(config)
+}
+
+type importResponse struct {
+	Status           string    `json:"status"`
+	Source           string    `json:"source"`
+	Sequence         int64     `json:"sequence"`
+	PreviousSequence int64     `json:"previous_sequence"`
+	GeneratedAt      time.Time `json:"generated_at"`
+	Users            int       `json:"users"`
+	Nodes            int       `json:"nodes"`
+}
+
+func bearerToken(header string) string {
+	scheme, token, ok := strings.Cut(strings.TrimSpace(header), " ")
+	if !ok || !strings.EqualFold(scheme, "Bearer") {
+		return ""
+	}
+	return strings.TrimSpace(token)
+}
+
+func (s *Server) publishSource(r *http.Request) (Config, SourceConfig, bool, error) {
+	config, err := LoadConfig(s.Layout)
+	if err != nil {
+		return Config{}, SourceConfig{}, false, err
+	}
+	source, ok := config.PublishSource(bearerToken(r.Header.Get("Authorization")))
+	return config, source, ok, nil
+}
+
+func (s *Server) handleBundleImport(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	config, source, ok, err := s.publishSource(r)
+	if err != nil {
+		slog.Error("load subscription server config for publish", "err", err)
+		writeError(w, http.StatusInternalServerError, "config_unavailable", "subscription server configuration is unavailable")
+		return
+	}
+	if !ok {
+		w.Header().Set("WWW-Authenticate", `Bearer realm="subscription-publish"`)
+		writeError(w, http.StatusUnauthorized, "unauthorized", "invalid publish token")
+		return
+	}
+	w.Header().Set("X-Proxystack-Source", source.Name)
+	if r.Method == http.MethodHead {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/octet-stream" {
+		writeError(w, http.StatusUnsupportedMediaType, "unsupported_media_type", "content type must be application/octet-stream")
+		return
+	}
+	if r.ContentLength > subscription.MaxBundleSize {
+		writeError(w, http.StatusRequestEntityTooLarge, "bundle_too_large", "subscription bundle is too large")
+		return
+	}
+	body := http.MaxBytesReader(w, r.Body, subscription.MaxBundleSize)
+	data, err := io.ReadAll(body)
+	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeError(w, http.StatusRequestEntityTooLarge, "bundle_too_large", "subscription bundle is too large")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "read_failed", "could not read subscription bundle")
+		return
+	}
+
+	s.updateMu.Lock()
+	result, err := ImportForSource(s.Layout, config, data, source.Name)
+	if err == nil {
+		fresh, loadErr := LoadConfig(s.Layout)
+		if loadErr != nil {
+			err = loadErr
+		} else {
+			s.reload(fresh)
+			s.signature = s.dataSignature()
+		}
+	}
+	s.updateMu.Unlock()
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrStale), errors.Is(err, ErrSequenceConflict):
+			writeError(w, http.StatusConflict, "sequence_conflict", "subscription bundle sequence is not newer")
+		case errors.Is(err, ErrSourceMismatch), errors.Is(err, ErrInvalidBundle):
+			writeError(w, http.StatusUnprocessableEntity, "invalid_bundle", "subscription bundle is invalid")
+		default:
+			slog.Error("import published bundle", "source", source.Name, "err", err)
+			writeError(w, http.StatusInternalServerError, "import_failed", "subscription bundle could not be imported")
+		}
+		return
+	}
+	status, code := http.StatusCreated, "imported"
+	if result.Already {
+		status, code = http.StatusOK, "already_imported"
+	}
+	writeJSON(w, status, importResponse{
+		Status: code, Source: result.Snapshot.Source, Sequence: result.Snapshot.Sequence, PreviousSequence: result.Previous,
+		GeneratedAt: result.Snapshot.GeneratedAt, Users: len(result.Snapshot.Users), Nodes: len(result.Snapshot.Nodes),
+	})
 }
 
 // dataSignature 用配置文件和订阅包的修改时间与大小判断是否需要重新加载。
@@ -258,6 +365,8 @@ func (s *Server) Handler() http.Handler {
 		}
 		writeJSON(w, status, health)
 	})
+	mux.HandleFunc("HEAD /api/v1/subscription-bundles/import", s.handleBundleImport)
+	mux.HandleFunc("POST /api/v1/subscription-bundles/import", s.handleBundleImport)
 	serveSubscription := func(w http.ResponseWriter, r *http.Request) {
 		format := r.PathValue("format")
 		if !formats[format] {
@@ -311,6 +420,8 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 
 // Refresh 立即处理收件目录并重新加载配置和订阅包。
 func (s *Server) Refresh() {
+	s.updateMu.Lock()
+	defer s.updateMu.Unlock()
 	s.processInbox()
 	config, err := LoadConfig(s.Layout)
 	if err != nil {

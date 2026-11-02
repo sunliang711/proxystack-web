@@ -1,6 +1,7 @@
 package subserver
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -9,32 +10,75 @@ import (
 	"proxystack-web/internal/subscription"
 )
 
-// ErrStale 表示订阅包不比已导入的新：序号小于或等于当前序号。
+// ErrStale 表示订阅包比已导入的序号旧。
 var ErrStale = errors.New("bundle is not newer than the imported one")
+
+// ErrSequenceConflict 表示相同序号对应的订阅包内容不同。
+var ErrSequenceConflict = errors.New("bundle sequence conflicts with the imported one")
+
+// ErrSourceMismatch 表示订阅包来源与发布 Token 绑定的来源不同。
+var ErrSourceMismatch = errors.New("bundle source does not match the authenticated source")
+
+// ErrInvalidBundle 表示订阅包格式、签名或内容校验失败。
+var ErrInvalidBundle = errors.New("subscription bundle is invalid")
 
 // ImportResult 是一次导入的结果。
 type ImportResult struct {
 	Snapshot *subscription.Snapshot
 	// Previous 是被替换的序号，首次导入为 0。
 	Previous int64
+	// Already 表示相同的原始订阅包已经导入，无需再次写盘。
+	Already bool
 }
 
 // Import 验签并校验订阅包，通过后原子替换该来源的当前订阅包。
-// 序号不大于当前序号时拒绝（force 为真时允许，用于管理端重装后序号重新开始）。
+// 更旧序号或相同序号的不同内容会被拒绝（force 为真时允许，用于管理端重装后序号重新开始）。
 func Import(layout Layout, config Config, data []byte, force bool) (*ImportResult, error) {
+	return importBundle(layout, config, data, force, "")
+}
+
+// ImportForSource 导入在线发布的订阅包，并要求包内来源与发布 Token 绑定的来源一致。
+func ImportForSource(layout Layout, config Config, data []byte, expectedSource string) (*ImportResult, error) {
+	return importBundle(layout, config, data, false, expectedSource)
+}
+
+func importBundle(layout Layout, config Config, data []byte, force bool, expectedSource string) (*ImportResult, error) {
 	snapshot, err := subscription.Open(data, config.TrustedKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrInvalidBundle, err)
 	}
-	result := &ImportResult{Snapshot: snapshot}
-	if current, err := readBundle(layout, config, snapshot.Source); err == nil {
-		result.Previous = current.Sequence
-		if snapshot.Sequence <= current.Sequence && !force {
-			return nil, fmt.Errorf("%w: source %s has sequence %d, the bundle has %d", ErrStale, snapshot.Source, current.Sequence, snapshot.Sequence)
-		}
+	if expectedSource != "" && snapshot.Source != expectedSource {
+		return nil, fmt.Errorf("%w: got %s", ErrSourceMismatch, snapshot.Source)
 	}
 	if err := os.MkdirAll(layout.DataDir(), 0o750); err != nil {
 		return nil, err
+	}
+	unlock, err := acquireImportLock(layout)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+
+	result := &ImportResult{Snapshot: snapshot}
+	currentData, readErr := os.ReadFile(layout.BundlePath(snapshot.Source))
+	if readErr == nil {
+		current, openErr := subscription.Open(currentData, config.TrustedKey)
+		if openErr != nil {
+			return nil, openErr
+		}
+		result.Previous = current.Sequence
+		if !force && snapshot.Sequence == current.Sequence {
+			if bytes.Equal(data, currentData) {
+				result.Already = true
+				return result, nil
+			}
+			return nil, fmt.Errorf("%w: source %s has sequence %d", ErrSequenceConflict, snapshot.Source, current.Sequence)
+		}
+		if snapshot.Sequence < current.Sequence && !force {
+			return nil, fmt.Errorf("%w: source %s has sequence %d, the bundle has %d", ErrStale, snapshot.Source, current.Sequence, snapshot.Sequence)
+		}
+	} else if !errors.Is(readErr, os.ErrNotExist) {
+		return nil, readErr
 	}
 	if err := writeFileAtomic(layout.BundlePath(snapshot.Source), data, 0o640); err != nil {
 		return nil, err

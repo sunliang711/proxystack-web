@@ -5,6 +5,9 @@ package subserver
 import (
 	"bytes"
 	"crypto/ed25519"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -45,9 +48,10 @@ type Config struct {
 
 // SourceConfig 是一个受信任的来源（一台管理端）。主来源提供用户、token、模板和设置，其他来源只提供节点。
 type SourceConfig struct {
-	Name      string `yaml:"name"`
-	PublicKey string `yaml:"public_key"`
-	Primary   bool   `yaml:"primary,omitempty"`
+	Name             string `yaml:"name"`
+	PublicKey        string `yaml:"public_key"`
+	PublishTokenHash string `yaml:"publish_token_hash,omitempty"`
+	Primary          bool   `yaml:"primary,omitempty"`
 }
 
 // DefaultConfig 返回默认配置（没有来源）。订阅端由 nginx 反向代理，默认只监听回环地址。
@@ -66,7 +70,7 @@ func (c Config) Validate() error {
 	if c.Port < 1 || c.Port > 65535 {
 		return fmt.Errorf("port must be between 1 and 65535")
 	}
-	names := map[string]bool{}
+	names, tokenHashes := map[string]bool{}, map[string]bool{}
 	primaries := 0
 	for _, source := range c.Sources {
 		if !subscription.ValidSourceName(source.Name) {
@@ -79,6 +83,16 @@ func (c Config) Validate() error {
 		if _, err := subscription.ParsePublicKey(source.PublicKey); err != nil {
 			return fmt.Errorf("source %s: %w", source.Name, err)
 		}
+		if source.PublishTokenHash != "" {
+			decoded, err := hex.DecodeString(source.PublishTokenHash)
+			if err != nil || len(decoded) != sha256.Size || hex.EncodeToString(decoded) != source.PublishTokenHash {
+				return fmt.Errorf("source %s: publish_token_hash must be a lowercase SHA-256 hex digest", source.Name)
+			}
+			if tokenHashes[source.PublishTokenHash] {
+				return errors.New("publish_token_hash must be unique for each source")
+			}
+			tokenHashes[source.PublishTokenHash] = true
+		}
 		if source.Primary {
 			primaries++
 		}
@@ -87,6 +101,28 @@ func (c Config) Validate() error {
 		return errors.New("exactly one source must be primary")
 	}
 	return nil
+}
+
+// PublishSource 返回发布 Token 绑定的来源；未配置或不匹配时返回 false。
+func (c Config) PublishSource(token string) (SourceConfig, bool) {
+	if token == "" {
+		return SourceConfig{}, false
+	}
+	sum := sha256.Sum256([]byte(token))
+	want := []byte(hex.EncodeToString(sum[:]))
+	var matched SourceConfig
+	found := 0
+	for _, source := range c.Sources {
+		if source.PublishTokenHash == "" {
+			continue
+		}
+		equal := subtle.ConstantTimeCompare([]byte(source.PublishTokenHash), want)
+		if equal == 1 {
+			matched = source
+		}
+		found |= equal
+	}
+	return matched, found == 1
 }
 
 // Source 返回来源配置。

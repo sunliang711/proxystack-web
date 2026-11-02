@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -292,6 +294,68 @@ func newSubSourceCommand(layout func() subserver.Layout) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.AddCommand(add, remove)
+	setPublishToken := &cobra.Command{
+		Use:   "set-publish-token NAME",
+		Short: "Set the online publish token for a trusted source (read securely from stdin)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			l := layout()
+			config, err := subserver.LoadConfig(l)
+			if err != nil {
+				return err
+			}
+			index := -1
+			for i := range config.Sources {
+				if config.Sources[i].Name == args[0] {
+					index = i
+				}
+			}
+			if index < 0 {
+				return fmt.Errorf("source %s does not exist", args[0])
+			}
+			token, err := readPassphrase(cmd, "Publish token: ")
+			if err != nil {
+				return err
+			}
+			if len(token) < 32 {
+				return errors.New("publish token must be at least 32 characters")
+			}
+			sum := sha256.Sum256([]byte(token))
+			config.Sources[index].PublishTokenHash = hex.EncodeToString(sum[:])
+			if err := subserver.SaveConfig(l, config); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Publish token updated for source %s.\n", args[0])
+			return nil
+		},
+	}
+	clearPublishToken := &cobra.Command{
+		Use:   "clear-publish-token NAME",
+		Short: "Disable online publishing for a trusted source",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			l := layout()
+			config, err := subserver.LoadConfig(l)
+			if err != nil {
+				return err
+			}
+			found := false
+			for i := range config.Sources {
+				if config.Sources[i].Name == args[0] {
+					config.Sources[i].PublishTokenHash = ""
+					found = true
+				}
+			}
+			if !found {
+				return fmt.Errorf("source %s does not exist", args[0])
+			}
+			if err := subserver.SaveConfig(l, config); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Online publishing disabled for source %s.\n", args[0])
+			return nil
+		},
+	}
+	cmd.AddCommand(add, remove, setPublishToken, clearPublishToken)
 	return cmd
 }

@@ -2341,6 +2341,41 @@
         ],
         "type": "object"
       },
+      "OnlinePublishInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "target_ids": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "target_ids"
+        ],
+        "type": "object"
+      },
+      "OnlinePublishStarted": {
+        "additionalProperties": false,
+        "properties": {
+          "sequence": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "task_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "task_id",
+          "sequence"
+        ],
+        "type": "object"
+      },
       "Outbound": {
         "additionalProperties": false,
         "properties": {
@@ -2629,6 +2664,42 @@
         ],
         "type": "object"
       },
+      "ProbeResult": {
+        "additionalProperties": false,
+        "properties": {
+          "nodes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceHealth"
+            },
+            "type": "array"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/Stage"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          },
+          "users": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stages",
+          "status",
+          "users",
+          "nodes",
+          "sources"
+        ],
+        "type": "object"
+      },
       "Profile": {
         "additionalProperties": false,
         "properties": {
@@ -2704,6 +2775,166 @@
           "latency_ms",
           "kind",
           "message"
+        ],
+        "type": "object"
+      },
+      "PublishTargetInput": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "host_key_algorithm": {
+            "type": "string"
+          },
+          "host_key_fingerprint": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "remote_port": {
+            "format": "int64",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "source": {
+            "type": "string"
+          },
+          "ssh_host": {
+            "type": "string"
+          },
+          "ssh_port": {
+            "format": "int64",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "ssh_user": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "ssh_host",
+          "ssh_port",
+          "ssh_user",
+          "host_key_algorithm",
+          "host_key_fingerprint",
+          "remote_port",
+          "source",
+          "enabled"
+        ],
+        "type": "object"
+      },
+      "PublishTargetSetup": {
+        "additionalProperties": false,
+        "properties": {
+          "authorized_keys_entry": {
+            "type": "string"
+          },
+          "publish_token_command": {
+            "type": "string"
+          },
+          "secret": {
+            "type": "string"
+          },
+          "sshd_config": {
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/PublishTargetView"
+          }
+        },
+        "required": [
+          "target",
+          "secret",
+          "authorized_keys_entry",
+          "publish_token_command",
+          "sshd_config"
+        ],
+        "type": "object"
+      },
+      "PublishTargetView": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "host_key_algorithm": {
+            "type": "string"
+          },
+          "host_key_fingerprint": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "last_publish_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_publish_error": {
+            "type": "string"
+          },
+          "last_sequence": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "last_test_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_test_error": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "remote_port": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "secret": {
+            "type": "string"
+          },
+          "secret_configured": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string"
+          },
+          "ssh_host": {
+            "type": "string"
+          },
+          "ssh_port": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "ssh_user": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "ssh_host",
+          "ssh_port",
+          "ssh_user",
+          "host_key_algorithm",
+          "host_key_fingerprint",
+          "remote_port",
+          "source",
+          "secret",
+          "secret_configured",
+          "enabled",
+          "last_test_at",
+          "last_test_error",
+          "last_publish_at",
+          "last_sequence",
+          "last_publish_error"
         ],
         "type": "object"
       },
@@ -3132,6 +3363,31 @@
         ],
         "type": "object"
       },
+      "SSHPublishIdentityView": {
+        "additionalProperties": false,
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "public_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "configured",
+          "public_key",
+          "fingerprint",
+          "created_at"
+        ],
+        "type": "object"
+      },
       "SchedulePreviewInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -3246,6 +3502,26 @@
           "node_export",
           "traffic",
           "notify"
+        ],
+        "type": "object"
+      },
+      "SourceHealth": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sequence": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "sequence"
         ],
         "type": "object"
       },
@@ -3682,6 +3958,36 @@
           "today",
           "month",
           "recent"
+        ],
+        "type": "object"
+      },
+      "Stage": {
+        "additionalProperties": false,
+        "properties": {
+          "duration_ms": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "succeeded",
+              "failed",
+              "skipped"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "status",
+          "duration_ms",
+          "message"
         ],
         "type": "object"
       },
@@ -8409,6 +8715,408 @@
           }
         ],
         "summary": "签发并下载订阅包（含全部用户的 token，记入审计日志）",
+        "tags": [
+          "subscription"
+        ]
+      }
+    },
+    "/api/sub-bundle/publish-online": {
+      "post": {
+        "operationId": "publishSubscriptionBundleOnline",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnlinePublishInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnlinePublishStarted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "签发订阅包并通过 SSH 向所选订阅端发布",
+        "tags": [
+          "subscription"
+        ]
+      }
+    },
+    "/api/sub-publish/identity": {
+      "get": {
+        "operationId": "getSSHPublishIdentity",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSHPublishIdentityView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "SSH 在线发布公钥",
+        "tags": [
+          "subscription"
+        ]
+      },
+      "post": {
+        "operationId": "generateSSHPublishIdentity",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSHPublishIdentityView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "生成 SSH 在线发布密钥",
+        "tags": [
+          "subscription"
+        ]
+      }
+    },
+    "/api/sub-publish/targets": {
+      "get": {
+        "operationId": "listSubscriptionPublishTargets",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PublishTargetView"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "SSH 在线发布目标",
+        "tags": [
+          "subscription"
+        ]
+      },
+      "post": {
+        "operationId": "createSubscriptionPublishTarget",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishTargetInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishTargetSetup"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "创建 SSH 在线发布目标",
+        "tags": [
+          "subscription"
+        ]
+      }
+    },
+    "/api/sub-publish/targets/{id}": {
+      "delete": {
+        "operationId": "deleteSubscriptionPublishTarget",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "删除 SSH 在线发布目标",
+        "tags": [
+          "subscription"
+        ]
+      },
+      "put": {
+        "operationId": "updateSubscriptionPublishTarget",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishTargetInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishTargetView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "修改 SSH 在线发布目标",
+        "tags": [
+          "subscription"
+        ]
+      }
+    },
+    "/api/sub-publish/targets/{id}/rotate-secret": {
+      "post": {
+        "operationId": "rotateSubscriptionPublishTargetSecret",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishTargetSetup"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "轮换订阅端发布 Secret",
+        "tags": [
+          "subscription"
+        ]
+      }
+    },
+    "/api/sub-publish/targets/{id}/test": {
+      "post": {
+        "operationId": "testSubscriptionPublishTarget",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProbeResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "测试 SSH 在线发布目标",
         "tags": [
           "subscription"
         ]

@@ -1,0 +1,366 @@
+<script setup lang="ts">
+import { computed, h, onMounted, ref } from 'vue'
+import {
+  NAlert, NButton, NCard, NDataTable, NDescriptions, NDescriptionsItem, NDrawer, NDrawerContent, NForm, NFormItem,
+  NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpace, NStep, NSteps, NSwitch, NTag, NText, useMessage,
+  type DataTableColumns,
+} from 'naive-ui'
+import { api, MASKED, problemMessage } from '../api/client'
+import CopyableCode from '../components/CopyableCode.vue'
+import { formatTime } from '../util/format'
+
+interface SSHIdentity {
+  configured: boolean
+  public_key: string
+  fingerprint: string
+  created_at: string
+}
+
+interface PublishTarget {
+  id?: number
+  name: string
+  ssh_host: string
+  ssh_port: number
+  ssh_user: string
+  host_key_algorithm: string
+  host_key_fingerprint: string
+  remote_port: number
+  source: string
+  secret: string
+  enabled: boolean
+  last_test_at?: string
+  last_test_error?: string
+  last_publish_at?: string
+  last_sequence?: number
+  last_publish_error?: string
+}
+
+interface ProvisioningResult {
+  target: PublishTarget
+  secret: string
+  authorized_keys_entry?: string
+  publish_token_command?: string
+  sshd_config?: string
+}
+
+interface TestStage {
+  name: string
+  status: string
+  duration_ms?: number
+  message?: string
+}
+
+interface TestResult {
+  stages: TestStage[]
+  status?: string
+  users?: number
+  nodes?: number
+  sources?: Array<{ name: string; sequence: number; error?: string }>
+}
+
+const message = useMessage()
+const identity = ref<SSHIdentity | null>(null)
+const targets = ref<PublishTarget[]>([])
+const currentSource = ref('main')
+const loading = ref(false)
+const generating = ref(false)
+const saving = ref(false)
+const testing = ref<number | null>(null)
+
+async function load() {
+  loading.value = true
+  const [identityResult, targetsResult, statusResult] = await Promise.all([
+    api.GET('/api/sub-publish/identity'),
+    api.GET('/api/sub-publish/targets'),
+    api.GET('/api/sub-bundle'),
+  ])
+  loading.value = false
+  if (identityResult.error) message.error(problemMessage(identityResult.error, '读取 SSH 密钥失败'))
+  if (targetsResult.error) message.error(problemMessage(targetsResult.error, '读取订阅端失败'))
+  if (statusResult.error) message.error(problemMessage(statusResult.error, '读取订阅来源失败'))
+  identity.value = identityResult.data ?? null
+  targets.value = targetsResult.data ?? []
+  currentSource.value = statusResult.data?.source ?? 'main'
+}
+onMounted(load)
+
+async function generateIdentity() {
+  generating.value = true
+  const { data, error } = await api.POST('/api/sub-publish/identity')
+  generating.value = false
+  if (error || !data) {
+    message.error(problemMessage(error, '生成 SSH 密钥失败'))
+    return
+  }
+  identity.value = data
+  message.success('SSH 密钥已生成')
+}
+
+const editing = ref<PublishTarget | null>(null)
+const draft = computed(() => editing.value as PublishTarget)
+function open(target?: PublishTarget) {
+  editing.value = target
+    ? { ...target, source: currentSource.value }
+    : {
+        name: '', ssh_host: '', ssh_port: 22, ssh_user: 'proxystack-tunnel', host_key_algorithm: 'ssh-ed25519',
+        host_key_fingerprint: '', remote_port: 9444, source: currentSource.value, secret: '', enabled: true,
+      }
+}
+
+const provisioning = ref<ProvisioningResult | null>(null)
+function provisioningResult(data: any): ProvisioningResult {
+  const target = data.target ?? data
+  return {
+    target,
+    secret: data.secret ?? '',
+    authorized_keys_entry: data.authorized_keys_entry,
+    publish_token_command: data.publish_token_command,
+    sshd_config: data.sshd_config,
+  }
+}
+
+async function save() {
+  saving.value = true
+  const id = draft.value.id
+  const body = {
+    name: draft.value.name,
+    ssh_host: draft.value.ssh_host,
+    ssh_port: draft.value.ssh_port,
+    ssh_user: draft.value.ssh_user,
+    host_key_algorithm: draft.value.host_key_algorithm,
+    host_key_fingerprint: draft.value.host_key_fingerprint,
+    remote_port: draft.value.remote_port,
+    source: currentSource.value,
+    enabled: draft.value.enabled,
+  }
+  const result = id
+    ? await api.PUT('/api/sub-publish/targets/{id}', { params: { path: { id } }, body })
+    : await api.POST('/api/sub-publish/targets', { body })
+  saving.value = false
+  if (result.error || !result.data) {
+    message.error(problemMessage(result.error, '保存订阅端失败'))
+    return
+  }
+  const created = !id
+  if (created) provisioning.value = provisioningResult(result.data)
+  editing.value = null
+  message.success('订阅端配置已保存')
+  await load()
+}
+
+async function remove(target: PublishTarget) {
+  const { error } = await api.DELETE('/api/sub-publish/targets/{id}', { params: { path: { id: target.id! } } })
+  if (error) {
+    message.error(problemMessage(error, '删除订阅端失败'))
+    return
+  }
+  message.success('订阅端已删除')
+  await load()
+}
+
+async function rotateSecret(target: PublishTarget) {
+  const { data, error } = await api.POST('/api/sub-publish/targets/{id}/rotate-secret', { params: { path: { id: target.id! } } })
+  if (error || !data) {
+    message.error(problemMessage(error, '轮换发布 Secret 失败'))
+    return
+  }
+  provisioning.value = provisioningResult(data)
+  message.success('管理端已改用新 Secret，请立即更新订阅端')
+  await load()
+}
+
+const testResult = ref<{ target: PublishTarget; result: TestResult } | null>(null)
+async function test(target: PublishTarget) {
+  testing.value = target.id ?? null
+  const { data, error } = await api.POST('/api/sub-publish/targets/{id}/test', { params: { path: { id: target.id! } } })
+  testing.value = null
+  if (error || !data) {
+    message.error(problemMessage(error, '连接测试失败'))
+    return
+  }
+  testResult.value = { target, result: data }
+  await load()
+}
+
+const instructions = ref<PublishTarget | null>(null)
+const authorizedKeys = (target: PublishTarget) =>
+  `restrict,port-forwarding,command="/bin/false",permitopen="127.0.0.1:${target.remote_port}" ${identity.value?.public_key ?? ''} proxystack-web`
+const tokenCommand = (target: PublishTarget) =>
+  `sudo proxystack-web sub --dir /opt/proxystack-web-sub source set-publish-token ${target.source}`
+const sshdConfig = (target: PublishTarget) => `Match User ${target.ssh_user}\n    AllowTcpForwarding local\n    PermitOpen 127.0.0.1:${target.remote_port}\n    ForceCommand /bin/false\n    PermitTTY no\n    X11Forwarding no\n    AllowAgentForwarding no\nMatch all`
+
+function statusTime(value?: string) {
+  return value && !value.startsWith('0001') && !value.startsWith('1970') ? formatTime(value) : '从未执行'
+}
+
+function sourceSequence(target: PublishTarget, result: TestResult) {
+  return result.sources?.find((source) => source.name === target.source)?.sequence
+}
+
+const columns: DataTableColumns<PublishTarget> = [
+  { title: '名称', key: 'name', minWidth: 120 },
+  { title: 'SSH 地址', key: 'ssh_host', minWidth: 190, render: (row) => `${row.ssh_user}@${row.ssh_host}:${row.ssh_port}` },
+  { title: '来源', key: 'source', width: 110 },
+  { title: '启用', key: 'enabled', width: 70, render: (row) => (row.enabled ? '是' : '否') },
+  {
+    title: '最近测试', key: 'last_test_at', minWidth: 170,
+    render: (row) => h(NSpace, { vertical: true, size: 2 }, () => [
+      statusTime(row.last_test_at),
+      row.last_test_error
+        ? h(NText, { type: 'error' }, () => row.last_test_error)
+        : row.last_test_at ? h(NTag, { size: 'small', type: 'success' }, () => '通过') : null,
+    ]),
+  },
+  {
+    title: '最近发布', key: 'last_publish_at', minWidth: 170,
+    render: (row) => h(NSpace, { vertical: true, size: 2 }, () => [
+      row.last_sequence ? `${statusTime(row.last_publish_at)} · #${row.last_sequence}` : '从未发布',
+      row.last_publish_error
+        ? h(NText, { type: 'error' }, () => row.last_publish_error)
+        : row.last_sequence ? h(NTag, { size: 'small', type: 'success' }, () => '成功') : null,
+    ]),
+  },
+  {
+    title: '操作', key: 'actions', width: 310, fixed: 'right',
+    render: (row) => h(NSpace, { size: 4 }, () => [
+      h(NButton, { size: 'small', loading: testing.value === row.id, onClick: () => test(row) }, () => '测试'),
+      h(NButton, { size: 'small', onClick: () => (instructions.value = row) }, () => '配置说明'),
+      h(NButton, { size: 'small', onClick: () => open(row) }, () => '编辑'),
+      h(NPopconfirm, { onPositiveClick: () => rotateSecret(row) }, {
+        trigger: () => h(NButton, { size: 'small', quaternary: true }, () => '轮换 Secret'),
+        default: () => '管理端将立即改用新 Secret；订阅端更新前在线发布会失败，更新后旧 Secret 才会失效。继续？',
+      }),
+      h(NPopconfirm, { onPositiveClick: () => remove(row) }, {
+        trigger: () => h(NButton, { size: 'small', type: 'error', quaternary: true }, () => '删除'),
+        default: () => '删除这个订阅端配置？',
+      }),
+    ]),
+  },
+]
+
+const algorithmOptions = [
+  { label: 'Ed25519', value: 'ssh-ed25519' },
+  { label: 'ECDSA P-256', value: 'ecdsa-sha2-nistp256' },
+  { label: 'RSA SHA-256/512', value: 'ssh-rsa' },
+]
+</script>
+
+<template>
+  <NSpace vertical :size="20">
+    <NCard title="管理端 SSH 密钥">
+      <NSpace v-if="identity?.configured" vertical :size="12">
+        <NDescriptions :column="1" label-placement="left" bordered size="small">
+          <NDescriptionsItem label="公钥指纹"><NTag size="small">{{ identity.fingerprint }}</NTag></NDescriptionsItem>
+          <NDescriptionsItem label="生成时间">{{ statusTime(identity.created_at) }}</NDescriptionsItem>
+        </NDescriptions>
+        <CopyableCode label="公钥" :value="identity.public_key" />
+        <NAlert type="warning" :bordered="false">
+          私钥只保存在管理端，不会通过 API 或页面返回。所有目标共用这一个公钥，需要手动配置到每台订阅端。
+        </NAlert>
+      </NSpace>
+      <NSpace v-else vertical>
+        <NAlert type="info" :bordered="false">在线发布需要一套管理端 SSH Ed25519 密钥。生成后只能查看公钥，不能取回私钥。</NAlert>
+        <NButton type="primary" :loading="generating" @click="generateIdentity">生成 SSH 密钥</NButton>
+      </NSpace>
+    </NCard>
+
+    <NCard title="订阅端目标" class="table-panel">
+      <template #header-extra>
+        <NButton type="primary" :disabled="!identity?.configured" @click="open()">添加订阅端</NButton>
+      </template>
+      <NAlert type="info" :bordered="false" style="margin-bottom: 12px">
+        管理端按需建立 SSH 正向转发，远端主机固定为 127.0.0.1。每个订阅端使用独立发布 Secret，测试会依次检查 SSH、转发、订阅端健康状态和发布鉴权。
+      </NAlert>
+      <NDataTable :loading="loading" :columns="columns" :data="targets" :scroll-x="1180" size="small" />
+    </NCard>
+  </NSpace>
+
+  <NDrawer :show="!!editing" :width="560" @update:show="(value) => !value && (editing = null)">
+    <NDrawerContent v-if="editing" :title="editing.name || '新的订阅端'" closable>
+      <NForm label-placement="left" label-width="120">
+        <NFormItem label="名称"><NInput v-model:value="draft.name" /></NFormItem>
+        <NFormItem label="SSH 主机"><NInput v-model:value="draft.ssh_host" placeholder="sub.example.com" /></NFormItem>
+        <NFormItem label="SSH 端口"><NInputNumber v-model:value="draft.ssh_port" :min="1" :max="65535" :show-button="false" /></NFormItem>
+        <NFormItem label="SSH 用户"><NInput v-model:value="draft.ssh_user" /></NFormItem>
+        <NFormItem label="Host Key 算法"><NSelect v-model:value="draft.host_key_algorithm" :options="algorithmOptions" /></NFormItem>
+        <NFormItem label="Host Key 指纹">
+          <NInput v-model:value="draft.host_key_fingerprint" placeholder="SHA256:..." />
+        </NFormItem>
+        <NFormItem label="远端 HTTP 地址">
+          <NInput :value="`127.0.0.1:${draft.remote_port}`" readonly />
+        </NFormItem>
+        <NFormItem label="远端端口"><NInputNumber v-model:value="draft.remote_port" :min="1" :max="65535" :show-button="false" /></NFormItem>
+        <NFormItem label="来源名"><NInput :value="currentSource" readonly /></NFormItem>
+        <NFormItem v-if="draft.id" label="发布 Secret">
+          <NInput :value="draft.secret || MASKED" readonly />
+        </NFormItem>
+        <NFormItem label="启用"><NSwitch v-model:value="draft.enabled" /></NFormItem>
+      </NForm>
+      <NAlert type="warning" :bordered="false">
+        SSH Host Key 指纹必须通过独立可信渠道核对。管理端不会自动信任首次扫描到的主机密钥。来源名必须与当前管理端来源“{{ currentSource }}”一致。
+      </NAlert>
+      <template #footer>
+        <NSpace>
+          <NButton @click="editing = null">取消</NButton>
+          <NButton type="primary" :loading="saving" @click="save">保存</NButton>
+        </NSpace>
+      </template>
+    </NDrawerContent>
+  </NDrawer>
+
+  <NModal :show="!!provisioning" preset="card" title="完成订阅端配置" style="width: 820px; max-width: calc(100vw - 32px)" @update:show="(value) => !value && (provisioning = null)">
+    <NSpace v-if="provisioning" vertical :size="16">
+      <NAlert type="warning" :bordered="false">
+        发布 Secret 只显示这一次。关闭后无法再次查看；如果遗失，请轮换 Secret。轮换后管理端会立即改用新 Secret，请紧接着更新订阅端。
+      </NAlert>
+      <NSteps vertical :current="1" status="process">
+        <NStep title="安装管理端 SSH 公钥">
+          <CopyableCode :value="provisioning.authorized_keys_entry || authorizedKeys(provisioning.target)" />
+          <NText depth="3">把这一整行追加到 SSH 用户的 <NText code>~/.ssh/authorized_keys</NText>，目录权限设为 700，文件权限设为 600。</NText>
+        </NStep>
+        <NStep title="限制 SSH 用户和公钥只能正向转发">
+          <CopyableCode :value="provisioning.sshd_config || sshdConfig(provisioning.target)" />
+          <NText depth="3">写入 sshd 配置后先执行 <NText code>sshd -t</NText>，校验通过再 reload SSH 服务。</NText>
+        </NStep>
+        <NStep title="配置发布 Secret">
+          <NSpace vertical :size="8">
+            <CopyableCode label="一次性 Secret" :value="provisioning.secret" />
+            <CopyableCode label="在订阅端执行，按提示粘贴 Secret" :value="provisioning.publish_token_command || tokenCommand(provisioning.target)" />
+          </NSpace>
+        </NStep>
+        <NStep title="核对 Host Key 并测试">
+          <NText>在订阅端本机执行 <NText code>ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256</NText>，通过独立渠道核对配置的指纹，再回到目标列表点击“测试”。其他 Host Key 算法请改用对应的公钥文件。</NText>
+        </NStep>
+      </NSteps>
+    </NSpace>
+  </NModal>
+
+  <NModal :show="!!instructions" preset="card" title="订阅端配置说明" style="width: 820px; max-width: calc(100vw - 32px)" @update:show="(value) => !value && (instructions = null)">
+    <NSpace v-if="instructions" vertical :size="14">
+      <CopyableCode label="authorized_keys" :value="authorizedKeys(instructions)" />
+      <CopyableCode label="sshd_config 限制" :value="sshdConfig(instructions)" />
+      <CopyableCode label="配置发布 Secret" :value="tokenCommand(instructions)" />
+      <NAlert type="info" :bordered="false">发布 Secret 不会再次显示。命令执行后按提示输入创建时保存的 Secret；如已遗失，请先轮换。</NAlert>
+    </NSpace>
+  </NModal>
+
+  <NModal :show="!!testResult" preset="card" :title="`${testResult?.target.name ?? ''}：连接测试`" style="width: 680px; max-width: calc(100vw - 32px)" @update:show="(value) => !value && (testResult = null)">
+    <NSpace v-if="testResult" vertical :size="14">
+      <NDescriptions :column="4" bordered size="small">
+        <NDescriptionsItem label="状态">{{ testResult.result.status || '-' }}</NDescriptionsItem>
+        <NDescriptionsItem label="当前序号">{{ sourceSequence(testResult.target, testResult.result) ? `#${sourceSequence(testResult.target, testResult.result)}` : '-' }}</NDescriptionsItem>
+        <NDescriptionsItem label="用户">{{ testResult.result.users ?? 0 }}</NDescriptionsItem>
+        <NDescriptionsItem label="节点">{{ testResult.result.nodes ?? 0 }}</NDescriptionsItem>
+      </NDescriptions>
+      <NSteps vertical>
+        <NStep
+          v-for="stage in testResult.result.stages"
+          :key="stage.name"
+          :title="stage.name"
+          :status="stage.status === 'succeeded' || stage.status === 'success' ? 'finish' : stage.status === 'failed' ? 'error' : 'process'"
+          :description="`${stage.message || (stage.status === 'succeeded' || stage.status === 'success' ? '正常' : stage.status)}${stage.duration_ms !== undefined ? ` · ${stage.duration_ms}ms` : ''}`"
+        />
+      </NSteps>
+    </NSpace>
+  </NModal>
+</template>

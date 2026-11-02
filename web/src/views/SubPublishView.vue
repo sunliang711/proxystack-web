@@ -1,24 +1,55 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { NAlert, NButton, NCard, NDescriptions, NDescriptionsItem, NInputGroup, NInput, NPopconfirm, NSpace, NTag, NText, useMessage } from 'naive-ui'
+import { useRouter } from 'vue-router'
+import {
+  NAlert, NButton, NCard, NCheckbox, NCheckboxGroup, NDescriptions, NDescriptionsItem, NPopconfirm, NRadioButton,
+  NRadioGroup, NSpace, NTag, NText, useMessage,
+} from 'naive-ui'
 import { api, problemMessage, saveBlob, type Schemas } from '../api/client'
+import CopyableCode from '../components/CopyableCode.vue'
 import { formatTime } from '../util/format'
 
+interface PublishTarget {
+  id: number
+  name: string
+  ssh_host: string
+  ssh_port: number
+  source: string
+  enabled: boolean
+  last_test_at?: string
+  last_test_error?: string
+  last_sequence?: number
+}
+
+interface OnlinePublishResult {
+  task_id: number
+  sequence: number
+}
+
+const router = useRouter()
 const message = useMessage()
 const status = ref<Schemas['BundleStatus'] | null>(null)
+const targets = ref<PublishTarget[]>([])
+const selected = ref<number[]>([])
+const mode = ref<'online' | 'offline'>('online')
 const busy = ref(false)
+const submitted = ref<OnlinePublishResult | null>(null)
 
 async function load() {
-  const { data, error } = await api.GET('/api/sub-bundle')
-  if (error) message.error(problemMessage(error))
-  status.value = data ?? null
+  const [statusResult, targetsResult] = await Promise.all([
+    api.GET('/api/sub-bundle'),
+    api.GET('/api/sub-publish/targets'),
+  ])
+  if (statusResult.error) message.error(problemMessage(statusResult.error))
+  if (targetsResult.error) message.error(problemMessage(targetsResult.error, '读取订阅端失败'))
+  status.value = statusResult.data ?? null
+  targets.value = (targetsResult.data ?? []).filter((target: PublishTarget) => target.enabled)
+  selected.value = selected.value.filter((id) => targets.value.some((target) => target.id === id))
 }
 onMounted(load)
 
-async function publish() {
-  busy.value = true
+async function publishOffline() {
   const { data, error, response } = await api.POST('/api/sub-bundle/publish', { parseAs: 'blob' })
-  busy.value = false
   if (error || !data) {
     message.error(problemMessage(error, '签发失败'))
     return
@@ -26,15 +57,31 @@ async function publish() {
   const disposition = response.headers.get('Content-Disposition') ?? ''
   saveBlob(data as Blob, /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'subscription.bundle')
   message.success('已签发并下载，拷贝到订阅端导入后生效')
-  load()
+  await load()
 }
 
-async function copy(text: string) {
+async function publishOnline() {
+  if (!selected.value.length) {
+    message.warning('请至少选择一个订阅端')
+    return
+  }
+  const { data, error } = await api.POST('/api/sub-bundle/publish-online', { body: { target_ids: selected.value } })
+  if (error || !data) {
+    message.error(problemMessage(error, '提交在线发布失败'))
+    return
+  }
+  submitted.value = data
+  message.success(`订阅包 #${data.sequence} 已提交到任务中心`)
+  await load()
+}
+
+async function publish() {
+  busy.value = true
   try {
-    await navigator.clipboard.writeText(text)
-    message.success('已复制')
-  } catch {
-    message.error('复制失败：浏览器不允许访问剪贴板')
+    if (mode.value === 'online') await publishOnline()
+    else await publishOffline()
+  } finally {
+    busy.value = false
   }
 }
 
@@ -46,6 +93,19 @@ const addSourceCommand = computed(() =>
 )
 /** 构建时跳过的节点数；跳过的节点不进入订阅包，其余内容照常签发。 */
 const skipped = computed(() => status.value?.build_warnings.length ?? 0)
+const actionLabel = computed(() => mode.value === 'online' ? '签发并在线发布' : '签发并下载')
+
+function targetSummary(target: PublishTarget) {
+  const address = `${target.ssh_host}:${target.ssh_port}`
+  if (target.last_test_error) return `${address} · 最近测试失败`
+  if (target.last_sequence) return `${address} · 当前 #${target.last_sequence}`
+  return `${address} · 尚未发布`
+}
+
+function openTask() {
+  if (!submitted.value) return
+  void router.push({ name: 'task-detail', params: { source: 'task', id: submitted.value.task_id } })
+}
 </script>
 
 <template>
@@ -55,26 +115,26 @@ const skipped = computed(() => status.value?.build_warnings.length ?? 0)
         <NSpace justify="end">
           <NPopconfirm v-if="skipped" @positive-click="publish">
             <template #trigger>
-              <NButton type="primary" :loading="busy">签发并下载</NButton>
+              <NButton type="primary" :loading="busy" :disabled="!status || (mode === 'online' && !selected.length)">{{ actionLabel }}</NButton>
             </template>
-            有 {{ skipped }} 项内容在构建时被跳过，签发的订阅包里不包含它们。确定签发？
+            有 {{ skipped }} 项内容在构建时被跳过，签发的订阅包里不包含它们。确定继续？
           </NPopconfirm>
-          <NButton v-else type="primary" :loading="busy" :disabled="!status" @click="publish">签发并下载</NButton>
+          <NButton v-else type="primary" :loading="busy" :disabled="!status || (mode === 'online' && !selected.length)" @click="publish">{{ actionLabel }}</NButton>
         </NSpace>
       </template>
       <NSpace v-if="status" vertical>
         <NAlert v-if="status.sequence === 0" type="info" :bordered="false">还没有发布过订阅包。</NAlert>
         <NAlert v-else-if="status.pending" type="warning" :bordered="false">
-          订阅内容在上次发布（#{{ status.sequence }}）之后有变化，订阅端仍在提供旧内容。暂停用户已经在代理端生效，订阅中的节点要等下次发布导入后才会去掉。
+          订阅内容在上次签发（#{{ status.sequence }}）之后有变化。暂停用户已经在代理端生效，订阅中的节点需要重新发布后才会去掉。
         </NAlert>
-        <NAlert v-else type="success" :bordered="false">订阅端导入 #{{ status.sequence }} 后即为最新内容。</NAlert>
+        <NAlert v-else type="success" :bordered="false">当前内容已签发为 #{{ status.sequence }}；各订阅端是否已导入以目标状态或发布任务结果为准。</NAlert>
         <NAlert v-if="skipped" type="warning" :bordered="false" title="部分内容被跳过">
           下面 {{ skipped }} 项在构建订阅时被跳过，不会进入签发的订阅包，其余节点照常签发。修复对应的配置后重新加载本页即可恢复。
         </NAlert>
         <NAlert v-for="warning in status.build_warnings" :key="warning" type="warning" :bordered="false">{{ warning }}</NAlert>
         <NDescriptions :column="1" label-placement="left" bordered size="small">
           <NDescriptionsItem label="来源名">{{ status.source }}</NDescriptionsItem>
-          <NDescriptionsItem label="最近一次发布">
+          <NDescriptionsItem label="最近一次签发">
             <template v-if="status.sequence">#{{ status.sequence }}，{{ formatTime(status.published_at) }}，{{ status.published_by }}</template>
             <NText v-else depth="3">无</NText>
           </NDescriptionsItem>
@@ -85,34 +145,53 @@ const skipped = computed(() => status.value?.build_warnings.length ?? 0)
           </NDescriptionsItem>
           <NDescriptionsItem label="公钥指纹"><NTag size="small">{{ status.fingerprint }}</NTag></NDescriptionsItem>
         </NDescriptions>
-        <NText depth="3">订阅包含有全部用户的订阅 token 和节点凭据，签发记入审计日志；请通过可信的方式拷贝，导入后删除。</NText>
+        <NText depth="3">订阅包含有全部用户的订阅 token 和节点凭据，签发与在线投递均记入审计日志。</NText>
       </NSpace>
     </NCard>
 
-    <NCard v-if="status" title="订阅端操作" size="small">
-      <NSpace vertical>
-        <NText>订阅端与管理端不需要网络连通，订阅包通过手工拷贝送达。订阅端用下面的公钥验签，包被修改过或不是本机签发的都会被拒收，序号不大于已导入序号的旧包也会被拒收。</NText>
-        <NText strong>公钥</NText>
-        <NInputGroup>
-          <NInput :value="status.public_key" readonly />
-          <NButton @click="copy(status.public_key)">复制</NButton>
-        </NInputGroup>
-        <NText strong>安装订阅端（在订阅机上执行）</NText>
-        <NInputGroup>
-          <NInput :value="installCommand" readonly />
-          <NButton @click="copy(installCommand)">复制</NButton>
-        </NInputGroup>
-        <NText strong>已有订阅端添加本机为来源</NText>
-        <NText depth="3">作为主来源时追加 --primary；主来源提供用户、token、模板和设置，其他来源只提供节点，按用户名合并。</NText>
-        <NInputGroup>
-          <NInput :value="addSourceCommand" readonly />
-          <NButton @click="copy(addSourceCommand)">复制</NButton>
-        </NInputGroup>
-        <NText strong>导入订阅包</NText>
-        <NText depth="3">
-          执行 <NText code>proxystack-web sub import 文件</NText>，或把文件放进订阅端目录下的 <NText code>inbox/</NText>，几秒内自动导入；被拒收的文件移到 <NText code>inbox/rejected/</NText> 并附带原因。
-          <NText code>proxystack-web sub status</NText> 查看各来源已导入的序号。
-        </NText>
+    <NCard title="发布方式">
+      <NSpace vertical :size="16">
+        <NRadioGroup v-model:value="mode" size="small">
+          <NRadioButton value="online">SSH 在线发布</NRadioButton>
+          <NRadioButton value="offline">离线签发下载</NRadioButton>
+        </NRadioGroup>
+
+        <template v-if="mode === 'online'">
+          <NAlert v-if="!targets.length" type="warning" :bordered="false">
+            还没有启用的订阅端目标。请先到“SSH 发布设置”生成 SSH 密钥并配置订阅端。
+          </NAlert>
+          <NCheckboxGroup v-else v-model:value="selected">
+            <NSpace vertical>
+              <NCheckbox v-for="target in targets" :key="target.id" :value="target.id">
+                <NSpace :size="8" align="center">
+                  <NText strong>{{ target.name }}</NText>
+                  <NText depth="3">{{ targetSummary(target) }}</NText>
+                  <NTag v-if="target.last_test_error" size="small" type="error">测试失败</NTag>
+                </NSpace>
+              </NCheckbox>
+            </NSpace>
+          </NCheckboxGroup>
+          <NAlert type="info" :bordered="false">
+            本次只签发一份订阅包，并向所有选中目标发送相同内容。部分目标失败时，已经成功的目标不会回滚；再次发布会生成新的序号。
+          </NAlert>
+          <NAlert v-if="submitted" type="success" :bordered="false">
+            订阅包 #{{ submitted.sequence }} 已提交，任务编号 #{{ submitted.task_id }}。
+            <NButton text type="primary" @click="openTask">查看发布详情</NButton>
+          </NAlert>
+        </template>
+
+        <template v-else-if="status">
+          <NAlert type="info" :bordered="false">
+            离线模式会下载签名订阅包。通过可信方式把文件拷贝到订阅端，执行导入后删除传输副本。
+          </NAlert>
+          <CopyableCode label="订阅包验签公钥" :value="status.public_key" />
+          <CopyableCode label="安装订阅端" :value="installCommand" />
+          <CopyableCode label="已有订阅端添加本机为来源" :value="addSourceCommand" />
+          <NText depth="3">
+            执行 <NText code>proxystack-web sub import 文件</NText>，或把文件放进订阅端目录下的 <NText code>inbox/</NText>；
+            <NText code>proxystack-web sub status</NText> 查看各来源已导入的序号。
+          </NText>
+        </template>
       </NSpace>
     </NCard>
   </NSpace>

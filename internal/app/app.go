@@ -15,6 +15,7 @@ import (
 	"proxystack-web/internal/paths"
 	"proxystack-web/internal/runtime"
 	"proxystack-web/internal/store"
+	"proxystack-web/internal/subpublish"
 	"proxystack-web/internal/units"
 	"proxystack-web/internal/xrayapi"
 )
@@ -41,6 +42,8 @@ type Service struct {
 	ProbePorts bool
 	// RequestRestart 请求管理服务退出并由 systemd 重启（自更新后调用）。
 	RequestRestart func()
+	// SubPublisher 通过 SSH 正向转发测试并投递订阅包；测试可替换为内存实现。
+	SubPublisher subpublish.Client
 
 	// runtimeMu 串行化 apply、unit 操作和暂停生效，避免并发写生成物或重启同一 unit。
 	runtimeMu sync.Mutex
@@ -69,6 +72,7 @@ func New(st *store.Store, layout paths.Layout) *Service {
 		Store: st, Layout: layout, Now: time.Now, PortChecker: validation.TCPPortChecker{},
 		Units: fake, Logs: fake, XrayAPI: &xrayapi.Fake{}, Checker: runtime.BinaryChecker{Layout: layout},
 		Events: events.New(),
+		SubPublisher: subpublish.SSHClient{},
 	}
 }
 

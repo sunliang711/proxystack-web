@@ -1132,6 +1132,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sub-bundle/publish-online": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 签发订阅包并通过 SSH 向所选订阅端发布 */
+        post: operations["publishSubscriptionBundleOnline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sub-publish/identity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** SSH 在线发布公钥 */
+        get: operations["getSSHPublishIdentity"];
+        put?: never;
+        /** 生成 SSH 在线发布密钥 */
+        post: operations["generateSSHPublishIdentity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sub-publish/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** SSH 在线发布目标 */
+        get: operations["listSubscriptionPublishTargets"];
+        put?: never;
+        /** 创建 SSH 在线发布目标 */
+        post: operations["createSubscriptionPublishTarget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sub-publish/targets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 修改 SSH 在线发布目标 */
+        put: operations["updateSubscriptionPublishTarget"];
+        post?: never;
+        /** 删除 SSH 在线发布目标 */
+        delete: operations["deleteSubscriptionPublishTarget"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sub-publish/targets/{id}/rotate-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 轮换订阅端发布 Secret */
+        post: operations["rotateSubscriptionPublishTargetSecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sub-publish/targets/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 测试 SSH 在线发布目标 */
+        post: operations["testSubscriptionPublishTarget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sub-templates": {
         parameters: {
             query?: never;
@@ -2193,6 +2298,15 @@ export interface components {
             /** Format: int64 */
             warn_percent: number;
         };
+        OnlinePublishInputBody: {
+            target_ids: number[];
+        };
+        OnlinePublishStarted: {
+            /** Format: int64 */
+            sequence: number;
+            /** Format: int64 */
+            task_id: number;
+        };
         Outbound: {
             password: string;
             /** Format: int64 */
@@ -2268,6 +2382,15 @@ export interface components {
             mihomo: string;
             xray: string;
         };
+        ProbeResult: {
+            /** Format: int64 */
+            nodes: number;
+            sources: components["schemas"]["SourceHealth"][];
+            stages: components["schemas"]["Stage"][];
+            status: string;
+            /** Format: int64 */
+            users: number;
+        };
         Profile: {
             display_template: string;
             /** Format: int64 */
@@ -2289,6 +2412,51 @@ export interface components {
             latency_ms: number;
             message: string;
             ok: boolean;
+        };
+        PublishTargetInput: {
+            enabled: boolean;
+            host_key_algorithm: string;
+            host_key_fingerprint: string;
+            name: string;
+            /** Format: int64 */
+            remote_port: number;
+            source: string;
+            ssh_host: string;
+            /** Format: int64 */
+            ssh_port: number;
+            ssh_user: string;
+        };
+        PublishTargetSetup: {
+            authorized_keys_entry: string;
+            publish_token_command: string;
+            secret: string;
+            sshd_config: string;
+            target: components["schemas"]["PublishTargetView"];
+        };
+        PublishTargetView: {
+            enabled: boolean;
+            host_key_algorithm: string;
+            host_key_fingerprint: string;
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            last_publish_at: string;
+            last_publish_error: string;
+            /** Format: int64 */
+            last_sequence: number;
+            /** Format: date-time */
+            last_test_at: string;
+            last_test_error: string;
+            name: string;
+            /** Format: int64 */
+            remote_port: number;
+            secret: string;
+            secret_configured: boolean;
+            source: string;
+            ssh_host: string;
+            /** Format: int64 */
+            ssh_port: number;
+            ssh_user: string;
         };
         ReconcileOutputBody: {
             findings: string[];
@@ -2403,6 +2571,13 @@ export interface components {
         RuntimeStatusOutputBody: {
             stacks: components["schemas"]["StackRuntime"][];
         };
+        SSHPublishIdentityView: {
+            configured: boolean;
+            /** Format: date-time */
+            created_at: string;
+            fingerprint: string;
+            public_key: string;
+        };
         SchedulePreviewInputBody: {
             schedule: string;
         };
@@ -2432,6 +2607,12 @@ export interface components {
             security: components["schemas"]["SecuritySettings"];
             subscription: components["schemas"]["SubscriptionSettings"];
             traffic: components["schemas"]["TrafficSettings"];
+        };
+        SourceHealth: {
+            error?: string;
+            name: string;
+            /** Format: int64 */
+            sequence: number;
         };
         Stack: {
             desired_running: boolean;
@@ -2538,6 +2719,14 @@ export interface components {
             user: string;
             /** Format: int64 */
             user_id: number;
+        };
+        Stage: {
+            /** Format: int64 */
+            duration_ms: number;
+            message: string;
+            name: string;
+            /** @enum {string} */
+            status: "succeeded" | "failed" | "skipped";
         };
         SubscriptionLinks: {
             base_url: string;
@@ -5188,6 +5377,287 @@ export interface operations {
                 };
                 content: {
                     "application/json": string;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    publishSubscriptionBundleOnline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnlinePublishInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnlinePublishStarted"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getSSHPublishIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHPublishIdentityView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    generateSSHPublishIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHPublishIdentityView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listSubscriptionPublishTargets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishTargetView"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createSubscriptionPublishTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishTargetInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishTargetSetup"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateSubscriptionPublishTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishTargetInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishTargetView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteSubscriptionPublishTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    rotateSubscriptionPublishTargetSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishTargetSetup"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    testSubscriptionPublishTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProbeResult"];
                 };
             };
             /** @description Error */
