@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
-  NAlert, NButton, NCard, NDescriptions, NDescriptionsItem, NForm, NFormItem, NInputNumber, NPopconfirm, NSelect, NSpace, NSpin, NTag, NText, NTooltip,
+  NAlert, NButton, NCard, NDescriptions, NDescriptionsItem, NForm, NFormItem, NInputNumber, NModal, NPopconfirm, NSelect, NSpace, NSpin, NTag, NText, NTooltip,
 } from 'naive-ui'
 import { api, problemMessage, type Schemas } from '../api/client'
 import { useBackgroundTask } from '../composables/useBackgroundTask'
@@ -34,11 +34,31 @@ async function saveListen() {
 const update = ref<Schemas['SelfVersion'] | null>(null)
 const updateError = ref('')
 const checking = ref(false)
-type UpdatePhase = 'idle' | 'submitting' | 'unknown' | 'updating' | 'restarting' | 'verifying' | 'complete'
+type UpdatePhase = 'idle' | 'submitting' | 'unknown' | 'updating' | 'restarting' | 'verifying' | 'complete' | 'failed' | 'timeout'
 const updatePhase = ref<UpdatePhase>('idle')
 const updateTarget = ref('')
 const updateTaskID = ref<number | null>(null)
-const updateBusy = computed(() => updatePhase.value !== 'idle')
+const updateBusy = computed(() => !['idle', 'failed', 'timeout'].includes(updatePhase.value))
+const updateModalVisible = computed(() => updatePhase.value !== 'idle')
+const updateModalClosable = computed(() => updatePhase.value === 'failed' || updatePhase.value === 'timeout')
+const updateSpinning = computed(() => ['submitting', 'updating', 'restarting', 'verifying'].includes(updatePhase.value))
+const updateModalType = computed(() => {
+  if (updatePhase.value === 'complete') return 'success'
+  if (updatePhase.value === 'failed') return 'error'
+  if (updatePhase.value === 'unknown' || updatePhase.value === 'timeout') return 'warning'
+  return 'info'
+})
+const updateModalTitle = computed(() => ({
+  idle: '',
+  submitting: '正在更新管理服务',
+  unknown: '更新状态待确认',
+  updating: '正在更新管理服务',
+  restarting: '正在重启管理服务',
+  verifying: '正在确认新版本',
+  complete: '更新完成',
+  failed: '更新失败',
+  timeout: '确认更新超时',
+}[updatePhase.value]))
 const updatePhaseText = computed(() => ({
   idle: '',
   submitting: '正在提交更新任务…',
@@ -47,6 +67,8 @@ const updatePhaseText = computed(() => ({
   restarting: '管理服务正在重启…',
   verifying: `服务已恢复，正在确认 ${updateTarget.value}…`,
   complete: '更新完成，正在刷新页面…',
+  failed: updateError.value || '更新失败，请查看任务日志',
+  timeout: updateError.value || `自动确认 ${updateTarget.value} 超时，请检查服务状态`,
 }[updatePhase.value]))
 let updateController: AbortController | null = null
 let submitController: AbortController | null = null
@@ -55,8 +77,8 @@ const trackTask = useBackgroundTask((status) => {
   if (updatePhase.value === 'complete') return
   if (status !== 'succeeded') {
     stopUpdateMonitor()
-    updatePhase.value = 'idle'
     updateError.value = '更新任务失败，请打开任务详情查看日志'
+    updatePhase.value = 'failed'
   } else if (status === 'succeeded' && updatePhase.value === 'updating') {
     updatePhase.value = 'restarting'
     startUpdateMonitor(updateTarget.value)
@@ -92,8 +114,8 @@ async function runUpdate() {
     if (submitController !== controller) return
     submitController = null
     if (error) {
-      updatePhase.value = 'idle'
       updateError.value = problemMessage(error, '更新失败')
+      updatePhase.value = 'failed'
       return
     }
     updateTaskID.value = data!.task_id
@@ -138,11 +160,21 @@ function startUpdateMonitor(targetVersion: string) {
   }).catch((cause) => {
     if (controller.signal.aborted || updateController !== controller) return
     updateController = null
-    updatePhase.value = 'idle'
     updateError.value = cause instanceof VersionCheckTimeoutError
       ? `自动确认 ${targetVersion} 超时，请检查服务状态后手动刷新页面`
       : '检查更新结果失败，请手动刷新页面'
+    updatePhase.value = cause instanceof VersionCheckTimeoutError ? 'timeout' : 'failed'
   })
+}
+
+function closeUpdateModal() {
+  if (!updateModalClosable.value) return
+  updatePhase.value = 'idle'
+  updateError.value = ''
+}
+
+function reloadPage() {
+  window.location.reload()
 }
 
 onBeforeUnmount(() => {
@@ -178,20 +210,12 @@ onBeforeUnmount(() => {
           下载并校验新版本后替换并重启管理服务，页面会短暂断开。继续？
         </NPopconfirm>
       </NSpace>
-      <NAlert v-if="updateBusy" :type="updatePhase === 'complete' ? 'success' : updatePhase === 'unknown' ? 'warning' : 'info'" :bordered="false">
-        <NSpace align="center">
-          <NSpin v-if="updatePhase !== 'complete' && updatePhase !== 'unknown'" size="small" />
-          <NText>{{ updatePhaseText }}</NText>
-          <NButton v-if="updateTaskID" text size="small" @click="taskCenter.open({ source: 'task', id: updateTaskID })">查看任务</NButton>
-          <NButton v-else-if="updatePhase === 'unknown'" text size="small" @click="taskCenter.open()">打开任务中心</NButton>
-        </NSpace>
-      </NAlert>
       <NAlert v-if="update && !update.update_available" type="success" :bordered="false">当前已是最新版本（{{ update.current }}）</NAlert>
       <NAlert v-if="info?.dev_mode && update?.update_available" type="warning" :bordered="false">开发模式不能自动重启管理服务，请在正式部署环境中执行更新。</NAlert>
       <NAlert v-if="update?.update_available && update.notes" type="info" :title="`${update.latest} 更新说明`" :bordered="false">
         <pre style="white-space: pre-wrap; font-family: inherit; margin: 0">{{ update.notes }}</pre>
       </NAlert>
-      <NAlert v-if="updateError" type="error" :bordered="false">{{ updateError }}</NAlert>
+      <NAlert v-if="updateError && updatePhase === 'idle'" type="error" :bordered="false">{{ updateError }}</NAlert>
     </NSpace>
   </NCard>
   <NCard title="面板监听" style="margin-top: 20px">
@@ -208,4 +232,31 @@ onBeforeUnmount(() => {
       <NAlert v-if="listenResult" :type="listenResult.type" :bordered="false">{{ listenResult.text }}</NAlert>
     </NSpace>
   </NCard>
+  <NModal
+    :show="updateModalVisible"
+    preset="card"
+    aria-label="更新管理服务"
+    :title="updateModalTitle"
+    :closable="updateModalClosable"
+    :mask-closable="false"
+    :close-on-esc="false"
+    style="width: 400px; max-width: calc(100vw - 32px)"
+    @update:show="(show) => !show && closeUpdateModal()"
+  >
+    <NSpace vertical align="center" :size="20" style="padding: 12px 0 4px; text-align: center">
+      <NSpin v-if="updateSpinning" size="large" />
+      <NAlert :type="updateModalType" :bordered="false" style="width: 100%">
+        {{ updatePhaseText }}
+      </NAlert>
+      <NText v-if="updateTarget && updatePhase !== 'unknown'" depth="3">目标版本：{{ updateTarget }}</NText>
+    </NSpace>
+    <template #footer>
+      <NSpace justify="end">
+        <NButton v-if="updateTaskID" @click="taskCenter.open({ source: 'task', id: updateTaskID })">查看任务</NButton>
+        <NButton v-else-if="updatePhase === 'unknown'" @click="taskCenter.open()">打开任务中心</NButton>
+        <NButton v-if="updatePhase === 'unknown' || updatePhase === 'failed' || updatePhase === 'timeout'" @click="reloadPage">刷新页面</NButton>
+        <NButton v-if="updateModalClosable" type="primary" @click="closeUpdateModal">关闭</NButton>
+      </NSpace>
+    </template>
+  </NModal>
 </template>
