@@ -2516,6 +2516,8 @@ export interface components {
             /** Format: int64 */
             stack_id: number;
             today: components["schemas"]["Bytes"];
+            user_month: components["schemas"]["Bytes"];
+            user_today: components["schemas"]["Bytes"];
         };
         StackUsage: {
             by_user: components["schemas"]["StackUserUsage"][];
@@ -2665,6 +2667,8 @@ export interface components {
             today: components["schemas"]["Bytes"];
             top_users: components["schemas"]["UserTraffic"][];
             top_users_today: components["schemas"]["UserTraffic"][];
+            user_month: components["schemas"]["Bytes"];
+            user_today: components["schemas"]["Bytes"];
         };
         TrafficResult: {
             buckets: string[];

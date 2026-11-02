@@ -84,18 +84,24 @@ func TestTrafficStackBreakdown(t *testing.T) {
 			})
 		}
 	}
-	for _, tc := range []struct{ userID, total int64 }{{0, 370}, {userID, 50}} {
+	for _, tc := range []struct{ userID, total, userTotal int64 }{{0, 370, 160}, {userID, 50, 50}} {
 		overview, err := h.svc.TrafficOverviewData(ctx, tc.userID)
 		require.NoError(t, err)
 		require.Equal(t, tc.total, overview.Today.Total())
 		require.Equal(t, tc.total, overview.Month.Total())
-		var today, month int64
+		require.Equal(t, tc.userTotal, overview.UserToday.Total())
+		require.Equal(t, tc.userTotal, overview.UserMonth.Total())
+		var today, month, userToday, userMonth int64
 		for _, stack := range overview.ByStack {
 			today += stack.Today.Total()
 			month += stack.Month.Total()
+			userToday += stack.UserToday.Total()
+			userMonth += stack.UserMonth.Total()
 		}
 		require.Equal(t, today, overview.Today.Total())
 		require.Equal(t, month, overview.Month.Total())
+		require.Equal(t, userToday, overview.UserToday.Total())
+		require.Equal(t, userMonth, overview.UserMonth.Total())
 	}
 	_, err = h.svc.TrafficOverviewData(ctx, 997)
 	require.ErrorIs(t, err, app.ErrNotFound)
@@ -127,6 +133,7 @@ func TestUserStackUsageIncludesPending(t *testing.T) {
 	overview, err := h.svc.TrafficOverviewData(ctx, h.alice(t).ID)
 	require.NoError(t, err)
 	require.Equal(t, usage.Today, overview.Today)
+	require.Equal(t, usage.Today, overview.UserToday)
 	point := overview.Live[len(overview.Live)-1].Users[h.alice(t).ID]
 	require.EqualValues(t, 2, point.Up)
 	require.EqualValues(t, 3, point.Down)
@@ -183,9 +190,13 @@ func TestTrafficOverviewDailyAndMonthlyRankings(t *testing.T) {
 			require.Equal(t, bob.ID, overview.TopUsersToday[0].ID)
 			require.EqualValues(t, 400, overview.TopUsersToday[0].Total())
 			require.Equal(t, alice.ID, overview.TopUsers[0].ID)
+			require.EqualValues(t, 510, overview.UserToday.Total())
+			require.EqualValues(t, 1510, overview.UserMonth.Total())
 		} else {
 			require.Len(t, overview.TopUsersToday, 1)
 			require.Len(t, overview.TopUsers, 1)
+			require.Equal(t, overview.Today, overview.UserToday)
+			require.Equal(t, overview.Month, overview.UserMonth)
 		}
 		for _, user := range overview.TopUsersToday {
 			if user.ID == alice.ID {

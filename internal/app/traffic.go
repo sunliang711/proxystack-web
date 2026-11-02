@@ -422,13 +422,16 @@ func (s *Service) runTraffic(ctx context.Context) {
 
 // TrafficOverview 是总览页的数据。
 type TrafficOverview struct {
-	Enabled  bool            `json:"enabled"`
-	Today    traffic.Bytes   `json:"today"`
-	Month    traffic.Bytes   `json:"month"`
-	TopUsers []UserTraffic   `json:"top_users"`
-	Live     []LivePoint     `json:"live"`
-	Stacks   []CollectStatus `json:"stacks"`
-	ByStack  []StackTraffic  `json:"by_stack"`
+	Enabled bool          `json:"enabled"`
+	Today   traffic.Bytes `json:"today"`
+	Month   traffic.Bytes `json:"month"`
+	// UserToday 和 UserMonth 是能归属到具体用户及其档案的用量。
+	UserToday traffic.Bytes   `json:"user_today"`
+	UserMonth traffic.Bytes   `json:"user_month"`
+	TopUsers  []UserTraffic   `json:"top_users"`
+	Live      []LivePoint     `json:"live"`
+	Stacks    []CollectStatus `json:"stacks"`
+	ByStack   []StackTraffic  `json:"by_stack"`
 	// FailedNotifications 是发送失败的通知数。
 	FailedNotifications int64 `json:"failed_notifications"`
 

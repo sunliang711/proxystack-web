@@ -22,6 +22,9 @@ func TestTrafficStackQuery(t *testing.T) {
 	h.mustDo(http.MethodGet, "/api/traffic/overview?user_id=9999", nil, http.StatusNotFound)
 	body = h.mustDo(http.MethodGet, "/api/traffic/overview", nil, http.StatusOK)
 	require.Empty(t, body["by_stack"])
+	for _, key := range []string{"today", "month", "user_today", "user_month"} {
+		require.Equal(t, map[string]any{"up": float64(0), "down": float64(0)}, body[key])
+	}
 }
 
 // TestStackUsageAPI 验证鉴权、参数校验及未产生流量时的响应结构。

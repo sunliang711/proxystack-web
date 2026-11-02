@@ -17,12 +17,14 @@ type UserLivePoint struct {
 	Stacks map[string]traffic.Bytes `json:"stacks"`
 }
 
-// StackTraffic 是总览中一个 stack 的今日和本月用量。
+// StackTraffic 是总览中一个 stack 的入站用量和用户可归属用量。
 type StackTraffic struct {
-	StackID int64         `json:"stack_id"`
-	Stack   string        `json:"stack"`
-	Today   traffic.Bytes `json:"today"`
-	Month   traffic.Bytes `json:"month"`
+	StackID   int64         `json:"stack_id"`
+	Stack     string        `json:"stack"`
+	Today     traffic.Bytes `json:"today"`
+	Month     traffic.Bytes `json:"month"`
+	UserToday traffic.Bytes `json:"user_today"`
+	UserMonth traffic.Bytes `json:"user_month"`
 }
 
 // StackSeries 保留明细的 stack 归属，同名入站或用户不会跨 stack 混淆。
@@ -141,9 +143,16 @@ func (s *Service) trafficOverview(ctx context.Context, userID int64) (*TrafficOv
 		}
 		for _, row := range rows {
 			if id, ok := traffic.SubjectUser(row.Subject); ok && matchesTrafficUser(row.Subject, userID) {
+				bytes := traffic.Bytes{Up: row.Up, Down: row.Down}
 				value := period.totals[id]
-				value.Add(traffic.Bytes{Up: row.Up, Down: row.Down})
+				value.Add(bytes)
 				period.totals[id] = value
+				stack := getStack(row.StackID)
+				if period.level == store.LevelDay {
+					stack.UserToday.Add(bytes)
+				} else {
+					stack.UserMonth.Add(bytes)
+				}
 			}
 		}
 	}
@@ -153,6 +162,11 @@ func (s *Service) trafficOverview(ctx context.Context, userID int64) (*TrafficOv
 			stack := getStack(key.StackID)
 			stack.Today.Add(bytes)
 			stack.Month.Add(bytes)
+		}
+		if key.Scope == traffic.ScopeUser && matchesTrafficUser(key.Subject, userID) {
+			stack := getStack(key.StackID)
+			stack.UserToday.Add(bytes)
+			stack.UserMonth.Add(bytes)
 		}
 	}
 	for id, bytes := range s.traffic.users {
@@ -174,6 +188,8 @@ func (s *Service) trafficOverview(ctx context.Context, userID int64) (*TrafficOv
 	for _, stack := range byStack {
 		out.Today.Add(stack.Today)
 		out.Month.Add(stack.Month)
+		out.UserToday.Add(stack.UserToday)
+		out.UserMonth.Add(stack.UserMonth)
 		out.ByStack = append(out.ByStack, *stack)
 	}
 	sort.Slice(out.ByStack, func(i, j int) bool { return out.ByStack[i].Stack < out.ByStack[j].Stack })

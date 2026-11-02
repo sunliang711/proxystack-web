@@ -3587,13 +3587,21 @@
           },
           "today": {
             "$ref": "#/components/schemas/Bytes"
+          },
+          "user_month": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "user_today": {
+            "$ref": "#/components/schemas/Bytes"
           }
         },
         "required": [
           "stack_id",
           "stack",
           "today",
-          "month"
+          "month",
+          "user_today",
+          "user_month"
         ],
         "type": "object"
       },
@@ -4125,12 +4133,20 @@
               "$ref": "#/components/schemas/UserTraffic"
             },
             "type": "array"
+          },
+          "user_month": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "user_today": {
+            "$ref": "#/components/schemas/Bytes"
           }
         },
         "required": [
           "enabled",
           "today",
           "month",
+          "user_today",
+          "user_month",
           "top_users",
           "live",
           "stacks",
