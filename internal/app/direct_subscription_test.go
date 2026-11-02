@@ -144,3 +144,28 @@ func TestDirectAndAppliedNodesUseCurrentDisplayTemplates(t *testing.T) {
 	require.Contains(t, preview, "name: GLOBAL usa1 alice\n")
 	require.Contains(t, preview, "name: GLOBAL usa1 alice [DRT]\n")
 }
+
+// TestAppliedNodesFallBackWhenCurrentDisplayTemplateConflictsWithAppliedTopology 验证当前拓扑校验通过但已应用拓扑重名时不会丢失整组节点。
+func TestAppliedNodesFallBackWhenCurrentDisplayTemplateConflictsWithAppliedTopology(t *testing.T) {
+	ctx := context.Background()
+	h := newRuntimeHarness(t)
+	id, err := h.svc.Apply(ctx, h.actor, []string{"usa1"})
+	require.NoError(t, err)
+	require.Equal(t, app.TaskSucceeded, h.waitTask(t, id).Status)
+
+	doc, err := h.svc.LoadConfig(ctx)
+	require.NoError(t, err)
+	stack := doc.Stacks[doc.StackByName("usa1")]
+	stack.Xray.Inbounds[0].Sub = false
+	_, err = h.svc.UpdateStack(ctx, h.actor, stack.ID, stack)
+	require.NoError(t, err)
+	alice := doc.Users[doc.UserByName("alice")]
+	alice.DisplayTemplate = "{{ .stack }}"
+	_, err = h.svc.UpdateUser(ctx, h.actor, alice.ID, alice)
+	require.NoError(t, err)
+
+	preview, err := h.svc.PreviewSubscription(ctx, alice.ID, "clash", nil)
+	require.NoError(t, err)
+	require.Contains(t, preview, "name: usa1 relay socks\n")
+	require.Contains(t, preview, "name: usa1 vmess\n")
+}

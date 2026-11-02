@@ -149,18 +149,26 @@ func (s *Service) buildSubscription(ctx context.Context) (*subSnapshot, error) {
 			skip(revision, err)
 			continue
 		}
+		appliedNamesDoc := snapshotDoc.Clone()
 		configdoc.OverlaySubscriptionNames(snapshotDoc, doc)
-		snapshotDoc.Settings.Basic.ExternalHost = doc.Settings.Basic.ExternalHost
-		set, err := configdoc.Compile(snapshotDoc)
-		if err != nil {
-			skip(revision, err)
-			continue
+		render := func(candidate *configdoc.Document) (sub.Input, error) {
+			candidate.Settings.Basic.ExternalHost = doc.Settings.Basic.ExternalHost
+			set, err := configdoc.Compile(candidate)
+			if err != nil {
+				return sub.Input{}, err
+			}
+			set.Stacks = slices.DeleteFunc(set.Stacks, func(stack domain.Stack) bool { return !slices.Contains(stacks, stack.Name) })
+			return sub.RenderStackInputAt(set, "local", s.Now().UTC().Format(time.RFC3339))
 		}
-		set.Stacks = slices.DeleteFunc(set.Stacks, func(stack domain.Stack) bool { return !slices.Contains(stacks, stack.Name) })
-		input, err := sub.RenderStackInputAt(set, "local", s.Now().UTC().Format(time.RFC3339))
+		input, err := render(snapshotDoc)
 		if err != nil {
-			skip(revision, err)
-			continue
+			overlayErr := err
+			input, err = render(appliedNamesDoc)
+			if err != nil {
+				skip(revision, err)
+				continue
+			}
+			snapshot.warnings = append(snapshot.warnings, fmt.Sprintf("revision %d: current subscription naming overlay rejected; using applied names: %v", revision, overlayErr))
 		}
 		snapshot.local = append(snapshot.local, input.Nodes...)
 	}
