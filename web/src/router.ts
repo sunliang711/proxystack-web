@@ -21,7 +21,7 @@ const router = createRouter({
       path: '/',
       component: () => import('./layouts/MainLayout.vue'),
       children: [
-        { path: '', name: 'dashboard', component: () => import('./views/DashboardView.vue'), meta: { title: '总览', description: '对比今日和本月的各 Stack 入站、用户可归属及 relay / 未归属口径差额，并展示最近一小时实时速率与日月用量排行。采集失败、通知发送失败等需要处理的事项会在顶部提示。' } },
+        { path: '', name: 'dashboard', component: () => import('./views/DashboardView.vue'), meta: { title: '总览', description: '对比今日和本月的各 Stack 入站、用户流量及 relay / 未归属口径差额，并展示最近一小时实时速率与日月用量排行。采集失败、通知发送失败等需要处理的事项会在顶部提示。' } },
         { path: 'traffic', name: 'traffic', component: () => import('./views/TrafficView.vue'), meta: { title: '流量明细', description: '按小时、日、月、年查看用户、入站或出站的流量趋势与明细，可按 stack 和对象筛选，并导出为 CSV。' } },
         { path: 'notifications', name: 'notifications', component: () => import('./views/NotificationsView.vue'), meta: { title: '通知记录', description: '每日阈值、额度超限、到期暂停等事件产生的邮件通知及其发送状态。发送失败的记录可以手动重发。' } },
         { path: 'stacks', name: 'stacks', component: () => import('./views/StacksView.vue'), meta: { title: 'Stack', description: '每个 stack 是一组独立运行的 xray / mihomo 进程及其配置。在这里新建、导入和导出 stack，进入后编辑入站、出站与规则。' } },

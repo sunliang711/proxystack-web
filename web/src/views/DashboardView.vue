@@ -65,8 +65,8 @@ const filteredLive = computed(() => live.value.map(selectedPoint))
 const latest = computed(() => filteredLive.value[filteredLive.value.length - 1])
 const labels = computed(() => live.value.map((point) => new Date(point.at).toLocaleTimeString('zh-CN', { hour12: false })))
 const rateSeries = computed(() => [
-  { name: '上行', data: filteredLive.value.map((point) => point.up), slot: 0 },
-  { name: '下行', data: filteredLive.value.map((point) => point.down), slot: 1 },
+  { name: '↑', data: filteredLive.value.map((point) => point.up), slot: 0 },
+  { name: '↓', data: filteredLive.value.map((point) => point.down), slot: 1 },
 ])
 const total = (bytes: { up: number; down: number }) => bytes.up + bytes.down
 const difference = (inbound: { up: number; down: number }, user: { up: number; down: number }) => total(inbound) - total(user)
@@ -83,7 +83,7 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
         <span class="section-label" style="margin: 0">统计范围</span>
         <NSelect v-model:value="userId" :options="users.map((user) => ({ label: user.name, value: user.id! }))" clearable filterable placeholder="全部流量（可指定用户）" />
         <NButton size="small" :loading="loading" @click="load">刷新</NButton>
-        <NText class="filter-note">{{ userId ? '当前只统计所选用户及其档案的流量。' : '同时显示各 Stack 入站、用户可归属及 relay / 未归属口径差额。' }} <EntityLink v-if="userId" kind="user" :id="userId" label="查看用户" /></NText>
+        <NText class="filter-note">{{ userId ? '当前只统计所选用户及其档案的流量。' : '差额 = Stack 入站 - 用户流量，主要反映 relay 重复计数和未归属流量。' }} <EntityLink v-if="userId" kind="user" :id="userId" label="查看用户" /></NText>
       </div>
     </NCard>
     <template v-if="overview">
@@ -96,16 +96,16 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
     <NGrid cols="2 m:4" responsive="screen" :x-gap="20" :y-gap="20">
       <NGridItem><NCard size="small" class="metric-card"><NStatistic :label="userId ? '今日流量' : '今日 Stack 入站'" :value="formatBytes(total(overview.today))" /></NCard></NGridItem>
       <template v-if="!userId">
-        <NGridItem><NCard size="small" class="metric-card"><NStatistic label="今日用户可归属" :value="formatBytes(total(overview.user_today))" /></NCard></NGridItem>
+        <NGridItem><NCard size="small" class="metric-card"><NStatistic label="今日用户流量" :value="formatBytes(total(overview.user_today))" /></NCard></NGridItem>
         <NGridItem><NCard size="small" class="metric-card"><NStatistic label="今日 relay / 未归属差额" :value="formatSignedBytes(difference(overview.today, overview.user_today))" /></NCard></NGridItem>
       </template>
       <NGridItem><NCard size="small" class="metric-card"><NStatistic :label="userId ? '本月流量' : '本月 Stack 入站'" :value="formatBytes(total(overview.month))" /></NCard></NGridItem>
       <template v-if="!userId">
-        <NGridItem><NCard size="small" class="metric-card"><NStatistic label="本月用户可归属" :value="formatBytes(total(overview.user_month))" /></NCard></NGridItem>
+        <NGridItem><NCard size="small" class="metric-card"><NStatistic label="本月用户流量" :value="formatBytes(total(overview.user_month))" /></NCard></NGridItem>
         <NGridItem><NCard size="small" class="metric-card"><NStatistic label="本月 relay / 未归属差额" :value="formatSignedBytes(difference(overview.month, overview.user_month))" /></NCard></NGridItem>
       </template>
-      <NGridItem><NCard size="small" class="metric-card"><NStatistic label="当前上行" :value="formatRate(latest?.up ?? 0)" /></NCard></NGridItem>
-      <NGridItem><NCard size="small" class="metric-card"><NStatistic label="当前下行" :value="formatRate(latest?.down ?? 0)" /></NCard></NGridItem>
+      <NGridItem><NCard size="small" class="metric-card"><NStatistic label="当前 ↑" :value="formatRate(latest?.up ?? 0)" /></NCard></NGridItem>
+      <NGridItem><NCard size="small" class="metric-card"><NStatistic label="当前 ↓" :value="formatRate(latest?.down ?? 0)" /></NCard></NGridItem>
     </NGrid>
 
     <NCard title="实时速率（最近 1 小时）" size="small">
@@ -118,17 +118,15 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
     <NCard title="各 Stack 用量" size="small">
       <NEmpty v-if="!overview.by_stack.length" description="还没有 Stack 流量数据" />
       <div v-else class="table-scroll"><NTable :bordered="false" size="small" :single-line="false">
-        <thead><tr><th>Stack</th><th>{{ userId ? '今日流量' : '今日入站' }}</th><th v-if="!userId">今日用户可归属</th><th v-if="!userId">今日差额</th><th>{{ userId ? '本月流量' : '本月入站' }}</th><th v-if="!userId">本月用户可归属</th><th v-if="!userId">本月差额</th><th>当前上行 / 下行</th></tr></thead>
+        <thead><tr><th>Stack</th><th>{{ userId ? '今日流量' : '今日入站' }}</th><th v-if="!userId">今日用户流量</th><th>{{ userId ? '本月流量' : '本月入站' }}</th><th v-if="!userId">本月用户流量</th><th>当前速率</th></tr></thead>
         <tbody>
           <tr v-for="stack in overview.by_stack" :key="stack.stack_id">
             <td><EntityLink kind="stack" :id="stack.stack_id" :name="stack.stack" /></td>
-            <td><div>{{ formatBytes(total(stack.today)) }}</div><NText depth="3">{{ formatBytes(stack.today.up) }} / {{ formatBytes(stack.today.down) }}</NText></td>
-            <td v-if="!userId"><div>{{ formatBytes(total(stack.user_today)) }}</div><NText depth="3">{{ formatBytes(stack.user_today.up) }} / {{ formatBytes(stack.user_today.down) }}</NText></td>
-            <td v-if="!userId">{{ formatSignedBytes(difference(stack.today, stack.user_today)) }}</td>
-            <td><div>{{ formatBytes(total(stack.month)) }}</div><NText depth="3">{{ formatBytes(stack.month.up) }} / {{ formatBytes(stack.month.down) }}</NText></td>
-            <td v-if="!userId"><div>{{ formatBytes(total(stack.user_month)) }}</div><NText depth="3">{{ formatBytes(stack.user_month.up) }} / {{ formatBytes(stack.user_month.down) }}</NText></td>
-            <td v-if="!userId">{{ formatSignedBytes(difference(stack.month, stack.user_month)) }}</td>
-            <td>{{ formatRate(latest?.stacks[stack.stack]?.up ?? 0) }} / {{ formatRate(latest?.stacks[stack.stack]?.down ?? 0) }}</td>
+            <td><div>合计 {{ formatBytes(total(stack.today)) }}</div><NText depth="3">↑ {{ formatBytes(stack.today.up) }} · ↓ {{ formatBytes(stack.today.down) }}</NText></td>
+            <td v-if="!userId"><div>合计 {{ formatBytes(total(stack.user_today)) }}</div><NText depth="3">↑ {{ formatBytes(stack.user_today.up) }} · ↓ {{ formatBytes(stack.user_today.down) }}</NText></td>
+            <td><div>合计 {{ formatBytes(total(stack.month)) }}</div><NText depth="3">↑ {{ formatBytes(stack.month.up) }} · ↓ {{ formatBytes(stack.month.down) }}</NText></td>
+            <td v-if="!userId"><div>合计 {{ formatBytes(total(stack.user_month)) }}</div><NText depth="3">↑ {{ formatBytes(stack.user_month.up) }} · ↓ {{ formatBytes(stack.user_month.down) }}</NText></td>
+            <td><div>↑ {{ formatRate(latest?.stacks[stack.stack]?.up ?? 0) }}</div><NText depth="3">↓ {{ formatRate(latest?.stacks[stack.stack]?.down ?? 0) }}</NText></td>
           </tr>
         </tbody>
       </NTable></div>
@@ -145,7 +143,7 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
         <template #extra><RouterLink :to="{ name: 'users' }">查看用户用量</RouterLink></template>
       </NEmpty>
       <div v-else class="table-scroll"><NTable :bordered="false" size="small">
-        <thead><tr><th>用户</th><th>上行</th><th>下行</th><th style="width: 45%">合计</th></tr></thead>
+        <thead><tr><th>用户</th><th>↑</th><th>↓</th><th style="width: 45%">合计</th></tr></thead>
         <tbody>
           <tr v-for="user in rankedUsers" :key="user.id">
             <td><EntityLink kind="user" :id="user.id" :name="user.name" /></td>
