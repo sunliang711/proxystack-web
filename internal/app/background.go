@@ -39,5 +39,10 @@ func (s *Service) StartBackground(ctx context.Context) error {
 	}()
 	go s.runNotifications(ctx)
 	go s.runScheduler(ctx)
+	s.background.Add(1)
+	go func() {
+		defer s.background.Done()
+		s.runSelfUpgradeWatcher(ctx)
+	}()
 	return nil
 }

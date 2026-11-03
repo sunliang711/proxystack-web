@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
-  NAlert, NButton, NCard, NDescriptions, NDescriptionsItem, NForm, NFormItem, NInputNumber, NModal, NPopconfirm, NSelect, NSpace, NSpin, NTag, NText, NTooltip,
+  NAlert, NButton, NCard, NDescriptions, NDescriptionsItem, NForm, NFormItem, NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpace, NSpin, NTag, NText, NTooltip,
 } from 'naive-ui'
 import { api, problemMessage, type Schemas } from '../api/client'
 import { useBackgroundTask } from '../composables/useBackgroundTask'
 import { taskCenter } from '../tasks'
 import { VersionCheckTimeoutError, waitForVersion } from '../util/self-update'
+import { formatTime } from '../util/format'
 
 const info = ref<Schemas['SystemInfo'] | null>(null)
 
@@ -18,6 +19,10 @@ onMounted(async () => {
   const { data } = await api.GET('/api/system/info')
   info.value = data ?? null
   if (data) listen.value = { listen: data.listen, port: data.port }
+  await loadUpgradeSchedule()
+  scheduleTimer = window.setInterval(() => {
+    if (scheduleActive.value) void loadUpgradeSchedule()
+  }, 5000)
 })
 
 async function saveListen() {
@@ -38,6 +43,14 @@ type UpdatePhase = 'idle' | 'submitting' | 'unknown' | 'updating' | 'restarting'
 const updatePhase = ref<UpdatePhase>('idle')
 const updateTarget = ref('')
 const updateTaskID = ref<number | null>(null)
+const upgradeSchedule = ref<Schemas['SelfUpgradeSchedule'] | null>(null)
+const scheduleModalVisible = ref(false)
+const scheduleTarget = ref('latest')
+const scheduleTimeoutSeconds = ref(300)
+const scheduleIntervalSeconds = ref(20)
+const scheduleBusy = ref(false)
+let scheduleTimer: number | undefined
+const scheduleActive = computed(() => upgradeSchedule.value?.status === 'waiting' || upgradeSchedule.value?.status === 'updating')
 const updateBusy = computed(() => !['idle', 'failed', 'timeout'].includes(updatePhase.value))
 const updateModalVisible = computed(() => updatePhase.value !== 'idle')
 const updateModalClosable = computed(() => updatePhase.value === 'failed' || updatePhase.value === 'timeout')
@@ -97,8 +110,46 @@ async function checkUpdate() {
   update.value = data ?? null
 }
 
+async function loadUpgradeSchedule() {
+  const { data } = await api.GET('/api/system/upgrade-schedule')
+  if (data) upgradeSchedule.value = data
+}
+
+async function scheduleUpgrade() {
+  scheduleBusy.value = true
+  const { data, error } = await api.POST('/api/system/upgrade-schedule', {
+    body: {
+      target: scheduleTarget.value.trim() || 'latest',
+      timeout_seconds: scheduleTimeoutSeconds.value,
+      interval_seconds: scheduleIntervalSeconds.value,
+    },
+  })
+  scheduleBusy.value = false
+  if (error || !data) {
+    updateError.value = problemMessage(error, '预约升级失败')
+    return
+  }
+  upgradeSchedule.value = data
+  scheduleModalVisible.value = false
+}
+
+async function cancelUpgradeSchedule() {
+  scheduleBusy.value = true
+  const { data, error } = await api.DELETE('/api/system/upgrade-schedule')
+  scheduleBusy.value = false
+  if (error || !data) {
+    updateError.value = problemMessage(error, '取消预约升级失败')
+    return
+  }
+  upgradeSchedule.value = data
+}
+
 async function runUpdate() {
   if (!update.value?.update_available || updateBusy.value) return
+  if (scheduleActive.value) {
+    updateError.value = '请先取消正在等待的预约升级'
+    return
+  }
   if (info.value?.dev_mode) {
     updateError.value = '开发模式不能自动重启管理服务，请在正式部署环境中执行更新'
     return
@@ -182,6 +233,7 @@ onBeforeUnmount(() => {
   submitController = null
   stopUpdateMonitor()
   if (reloadTimer !== undefined) window.clearTimeout(reloadTimer)
+  if (scheduleTimer !== undefined) window.clearInterval(scheduleTimer)
 })
 </script>
 
@@ -202,14 +254,28 @@ onBeforeUnmount(() => {
     <NSpace vertical style="margin-top: 20px">
       <NSpace>
         <NTooltip placement="top-start" style="max-width: min(360px, calc(100vw - 32px))">
-          <template #trigger><NButton :loading="checking" :disabled="updateBusy" @click="checkUpdate">检查新版本</NButton></template>
+          <template #trigger><NButton :loading="checking" :disabled="updateBusy || scheduleActive" @click="checkUpdate">检查新版本</NButton></template>
           更新只替换管理服务本身；xray 和 mihomo 由独立的服务承载，代理流量不受影响。下载走系统设置中的下载代理。
         </NTooltip>
+        <NButton :disabled="updateBusy || info?.dev_mode || scheduleActive" @click="scheduleModalVisible = true">预约升级</NButton>
         <NPopconfirm v-if="update?.update_available" @positive-click="runUpdate">
-          <template #trigger><NButton type="primary" :loading="updateBusy" :disabled="updateBusy || info?.dev_mode">更新到 {{ update.latest }}</NButton></template>
+          <template #trigger><NButton type="primary" :loading="updateBusy" :disabled="updateBusy || info?.dev_mode || scheduleActive">更新到 {{ update.latest }}</NButton></template>
           下载并校验新版本后替换并重启管理服务，页面会短暂断开。继续？
         </NPopconfirm>
       </NSpace>
+      <NAlert v-if="upgradeSchedule && upgradeSchedule.status !== 'idle'" :type="upgradeSchedule.status === 'succeeded' ? 'success' : upgradeSchedule.status === 'failed' || upgradeSchedule.status === 'timeout' ? 'error' : 'info'" :bordered="false">
+        <NSpace vertical :size="4">
+          <NText>
+            预约升级：{{ upgradeSchedule.target }} · {{ upgradeSchedule.status === 'waiting' ? '等待版本发布' : upgradeSchedule.status === 'updating' ? '正在升级' : upgradeSchedule.status === 'succeeded' ? '已完成' : upgradeSchedule.status === 'timeout' ? '已超时' : upgradeSchedule.status === 'cancelled' ? '已取消' : '失败' }}
+          </NText>
+          <NText v-if="upgradeSchedule.status === 'waiting'" depth="3">
+            截止 {{ formatTime(upgradeSchedule.deadline_at) }}，每 {{ upgradeSchedule.interval_seconds }} 秒检查一次。
+          </NText>
+          <NText v-if="upgradeSchedule.resolved_version" depth="3">已解析版本：{{ upgradeSchedule.resolved_version }}</NText>
+          <NText v-if="upgradeSchedule.last_error" depth="3">{{ upgradeSchedule.last_error }}</NText>
+          <NButton v-if="scheduleActive" size="small" :loading="scheduleBusy" @click="cancelUpgradeSchedule">取消预约</NButton>
+        </NSpace>
+      </NAlert>
       <NAlert v-if="update && !update.update_available" type="success" :bordered="false">当前已是最新版本（{{ update.current }}）</NAlert>
       <NAlert v-if="info?.dev_mode && update?.update_available" type="warning" :bordered="false">开发模式不能自动重启管理服务，请在正式部署环境中执行更新。</NAlert>
       <NAlert v-if="update?.update_available && update.notes" type="info" :title="`${update.latest} 更新说明`" :bordered="false">
@@ -218,6 +284,33 @@ onBeforeUnmount(() => {
       <NAlert v-if="updateError && updatePhase === 'idle'" type="error" :bordered="false">{{ updateError }}</NAlert>
     </NSpace>
   </NCard>
+  <NModal v-model:show="scheduleModalVisible" preset="card" title="预约升级" style="width: 560px; max-width: calc(100vw - 32px)">
+    <NForm label-placement="left" label-width="120">
+      <NFormItem label="目标版本">
+        <NSpace vertical style="width: 100%">
+          <NSelect v-model:value="scheduleTarget" :options="[{ label: 'latest（最新正式版）', value: 'latest' }]" />
+          <NInput v-model:value="scheduleTarget" placeholder="latest 或 v0.3.7" />
+        </NSpace>
+      </NFormItem>
+      <NFormItem label="等待时长">
+        <NInputNumber v-model:value="scheduleTimeoutSeconds" :min="30" :max="86400" :step="30" />
+        <NText depth="3" style="margin-left: 8px">秒</NText>
+      </NFormItem>
+      <NFormItem label="检查间隔">
+        <NInputNumber v-model:value="scheduleIntervalSeconds" :min="5" :max="3600" :step="5" />
+        <NText depth="3" style="margin-left: 8px">秒</NText>
+      </NFormItem>
+    </NForm>
+    <NAlert type="info" :bordered="false">
+      管理服务会在后台持续检查，不需要保持页面打开。找到目标版本后会自动下载、校验、替换并重启管理服务；预约状态会在服务重启后继续恢复。
+    </NAlert>
+    <template #footer>
+      <NSpace justify="end">
+        <NButton @click="scheduleModalVisible = false">取消</NButton>
+        <NButton type="primary" :loading="scheduleBusy" @click="scheduleUpgrade">开始预约</NButton>
+      </NSpace>
+    </template>
+  </NModal>
   <NCard title="面板监听" style="margin-top: 20px">
     <NSpace vertical>
       <NText depth="3">修改后管理服务会重启，xray 和 mihomo 不受影响。改错连不上时，在本机执行 proxystack-web admin set-listen 恢复。</NText>

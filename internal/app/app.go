@@ -48,15 +48,16 @@ type Service struct {
 	SubDeployer subpublish.Deployer
 
 	// runtimeMu 串行化 apply、unit 操作和暂停生效，避免并发写生成物或重启同一 unit。
-	runtimeMu    sync.Mutex
-	tasks        taskRegistry
-	subs         subCache
-	traffic      trafficState
-	autoPause    autoPauseState
-	scheduler    schedulerState
-	subDeployMu  sync.Mutex
-	subDeploying map[int64]bool
-	guard        loginGuard
+	runtimeMu     sync.Mutex
+	tasks         taskRegistry
+	subs          subCache
+	traffic       trafficState
+	autoPause     autoPauseState
+	scheduler     schedulerState
+	subDeployMu   sync.Mutex
+	subDeploying  map[int64]bool
+	selfUpgradeMu sync.Mutex
+	guard         loginGuard
 	// notificationMu 串行化邮件发送与出口事件替换，避免恢复后发送滞后的故障邮件。
 	notificationMu sync.Mutex
 	egressMu       sync.Mutex

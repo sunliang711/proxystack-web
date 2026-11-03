@@ -42,6 +42,8 @@ const (
 // settingDepsLatest 保存最近一次检查到的各组件最新版本（运行状态，不属于配置）。
 const settingDepsLatest = "deps_latest"
 
+const settingSelfUpgradeSchedule = "self_upgrade_schedule"
+
 // DepFiles 返回组件安装后的文件路径。
 func (s *Service) DepFiles(component string) map[string]string {
 	switch component {
@@ -812,6 +814,11 @@ func (s *Service) CheckSelfUpdate(ctx context.Context) (*SelfVersion, error) {
 // SelfUpdate 下载并校验新版本，原子替换当前二进制，然后请求以特定退出码退出，由 systemd 重启。
 // 代理进程由独立的 unit 承载，不受影响。
 func (s *Service) SelfUpdate(ctx context.Context, actor Actor) (int64, error) {
+	return s.SelfUpdateVersion(ctx, actor, "latest")
+}
+
+// SelfUpdateVersion 下载并安装指定版本；target 为 latest 时使用最新正式版。
+func (s *Service) SelfUpdateVersion(ctx context.Context, actor Actor, target string) (int64, error) {
 	return s.startTask("self-update", "更新 proxystack-web", actor.Name, func(ctx context.Context, logf Logf) error {
 		doc, err := s.LoadConfig(ctx)
 		if err != nil {
@@ -822,7 +829,7 @@ func (s *Service) SelfUpdate(ctx context.Context, actor Actor) (int64, error) {
 			return err
 		}
 		logf("下载代理：%s", proxy.Redacted())
-		release, err := deps.FindRelease(ctx, fetcher, deps.Self, "latest")
+		release, err := deps.FindRelease(ctx, fetcher, deps.Self, target)
 		if err != nil {
 			return err
 		}

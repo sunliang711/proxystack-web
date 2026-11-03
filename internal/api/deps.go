@@ -63,6 +63,14 @@ type selfVersionOutput struct {
 	Body app.SelfVersion
 }
 
+type selfUpgradeScheduleInput struct {
+	Body app.SelfUpgradeRequest
+}
+
+type selfUpgradeScheduleOutput struct {
+	Body app.SelfUpgradeSchedule
+}
+
 func registerDeps(api huma.API, s *Server) {
 	reg := func(op huma.Operation) huma.Operation {
 		op.Tags = []string{"deps"}
@@ -153,6 +161,30 @@ func registerDeps(api huma.API, s *Server) {
 				return nil, toHTTPError(err)
 			}
 			return &selfVersionOutput{Body: *result}, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "getSelfUpgradeSchedule", Method: http.MethodGet, Path: "/api/system/upgrade-schedule", Summary: "查看管理服务预约升级状态", Tags: []string{"system"}}),
+		func(ctx context.Context, _ *struct{}) (*selfUpgradeScheduleOutput, error) {
+			result, err := s.svc.SelfUpgradeSchedule(ctx)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &selfUpgradeScheduleOutput{Body: *result}, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "scheduleSelfUpgrade", Method: http.MethodPost, Path: "/api/system/upgrade-schedule", Summary: "预约管理服务升级", DefaultStatus: http.StatusAccepted, Tags: []string{"system"}}),
+		func(ctx context.Context, in *selfUpgradeScheduleInput) (*selfUpgradeScheduleOutput, error) {
+			result, err := s.svc.ScheduleSelfUpgrade(ctx, actorFrom(ctx), in.Body)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &selfUpgradeScheduleOutput{Body: *result}, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "cancelSelfUpgradeSchedule", Method: http.MethodDelete, Path: "/api/system/upgrade-schedule", Summary: "取消管理服务预约升级", Tags: []string{"system"}}),
+		func(ctx context.Context, _ *struct{}) (*selfUpgradeScheduleOutput, error) {
+			result, err := s.svc.CancelSelfUpgrade(ctx, actorFrom(ctx))
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &selfUpgradeScheduleOutput{Body: *result}, nil
 		})
 	huma.Register(api, reg(huma.Operation{OperationID: "selfUpdate", Method: http.MethodPost, Path: "/api/system/update", Summary: "更新管理服务（后台作业）", DefaultStatus: http.StatusAccepted, Tags: []string{"system"}}),
 		func(ctx context.Context, _ *struct{}) (*taskIDOutput, error) {

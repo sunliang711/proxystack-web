@@ -1392,6 +1392,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/upgrade-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查看管理服务预约升级状态 */
+        get: operations["getSelfUpgradeSchedule"];
+        put?: never;
+        /** 预约管理服务升级 */
+        post: operations["scheduleSelfUpgrade"];
+        /** 取消管理服务预约升级 */
+        delete: operations["cancelSelfUpgradeSchedule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/task-center": {
         parameters: {
             query?: never;
@@ -2669,6 +2688,36 @@ export interface components {
         SecuritySettings: {
             allow_noauth_public: boolean;
             require_auth_for_public_socks_http: boolean;
+        };
+        SelfUpgradeRequest: {
+            /** Format: int64 */
+            interval_seconds: number;
+            target: string;
+            /** Format: int64 */
+            timeout_seconds: number;
+        };
+        SelfUpgradeSchedule: {
+            /** Format: date-time */
+            deadline_at: string;
+            /** Format: date-time */
+            finished_at: string;
+            /** Format: int64 */
+            interval_seconds: number;
+            /** Format: date-time */
+            last_check_at: string;
+            last_error?: string;
+            /** Format: date-time */
+            next_check_at: string;
+            resolved_version?: string;
+            /** Format: date-time */
+            started_at: string;
+            /** @enum {string} */
+            status: "idle" | "waiting" | "updating" | "succeeded" | "timeout" | "failed" | "cancelled";
+            target: string;
+            /** Format: int64 */
+            task_id?: number;
+            /** Format: int64 */
+            timeout_seconds: number;
         };
         SelfVersion: {
             current: string;
@@ -6090,6 +6139,97 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskIDOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getSelfUpgradeSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SelfUpgradeSchedule"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    scheduleSelfUpgrade: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelfUpgradeRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SelfUpgradeSchedule"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    cancelSelfUpgradeSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SelfUpgradeSchedule"];
                 };
             };
             /** @description Error */
