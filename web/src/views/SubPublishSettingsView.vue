@@ -270,11 +270,29 @@ function sourceSequence(target: PublishTarget, result: TestResult) {
   return result.sources?.find((source) => source.name === target.source)?.sequence
 }
 
+function workflowState(row: PublishTarget) {
+  if (!row.deploy_state) return { label: '第 1 步：检测部署', type: 'warning' as const, detail: '先确认 SSH、系统和 sudo' }
+  if (row.deploy_state !== 'installed') return { label: '第 2 步：部署', type: 'warning' as const, detail: `当前状态：${row.deploy_state}` }
+  const testedAfterDeploy = row.last_test_at && (!row.last_deploy_at || Date.parse(row.last_test_at) >= Date.parse(row.last_deploy_at))
+  if (!testedAfterDeploy || row.last_test_error) return { label: '第 3 步：测试', type: 'warning' as const, detail: '部署完成后验证转发和 Secret' }
+  return { label: '第 5 步：签发订阅包', type: 'success' as const, detail: '第 4 步 Secret 已配置，可前往发布页' }
+}
+
 const columns: DataTableColumns<PublishTarget> = [
   { title: '名称', key: 'name', minWidth: 120 },
   { title: 'SSH 地址', key: 'ssh_host', minWidth: 190, render: (row) => `${row.ssh_user}@${row.ssh_host}:${row.ssh_port}` },
   { title: '来源', key: 'source', width: 110 },
   { title: '启用', key: 'enabled', width: 70, render: (row) => (row.enabled ? '是' : '否') },
+  {
+    title: '接入流程', key: 'workflow', minWidth: 210,
+    render: (row) => {
+      const state = workflowState(row)
+      return h(NSpace, { vertical: true, size: 2 }, () => [
+        h(NTag, { size: 'small', type: state.type }, () => state.label),
+        h(NText, { depth: 3 }, () => state.detail),
+      ])
+    },
+  },
   {
     title: '最近测试', key: 'last_test_at', minWidth: 170,
     render: (row) => h(NSpace, { vertical: true, size: 2 }, () => [
@@ -304,18 +322,18 @@ const columns: DataTableColumns<PublishTarget> = [
   {
     title: '操作', key: 'actions', width: 660, fixed: 'right',
     render: (row) => h(NSpace, { size: 4 }, () => [
-      h(NButton, { size: 'small', loading: testing.value === row.id, onClick: () => test(row) }, () => '测试'),
       h(NButton, { size: 'small', loading: inspecting.value === row.id, onClick: () => inspectDeploy(row) }, () => '检测部署'),
       h(NPopconfirm, { onPositiveClick: () => deploy(row) }, {
         trigger: () => h(NButton, { size: 'small', type: 'primary', loading: deploying.value === row.id }, () => row.deploy_state === 'installed' ? '更新' : '安装'),
         default: () => `将下载最新稳定版并通过 SSH ${row.deploy_state === 'installed' ? '更新' : '安装'}订阅端，继续？`,
       }),
+      h(NButton, { size: 'small', disabled: row.deploy_state !== 'installed', loading: testing.value === row.id, onClick: () => test(row), title: '先完成订阅端部署' }, () => '测试'),
       h(NPopconfirm, { onPositiveClick: () => rollbackDeploy(row) }, {
         trigger: () => h(NButton, { size: 'small', disabled: !row.previous_version, loading: rollingBack.value === row.id }, () => '回滚'),
         default: () => `将订阅端回滚到 ${row.previous_version || '上一版本'}，继续？`,
       }),
       h(NPopconfirm, { onPositiveClick: () => viewSetup(row) }, {
-        trigger: () => h(NButton, { size: 'small', loading: viewingSetup.value === row.id }, () => '完整配置'),
+        trigger: () => h(NButton, { size: 'small', loading: viewingSetup.value === row.id }, () => '配置 Secret / 完整配置'),
         default: () => '完整配置包含明文发布 Secret，查看操作会记录审计日志。继续？',
       }),
       h(NButton, { size: 'small', onClick: () => (instructions.value = row) }, () => '配置说明'),
@@ -364,6 +382,14 @@ function hostKeyCommand(algorithm: string) {
       <NSpace v-else vertical>
         <NAlert type="info" :bordered="false">在线发布需要一套管理端 SSH Ed25519 密钥。生成后只能查看公钥，不能取回私钥。</NAlert>
         <NButton type="primary" :loading="generating" @click="generateIdentity">生成 SSH 密钥</NButton>
+      </NSpace>
+    </NCard>
+
+    <NCard title="订阅端接入流程">
+      <NSpace vertical :size="8">
+        <NText strong>1 检测部署 → 2 部署 → 3 测试 → 4 配置发布 Secret → 5 签发订阅包</NText>
+        <NText depth="3">通过 SSH 安装或更新时，第 4 步会由管理端在部署完成后自动执行；离线安装时，先安装二进制，再从“配置 Secret / 完整配置”查看并执行命令。</NText>
+        <NText depth="3">只有部署完成且部署后的测试通过，目标才可在“发布订阅包”页面选择并签发。</NText>
       </NSpace>
     </NCard>
 

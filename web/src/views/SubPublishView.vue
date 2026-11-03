@@ -16,6 +16,8 @@ interface PublishTarget {
   ssh_port: number
   source: string
   enabled: boolean
+  deploy_state?: string
+  last_deploy_at?: string
   last_test_at?: string
   last_test_error?: string
   last_sequence?: number
@@ -44,7 +46,7 @@ async function load() {
   if (targetsResult.error) message.error(problemMessage(targetsResult.error, '读取订阅端失败'))
   status.value = statusResult.data ?? null
   targets.value = (targetsResult.data ?? []).filter((target: PublishTarget) => target.enabled)
-  selected.value = selected.value.filter((id) => targets.value.some((target) => target.id === id))
+  selected.value = selected.value.filter((id) => targets.value.some((target) => target.id === id && targetReady(target)))
 }
 onMounted(load)
 
@@ -114,6 +116,17 @@ function targetSummary(target: PublishTarget) {
   return `${address} · 尚未发布`
 }
 
+function targetReady(target: PublishTarget) {
+  if (target.deploy_state !== 'installed' || !!target.last_test_error || !target.last_test_at) return false
+  return !target.last_deploy_at || Date.parse(target.last_test_at) >= Date.parse(target.last_deploy_at)
+}
+
+function targetNextStep(target: PublishTarget) {
+  if (target.deploy_state !== 'installed') return target.deploy_state ? '先完成部署' : '先检测部署'
+  if (!targetReady(target)) return '先完成部署后的测试'
+  return '可签发'
+}
+
 function openTask() {
   if (!submitted.value) return
   void router.push({ name: 'task-detail', params: { source: 'task', id: submitted.value.task_id } })
@@ -179,13 +192,16 @@ function openSSHSettings() {
           <NAlert v-if="!targets.length" type="warning" :bordered="false">
             还没有启用的订阅端目标。请先到“SSH 发布与部署设置”生成 SSH 密钥并配置订阅端。
           </NAlert>
-          <NCheckboxGroup v-else v-model:value="selected">
+          <NAlert v-else type="info" :bordered="false">
+            在线签发流程：检测部署 → 部署 → 测试 → 配置发布 Secret → 签发订阅包。SSH 部署会自动配置 Secret；只有部署完成且测试通过的目标可以选择。
+          </NAlert>
+          <NCheckboxGroup v-if="targets.length" v-model:value="selected">
             <NSpace vertical>
-              <NCheckbox v-for="target in targets" :key="target.id" :value="target.id">
+              <NCheckbox v-for="target in targets" :key="target.id" :value="target.id" :disabled="!targetReady(target)">
                 <NSpace :size="8" align="center">
                   <NText strong>{{ target.name }}</NText>
                   <NText depth="3">{{ targetSummary(target) }}</NText>
-                  <NTag v-if="target.last_test_error" size="small" type="error">测试失败</NTag>
+                  <NTag size="small" :type="targetReady(target) ? 'success' : 'warning'">{{ targetNextStep(target) }}</NTag>
                 </NSpace>
               </NCheckbox>
             </NSpace>

@@ -17,6 +17,8 @@ test('SSH 配置支持发布和部署并提供分阶段测试', () => {
   assert.match(settings, /\/deploy\/rollback/)
   assert.match(settings, /远端主机固定为 127\.0\.0\.1/)
   assert.match(settings, /testResult\.result\.stages/)
+  assert.match(settings, /1 检测部署 → 2 部署 → 3 测试 → 4 配置发布 Secret → 5 签发订阅包/)
+  assert.match(settings, /disabled: row\.deploy_state !== 'installed'/)
 })
 
 test('添加订阅端时说明 Host Key 来源和获取方式', () => {
@@ -44,6 +46,9 @@ test('发布页同时保留 SSH 在线发布和统一离线部署', () => {
   assert.match(publish, /SSH 在线发布/)
   assert.match(publish, /离线签发下载/)
   assert.match(publish, /target_ids: selected\.value/)
+  assert.match(publish, /检测部署 → 部署 → 测试 → 配置发布 Secret → 签发订阅包/)
+  assert.match(publish, /function targetReady\(target: PublishTarget\)/)
+  assert.match(publish, /只有部署完成且测试通过的目标可以选择/)
   assert.match(publish, /再次发布会生成新的序号/)
   assert.match(publish, /router\.push\(\{ name: 'sub-publish-settings' \}\)/)
   assert.match(publish, /releases\/latest\/download/)
