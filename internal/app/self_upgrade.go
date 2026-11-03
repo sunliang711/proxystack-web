@@ -231,6 +231,12 @@ func (s *Service) checkSelfUpgradeSchedule(ctx context.Context) {
 		return
 	}
 	if !deps.IsNewerVersion(version.Current().Version, release.Tag) {
+		if state.Target == "latest" && state.ResolvedVersion == "" {
+			state.ResolvedVersion = release.Tag
+			state.LastError = ""
+			_ = s.saveSelfUpgradeSchedule(ctx, state)
+			return
+		}
 		state.Status, state.ResolvedVersion, state.FinishedAt, state.NextCheckAt = SelfUpgradeSucceeded, release.Tag, now, time.Time{}
 		state.LastError = "current version is already up to date"
 		_ = s.saveSelfUpgradeSchedule(ctx, state)
