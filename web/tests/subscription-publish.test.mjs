@@ -21,6 +21,7 @@ test('SSH 配置支持发布和部署并提供分阶段测试', () => {
   assert.match(settings, /1 检测部署 → 2 部署 → 3 测试 → 4 配置发布 Secret → 5 签发订阅包/)
   assert.match(settings, /disabled: row\.deploy_state !== 'installed'/)
   assert.match(settings, /row\.deploy_state === 'installed' \? '更新' : '部署'/)
+  assert.match(settings, /第 4 步：配置发布 Secret（已自动完成）/)
 })
 
 test('添加订阅端时说明 Host Key 来源和获取方式', () => {

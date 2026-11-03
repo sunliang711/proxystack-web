@@ -275,7 +275,7 @@ function workflowState(row: PublishTarget) {
   if (row.deploy_state !== 'installed') return { label: '第 2 步：部署', type: 'warning' as const, detail: `当前状态：${row.deploy_state}` }
   const testedAfterDeploy = row.last_test_at && (!row.last_deploy_at || Date.parse(row.last_test_at) >= Date.parse(row.last_deploy_at))
   if (!testedAfterDeploy || row.last_test_error) return { label: '第 3 步：测试', type: 'warning' as const, detail: '部署完成后验证转发和 Secret' }
-  return { label: '第 5 步：签发订阅包', type: 'success' as const, detail: '第 4 步 Secret 已配置，可前往发布页' }
+  return { label: '第 4 步：配置发布 Secret（已自动完成）', type: 'success' as const, detail: 'SSH 部署已配置 Secret，下一步：第 5 步签发订阅包' }
 }
 
 const columns: DataTableColumns<PublishTarget> = [
