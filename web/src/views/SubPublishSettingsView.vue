@@ -118,6 +118,7 @@ function open(target?: PublishTarget) {
 }
 
 const provisioning = ref<ProvisioningResult | null>(null)
+const secretSetup = ref<ProvisioningResult | null>(null)
 function sshUserSetupCommand(sshUser: string) {
   if (!/^[A-Za-z_][A-Za-z0-9_-]{0,31}$/.test(sshUser)) return '# 请先填写合法的 SSH 用户名'
   const sshDir = sshUser === 'root' ? '/root/.ssh' : `/home/${sshUser}/.ssh`
@@ -184,21 +185,25 @@ async function rotateSecret(target: PublishTarget) {
     message.error(problemMessage(error, '轮换发布 Secret 失败'))
     return
   }
-  provisioning.value = provisioningResult(data)
+  secretSetup.value = provisioningResult(data)
   message.success('管理端已改用新 Secret，请立即更新订阅端')
   await load()
 }
 
-const viewingSetup = ref<number | null>(null)
-async function viewSetup(target: PublishTarget) {
-  viewingSetup.value = target.id ?? null
+function viewSetup(target: PublishTarget) {
+  provisioning.value = { target, secret: '' }
+}
+
+const viewingSecret = ref<number | null>(null)
+async function viewSecret(target: PublishTarget) {
+  viewingSecret.value = target.id ?? null
   const { data, error } = await api.GET('/api/sub-publish/targets/{id}/setup', { params: { path: { id: target.id! } } })
-  viewingSetup.value = null
+  viewingSecret.value = null
   if (error || !data) {
-    message.error(problemMessage(error, '读取订阅端完整配置失败'))
+    message.error(problemMessage(error, '读取发布 Secret 失败'))
     return
   }
-  provisioning.value = provisioningResult(data)
+  secretSetup.value = provisioningResult(data)
 }
 
 const testResult = ref<{ target: PublishTarget; result: TestResult } | null>(null)
@@ -332,9 +337,10 @@ const columns: DataTableColumns<PublishTarget> = [
         trigger: () => h(NButton, { size: 'small', disabled: !row.previous_version, loading: rollingBack.value === row.id }, () => '回滚'),
         default: () => `将订阅端回滚到 ${row.previous_version || '上一版本'}，继续？`,
       }),
-      h(NPopconfirm, { onPositiveClick: () => viewSetup(row) }, {
-        trigger: () => h(NButton, { size: 'small', loading: viewingSetup.value === row.id }, () => '配置 Secret / 完整配置'),
-        default: () => '完整配置包含明文发布 Secret，查看操作会记录审计日志。继续？',
+      h(NButton, { size: 'small', onClick: () => viewSetup(row) }, () => '完整配置'),
+      h(NPopconfirm, { onPositiveClick: () => viewSecret(row) }, {
+        trigger: () => h(NButton, { size: 'small', loading: viewingSecret.value === row.id }, () => '查看 Secret'),
+        default: () => '将显示明文发布 Secret，查看操作会记录审计日志。继续？',
       }),
       h(NButton, { size: 'small', onClick: () => (instructions.value = row) }, () => '配置说明'),
       h(NButton, { size: 'small', onClick: () => open(row) }, () => '编辑'),
@@ -388,7 +394,7 @@ function hostKeyCommand(algorithm: string) {
     <NCard title="订阅端接入流程">
       <NSpace vertical :size="8">
         <NText strong>1 检测部署 → 2 部署 → 3 测试 → 4 配置发布 Secret → 5 签发订阅包</NText>
-        <NText depth="3">通过 SSH 安装或更新时，第 4 步会由管理端在部署完成后自动执行；离线安装时，先安装二进制，再从“配置 Secret / 完整配置”查看并执行命令。</NText>
+        <NText depth="3">通过 SSH 安装或更新时，第 4 步会由管理端在部署完成后自动执行；离线安装时，先安装二进制，再从“查看 Secret”弹窗查看并执行命令。</NText>
         <NText depth="3">只有部署完成且部署后的测试通过，目标才可在“发布订阅包”页面选择并签发。</NText>
       </NSpace>
     </NCard>
@@ -453,10 +459,10 @@ function hostKeyCommand(algorithm: string) {
     </NDrawerContent>
   </NDrawer>
 
-  <NModal :show="!!provisioning" preset="card" title="订阅端完整配置" style="width: 820px; max-width: calc(100vw - 32px)" @update:show="(value) => !value && (provisioning = null)">
+  <NModal :show="!!provisioning" preset="card" title="订阅端完整配置（不含 Secret）" style="width: 820px; max-width: calc(100vw - 32px)" @update:show="(value) => !value && (provisioning = null)">
     <NSpace v-if="provisioning" vertical :size="16">
-      <NAlert type="warning" :bordered="false">
-        此窗口包含明文发布 Secret。关闭后页面会清除本次显示内容，可从目标列表的“完整配置”再次查看；每次查看都会记录审计日志。
+      <NAlert type="info" :bordered="false">
+        此窗口只包含 SSH、公钥、转发和 sudo 配置，不显示发布 Secret。发布 Secret 请从目标列表单独点击“查看 Secret”。
       </NAlert>
       <NSteps vertical :current="1" status="process">
         <NStep title="安装管理端 SSH 公钥">
@@ -475,18 +481,21 @@ function hostKeyCommand(algorithm: string) {
           <CopyableCode :value="sudoSetupCommand(provisioning.target.ssh_user)" />
           <NText depth="3">部署检测要求 <NText code>sudo -n /bin/true</NText> 成功。root 用户不需要此步骤。</NText>
         </NStep>
-        <NStep title="配置发布 Secret">
-          <NSpace vertical :size="8">
-            <CopyableCode label="发布 Secret" :value="provisioning.secret" />
-            <NText depth="3">首次通过 SSH 安装或更新时，管理端会在部署完成后自动配置这个 Secret，不要在订阅端尚未安装二进制时执行下面的命令。</NText>
-            <CopyableCode label="安装完成后手工执行，按提示粘贴 Secret" :value="provisioning.publish_token_command || tokenCommand(provisioning.target)" />
-            <NText depth="3">如果使用离线方式安装，先完成订阅端安装，再执行此命令；之后在线发布和连接测试会使用同一个 Secret。</NText>
-          </NSpace>
-        </NStep>
         <NStep title="核对 Host Key 并测试">
           <NText>在订阅端本机执行 <NText code>ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256</NText>，通过独立渠道核对配置的指纹，再回到目标列表点击“测试”。其他 Host Key 算法请改用对应的公钥文件。</NText>
         </NStep>
       </NSteps>
+    </NSpace>
+  </NModal>
+
+  <NModal :show="!!secretSetup" preset="card" title="订阅端发布 Secret" style="width: 680px; max-width: calc(100vw - 32px)" @update:show="(value) => !value && (secretSetup = null)">
+    <NSpace v-if="secretSetup" vertical :size="14">
+      <NAlert type="warning" :bordered="false">
+        此窗口包含明文发布 Secret。关闭后页面会清除本次显示内容；每次查看都会记录审计日志。
+      </NAlert>
+      <CopyableCode label="发布 Secret" :value="secretSetup.secret" />
+      <NText depth="3">首次通过 SSH 安装或更新时，管理端会在部署完成后自动配置此 Secret；离线安装或手工重置时，先完成订阅端安装，再执行下面的命令并按提示粘贴 Secret。</NText>
+      <CopyableCode label="安装完成后配置发布 Secret" :value="secretSetup.publish_token_command || tokenCommand(secretSetup.target)" />
     </NSpace>
   </NModal>
 
@@ -496,9 +505,7 @@ function hostKeyCommand(algorithm: string) {
       <CopyableCode label="写入 /etc/ssh/sshd_config.d 并 reload" :value="sshdConfigSetupCommand(instructions)" />
       <CopyableCode label="sshd_config 限制" :value="sshdConfig(instructions)" />
       <CopyableCode label="sudo -n 配置" :value="sudoSetupCommand(instructions.ssh_user)" />
-      <NText depth="3">首次通过 SSH 安装或更新时，管理端会在部署完成后自动配置发布 Secret；离线安装或手工重置时，请先完成订阅端安装，再执行：</NText>
-      <CopyableCode label="安装完成后配置发布 Secret" :value="tokenCommand(instructions)" />
-      <NAlert type="info" :bordered="false">此说明不包含明文发布 Secret；需要重新配置时，请从目标列表打开“完整配置”。</NAlert>
+      <NAlert type="info" :bordered="false">此说明不包含明文发布 Secret；需要查看或重新配置时，请从目标列表单独点击“查看 Secret”。</NAlert>
     </NSpace>
   </NModal>
 

@@ -36,12 +36,12 @@ test('添加订阅端时说明 Host Key 来源和获取方式', () => {
 
 test('完整配置可以重复查看 Secret，普通说明不拼接掩码', () => {
   assert.match(settings, /\/api\/sub-publish\/targets\/\{id\}\/setup/)
-  assert.match(settings, /完整配置包含明文发布 Secret/)
-  assert.match(settings, /可从目标列表的“完整配置”再次查看/)
+  assert.match(settings, /title="订阅端完整配置（不含 Secret）"/)
+  assert.match(settings, /查看 Secret/)
+  assert.match(settings, /将显示明文发布 Secret，查看操作会记录审计日志/)
   assert.match(settings, /每次查看都会记录审计日志/)
-  assert.match(settings, /管理端会在部署完成后自动配置这个 Secret/)
-  assert.match(settings, /不要在订阅端尚未安装二进制时执行下面的命令/)
-  assert.match(settings, /如果使用离线方式安装，先完成订阅端安装/)
+  assert.match(settings, /首次通过 SSH 安装或更新时，管理端会在部署完成后自动配置此 Secret/)
+  assert.match(settings, /离线安装或手工重置时，先完成订阅端安装/)
   assert.doesNotMatch(settings, /tokenCommand\([^)]*\).*MASKED/s)
 })
 
