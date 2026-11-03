@@ -20,9 +20,11 @@ test('添加订阅端时说明 Host Key 来源和获取方式', () => {
   assert.match(settings, /从输出中只复制完整的/)
 })
 
-test('Secret 仅在创建或轮换结果中展示，普通说明不拼接掩码', () => {
-  assert.match(settings, /发布 Secret 只显示这一次/)
-  assert.match(settings, /如果遗失，请轮换 Secret/)
+test('完整配置可以重复查看 Secret，普通说明不拼接掩码', () => {
+  assert.match(settings, /\/api\/sub-publish\/targets\/\{id\}\/setup/)
+  assert.match(settings, /完整配置包含明文发布 Secret/)
+  assert.match(settings, /可从目标列表的“完整配置”再次查看/)
+  assert.match(settings, /每次查看都会记录审计日志/)
   assert.doesNotMatch(settings, /tokenCommand\([^)]*\).*MASKED/s)
 })
 

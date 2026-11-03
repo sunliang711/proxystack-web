@@ -9075,6 +9075,60 @@
         ]
       }
     },
+    "/api/sub-publish/targets/{id}/setup": {
+      "get": {
+        "operationId": "getSubscriptionPublishTargetSetup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishTargetSetup"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "查看订阅端完整配置（包含发布 Secret，记入审计日志）",
+        "tags": [
+          "subscription"
+        ]
+      }
+    },
     "/api/sub-publish/targets/{id}/test": {
       "post": {
         "operationId": "testSubscriptionPublishTarget",

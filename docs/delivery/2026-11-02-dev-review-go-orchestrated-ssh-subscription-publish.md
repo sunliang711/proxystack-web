@@ -18,7 +18,7 @@
 - 每个订阅端目标保存独立 SSH 参数、严格校验的 Host Key 类型与 SHA-256 指纹、固定回环目标端口、来源名、启用状态和独立发布 Secret。
 - 管理端通过 `golang.org/x/crypto/ssh` 的 `direct-tcpip` 访问订阅端 `127.0.0.1:<port>`，转发目标不可配置为其他主机。
 - 订阅端提供 `HEAD/POST /api/v1/subscription-bundles/import`。HEAD 用于测试 Secret 和来源绑定；POST 接收原始签名 bundle，鉴权成功后再读取请求体。
-- Secret 使用 Bearer Header 传递。管理端保存投递所需明文，订阅端只保存 SHA-256 哈希；创建和轮换时明文只返回一次，响应禁止缓存。
+- Secret 使用 Bearer Header 传递。管理端保存投递所需明文，订阅端只保存 SHA-256 哈希；完整配置通过独立鉴权接口按需查看，响应禁止缓存并记录审计日志。
 - 在线发布一次签发一份 bundle，最多并发投递四个目标。目标结果独立记录，部分失败不回滚已成功目标；离线签发下载流程保持不变。
 - 订阅端使用跨进程文件锁、序号检查和原子替换统一保护 HTTP、CLI 与 inbox 三种导入方式。
 

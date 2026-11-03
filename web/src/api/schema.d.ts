@@ -1220,6 +1220,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sub-publish/targets/{id}/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查看订阅端完整配置（包含发布 Secret，记入审计日志） */
+        get: operations["getSubscriptionPublishTargetSetup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sub-publish/targets/{id}/test": {
         parameters: {
             query?: never;
@@ -5609,6 +5626,38 @@ export interface operations {
         };
     };
     rotateSubscriptionPublishTargetSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishTargetSetup"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getSubscriptionPublishTargetSetup: {
         parameters: {
             query?: never;
             header?: never;

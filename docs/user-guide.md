@@ -149,7 +149,7 @@ sudo bash install.sh --role sub --migrate-sub
 
    - 把页面生成的受限 `authorized_keys` 条目加入 SSH 用户的 `~/.ssh/authorized_keys`。条目中的 `command="/bin/false"` 禁止该公钥执行远程命令，`permitopen` 只允许向指定的订阅端回环端口做正向转发。
    - 按页面给出的 `sshd_config` 片段限制该 SSH 用户。`ForceCommand /bin/false` 禁止远程命令，`PermitOpen` 和 `AllowTcpForwarding local` 只保留指定回环端口的正向转发。应用配置前先执行 `sshd -t`，然后 reload sshd。
-   - 执行 `sudo proxystack-web sub source set-publish-token 来源名`，按提示粘贴页面只显示一次的发布 Secret。订阅端只保存 Secret 的 SHA-256 哈希；每个目标使用独立 Secret。
+   - 执行 `sudo proxystack-web sub source set-publish-token 来源名`，按提示粘贴页面显示的发布 Secret。订阅端只保存 Secret 的 SHA-256 哈希；每个目标使用独立 Secret。
    - 通过独立可信渠道核对 SSH Host Key 指纹。例如可以在订阅端本机运行 `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`，不要只信任管理端首次网络扫描得到的结果。
 
 5. 回到目标列表点击「测试」。系统依次检查 SSH TCP、Host Key、SSH 公钥认证、到 `127.0.0.1:<订阅端端口>` 的正向转发、`/health` 健康状态和发布 Secret。全部通过后再进行正式发布。
@@ -157,7 +157,7 @@ sudo bash install.sh --role sub --migrate-sub
 
 在线发布只要求管理端能够连接订阅端的 SSH 端口。订阅端不需要额外监听隧道管理端口，也不会主动连接管理端；订阅导入 HTTP 接口仍可只监听回环地址。管理端严格校验已配置的 SSH Host Key，并禁止 HTTP 重定向。
 
-Secret 遗失时，在「SSH 发布设置」轮换目标 Secret，再到订阅端重新执行 `set-publish-token`。轮换后管理端立即改用新 Secret，在订阅端更新前在线发布会失败；订阅端完成更新后，旧 Secret 才会失效。普通目标列表只显示掩码，创建或轮换结果关闭后不能再次取回明文。
+普通目标列表只显示 Secret 掩码。需要重新配置订阅端时，点击操作列的「完整配置」可以再次查看当前 Secret、`authorized_keys`、`sshd_config` 和导入命令；每次查看都会记入审计日志，响应禁止缓存，窗口关闭后页面清除本次显示的明文。怀疑 Secret 泄露时再执行轮换并到订阅端重新运行 `set-publish-token`。轮换后管理端立即改用新 Secret，在订阅端更新前在线发布会失败；订阅端完成更新后，旧 Secret 才会失效。
 
 目标来源名必须与管理端「系统设置 → 订阅」中的当前来源名一致。修改管理端来源名后，需要同步更新订阅端信任来源和目标配置，并轮换、重新配置该目标的发布 Secret。
 

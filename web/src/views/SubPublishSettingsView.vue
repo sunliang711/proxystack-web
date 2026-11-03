@@ -169,6 +169,18 @@ async function rotateSecret(target: PublishTarget) {
   await load()
 }
 
+const viewingSetup = ref<number | null>(null)
+async function viewSetup(target: PublishTarget) {
+  viewingSetup.value = target.id ?? null
+  const { data, error } = await api.GET('/api/sub-publish/targets/{id}/setup', { params: { path: { id: target.id! } } })
+  viewingSetup.value = null
+  if (error || !data) {
+    message.error(problemMessage(error, '读取订阅端完整配置失败'))
+    return
+  }
+  provisioning.value = provisioningResult(data)
+}
+
 const testResult = ref<{ target: PublishTarget; result: TestResult } | null>(null)
 async function test(target: PublishTarget) {
   testing.value = target.id ?? null
@@ -221,9 +233,13 @@ const columns: DataTableColumns<PublishTarget> = [
     ]),
   },
   {
-    title: '操作', key: 'actions', width: 310, fixed: 'right',
+    title: '操作', key: 'actions', width: 420, fixed: 'right',
     render: (row) => h(NSpace, { size: 4 }, () => [
       h(NButton, { size: 'small', loading: testing.value === row.id, onClick: () => test(row) }, () => '测试'),
+      h(NPopconfirm, { onPositiveClick: () => viewSetup(row) }, {
+        trigger: () => h(NButton, { size: 'small', loading: viewingSetup.value === row.id }, () => '完整配置'),
+        default: () => '完整配置包含明文发布 Secret，查看操作会记录审计日志。继续？',
+      }),
       h(NButton, { size: 'small', onClick: () => (instructions.value = row) }, () => '配置说明'),
       h(NButton, { size: 'small', onClick: () => open(row) }, () => '编辑'),
       h(NPopconfirm, { onPositiveClick: () => rotateSecret(row) }, {
@@ -280,7 +296,7 @@ function hostKeyCommand(algorithm: string) {
       <NAlert type="info" :bordered="false" style="margin-bottom: 12px">
         管理端按需建立 SSH 正向转发，远端主机固定为 127.0.0.1。每个订阅端使用独立发布 Secret，测试会依次检查 SSH、转发、订阅端健康状态和发布鉴权。
       </NAlert>
-      <NDataTable :loading="loading" :columns="columns" :data="targets" :scroll-x="1180" size="small" />
+      <NDataTable :loading="loading" :columns="columns" :data="targets" :scroll-x="1290" size="small" />
     </NCard>
   </NSpace>
 
@@ -324,10 +340,10 @@ function hostKeyCommand(algorithm: string) {
     </NDrawerContent>
   </NDrawer>
 
-  <NModal :show="!!provisioning" preset="card" title="完成订阅端配置" style="width: 820px; max-width: calc(100vw - 32px)" @update:show="(value) => !value && (provisioning = null)">
+  <NModal :show="!!provisioning" preset="card" title="订阅端完整配置" style="width: 820px; max-width: calc(100vw - 32px)" @update:show="(value) => !value && (provisioning = null)">
     <NSpace v-if="provisioning" vertical :size="16">
       <NAlert type="warning" :bordered="false">
-        发布 Secret 只显示这一次。关闭后无法再次查看；如果遗失，请轮换 Secret。轮换后管理端会立即改用新 Secret，请紧接着更新订阅端。
+        此窗口包含明文发布 Secret。关闭后页面会清除本次显示内容，可从目标列表的“完整配置”再次查看；每次查看都会记录审计日志。
       </NAlert>
       <NSteps vertical :current="1" status="process">
         <NStep title="安装管理端 SSH 公钥">
@@ -340,7 +356,7 @@ function hostKeyCommand(algorithm: string) {
         </NStep>
         <NStep title="配置发布 Secret">
           <NSpace vertical :size="8">
-            <CopyableCode label="一次性 Secret" :value="provisioning.secret" />
+            <CopyableCode label="发布 Secret" :value="provisioning.secret" />
             <CopyableCode label="在订阅端执行，按提示粘贴 Secret" :value="provisioning.publish_token_command || tokenCommand(provisioning.target)" />
           </NSpace>
         </NStep>
@@ -356,7 +372,7 @@ function hostKeyCommand(algorithm: string) {
       <CopyableCode label="authorized_keys" :value="authorizedKeys(instructions)" />
       <CopyableCode label="sshd_config 限制" :value="sshdConfig(instructions)" />
       <CopyableCode label="配置发布 Secret" :value="tokenCommand(instructions)" />
-      <NAlert type="info" :bordered="false">发布 Secret 不会再次显示。命令执行后按提示输入创建时保存的 Secret；如已遗失，请先轮换。</NAlert>
+      <NAlert type="info" :bordered="false">此说明不包含明文发布 Secret；需要重新配置时，请从目标列表打开“完整配置”。</NAlert>
     </NSpace>
   </NModal>
 

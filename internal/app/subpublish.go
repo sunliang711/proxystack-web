@@ -113,7 +113,7 @@ type PublishTargetView struct {
 	LastPublishError   string    `json:"last_publish_error"`
 }
 
-// PublishTargetSetup 是创建或轮换 Secret 后仅返回一次的配置材料。
+// PublishTargetSetup 是配置订阅端 SSH 转发和发布 Secret 所需的完整材料。
 type PublishTargetSetup struct {
 	Target              PublishTargetView `json:"target"`
 	Secret              string            `json:"secret"`
@@ -356,7 +356,7 @@ func (s *Service) targetSetup(ctx context.Context, state publishTargetState, sec
 	}, nil
 }
 
-// CreatePublishTarget 创建目标并生成只返回一次的发布 Secret。
+// CreatePublishTarget 创建目标并生成发布 Secret。
 func (s *Service) CreatePublishTarget(ctx context.Context, actor Actor, input PublishTargetInput) (*PublishTargetSetup, error) {
 	input, err := normalizePublishTarget(input)
 	if err != nil {
@@ -398,6 +398,35 @@ func (s *Service) CreatePublishTarget(ctx context.Context, actor Actor, input Pu
 		return nil, err
 	}
 	return s.targetSetup(ctx, created, secret)
+}
+
+// GetPublishTargetSetup 返回目标当前的完整配置材料，并记录明文凭据查看审计。
+func (s *Service) GetPublishTargetSetup(ctx context.Context, actor Actor, id int64) (*PublishTargetSetup, error) {
+	var target publishTargetState
+	err := s.Store.InTx(ctx, func(q *dbq.Queries) error {
+		targets, err := loadPublishTargets(ctx, q)
+		if err != nil {
+			return err
+		}
+		for _, candidate := range targets {
+			if candidate.ID == id {
+				target = candidate
+				return nil
+			}
+		}
+		return ErrNotFound
+	})
+	if err != nil {
+		return nil, err
+	}
+	setup, err := s.targetSetup(ctx, target, target.Secret)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.AuditSecretView(ctx, actor, "subscription_publish_target:"+target.Name); err != nil {
+		return nil, err
+	}
+	return setup, nil
 }
 
 // UpdatePublishTarget 修改目标连接信息，不改变发布 Secret。

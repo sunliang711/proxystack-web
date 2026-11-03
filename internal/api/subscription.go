@@ -296,6 +296,14 @@ func registerSubscription(api huma.API, s *Server) {
 			}
 			return &publishTargetOutput{Body: *target}, nil
 		})
+	huma.Register(api, reg(huma.Operation{OperationID: "getSubscriptionPublishTargetSetup", Method: http.MethodGet, Path: "/api/sub-publish/targets/{id}/setup", Summary: "查看订阅端完整配置（包含发布 Secret，记入审计日志）"}),
+		func(ctx context.Context, in *idPath) (*publishTargetSetupOutput, error) {
+			setup, err := s.svc.GetPublishTargetSetup(ctx, actorFrom(ctx), in.ID)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &publishTargetSetupOutput{CacheControl: "no-store", Body: *setup}, nil
+		})
 	huma.Register(api, reg(huma.Operation{OperationID: "deleteSubscriptionPublishTarget", Method: http.MethodDelete, Path: "/api/sub-publish/targets/{id}", Summary: "删除 SSH 在线发布目标", DefaultStatus: http.StatusNoContent}),
 		func(ctx context.Context, in *idPath) (*struct{}, error) {
 			if err := s.svc.DeletePublishTarget(ctx, actorFrom(ctx), in.ID); err != nil {

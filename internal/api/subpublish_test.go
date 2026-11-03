@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSSHPublishSecretsAreOneTimeAndNotCached(t *testing.T) {
+func TestSSHPublishSecretsStayMaskedAndSetupCanBeViewed(t *testing.T) {
 	h, password := newHarness(t)
 	h.login("admin", password)
 	response, _ := h.do(http.MethodPost, "/api/auth/password", map[string]string{
@@ -45,8 +45,23 @@ func TestSSHPublishSecretsAreOneTimeAndNotCached(t *testing.T) {
 	require.Equal(t, http.StatusOK, listResponse.StatusCode, string(listBody))
 	require.NotContains(t, string(listBody), secret)
 
+	setupPath := "/api/sub-publish/targets/" + strconv.FormatInt(targetID, 10) + "/setup"
+	response, viewed := h.do(http.MethodGet, setupPath, nil)
+	require.Equal(t, http.StatusOK, response.StatusCode, viewed)
+	require.Equal(t, "no-store", response.Header.Get("Cache-Control"))
+	require.Equal(t, secret, viewed["secret"])
+	require.NotEmpty(t, viewed["authorized_keys_entry"])
+	require.NotEmpty(t, viewed["sshd_config"])
+	response, viewedAgain := h.do(http.MethodGet, setupPath, nil)
+	require.Equal(t, http.StatusOK, response.StatusCode, viewedAgain)
+	require.Equal(t, "no-store", response.Header.Get("Cache-Control"))
+	require.Equal(t, secret, viewedAgain["secret"])
+
 	response, rotated := h.do(http.MethodPost, "/api/sub-publish/targets/"+strconv.FormatInt(targetID, 10)+"/rotate-secret", nil)
 	require.Equal(t, http.StatusOK, response.StatusCode, rotated)
 	require.Equal(t, "no-store", response.Header.Get("Cache-Control"))
 	require.NotEqual(t, secret, rotated["secret"])
+	response, viewed = h.do(http.MethodGet, setupPath, nil)
+	require.Equal(t, http.StatusOK, response.StatusCode, viewed)
+	require.Equal(t, rotated["secret"], viewed["secret"])
 }
