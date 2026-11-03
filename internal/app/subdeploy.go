@@ -130,6 +130,24 @@ func (s *Service) DeployPublishTarget(ctx context.Context, actor Actor, id int64
 		if err != nil {
 			return err
 		}
+		if subDeployCurrent(status, release.Tag, request.Version == "") {
+			logf("Subscription server %s is already up to date with %s; skipping binary download", status.Version, release.Tag)
+			logf("Configuring the subscription publish token")
+			if err := s.SubDeployer.ConfigurePublishToken(ctx, subpublish.Identity{Seed: identity.Seed}, clientTarget(target), target.Source, target.Secret); err != nil {
+				return err
+			}
+			if err := s.updateDeployTargetState(ctx, target, status, ""); err != nil {
+				return err
+			}
+			_ = s.Store.InTx(ctx, func(q *dbq.Queries) error {
+				return audit.Write(ctx, q, s.Now(), audit.Entry{
+					Actor: actor.Name, SourceIP: actor.IP, Action: ActionSubDeployApply, Object: fmt.Sprint(id),
+					Summary: fmt.Sprintf("部署订阅端 %s：unchanged（已是 %s）", target.Name, status.Version),
+				})
+			})
+			logf("Subscription server unchanged: %s", status.Version)
+			return nil
+		}
 		asset, digest, err := deps.SelectAsset(deps.Self, release, "linux", status.Arch, "")
 		if err != nil {
 			return err
@@ -227,6 +245,16 @@ func (s *Service) RollbackPublishTarget(ctx context.Context, actor Actor, id int
 		return 0, err
 	}
 	return taskID, nil
+}
+
+// subDeployCurrent reports whether a running installation already provides the requested release.
+// For the latest stable request, a comparable installed version newer than the release also counts.
+func subDeployCurrent(status *subpublish.DeployStatus, tag string, latest bool) bool {
+	if status.State != "installed" || !status.ServiceActive || status.Version == "" {
+		return false
+	}
+	installed, release := strings.TrimPrefix(status.Version, "v"), strings.TrimPrefix(tag, "v")
+	return installed == release || latest && deps.IsNewerVersion(tag, status.Version)
 }
 
 func (s *Service) updateDeployTargetState(ctx context.Context, snapshot publishTargetState, status *subpublish.DeployStatus, errorText string) error {

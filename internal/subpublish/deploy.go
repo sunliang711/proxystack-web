@@ -51,6 +51,7 @@ type DeployResult struct {
 type Deployer interface {
 	InspectDeploy(ctx context.Context, identity Identity, target Target) (*DeployStatus, error)
 	Deploy(ctx context.Context, identity Identity, target Target, request DeployRequest) (*DeployResult, error)
+	ConfigurePublishToken(ctx context.Context, identity Identity, target Target, source, secret string) error
 	RollbackDeploy(ctx context.Context, identity Identity, target Target) (*DeployResult, error)
 }
 
@@ -152,12 +153,30 @@ func (SSHClient) Deploy(ctx context.Context, identity Identity, target Target, r
 	if err := json.Unmarshal(output, &result); err != nil {
 		return nil, errors.New("remote subscription deployment returned an invalid response")
 	}
-	installed := remoteSubDir + "/bin/proxystack-web"
-	secretCommand := installed + " sub --dir " + remoteSubDir + " source set-publish-token " + shellQuote(request.Source)
-	if _, err := runSSHCommand(ctx, connection.client, privilegedCommand(target, secretCommand), strings.NewReader(request.Secret+"\n")); err != nil {
-		return nil, errors.New("configure subscription publish token failed")
+	if err := setPublishToken(ctx, connection.client, target, request.Source, request.Secret); err != nil {
+		return nil, err
 	}
 	return &result, nil
+}
+
+// ConfigurePublishToken writes the publish Secret to an installed subscription server without replacing its binary.
+func (SSHClient) ConfigurePublishToken(ctx context.Context, identity Identity, target Target, source, secret string) error {
+	stages := []Stage{}
+	connection, err := connect(ctx, identity, target, &stages)
+	if err != nil {
+		return err
+	}
+	defer connection.Close()
+	return setPublishToken(ctx, connection.client, target, source, secret)
+}
+
+func setPublishToken(ctx context.Context, client *ssh.Client, target Target, source, secret string) error {
+	installed := remoteSubDir + "/bin/proxystack-web"
+	command := installed + " sub --dir " + remoteSubDir + " source set-publish-token " + shellQuote(source)
+	if _, err := runSSHCommand(ctx, client, privilegedCommand(target, command), strings.NewReader(secret+"\n")); err != nil {
+		return errors.New("configure subscription publish token failed")
+	}
+	return nil
 }
 
 // RollbackDeploy invokes the local rollback transaction through SSH.

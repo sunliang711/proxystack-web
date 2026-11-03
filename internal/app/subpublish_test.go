@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -14,6 +16,7 @@ import (
 
 	"proxystack-web/internal/app"
 	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/deps"
 	"proxystack-web/internal/subpublish"
 	"proxystack-web/internal/subscription"
 )
@@ -43,6 +46,7 @@ type deployClientFake struct {
 	rollbackStart chan struct{}
 	rollbackDone  chan struct{}
 	rollbackOnce  sync.Once
+	tokens        []string
 }
 
 func (f *deployClientFake) InspectDeploy(context.Context, subpublish.Identity, subpublish.Target) (*subpublish.DeployStatus, error) {
@@ -51,6 +55,11 @@ func (f *deployClientFake) InspectDeploy(context.Context, subpublish.Identity, s
 
 func (f *deployClientFake) Deploy(context.Context, subpublish.Identity, subpublish.Target, subpublish.DeployRequest) (*subpublish.DeployResult, error) {
 	return nil, errors.New("unexpected deploy call")
+}
+
+func (f *deployClientFake) ConfigurePublishToken(_ context.Context, _ subpublish.Identity, _ subpublish.Target, source, secret string) error {
+	f.tokens = append(f.tokens, source+":"+secret)
+	return f.err
 }
 
 func (f *deployClientFake) RollbackDeploy(context.Context, subpublish.Identity, subpublish.Target) (*subpublish.DeployResult, error) {
@@ -198,6 +207,57 @@ func TestSubscriptionDeploymentInspectAndRollbackUpdateTargetState(t *testing.T)
 	require.NoError(t, err)
 	require.Equal(t, "v0.1.0", targets[0].CurrentVersion)
 	require.Equal(t, "v0.2.0", targets[0].PreviousVersion)
+}
+
+func TestSubscriptionDeploymentSkipsInstalledLatestRelease(t *testing.T) {
+	ctx := context.Background()
+	h := newRuntimeHarness(t)
+	_, err := h.svc.GenerateSSHPublishIdentity(ctx, h.actor)
+	require.NoError(t, err)
+	setup, err := h.svc.CreatePublishTarget(ctx, h.actor, publishTargetInput("primary", "sub-a.example.com"))
+	require.NoError(t, err)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/"+deps.Repo(deps.Self)+"/releases/latest" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"tag_name": "v0.2.0", "assets": []map[string]any{}})
+	}))
+	t.Cleanup(server.Close)
+	previous := deps.GitHubAPI
+	deps.GitHubAPI = server.URL
+	t.Cleanup(func() { deps.GitHubAPI = previous })
+
+	for _, installed := range []string{"v0.2.0", "0.2.0", "v0.3.0"} {
+		fake := &deployClientFake{inspect: &subpublish.DeployStatus{
+			OS: "linux", Arch: "amd64", Sudo: true, State: "installed", Version: installed, PreviousVersion: "v0.1.0",
+			ServiceActive: true, ServiceEnabled: true,
+		}}
+		h.svc.SubDeployer = fake
+		taskID, err := h.svc.DeployPublishTarget(ctx, h.actor, setup.Target.ID, app.SubDeployRequest{})
+		require.NoError(t, err)
+		task := h.waitTask(t, taskID)
+		require.Equal(t, app.TaskSucceeded, task.Status, installed)
+		require.Equal(t, []string{"main:" + setup.Secret}, fake.tokens, installed)
+		targets, err := h.svc.ListPublishTargets(ctx)
+		require.NoError(t, err)
+		require.Equal(t, installed, targets[0].CurrentVersion)
+		require.Equal(t, "v0.1.0", targets[0].PreviousVersion)
+	}
+
+	for _, status := range []*subpublish.DeployStatus{
+		{OS: "linux", Arch: "amd64", Sudo: true, State: "installed", Version: "v0.1.0", ServiceActive: true},
+		{OS: "linux", Arch: "amd64", Sudo: true, State: "installed", Version: "v0.2.0", ServiceActive: false},
+		{OS: "linux", Arch: "amd64", Sudo: true, State: "installed", Version: "dev", ServiceActive: true},
+	} {
+		fake := &deployClientFake{inspect: status}
+		h.svc.SubDeployer = fake
+		taskID, err := h.svc.DeployPublishTarget(ctx, h.actor, setup.Target.ID, app.SubDeployRequest{})
+		require.NoError(t, err)
+		task := h.waitTask(t, taskID)
+		require.Equal(t, app.TaskFailed, task.Status, status.Version)
+		require.Empty(t, fake.tokens, status.Version)
+	}
 }
 
 func TestSubscriptionTargetCannotChangeDuringDeployment(t *testing.T) {

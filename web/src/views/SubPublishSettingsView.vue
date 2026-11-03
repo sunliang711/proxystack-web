@@ -372,7 +372,7 @@ const columns: DataTableColumns<PublishTarget> = [
       h(NButton, { size: 'small', loading: inspecting.value === row.id, onClick: () => inspectDeploy(row) }, () => '检测部署'),
       h(NPopconfirm, { onPositiveClick: () => deploy(row) }, {
         trigger: () => h(NButton, { size: 'small', type: 'primary', loading: deploying.value === row.id }, () => row.deploy_state === 'installed' ? '更新' : '部署'),
-        default: () => `将下载最新稳定版并通过 SSH ${row.deploy_state === 'installed' ? '更新' : '部署'}订阅端，继续？`,
+        default: () => row.deploy_state === 'installed' ? '将检查最新稳定版：有新版本时通过 SSH 更新订阅端，已是最新时只同步发布 Secret。继续？' : '将下载最新稳定版并通过 SSH 部署订阅端，继续？',
       }),
       h(NButton, { size: 'small', disabled: row.deploy_state !== 'installed', loading: testing.value === row.id, onClick: () => test(row), title: '先完成订阅端部署' }, () => '测试'),
       h(NPopconfirm, { onPositiveClick: () => rollbackDeploy(row) }, {

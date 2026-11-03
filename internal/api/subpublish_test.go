@@ -49,6 +49,10 @@ func (apiDeployFake) Deploy(context.Context, subpublish.Identity, subpublish.Tar
 	panic("unexpected deploy call")
 }
 
+func (apiDeployFake) ConfigurePublishToken(context.Context, subpublish.Identity, subpublish.Target, string, string) error {
+	panic("unexpected publish token call")
+}
+
 func (apiDeployFake) RollbackDeploy(context.Context, subpublish.Identity, subpublish.Target) (*subpublish.DeployResult, error) {
 	panic("unexpected rollback call")
 }
