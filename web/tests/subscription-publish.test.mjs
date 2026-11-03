@@ -42,6 +42,9 @@ test('完整配置可以重复查看 Secret，普通说明不拼接掩码', () =
   assert.match(settings, /每次查看都会记录审计日志/)
   assert.match(settings, /首次通过 SSH 安装或更新时，管理端会在部署完成后自动配置此 Secret/)
   assert.match(settings, /离线安装或手工重置时，先完成订阅端安装/)
+  assert.match(settings, /proxystack-web-sub-cleanup-/)
+  assert.match(settings, /sshd_config\.d\/proxystack-web-sub\.conf/)
+  assert.match(settings, /sudo userdel -r \$\{target\.ssh_user\}/)
   assert.doesNotMatch(settings, /tokenCommand\([^)]*\).*MASKED/s)
 })
 

@@ -6,7 +6,7 @@ import {
   NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpace, NStep, NSteps, NSwitch, NTag, NText, useMessage,
   type DataTableColumns,
 } from 'naive-ui'
-import { api, MASKED, problemMessage } from '../api/client'
+import { api, MASKED, problemMessage, saveBlob } from '../api/client'
 import CopyableCode from '../components/CopyableCode.vue'
 import { formatTime } from '../util/format'
 
@@ -170,12 +170,15 @@ async function save() {
 }
 
 async function remove(target: PublishTarget) {
+  const sharedSSHTarget = targets.value.some((candidate) => candidate.id !== target.id && candidate.ssh_host === target.ssh_host && candidate.ssh_port === target.ssh_port && candidate.ssh_user === target.ssh_user)
   const { error } = await api.DELETE('/api/sub-publish/targets/{id}', { params: { path: { id: target.id! } } })
   if (error) {
     message.error(problemMessage(error, '删除订阅端失败'))
     return
   }
-  message.success('订阅端已删除')
+  const filename = `proxystack-web-sub-cleanup-${target.name.replace(/[^A-Za-z0-9._-]+/g, '-') || 'target'}.md`
+  saveBlob(new Blob([cleanupGuide(target, sharedSSHTarget)], { type: 'text/markdown;charset=utf-8' }), filename)
+  message.success('订阅端已删除，清理说明已下载')
   await load()
 }
 
@@ -192,6 +195,45 @@ async function rotateSecret(target: PublishTarget) {
 
 function viewSetup(target: PublishTarget) {
   provisioning.value = { target, secret: '' }
+}
+
+function cleanupGuide(target: PublishTarget, sharedSSHTarget: boolean) {
+  const publicKeyEntry = authorizedKeys(target)
+  const sshCleanup = sharedSSHTarget
+    ? `检测到同一 SSH 主机、端口和用户仍被其他订阅端目标使用。请不要删除以下共享 SSH 配置：\n\n- /etc/ssh/sshd_config.d/proxystack-web-sub.conf\n- /etc/sudoers.d/proxystack-web-sub-deploy\n- SSH 用户 ${target.ssh_user} 的其他公钥条目\n\n确认没有其他目标使用该 SSH 用户后，再按下面步骤清理。`
+    : `确认没有其他目标使用该 SSH 用户后执行：\n\n1. 从 ${target.ssh_user} 用户的 ~/.ssh/authorized_keys 删除下面这一整行：\n\n   ${publicKeyEntry}\n\n2. 删除 sudoers 配置并校验：\n\n   sudo rm -f /etc/sudoers.d/proxystack-web-sub-deploy\n   sudo visudo -c\n\n3. 删除 sshd 限制配置并 reload：\n\n   sudo rm -f /etc/ssh/sshd_config.d/proxystack-web-sub.conf\n   sudo sshd -t && sudo systemctl reload ssh\n\n如果系统服务名是 sshd，将最后的 ssh 替换为 sshd。`
+  return `# proxystack-web 订阅端清理说明
+
+生成时间：${new Date().toISOString()}
+
+## 目标
+
+- SSH 地址：${target.ssh_user}@${target.ssh_host}:${target.ssh_port}
+- 订阅端 HTTP 地址：127.0.0.1:${target.remote_port}
+- 来源名：${target.source}
+
+本文件不包含发布 Secret 或 SSH 私钥。管理端订阅端配置已经删除；以下命令需要在订阅端主机上人工确认后执行。
+
+## 一、卸载订阅服务
+
+保留配置和订阅数据：
+
+    sudo /opt/proxystack-web-sub/bin/proxystack-web sub --dir /opt/proxystack-web-sub deploy uninstall
+
+确认同时删除配置、订阅数据和服务账号：
+
+    sudo /opt/proxystack-web-sub/bin/proxystack-web sub --dir /opt/proxystack-web-sub deploy uninstall --purge
+
+## 二、清理 SSH 配置
+
+${sshCleanup}
+
+## 三、可选：删除专用 SSH 用户
+
+仅当 ${target.ssh_user} 是本次部署专用账号、没有其他用途且没有其他目标共用时执行：
+
+    sudo userdel -r ${target.ssh_user}
+`
 }
 
 const viewingSecret = ref<number | null>(null)
