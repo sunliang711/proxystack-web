@@ -15,6 +15,10 @@ test('SSH 配置固定转发到订阅端回环地址并提供分阶段测试', (
 })
 
 test('添加订阅端时说明 Host Key 来源和获取方式', () => {
+  assert.match(settings, /v-if="!draft\.id" label="SSH 用户创建"/)
+  assert.match(settings, /sudo useradd --create-home --shell \/bin\/bash/)
+  assert.match(settings, /该用户与运行订阅服务的/)
+  assert.match(settings, /proxystack-web-sub/)
   assert.match(settings, /这是订阅端 SSH 服务的 Host Key，不是管理端生成的登录公钥/)
   assert.match(settings, /sudo ssh-keygen -lf \$\{publicKeyFile\} -E sha256/)
   assert.match(settings, /从输出中只复制完整的/)

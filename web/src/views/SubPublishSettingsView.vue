@@ -108,6 +108,11 @@ function open(target?: PublishTarget) {
 }
 
 const provisioning = ref<ProvisioningResult | null>(null)
+function sshUserSetupCommand(sshUser: string) {
+  if (!/^[A-Za-z_][A-Za-z0-9_-]{0,31}$/.test(sshUser)) return '# 请先填写合法的 SSH 用户名'
+  const sshDir = `/home/${sshUser}/.ssh`
+  return `id -u ${sshUser} >/dev/null 2>&1 || sudo useradd --create-home --shell /bin/bash ${sshUser}\nsudo install -d -m 700 -o ${sshUser} -g ${sshUser} ${sshDir}\nsudo touch ${sshDir}/authorized_keys\nsudo chown ${sshUser}:${sshUser} ${sshDir}/authorized_keys\nsudo chmod 600 ${sshDir}/authorized_keys`
+}
 function provisioningResult(data: any): ProvisioningResult {
   const target = data.target ?? data
   return {
@@ -307,6 +312,13 @@ function hostKeyCommand(algorithm: string) {
         <NFormItem label="SSH 主机"><NInput v-model:value="draft.ssh_host" placeholder="sub.example.com" /></NFormItem>
         <NFormItem label="SSH 端口"><NInputNumber v-model:value="draft.ssh_port" :min="1" :max="65535" :show-button="false" /></NFormItem>
         <NFormItem label="SSH 用户"><NInput v-model:value="draft.ssh_user" /></NFormItem>
+        <NFormItem v-if="!draft.id" label="SSH 用户创建">
+          <NSpace vertical :size="8" style="width: 100%">
+            <NText depth="3">需要在订阅端主机上创建此专用 SSH 用户。该用户与运行订阅服务的 <NText code>proxystack-web-sub</NText> 用户不同，不需要 sudo 权限：</NText>
+            <CopyableCode :value="sshUserSetupCommand(draft.ssh_user)" />
+            <NText depth="3">如果用户已存在，第一行会跳过创建；后续命令会初始化 <NText code>~/.ssh/authorized_keys</NText> 及所需权限。保存后再把管理端生成的完整公钥配置追加到该文件。</NText>
+          </NSpace>
+        </NFormItem>
         <NFormItem label="Host Key 算法"><NSelect v-model:value="draft.host_key_algorithm" :options="algorithmOptions" /></NFormItem>
         <NFormItem label="Host Key 指纹">
           <NInput v-model:value="draft.host_key_fingerprint" placeholder="SHA256:..." />
