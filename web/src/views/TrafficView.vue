@@ -16,12 +16,12 @@ type Scope = 'user' | 'inbound' | 'outbound'
 type Series = Schemas['TrafficSeries']
 
 const message = useMessage()
-const level = ref<Level>('day')
+const level = ref<Level>('hour')
 const scope = ref<Scope>('inbound')
 const groupBy = ref<'stack' | 'subject'>('stack')
 const timezone = ref('UTC')
 const ready = ref(false)
-const range = ref<TrafficRange>(defaultTrafficRange('day', timezone.value))
+const range = ref<TrafficRange>(defaultTrafficRange(level.value, timezone.value))
 const pickerType = computed(() => ({ hour: 'datetimerange', day: 'daterange', month: 'monthrange', year: 'yearrange' } as const)[level.value])
 const bounds = computed(() => trafficBounds(level.value, range.value, timezone.value))
 const rangeLabel = computed(() => trafficRangeLabel(bounds.value, timezone.value))

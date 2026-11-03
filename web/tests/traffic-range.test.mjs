@@ -36,9 +36,9 @@ test('月与年按完整周期查询，起始月不会漏算，结束后周期�
     ['2024-01-01T00:00:00.000Z', '2027-01-01T00:00:00.000Z'])
 })
 
-test('默认小时、月、年分别选择24个小时、12个自然月与5个自然年', () => {
+test('默认小时、月、年分别选择统计时区的当天、12个自然月与5个自然年', () => {
   const now = Date.parse('2026-11-01T23:49:04Z')
-  assert.deepEqual(defaultTrafficRange('hour', 'Asia/Shanghai', now), ['2026-11-01 08:00:00', '2026-11-02 07:00:00'])
+  assert.deepEqual(defaultTrafficRange('hour', 'Asia/Shanghai', now), ['2026-11-02 00:00:00', '2026-11-02 07:00:00'])
   assert.deepEqual(defaultTrafficRange('month', 'Asia/Shanghai', now), ['2025-12-01 00:00:00', '2026-11-01 00:00:00'])
   assert.deepEqual(defaultTrafficRange('year', 'Asia/Shanghai', now), ['2022-01-01 00:00:00', '2026-01-01 00:00:00'])
 })

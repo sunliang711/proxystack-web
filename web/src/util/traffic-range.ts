@@ -51,9 +51,12 @@ function instant(date: Date, timezone: string): number {
   return Math.min(...candidates.filter((at) => localTime(at, timezone).getTime() > target))
 }
 
+// 小时粒度默认显示统计时区的当天，其他粒度显示最近若干个周期。
 export function defaultTrafficRange(level: TrafficLevel, timezone: string, now = Date.now()): TrafficRange {
-  const end = floor(localTime(now, timezone), level)
-  const count = { hour: 24, day: 30, month: 12, year: 5 }[level]
+  const local = localTime(now, timezone)
+  const end = floor(local, level)
+  if (level === 'hour') return [text(floor(local, 'day')), text(end)]
+  const count = { day: 30, month: 12, year: 5 }[level]
   return [text(step(end, level, 1 - count)), text(end)]
 }
 
