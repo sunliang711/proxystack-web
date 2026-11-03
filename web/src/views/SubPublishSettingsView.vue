@@ -259,6 +259,8 @@ const authorizedKeys = (target: PublishTarget) =>
 const tokenCommand = (target: PublishTarget) =>
   `sudo proxystack-web sub --dir /opt/proxystack-web-sub source set-publish-token ${target.source}`
 const sshdConfig = (target: PublishTarget) => `Match User ${target.ssh_user}\n    AllowTcpForwarding local\n    PermitOpen 127.0.0.1:${target.remote_port}\n    PermitTTY no\n    X11Forwarding no\n    AllowAgentForwarding no\nMatch all`
+const sshdConfigSetupCommand = (target: PublishTarget) =>
+  `sudo install -d -m 755 /etc/ssh/sshd_config.d\nsudo tee /etc/ssh/sshd_config.d/proxystack-web-sub.conf >/dev/null <<'EOF'\n${sshdConfig(target)}\nEOF\nsudo sshd -t && sudo systemctl reload ssh`
 
 function statusTime(value?: string) {
   return value && !value.startsWith('0001') && !value.startsWith('1970') ? formatTime(value) : '从未执行'
@@ -436,8 +438,12 @@ function hostKeyCommand(algorithm: string) {
           <NText depth="3">把这一整行追加到 SSH 用户的 <NText code>~/.ssh/authorized_keys</NText>，目录权限设为 700，文件权限设为 600。</NText>
         </NStep>
         <NStep title="限制 SSH 用户的转发范围">
-          <CopyableCode :value="provisioning.sshd_config || sshdConfig(provisioning.target)" />
-          <NText depth="3">写入 sshd 配置后先执行 <NText code>sshd -t</NText>，校验通过再 reload SSH 服务。</NText>
+          <NSpace vertical :size="8">
+            <NText depth="3">推荐写入订阅端的 <NText code>/etc/ssh/sshd_config.d/proxystack-web-sub.conf</NText>：</NText>
+            <CopyableCode label="写入 sshd_config.d 并 reload" :value="sshdConfigSetupCommand(provisioning.target)" />
+            <CopyableCode label="sshd 限制片段" :value="provisioning.sshd_config || sshdConfig(provisioning.target)" />
+            <NText depth="3">命令会先执行 <NText code>sshd -t</NText>，校验通过后再 reload SSH 服务；如果系统服务名是 <NText code>sshd</NText>，将最后的 <NText code>ssh</NText> 替换为 <NText code>sshd</NText>。</NText>
+          </NSpace>
         </NStep>
         <NStep title="允许非交互部署">
           <CopyableCode :value="sudoSetupCommand(provisioning.target.ssh_user)" />
@@ -459,6 +465,7 @@ function hostKeyCommand(algorithm: string) {
   <NModal :show="!!instructions" preset="card" title="订阅端配置说明" style="width: 820px; max-width: calc(100vw - 32px)" @update:show="(value) => !value && (instructions = null)">
     <NSpace v-if="instructions" vertical :size="14">
       <CopyableCode label="authorized_keys" :value="authorizedKeys(instructions)" />
+      <CopyableCode label="写入 /etc/ssh/sshd_config.d 并 reload" :value="sshdConfigSetupCommand(instructions)" />
       <CopyableCode label="sshd_config 限制" :value="sshdConfig(instructions)" />
       <CopyableCode label="sudo -n 配置" :value="sudoSetupCommand(instructions.ssh_user)" />
       <CopyableCode label="配置发布 Secret" :value="tokenCommand(instructions)" />

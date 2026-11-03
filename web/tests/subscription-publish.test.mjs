@@ -9,6 +9,8 @@ test('SSH 配置支持发布和部署并提供分阶段测试', () => {
   assert.match(settings, /permitopen="127\.0\.0\.1:\$\{target\.remote_port\}"/)
   assert.doesNotMatch(settings, /command="\/bin\/false"/)
   assert.match(settings, /PermitOpen 127\.0\.0\.1:\$\{target\.remote_port\}/)
+  assert.match(settings, /\/etc\/ssh\/sshd_config\.d\/proxystack-web-sub\.conf/)
+  assert.match(settings, /sudo sshd -t && sudo systemctl reload ssh/)
   assert.doesNotMatch(settings, /ForceCommand \/bin\/false/)
   assert.match(settings, /sudo -n \/bin\/true/)
   assert.match(settings, /\/deploy\/inspect/)
