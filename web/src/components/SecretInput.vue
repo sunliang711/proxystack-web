@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { NButton, NInput, NInputGroup, useMessage } from 'naive-ui'
 import { MASKED } from '../api/client'
+import { copyText } from '../util/clipboard'
 
 const props = defineProps<{
   /** 生成新值；不提供时不显示「生成」按钮。 */
@@ -47,7 +48,7 @@ async function toggleVisibility() {
 
 async function copy() {
   try {
-    await navigator.clipboard.writeText(value.value)
+    await copyText(value.value)
     message.success('已复制')
   } catch {
     message.error('复制失败：浏览器不允许访问剪贴板')

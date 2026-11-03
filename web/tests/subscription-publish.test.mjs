@@ -4,6 +4,7 @@ import { test } from 'node:test'
 
 const settings = await readFile(new URL('../src/views/SubPublishSettingsView.vue', import.meta.url), 'utf8')
 const publish = await readFile(new URL('../src/views/SubPublishView.vue', import.meta.url), 'utf8')
+const clipboard = await readFile(new URL('../src/util/clipboard.ts', import.meta.url), 'utf8')
 
 test('SSH 配置支持发布和部署并提供分阶段测试', () => {
   assert.match(settings, /permitopen="127\.0\.0\.1:\$\{target\.remote_port\}"/)
@@ -55,4 +56,10 @@ test('发布页同时保留 SSH 在线发布和统一离线部署', () => {
   assert.match(publish, /sha256sum -c/)
   assert.match(publish, /deploy apply --sha256/)
   assert.doesNotMatch(publish, /curl[^\n]+\|\s*sudo bash/)
+})
+
+test('复制命令在 Clipboard API 被拒绝时使用兼容降级路径', () => {
+  assert.match(clipboard, /navigator\.clipboard\?\.writeText/)
+  assert.match(clipboard, /document\.execCommand\('copy'\)/)
+  assert.match(clipboard, /focused\?\.focus\(\{ preventScroll: true \}\)/)
 })

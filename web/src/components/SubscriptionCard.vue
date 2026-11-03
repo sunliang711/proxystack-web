@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { NAlert, NButton, NCard, NCollapse, NCollapseItem, NFormItem, NInputGroup, NInput, NModal, NQrCode, NRadioButton, NRadioGroup, NSpace, NSpin, NText, useMessage } from 'naive-ui'
 import { api, problemMessage, type Schemas } from '../api/client'
 import CodeEditor from './CodeEditor.vue'
+import { copyText } from '../util/clipboard'
 
 const props = defineProps<{ userId: number; linksOnly?: boolean }>()
 const message = useMessage()
@@ -36,24 +37,7 @@ async function showLinks() {
 
 async function copy(text: string) {
   try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text)
-    } else {
-      // HTTP 面板没有 Clipboard API，使用当前弹窗中的临时文本框兼容复制。
-      const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null
-      const input = document.createElement('textarea')
-      input.value = text
-      input.readOnly = true
-      input.style.cssText = 'position: fixed; opacity: 0; pointer-events: none'
-      ;(focused?.closest('[role="dialog"]') ?? document.body).appendChild(input)
-      try {
-        input.select()
-        if (!document.execCommand('copy')) throw new Error('Copy failed')
-      } finally {
-        input.remove()
-        focused?.focus({ preventScroll: true })
-      }
-    }
+    await copyText(text)
     message.success('已复制')
   } catch {
     message.error('复制失败：浏览器不允许访问剪贴板')

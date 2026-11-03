@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { CopyOutline } from '@vicons/ionicons5'
 import { NButton, NCode, NIcon, NSpace, NTooltip, useMessage } from 'naive-ui'
+import { copyText } from '../util/clipboard'
 
 const props = defineProps<{
   value: string
@@ -11,7 +12,7 @@ const message = useMessage()
 
 async function copy() {
   try {
-    await navigator.clipboard.writeText(props.value)
+    await copyText(props.value)
     message.success('已复制')
   } catch {
     message.error('复制失败：浏览器不允许访问剪贴板')
