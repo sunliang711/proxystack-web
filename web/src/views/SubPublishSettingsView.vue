@@ -324,8 +324,8 @@ const columns: DataTableColumns<PublishTarget> = [
     render: (row) => h(NSpace, { size: 4 }, () => [
       h(NButton, { size: 'small', loading: inspecting.value === row.id, onClick: () => inspectDeploy(row) }, () => '检测部署'),
       h(NPopconfirm, { onPositiveClick: () => deploy(row) }, {
-        trigger: () => h(NButton, { size: 'small', type: 'primary', loading: deploying.value === row.id }, () => row.deploy_state === 'installed' ? '更新' : '安装'),
-        default: () => `将下载最新稳定版并通过 SSH ${row.deploy_state === 'installed' ? '更新' : '安装'}订阅端，继续？`,
+        trigger: () => h(NButton, { size: 'small', type: 'primary', loading: deploying.value === row.id }, () => row.deploy_state === 'installed' ? '更新' : '部署'),
+        default: () => `将下载最新稳定版并通过 SSH ${row.deploy_state === 'installed' ? '更新' : '部署'}订阅端，继续？`,
       }),
       h(NButton, { size: 'small', disabled: row.deploy_state !== 'installed', loading: testing.value === row.id, onClick: () => test(row), title: '先完成订阅端部署' }, () => '测试'),
       h(NPopconfirm, { onPositiveClick: () => rollbackDeploy(row) }, {
