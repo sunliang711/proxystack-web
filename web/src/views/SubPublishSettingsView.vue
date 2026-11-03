@@ -452,7 +452,9 @@ function hostKeyCommand(algorithm: string) {
         <NStep title="配置发布 Secret">
           <NSpace vertical :size="8">
             <CopyableCode label="发布 Secret" :value="provisioning.secret" />
-            <CopyableCode label="在订阅端执行，按提示粘贴 Secret" :value="provisioning.publish_token_command || tokenCommand(provisioning.target)" />
+            <NText depth="3">首次通过 SSH 安装或更新时，管理端会在部署完成后自动配置这个 Secret，不要在订阅端尚未安装二进制时执行下面的命令。</NText>
+            <CopyableCode label="安装完成后手工执行，按提示粘贴 Secret" :value="provisioning.publish_token_command || tokenCommand(provisioning.target)" />
+            <NText depth="3">如果使用离线方式安装，先完成订阅端安装，再执行此命令；之后在线发布和连接测试会使用同一个 Secret。</NText>
           </NSpace>
         </NStep>
         <NStep title="核对 Host Key 并测试">
@@ -468,7 +470,8 @@ function hostKeyCommand(algorithm: string) {
       <CopyableCode label="写入 /etc/ssh/sshd_config.d 并 reload" :value="sshdConfigSetupCommand(instructions)" />
       <CopyableCode label="sshd_config 限制" :value="sshdConfig(instructions)" />
       <CopyableCode label="sudo -n 配置" :value="sudoSetupCommand(instructions.ssh_user)" />
-      <CopyableCode label="配置发布 Secret" :value="tokenCommand(instructions)" />
+      <NText depth="3">首次通过 SSH 安装或更新时，管理端会在部署完成后自动配置发布 Secret；离线安装或手工重置时，请先完成订阅端安装，再执行：</NText>
+      <CopyableCode label="安装完成后配置发布 Secret" :value="tokenCommand(instructions)" />
       <NAlert type="info" :bordered="false">此说明不包含明文发布 Secret；需要重新配置时，请从目标列表打开“完整配置”。</NAlert>
     </NSpace>
   </NModal>

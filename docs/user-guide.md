@@ -144,7 +144,7 @@ sudo /opt/proxystack-web-sub/bin/proxystack-web sub --dir /opt/proxystack-web-su
    - 把页面生成的受限 `authorized_keys` 条目加入 SSH 用户的 `~/.ssh/authorized_keys`。`permitopen` 只允许向指定的订阅端回环端口做正向转发，同时保留部署命令执行能力。
    - 按页面给出的 `sshd_config` 片段限制转发目标、TTY、X11 和 Agent Forwarding。应用配置前先执行 `sshd -t`，然后 reload sshd。
    - 非 root SSH 用户按页面命令配置受限的 `sudo -n`。由于部署过程会上传并以 root 执行新二进制，这个 SSH 公钥具有部署级 root 权限，必须使用专用账号并严格保护私钥。
-   - 执行 `sudo proxystack-web sub source set-publish-token 来源名`，按提示粘贴页面显示的发布 Secret。订阅端只保存 Secret 的 SHA-256 哈希；每个目标使用独立 Secret。
+   - 首次通过 SSH 安装或更新时，管理端会在部署完成后自动配置发布 Secret，不要在订阅端尚未安装二进制时执行命令。若使用离线安装或需要手工重置，先完成订阅端安装，再执行 `sudo proxystack-web sub source set-publish-token 来源名`，按提示粘贴页面显示的发布 Secret。订阅端只保存 Secret 的 SHA-256 哈希；每个目标使用独立 Secret。
    - 通过独立可信渠道核对 SSH Host Key 指纹。例如可以在订阅端本机运行 `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`，不要只信任管理端首次网络扫描得到的结果。
 
 5. 回到目标列表先点击「检测部署」，检查 Linux、CPU 架构、`sudo -n`、安装状态和当前版本；随后可安装、更新或回滚。管理端下载对应架构的 Release 裸二进制并校验 SHA256，通过 SSH 上传后调用远端同一个 `sub deploy` 实现。
