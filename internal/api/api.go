@@ -220,6 +220,7 @@ func toHTTPError(err error) error {
 	var fe *app.FieldError
 	var ve *app.ValidationError
 	var tooMany *app.TooManyAttemptsError
+	var remote *app.RemoteError
 	switch {
 	case err == nil:
 		return nil
@@ -242,6 +243,8 @@ func toHTTPError(err error) error {
 			details = append(details, &huma.ErrorDetail{Location: location, Message: issue.Message})
 		}
 		return huma.Error422UnprocessableEntity("validation failed", details...)
+	case errors.As(err, &remote):
+		return huma.Error502BadGateway(remote.Message)
 	case errors.Is(err, app.ErrNotFound):
 		return huma.Error404NotFound(err.Error())
 	case errors.Is(err, app.ErrInvalidCredentials), errors.Is(err, app.ErrUnauthenticated):

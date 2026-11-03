@@ -102,3 +102,10 @@ type FieldError struct {
 }
 
 func (e *FieldError) Error() string { return fmt.Sprintf("%s: %s", e.Field, e.Message) }
+
+// RemoteError 表示管理端访问远端订阅端失败，消息仅允许使用已脱敏的远端操作描述。
+type RemoteError struct {
+	Message string
+}
+
+func (e *RemoteError) Error() string { return e.Message }

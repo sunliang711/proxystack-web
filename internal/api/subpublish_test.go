@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -15,10 +16,33 @@ import (
 
 type apiDeployFake struct {
 	status *subpublish.DeployStatus
+	err    error
 }
 
 func (f apiDeployFake) InspectDeploy(context.Context, subpublish.Identity, subpublish.Target) (*subpublish.DeployStatus, error) {
-	return f.status, nil
+	return f.status, f.err
+}
+
+func TestDeployInspectReturnsRemoteFailureDetails(t *testing.T) {
+	h, password := newHarness(t)
+	h.login("admin", password)
+	response, _ := h.do(http.MethodPost, "/api/auth/password", map[string]string{
+		"old_password": password, "new_password": "a-new-password",
+	})
+	require.Equal(t, http.StatusNoContent, response.StatusCode)
+	response, identity := h.do(http.MethodPost, "/api/sub-publish/identity", nil)
+	require.Equal(t, http.StatusOK, response.StatusCode, identity)
+	response, created := h.do(http.MethodPost, "/api/sub-publish/targets", map[string]any{
+		"name": "offline", "ssh_host": "sub.example.com", "ssh_port": 22, "ssh_user": "proxystack-tunnel",
+		"host_key_algorithm": "ssh-ed25519", "host_key_fingerprint": "SHA256:" + strings.Repeat("A", 43),
+		"remote_port": 9444, "source": "main", "enabled": true,
+	})
+	require.Equal(t, http.StatusOK, response.StatusCode, created)
+	targetID := int64(created["target"].(map[string]any)["id"].(float64))
+	h.svc.SubDeployer = apiDeployFake{err: errors.New("SSH TCP connection failed")}
+	response, body := h.do(http.MethodPost, "/api/sub-publish/targets/"+strconv.FormatInt(targetID, 10)+"/deploy/inspect", nil)
+	require.Equal(t, http.StatusBadGateway, response.StatusCode, body)
+	require.Equal(t, "SSH TCP connection failed", body["detail"])
 }
 
 func (apiDeployFake) Deploy(context.Context, subpublish.Identity, subpublish.Target, subpublish.DeployRequest) (*subpublish.DeployResult, error) {

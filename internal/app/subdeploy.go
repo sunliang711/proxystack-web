@@ -75,6 +75,7 @@ func (s *Service) InspectPublishTargetDeploy(ctx context.Context, actor Actor, i
 	status, inspectErr := s.SubDeployer.InspectDeploy(ctx, subpublish.Identity{Seed: identity.Seed}, clientTarget(target))
 	errorText := ""
 	if inspectErr != nil {
+		inspectErr = &RemoteError{Message: inspectErr.Error()}
 		errorText = inspectErr.Error()
 	}
 	updateErr := s.updateDeployTargetState(context.WithoutCancel(ctx), target, status, errorText)
