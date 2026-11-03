@@ -86,7 +86,9 @@ async function publish() {
 }
 
 const installCommand = computed(() =>
-  status.value ? `bash install.sh --role sub --source ${status.value.source} --public-key ${status.value.public_key}` : '',
+  status.value
+    ? `curl -fsSL https://raw.githubusercontent.com/sunliang711/proxystack-web/refs/heads/main/deploy/install.sh \\\n  | sudo bash -s -- --role sub --source '${status.value.source}' --public-key '${status.value.public_key}'`
+    : '',
 )
 const addSourceCommand = computed(() =>
   status.value ? `proxystack-web sub source add ${status.value.source} ${status.value.public_key}` : '',
@@ -105,6 +107,10 @@ function targetSummary(target: PublishTarget) {
 function openTask() {
   if (!submitted.value) return
   void router.push({ name: 'task-detail', params: { source: 'task', id: submitted.value.task_id } })
+}
+
+function openSSHSettings() {
+  void router.push({ name: 'sub-publish-settings' })
 }
 </script>
 
@@ -157,6 +163,9 @@ function openTask() {
         </NRadioGroup>
 
         <template v-if="mode === 'online'">
+          <NSpace justify="end">
+            <NButton text type="primary" @click="openSSHSettings">SSH 发布设置</NButton>
+          </NSpace>
           <NAlert v-if="!targets.length" type="warning" :bordered="false">
             还没有启用的订阅端目标。请先到“SSH 发布设置”生成 SSH 密钥并配置订阅端。
           </NAlert>

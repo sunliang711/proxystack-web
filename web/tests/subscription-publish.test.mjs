@@ -33,4 +33,7 @@ test('发布页同时保留 SSH 在线发布和离线下载', () => {
   assert.match(publish, /离线签发下载/)
   assert.match(publish, /target_ids: selected\.value/)
   assert.match(publish, /再次发布会生成新的序号/)
+  assert.match(publish, /router\.push\(\{ name: 'sub-publish-settings' \}\)/)
+  assert.match(publish, /curl -fsSL https:\/\/raw\.githubusercontent\.com\/sunliang711\/proxystack-web\/refs\/heads\/main\/deploy\/install\.sh/)
+  assert.match(publish, /sudo bash -s -- --role sub --source/)
 })
