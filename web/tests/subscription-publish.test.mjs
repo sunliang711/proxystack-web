@@ -14,6 +14,12 @@ test('SSH 配置固定转发到订阅端回环地址并提供分阶段测试', (
   assert.match(settings, /testResult\.result\.stages/)
 })
 
+test('添加订阅端时说明 Host Key 来源和获取方式', () => {
+  assert.match(settings, /这是订阅端 SSH 服务的 Host Key，不是管理端生成的登录公钥/)
+  assert.match(settings, /sudo ssh-keygen -lf \$\{publicKeyFile\} -E sha256/)
+  assert.match(settings, /从输出中只复制完整的/)
+})
+
 test('Secret 仅在创建或轮换结果中展示，普通说明不拼接掩码', () => {
   assert.match(settings, /发布 Secret 只显示这一次/)
   assert.match(settings, /如果遗失，请轮换 Secret/)

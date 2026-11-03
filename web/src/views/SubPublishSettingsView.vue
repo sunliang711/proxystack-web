@@ -243,6 +243,15 @@ const algorithmOptions = [
   { label: 'ECDSA P-256', value: 'ecdsa-sha2-nistp256' },
   { label: 'RSA SHA-256/512', value: 'ssh-rsa' },
 ]
+
+function hostKeyCommand(algorithm: string) {
+  const publicKeyFile = {
+    'ssh-ed25519': '/etc/ssh/ssh_host_ed25519_key.pub',
+    'ecdsa-sha2-nistp256': '/etc/ssh/ssh_host_ecdsa_key.pub',
+    'ssh-rsa': '/etc/ssh/ssh_host_rsa_key.pub',
+  }[algorithm] ?? '/etc/ssh/ssh_host_ed25519_key.pub'
+  return `sudo ssh-keygen -lf ${publicKeyFile} -E sha256`
+}
 </script>
 
 <template>
@@ -285,6 +294,13 @@ const algorithmOptions = [
         <NFormItem label="Host Key 算法"><NSelect v-model:value="draft.host_key_algorithm" :options="algorithmOptions" /></NFormItem>
         <NFormItem label="Host Key 指纹">
           <NInput v-model:value="draft.host_key_fingerprint" placeholder="SHA256:..." />
+        </NFormItem>
+        <NFormItem label="指纹获取方式">
+          <NSpace vertical :size="8" style="width: 100%">
+            <NText depth="3">这是订阅端 SSH 服务的 Host Key，不是管理端生成的登录公钥。在订阅端主机本机执行：</NText>
+            <CopyableCode :value="hostKeyCommand(draft.host_key_algorithm)" />
+            <NText depth="3">从输出中只复制完整的 <NText code>SHA256:...</NText>；例如输出末尾为 <NText code>(ED25519)</NText> 时，算法应选择 Ed25519。</NText>
+          </NSpace>
         </NFormItem>
         <NFormItem label="远端 HTTP 地址">
           <NInput :value="`127.0.0.1:${draft.remote_port}`" readonly />
