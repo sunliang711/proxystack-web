@@ -87,9 +87,19 @@ async function publish() {
 
 const installCommand = computed(() =>
   status.value
-    ? `curl -fsSL https://raw.githubusercontent.com/sunliang711/proxystack-web/refs/heads/main/deploy/install.sh \\\n  | sudo bash -s -- --role sub --source '${status.value.source}' --public-key '${status.value.public_key}'`
+    ? `set -e
+case "$(uname -m)" in x86_64|amd64) ARCH=amd64 ;; aarch64|arm64) ARCH=arm64 ;; *) echo "unsupported architecture" >&2; exit 1 ;; esac
+BASE=https://github.com/sunliang711/proxystack-web/releases/latest/download
+FILE=proxystack-web-linux-$ARCH
+curl -fLO "$BASE/$FILE"
+curl -fLO "$BASE/$FILE.sha256"
+sha256sum -c "$FILE.sha256"
+chmod 0700 "$FILE"
+sudo ./$FILE sub --dir /opt/proxystack-web-sub deploy apply --sha256 "$(cut -d " " -f1 "$FILE.sha256")" --source '${status.value.source}' --public-key '${status.value.public_key}'`
     : '',
 )
+const rollbackCommand = 'sudo /opt/proxystack-web-sub/bin/proxystack-web sub --dir /opt/proxystack-web-sub deploy rollback'
+const uninstallCommand = 'sudo /opt/proxystack-web-sub/bin/proxystack-web sub --dir /opt/proxystack-web-sub deploy uninstall'
 const addSourceCommand = computed(() =>
   status.value ? `proxystack-web sub source add ${status.value.source} ${status.value.public_key}` : '',
 )
@@ -164,10 +174,10 @@ function openSSHSettings() {
 
         <template v-if="mode === 'online'">
           <NSpace justify="end">
-            <NButton text type="primary" @click="openSSHSettings">SSH 发布设置</NButton>
+            <NButton text type="primary" @click="openSSHSettings">SSH 发布与部署设置</NButton>
           </NSpace>
           <NAlert v-if="!targets.length" type="warning" :bordered="false">
-            还没有启用的订阅端目标。请先到“SSH 发布设置”生成 SSH 密钥并配置订阅端。
+            还没有启用的订阅端目标。请先到“SSH 发布与部署设置”生成 SSH 密钥并配置订阅端。
           </NAlert>
           <NCheckboxGroup v-else v-model:value="selected">
             <NSpace vertical>
@@ -194,7 +204,9 @@ function openSSHSettings() {
             离线模式会下载签名订阅包。通过可信方式把文件拷贝到订阅端，执行导入后删除传输副本。
           </NAlert>
           <CopyableCode label="订阅包验签公钥" :value="status.public_key" />
-          <CopyableCode label="安装订阅端" :value="installCommand" />
+          <CopyableCode label="安装或更新订阅端" :value="installCommand" />
+          <CopyableCode label="回滚到上一版本" :value="rollbackCommand" />
+          <CopyableCode label="卸载并保留配置与数据" :value="uninstallCommand" />
           <CopyableCode label="已有订阅端添加本机为来源" :value="addSourceCommand" />
           <NText depth="3">
             执行 <NText code>proxystack-web sub import 文件</NText>，或把文件放进订阅端目录下的 <NText code>inbox/</NText>；

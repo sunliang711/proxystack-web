@@ -131,7 +131,7 @@ const groups: { key: string; label: string; items: NavItem[] }[] = [
     items: [
       { name: 'templates', label: '订阅模板', icon: DocumentTextOutline },
       { name: 'sub-publish', label: '发布订阅包', icon: PaperPlaneOutline },
-      { name: 'sub-publish-settings', label: 'SSH 发布设置', icon: GitNetworkOutline },
+      { name: 'sub-publish-settings', label: 'SSH 发布与部署', icon: GitNetworkOutline },
     ],
   },
   {

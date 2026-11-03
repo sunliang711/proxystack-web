@@ -713,6 +713,49 @@
         ],
         "type": "object"
       },
+      "DeployStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "arch": {
+            "type": "string"
+          },
+          "os": {
+            "type": "string"
+          },
+          "previous_version": {
+            "type": "string"
+          },
+          "service_active": {
+            "type": "boolean"
+          },
+          "service_enabled": {
+            "type": "boolean"
+          },
+          "state": {
+            "enum": [
+              "uninstalled",
+              "retained",
+              "installed"
+            ],
+            "type": "string"
+          },
+          "sudo": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "os",
+          "arch",
+          "sudo",
+          "state",
+          "service_active",
+          "service_enabled"
+        ],
+        "type": "object"
+      },
       "DepsOutputBody": {
         "additionalProperties": false,
         "properties": {
@@ -2859,6 +2902,12 @@
       "PublishTargetView": {
         "additionalProperties": false,
         "properties": {
+          "current_version": {
+            "type": "string"
+          },
+          "deploy_state": {
+            "type": "string"
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -2871,6 +2920,13 @@
           "id": {
             "format": "int64",
             "type": "integer"
+          },
+          "last_deploy_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_deploy_error": {
+            "type": "string"
           },
           "last_publish_at": {
             "format": "date-time",
@@ -2891,6 +2947,9 @@
             "type": "string"
           },
           "name": {
+            "type": "string"
+          },
+          "previous_version": {
             "type": "string"
           },
           "remote_port": {
@@ -2934,7 +2993,12 @@
           "last_test_error",
           "last_publish_at",
           "last_sequence",
-          "last_publish_error"
+          "last_publish_error",
+          "deploy_state",
+          "current_version",
+          "previous_version",
+          "last_deploy_at",
+          "last_deploy_error"
         ],
         "type": "object"
       },
@@ -3988,6 +4052,18 @@
           "status",
           "duration_ms",
           "message"
+        ],
+        "type": "object"
+      },
+      "SubDeployRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
         ],
         "type": "object"
       },
@@ -9021,6 +9097,157 @@
         ]
       }
     },
+    "/api/sub-publish/targets/{id}/deploy": {
+      "post": {
+        "operationId": "deploySubscriptionTarget",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubDeployRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskIDOutputBody"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "通过 SSH 安装或更新订阅端（后台作业）",
+        "tags": [
+          "subscription"
+        ]
+      }
+    },
+    "/api/sub-publish/targets/{id}/deploy/inspect": {
+      "post": {
+        "operationId": "inspectSubscriptionTargetDeployment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeployStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "检测订阅端部署环境",
+        "tags": [
+          "subscription"
+        ]
+      }
+    },
+    "/api/sub-publish/targets/{id}/deploy/rollback": {
+      "post": {
+        "operationId": "rollbackSubscriptionTarget",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskIDOutputBody"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "通过 SSH 回滚订阅端（后台作业）",
+        "tags": [
+          "subscription"
+        ]
+      }
+    },
     "/api/sub-publish/targets/{id}/rotate-secret": {
       "post": {
         "operationId": "rotateSubscriptionPublishTargetSecret",
@@ -9501,6 +9728,8 @@
                 "backup",
                 "deps",
                 "self-update",
+                "subscription-deploy",
+                "subscription-publish",
                 "db_backup",
                 "traffic_prune",
                 "geo_update",

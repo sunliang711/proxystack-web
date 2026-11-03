@@ -21,7 +21,8 @@ IMAGE=${PSW_DEPLOY_IMAGE:-psw-deploy-test:debian-12}
 if [[ -z ${PSW_DEPLOY_IMAGE:-} ]]; then
     docker build -q -t "$IMAGE" --build-arg BASE=debian:12 "$ROOT/tests/e2e" >/dev/null
 fi
-(cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH=$ARCH go build -o "$WORK/proxystack-web" ./cmd/proxystack-web)
+(cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH=$ARCH go build -ldflags "-X proxystack-web/internal/version.Version=v0.1.0-test" -o "$WORK/proxystack-web-v1" ./cmd/proxystack-web)
+(cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH=$ARCH go build -ldflags "-X proxystack-web/internal/version.Version=v0.2.0-test" -o "$WORK/proxystack-web-v2" ./cmd/proxystack-web)
 docker run -d --name "$NAME" --privileged --cgroupns=host \
     -v /sys/fs/cgroup:/sys/fs/cgroup:rw --tmpfs /run --tmpfs /run/lock "$IMAGE" >/dev/null
 for ((attempt = 1; attempt <= 30; attempt++)); do
@@ -30,5 +31,6 @@ for ((attempt = 1; attempt <= 30; attempt++)); do
 done
 docker exec "$NAME" systemctl is-system-running --wait >/dev/null || true
 docker cp "$ROOT/deploy" "$NAME:/root/sub-isolation-deploy"
-docker cp "$WORK/proxystack-web" "$NAME:/root/sub-isolation-binary"
+docker cp "$WORK/proxystack-web-v1" "$NAME:/root/sub-isolation-binary-v1"
+docker cp "$WORK/proxystack-web-v2" "$NAME:/root/sub-isolation-binary-v2"
 (cd "$ROOT" && PSW_DEPLOY_CONTAINER=$NAME go test -tags e2e -count=1 -v -timeout 6m ./tests/deploy)

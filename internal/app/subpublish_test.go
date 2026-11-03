@@ -36,6 +36,31 @@ type publishClientFake struct {
 	deliverOnce  sync.Once
 }
 
+type deployClientFake struct {
+	inspect       *subpublish.DeployStatus
+	rollback      *subpublish.DeployResult
+	err           error
+	rollbackStart chan struct{}
+	rollbackDone  chan struct{}
+	rollbackOnce  sync.Once
+}
+
+func (f *deployClientFake) InspectDeploy(context.Context, subpublish.Identity, subpublish.Target) (*subpublish.DeployStatus, error) {
+	return f.inspect, f.err
+}
+
+func (f *deployClientFake) Deploy(context.Context, subpublish.Identity, subpublish.Target, subpublish.DeployRequest) (*subpublish.DeployResult, error) {
+	return nil, errors.New("unexpected deploy call")
+}
+
+func (f *deployClientFake) RollbackDeploy(context.Context, subpublish.Identity, subpublish.Target) (*subpublish.DeployResult, error) {
+	if f.rollbackStart != nil {
+		f.rollbackOnce.Do(func() { close(f.rollbackStart) })
+		<-f.rollbackDone
+	}
+	return f.rollback, f.err
+}
+
 func (f *publishClientFake) Probe(ctx context.Context, _ subpublish.Identity, _ subpublish.Target) (*subpublish.ProbeResult, error) {
 	if f.probeStart != nil {
 		f.probeOnce.Do(func() { close(f.probeStart) })
@@ -100,10 +125,10 @@ func TestSSHPublishIdentityAndTargetSecretsAreNotExposed(t *testing.T) {
 	require.NotEmpty(t, setup.Secret)
 	require.Equal(t, configdoc.MaskedValue, setup.Target.Secret)
 	require.True(t, setup.Target.SecretConfigured)
-	require.Contains(t, setup.AuthorizedKeysEntry, `command="/bin/false"`)
 	require.Contains(t, setup.AuthorizedKeysEntry, `permitopen="127.0.0.1:9444"`)
+	require.NotContains(t, setup.AuthorizedKeysEntry, `command=`)
 	require.Contains(t, setup.SSHDConfig, "PermitOpen 127.0.0.1:9444")
-	require.Contains(t, setup.SSHDConfig, "ForceCommand /bin/false")
+	require.NotContains(t, setup.SSHDConfig, "ForceCommand")
 	require.Contains(t, setup.PublishTokenCommand, "set-publish-token main")
 
 	targets, err := h.svc.ListPublishTargets(ctx)
@@ -138,6 +163,73 @@ func TestSSHPublishIdentityAndTargetSecretsAreNotExposed(t *testing.T) {
 	targets, err = h.svc.ListPublishTargets(ctx)
 	require.NoError(t, err)
 	require.True(t, targets[0].LastTestAt.IsZero())
+}
+
+func TestSubscriptionDeploymentInspectAndRollbackUpdateTargetState(t *testing.T) {
+	ctx := context.Background()
+	h := newRuntimeHarness(t)
+	_, err := h.svc.GenerateSSHPublishIdentity(ctx, h.actor)
+	require.NoError(t, err)
+	setup, err := h.svc.CreatePublishTarget(ctx, h.actor, publishTargetInput("primary", "sub-a.example.com"))
+	require.NoError(t, err)
+
+	h.svc.SubDeployer = &deployClientFake{inspect: &subpublish.DeployStatus{
+		OS: "linux", Arch: "amd64", Sudo: true, State: "installed", Version: "v0.2.0", PreviousVersion: "v0.1.0",
+		ServiceActive: true, ServiceEnabled: true,
+	}}
+	status, err := h.svc.InspectPublishTargetDeploy(ctx, h.actor, setup.Target.ID)
+	require.NoError(t, err)
+	require.Equal(t, "v0.2.0", status.Version)
+	targets, err := h.svc.ListPublishTargets(ctx)
+	require.NoError(t, err)
+	require.Equal(t, "installed", targets[0].DeployState)
+	require.Equal(t, "v0.2.0", targets[0].CurrentVersion)
+	require.Equal(t, "v0.1.0", targets[0].PreviousVersion)
+	require.True(t, targets[0].LastDeployError == "")
+
+	h.svc.SubDeployer = &deployClientFake{rollback: &subpublish.DeployResult{
+		Action: "rolled_back", Version: "v0.1.0", PreviousVersion: "v0.2.0",
+	}}
+	taskID, err := h.svc.RollbackPublishTarget(ctx, h.actor, setup.Target.ID)
+	require.NoError(t, err)
+	task := h.waitTask(t, taskID)
+	require.Equal(t, app.TaskSucceeded, task.Status)
+	targets, err = h.svc.ListPublishTargets(ctx)
+	require.NoError(t, err)
+	require.Equal(t, "v0.1.0", targets[0].CurrentVersion)
+	require.Equal(t, "v0.2.0", targets[0].PreviousVersion)
+}
+
+func TestSubscriptionTargetCannotChangeDuringDeployment(t *testing.T) {
+	ctx := context.Background()
+	h := newRuntimeHarness(t)
+	_, err := h.svc.GenerateSSHPublishIdentity(ctx, h.actor)
+	require.NoError(t, err)
+	setup, err := h.svc.CreatePublishTarget(ctx, h.actor, publishTargetInput("primary", "sub-a.example.com"))
+	require.NoError(t, err)
+
+	fake := &deployClientFake{
+		rollback:      &subpublish.DeployResult{Action: "rolled_back", Version: "v0.1.0", PreviousVersion: "v0.2.0"},
+		rollbackStart: make(chan struct{}), rollbackDone: make(chan struct{}),
+	}
+	h.svc.SubDeployer = fake
+	started, err := h.svc.RollbackPublishTarget(ctx, h.actor, setup.Target.ID)
+	require.NoError(t, err)
+	select {
+	case <-fake.rollbackStart:
+	case <-time.After(time.Second):
+		t.Fatal("rollback did not start")
+	}
+	_, err = h.svc.RotatePublishTargetSecret(ctx, h.actor, setup.Target.ID)
+	require.ErrorContains(t, err, "cannot be changed")
+	_, err = h.svc.UpdatePublishTarget(ctx, h.actor, setup.Target.ID, publishTargetInput("primary", "sub-b.example.com"))
+	require.ErrorContains(t, err, "cannot be changed")
+	err = h.svc.DeletePublishTarget(ctx, h.actor, setup.Target.ID)
+	require.ErrorContains(t, err, "cannot be changed")
+	_, err = h.svc.PublishSubscriptionBundleOnline(ctx, h.actor, []int64{setup.Target.ID})
+	require.ErrorContains(t, err, "publish or deployment")
+	close(fake.rollbackDone)
+	require.Equal(t, app.TaskSucceeded, h.waitTask(t, started).Status)
 }
 
 func TestPublishTargetRejectsInvalidNameAndSource(t *testing.T) {
@@ -267,7 +359,7 @@ func TestTargetTestDoesNotOverwriteStatusAfterConfigurationChanges(t *testing.T)
 	require.True(t, targets[0].LastTestAt.IsZero())
 }
 
-func TestOnlinePublishDoesNotOverwriteStatusAfterConfigurationChanges(t *testing.T) {
+func TestSubscriptionTargetCannotChangeOrDeployDuringOnlinePublish(t *testing.T) {
 	ctx := context.Background()
 	h := newRuntimeHarness(t)
 	_, err := h.svc.GenerateSSHPublishIdentity(ctx, h.actor)
@@ -285,16 +377,17 @@ func TestOnlinePublishDoesNotOverwriteStatusAfterConfigurationChanges(t *testing
 		t.Fatal("online publish did not start")
 	}
 	_, err = h.svc.UpdatePublishTarget(ctx, h.actor, setup.Target.ID, publishTargetInput("primary", "sub-b.example.com"))
-	require.NoError(t, err)
+	require.ErrorContains(t, err, "cannot be changed")
+	_, err = h.svc.RollbackPublishTarget(ctx, h.actor, setup.Target.ID)
+	require.ErrorContains(t, err, "publish or deployment")
 	close(fake.deliverDone)
 	task := h.waitTask(t, started.TaskID)
 	require.Equal(t, app.TaskSucceeded, task.Status, task.Error)
-	require.Contains(t, strings.Join(task.Log, "\n"), "configuration changed; delivery status was not updated")
 
 	targets, err := h.svc.ListPublishTargets(ctx)
 	require.NoError(t, err)
 	require.Len(t, targets, 1)
-	require.Equal(t, "sub-b.example.com", targets[0].SSHHost)
-	require.True(t, targets[0].LastPublishAt.IsZero())
-	require.Zero(t, targets[0].LastSequence)
+	require.Equal(t, "sub-a.example.com", targets[0].SSHHost)
+	require.False(t, targets[0].LastPublishAt.IsZero())
+	require.Equal(t, started.Sequence, targets[0].LastSequence)
 }

@@ -108,6 +108,15 @@ type publishTargetProbeOutput struct {
 	Body subpublish.ProbeResult
 }
 
+type publishTargetDeployStatusOutput struct {
+	Body subpublish.DeployStatus
+}
+
+type publishTargetDeployInput struct {
+	ID   int64 `path:"id"`
+	Body app.SubDeployRequest
+}
+
 type onlinePublishInput struct {
 	Body struct {
 		TargetIDs []int64 `json:"target_ids" minItems:"1"`
@@ -326,6 +335,34 @@ func registerSubscription(api huma.API, s *Server) {
 				return nil, toHTTPError(err)
 			}
 			return &publishTargetProbeOutput{Body: *result}, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "inspectSubscriptionTargetDeployment", Method: http.MethodPost, Path: "/api/sub-publish/targets/{id}/deploy/inspect", Summary: "检测订阅端部署环境"}),
+		func(ctx context.Context, in *idPath) (*publishTargetDeployStatusOutput, error) {
+			result, err := s.svc.InspectPublishTargetDeploy(ctx, actorFrom(ctx), in.ID)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &publishTargetDeployStatusOutput{Body: *result}, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "deploySubscriptionTarget", Method: http.MethodPost, Path: "/api/sub-publish/targets/{id}/deploy", Summary: "通过 SSH 安装或更新订阅端（后台作业）", DefaultStatus: http.StatusAccepted}),
+		func(ctx context.Context, in *publishTargetDeployInput) (*taskIDOutput, error) {
+			id, err := s.svc.DeployPublishTarget(ctx, actorFrom(ctx), in.ID, in.Body)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			out := &taskIDOutput{}
+			out.Body.TaskID = id
+			return out, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "rollbackSubscriptionTarget", Method: http.MethodPost, Path: "/api/sub-publish/targets/{id}/deploy/rollback", Summary: "通过 SSH 回滚订阅端（后台作业）", DefaultStatus: http.StatusAccepted}),
+		func(ctx context.Context, in *idPath) (*taskIDOutput, error) {
+			id, err := s.svc.RollbackPublishTarget(ctx, actorFrom(ctx), in.ID)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			out := &taskIDOutput{}
+			out.Body.TaskID = id
+			return out, nil
 		})
 	huma.Register(api, reg(huma.Operation{OperationID: "publishSubscriptionBundle", Method: http.MethodPost, Path: "/api/sub-bundle/publish", Summary: "签发并下载订阅包（含全部用户的 token，记入审计日志）"}),
 		func(ctx context.Context, _ *struct{}) (*exportOutput, error) {

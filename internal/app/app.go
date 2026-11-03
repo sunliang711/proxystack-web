@@ -44,18 +44,22 @@ type Service struct {
 	RequestRestart func()
 	// SubPublisher 通过 SSH 正向转发测试并投递订阅包；测试可替换为内存实现。
 	SubPublisher subpublish.Client
+	// SubDeployer 通过同一 SSH 通道检测、安装、更新和回滚订阅端。
+	SubDeployer subpublish.Deployer
 
 	// runtimeMu 串行化 apply、unit 操作和暂停生效，避免并发写生成物或重启同一 unit。
-	runtimeMu sync.Mutex
-	tasks     taskRegistry
-	subs      subCache
-	traffic   trafficState
-	autoPause autoPauseState
-	scheduler schedulerState
-	guard     loginGuard
+	runtimeMu    sync.Mutex
+	tasks        taskRegistry
+	subs         subCache
+	traffic      trafficState
+	autoPause    autoPauseState
+	scheduler    schedulerState
+	subDeployMu  sync.Mutex
+	subDeploying map[int64]bool
+	guard        loginGuard
 	// notificationMu 串行化邮件发送与出口事件替换，避免恢复后发送滞后的故障邮件。
 	notificationMu sync.Mutex
-	egressMu sync.Mutex
+	egressMu       sync.Mutex
 	// background 跟踪退出前要收尾的后台循环。
 	background sync.WaitGroup
 
@@ -71,8 +75,9 @@ func New(st *store.Store, layout paths.Layout) *Service {
 	return &Service{
 		Store: st, Layout: layout, Now: time.Now, PortChecker: validation.TCPPortChecker{},
 		Units: fake, Logs: fake, XrayAPI: &xrayapi.Fake{}, Checker: runtime.BinaryChecker{Layout: layout},
-		Events: events.New(),
+		Events:       events.New(),
 		SubPublisher: subpublish.SSHClient{},
+		SubDeployer:  subpublish.SSHClient{},
 	}
 }
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, h, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   NAlert, NButton, NCard, NDataTable, NDescriptions, NDescriptionsItem, NDrawer, NDrawerContent, NForm, NFormItem,
   NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpace, NStep, NSteps, NSwitch, NTag, NText, useMessage,
@@ -33,6 +34,11 @@ interface PublishTarget {
   last_publish_at?: string
   last_sequence?: number
   last_publish_error?: string
+  deploy_state?: string
+  current_version?: string
+  previous_version?: string
+  last_deploy_at?: string
+  last_deploy_error?: string
 }
 
 interface ProvisioningResult {
@@ -59,6 +65,7 @@ interface TestResult {
 }
 
 const message = useMessage()
+const router = useRouter()
 const identity = ref<SSHIdentity | null>(null)
 const targets = ref<PublishTarget[]>([])
 const currentSource = ref('main')
@@ -66,6 +73,9 @@ const loading = ref(false)
 const generating = ref(false)
 const saving = ref(false)
 const testing = ref<number | null>(null)
+const inspecting = ref<number | null>(null)
+const deploying = ref<number | null>(null)
+const rollingBack = ref<number | null>(null)
 
 async function load() {
   loading.value = true
@@ -110,8 +120,13 @@ function open(target?: PublishTarget) {
 const provisioning = ref<ProvisioningResult | null>(null)
 function sshUserSetupCommand(sshUser: string) {
   if (!/^[A-Za-z_][A-Za-z0-9_-]{0,31}$/.test(sshUser)) return '# 请先填写合法的 SSH 用户名'
-  const sshDir = `/home/${sshUser}/.ssh`
+  const sshDir = sshUser === 'root' ? '/root/.ssh' : `/home/${sshUser}/.ssh`
   return `id -u ${sshUser} >/dev/null 2>&1 || sudo useradd --create-home --shell /bin/bash ${sshUser}\nsudo install -d -m 700 -o ${sshUser} -g ${sshUser} ${sshDir}\nsudo touch ${sshDir}/authorized_keys\nsudo chown ${sshUser}:${sshUser} ${sshDir}/authorized_keys\nsudo chmod 600 ${sshDir}/authorized_keys`
+}
+function sudoSetupCommand(sshUser: string) {
+  if (sshUser === 'root') return '# root 用户无需配置 sudo'
+  if (!/^[A-Za-z_][A-Za-z0-9_-]{0,31}$/.test(sshUser)) return '# 请先填写合法的 SSH 用户名'
+  return `echo '${sshUser} ALL=(root) NOPASSWD: /bin/true, /usr/bin/test, /tmp/proxystack-web-deploy-*, /opt/proxystack-web-sub/bin/proxystack-web' | sudo tee /etc/sudoers.d/proxystack-web-sub-deploy >/dev/null\nsudo chmod 440 /etc/sudoers.d/proxystack-web-sub-deploy\nsudo visudo -cf /etc/sudoers.d/proxystack-web-sub-deploy\nsudo -u ${sshUser} sudo -n /bin/true`
 }
 function provisioningResult(data: any): ProvisioningResult {
   const target = data.target ?? data
@@ -199,12 +214,51 @@ async function test(target: PublishTarget) {
   await load()
 }
 
+async function inspectDeploy(target: PublishTarget) {
+  inspecting.value = target.id ?? null
+  const { data, error } = await api.POST('/api/sub-publish/targets/{id}/deploy/inspect', { params: { path: { id: target.id! } } })
+  inspecting.value = null
+  if (error || !data) {
+    message.error(problemMessage(error, '部署环境检测失败'))
+    await load()
+    return
+  }
+  message.success(`部署环境正常：${data.os}/${data.arch}，状态 ${data.state}`)
+  await load()
+}
+
+async function deploy(target: PublishTarget) {
+  deploying.value = target.id ?? null
+  const { data, error } = await api.POST('/api/sub-publish/targets/{id}/deploy', {
+    params: { path: { id: target.id! } }, body: { version: '' },
+  })
+  deploying.value = null
+  if (error || !data) {
+    message.error(problemMessage(error, '提交部署任务失败'))
+    return
+  }
+  message.success(`部署任务 #${data.task_id} 已提交`)
+  void router.push({ name: 'task-detail', params: { source: 'task', id: data.task_id } })
+}
+
+async function rollbackDeploy(target: PublishTarget) {
+  rollingBack.value = target.id ?? null
+  const { data, error } = await api.POST('/api/sub-publish/targets/{id}/deploy/rollback', { params: { path: { id: target.id! } } })
+  rollingBack.value = null
+  if (error || !data) {
+    message.error(problemMessage(error, '提交回滚任务失败'))
+    return
+  }
+  message.success(`回滚任务 #${data.task_id} 已提交`)
+  void router.push({ name: 'task-detail', params: { source: 'task', id: data.task_id } })
+}
+
 const instructions = ref<PublishTarget | null>(null)
 const authorizedKeys = (target: PublishTarget) =>
-  `restrict,port-forwarding,command="/bin/false",permitopen="127.0.0.1:${target.remote_port}" ${identity.value?.public_key ?? ''} proxystack-web`
+  `restrict,port-forwarding,permitopen="127.0.0.1:${target.remote_port}" ${identity.value?.public_key ?? ''} proxystack-web`
 const tokenCommand = (target: PublishTarget) =>
   `sudo proxystack-web sub --dir /opt/proxystack-web-sub source set-publish-token ${target.source}`
-const sshdConfig = (target: PublishTarget) => `Match User ${target.ssh_user}\n    AllowTcpForwarding local\n    PermitOpen 127.0.0.1:${target.remote_port}\n    ForceCommand /bin/false\n    PermitTTY no\n    X11Forwarding no\n    AllowAgentForwarding no\nMatch all`
+const sshdConfig = (target: PublishTarget) => `Match User ${target.ssh_user}\n    AllowTcpForwarding local\n    PermitOpen 127.0.0.1:${target.remote_port}\n    PermitTTY no\n    X11Forwarding no\n    AllowAgentForwarding no\nMatch all`
 
 function statusTime(value?: string) {
   return value && !value.startsWith('0001') && !value.startsWith('1970') ? formatTime(value) : '从未执行'
@@ -229,6 +283,14 @@ const columns: DataTableColumns<PublishTarget> = [
     ]),
   },
   {
+    title: '部署状态', key: 'deploy_state', minWidth: 180,
+    render: (row) => h(NSpace, { vertical: true, size: 2 }, () => [
+      row.deploy_state ? `${row.deploy_state}${row.current_version ? ` · ${row.current_version}` : ''}` : '尚未检测',
+      row.previous_version ? h(NText, { depth: 3 }, () => `可回滚：${row.previous_version}`) : null,
+      row.last_deploy_error ? h(NText, { type: 'error' }, () => row.last_deploy_error) : null,
+    ]),
+  },
+  {
     title: '最近发布', key: 'last_publish_at', minWidth: 170,
     render: (row) => h(NSpace, { vertical: true, size: 2 }, () => [
       row.last_sequence ? `${statusTime(row.last_publish_at)} · #${row.last_sequence}` : '从未发布',
@@ -238,9 +300,18 @@ const columns: DataTableColumns<PublishTarget> = [
     ]),
   },
   {
-    title: '操作', key: 'actions', width: 420, fixed: 'right',
+    title: '操作', key: 'actions', width: 660, fixed: 'right',
     render: (row) => h(NSpace, { size: 4 }, () => [
       h(NButton, { size: 'small', loading: testing.value === row.id, onClick: () => test(row) }, () => '测试'),
+      h(NButton, { size: 'small', loading: inspecting.value === row.id, onClick: () => inspectDeploy(row) }, () => '检测部署'),
+      h(NPopconfirm, { onPositiveClick: () => deploy(row) }, {
+        trigger: () => h(NButton, { size: 'small', type: 'primary', loading: deploying.value === row.id }, () => row.deploy_state === 'installed' ? '更新' : '安装'),
+        default: () => `将下载最新稳定版并通过 SSH ${row.deploy_state === 'installed' ? '更新' : '安装'}订阅端，继续？`,
+      }),
+      h(NPopconfirm, { onPositiveClick: () => rollbackDeploy(row) }, {
+        trigger: () => h(NButton, { size: 'small', disabled: !row.previous_version, loading: rollingBack.value === row.id }, () => '回滚'),
+        default: () => `将订阅端回滚到 ${row.previous_version || '上一版本'}，继续？`,
+      }),
       h(NPopconfirm, { onPositiveClick: () => viewSetup(row) }, {
         trigger: () => h(NButton, { size: 'small', loading: viewingSetup.value === row.id }, () => '完整配置'),
         default: () => '完整配置包含明文发布 Secret，查看操作会记录审计日志。继续？',
@@ -301,7 +372,7 @@ function hostKeyCommand(algorithm: string) {
       <NAlert type="info" :bordered="false" style="margin-bottom: 12px">
         管理端按需建立 SSH 正向转发，远端主机固定为 127.0.0.1。每个订阅端使用独立发布 Secret，测试会依次检查 SSH、转发、订阅端健康状态和发布鉴权。
       </NAlert>
-      <NDataTable :loading="loading" :columns="columns" :data="targets" :scroll-x="1290" size="small" />
+      <NDataTable :loading="loading" :columns="columns" :data="targets" :scroll-x="1710" size="small" />
     </NCard>
   </NSpace>
 
@@ -314,8 +385,10 @@ function hostKeyCommand(algorithm: string) {
         <NFormItem label="SSH 用户"><NInput v-model:value="draft.ssh_user" /></NFormItem>
         <NFormItem v-if="!draft.id" label="SSH 用户创建">
           <NSpace vertical :size="8" style="width: 100%">
-            <NText depth="3">需要在订阅端主机上创建此专用 SSH 用户。该用户与运行订阅服务的 <NText code>proxystack-web-sub</NText> 用户不同，不需要 sudo 权限：</NText>
+            <NText depth="3">需要在订阅端主机上创建此专用 SSH 用户。该用户与运行订阅服务的 <NText code>proxystack-web-sub</NText> 用户不同：</NText>
             <CopyableCode :value="sshUserSetupCommand(draft.ssh_user)" />
+            <NText depth="3">非 root 用户还要允许部署命令使用 <NText code>sudo -n</NText>：</NText>
+            <CopyableCode :value="sudoSetupCommand(draft.ssh_user)" />
             <NText depth="3">如果用户已存在，第一行会跳过创建；后续命令会初始化 <NText code>~/.ssh/authorized_keys</NText> 及所需权限。保存后再把管理端生成的完整公钥配置追加到该文件。</NText>
           </NSpace>
         </NFormItem>
@@ -341,7 +414,7 @@ function hostKeyCommand(algorithm: string) {
         <NFormItem label="启用"><NSwitch v-model:value="draft.enabled" /></NFormItem>
       </NForm>
       <NAlert type="warning" :bordered="false">
-        SSH Host Key 指纹必须通过独立可信渠道核对。管理端不会自动信任首次扫描到的主机密钥。来源名必须与当前管理端来源“{{ currentSource }}”一致。
+        SSH Host Key 指纹必须通过独立可信渠道核对。部署允许该 SSH 密钥上传并以 root 执行订阅端二进制，等同部署级 root 权限，只能用于受控的专用账号。来源名必须与当前管理端来源“{{ currentSource }}”一致。
       </NAlert>
       <template #footer>
         <NSpace>
@@ -362,9 +435,13 @@ function hostKeyCommand(algorithm: string) {
           <CopyableCode :value="provisioning.authorized_keys_entry || authorizedKeys(provisioning.target)" />
           <NText depth="3">把这一整行追加到 SSH 用户的 <NText code>~/.ssh/authorized_keys</NText>，目录权限设为 700，文件权限设为 600。</NText>
         </NStep>
-        <NStep title="限制 SSH 用户和公钥只能正向转发">
+        <NStep title="限制 SSH 用户的转发范围">
           <CopyableCode :value="provisioning.sshd_config || sshdConfig(provisioning.target)" />
           <NText depth="3">写入 sshd 配置后先执行 <NText code>sshd -t</NText>，校验通过再 reload SSH 服务。</NText>
+        </NStep>
+        <NStep title="允许非交互部署">
+          <CopyableCode :value="sudoSetupCommand(provisioning.target.ssh_user)" />
+          <NText depth="3">部署检测要求 <NText code>sudo -n /bin/true</NText> 成功。root 用户不需要此步骤。</NText>
         </NStep>
         <NStep title="配置发布 Secret">
           <NSpace vertical :size="8">
@@ -383,6 +460,7 @@ function hostKeyCommand(algorithm: string) {
     <NSpace v-if="instructions" vertical :size="14">
       <CopyableCode label="authorized_keys" :value="authorizedKeys(instructions)" />
       <CopyableCode label="sshd_config 限制" :value="sshdConfig(instructions)" />
+      <CopyableCode label="sudo -n 配置" :value="sudoSetupCommand(instructions.ssh_user)" />
       <CopyableCode label="配置发布 Secret" :value="tokenCommand(instructions)" />
       <NAlert type="info" :bordered="false">此说明不包含明文发布 Secret；需要重新配置时，请从目标列表打开“完整配置”。</NAlert>
     </NSpace>

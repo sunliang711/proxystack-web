@@ -859,15 +859,15 @@ StatsService 返回的计数名格式为 `user>>>EMAIL>>>traffic>>>uplink`、`in
 
 `--role` 选择安装的服务，默认 `panel`（上述步骤）。`--role sub` 安装订阅端：
 
-1. 创建系统用户 `proxystack-web-sub`（无登录 shell）和 `/opt/proxystack-web-sub` 目录树，收件目录允许同组写入。
-2. 安装二进制到 `/opt/proxystack-web-sub/bin/`。
-3. 以服务账号执行 `proxystack-web sub init`，写入本机配置，信任 `--source` 和 `--public-key` 指定的主来源（管理端「发布订阅包」页给出完整的安装命令）。
-4. 写入 `proxystack-web-sub.service` 并 `systemctl enable --now`。
+1. 调用下载后二进制自身的 `sub deploy apply`。
+2. 部署命令校验 Linux、systemd、root 权限、安装归属和 SHA256，创建服务账号、目录、配置与 unit。
+3. 更新时暂存新二进制，保留上一版本，重启并校验 `/health` 返回版本；失败自动恢复。
+4. 离线安装与 SSH 安装、更新、回滚共用上述实现，脚本只负责准备二进制和参数。
 5. 打印订阅端状态和导入方法。
 
 订阅端参数：`--source`、`--public-key`、`--sub-listen`、`--sub-port`。订阅端已安装时，`--role sub` 只替换二进制并重启服务。`--role all` 在同一台机器上依次安装管理端和订阅端，订阅端自动信任本机管理端的公钥。
 
-订阅端目录、服务和账号统一使用 `proxystack-web-sub`，与 proxystack-go 的 pssub 隔离。安装与卸载校验实际 ExecStart、配置及安装标记，拒绝认领未知目录或同名服务；普通卸载保留标记供重装或清理使用。旧版本项目订阅端通过 `--role sub --migrate-sub` 显式迁移：校验旧服务和配置，停止旧服务后备份并复制数据，调整权限并启动新服务，启动及 HTTP 检查通过后停用和移除旧 unit，将原目录保留在迁移备份中。失败恢复旧服务，拒绝迁移 pssub、含符号链接的目录或有本地 drop-in 的旧 unit。迁移备份不受卸载或 `--purge` 影响。
+订阅端目录、服务和账号统一使用 `proxystack-web-sub`，与 proxystack-go 的 pssub 隔离。安装与卸载校验实际 ExecStart、配置及安装标记，拒绝认领未知目录、符号链接或同名服务；普通卸载保留配置和数据，`--purge` 才清理目录与账号。新版允许不兼容移除 `--migrate-sub`，旧目录迁移需先使用旧版本完成。
 
 传入 `--restore FILE` 时，第 6 步改为用迁移包初始化数据库（口令从终端交互读取），不生成初始管理员密码；第 8 步只打印面板地址。恢复细节见 5.6。
 

@@ -62,7 +62,7 @@ type taskListOutput struct {
 type taskCenterInput struct {
 	Source string `query:"source" enum:"all,task,job" default:"all"`
 	Status string `query:"status" enum:"all,running,succeeded,failed,skipped,timeout" default:"all"`
-	Kind   string `query:"kind" enum:"all,apply,backup,deps,self-update,db_backup,traffic_prune,geo_update,deps_check,deps_upgrade,remote_sync,reconcile,egress_check" default:"all"`
+	Kind   string `query:"kind" enum:"all,apply,backup,deps,self-update,subscription-deploy,subscription-publish,db_backup,traffic_prune,geo_update,deps_check,deps_upgrade,remote_sync,reconcile,egress_check" default:"all"`
 	Limit  int64  `query:"limit" minimum:"1" maximum:"200" default:"50"`
 	Offset int64  `query:"offset" minimum:"0" default:"0"`
 }

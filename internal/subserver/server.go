@@ -20,6 +20,7 @@ import (
 
 	"proxystack-web/internal/generator/sub"
 	"proxystack-web/internal/subscription"
+	"proxystack-web/internal/version"
 )
 
 var formats = map[string]bool{sub.FormatClash: true, sub.FormatPremium: true, sub.FormatSurge: true}
@@ -312,11 +313,12 @@ func (s *Server) now() time.Time {
 
 // Health 是 /health 的响应。不含用户名和 token。
 type Health struct {
-	Status string         `json:"status"`
-	Users  int            `json:"users"`
-	Nodes  int            `json:"nodes"`
-	Source []SourceHealth `json:"sources"`
-	Error  string         `json:"error,omitempty"`
+	Status  string         `json:"status"`
+	Version string         `json:"version"`
+	Users   int            `json:"users"`
+	Nodes   int            `json:"nodes"`
+	Source  []SourceHealth `json:"sources"`
+	Error   string         `json:"error,omitempty"`
 	// Warnings 是合并时跳过的节点。
 	Warnings []string `json:"warnings,omitempty"`
 }
@@ -334,7 +336,7 @@ type SourceHealth struct {
 func (s *Server) Health() Health {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	health := Health{Status: "ok", Source: []SourceHealth{}, Error: s.lastError}
+	health := Health{Status: "ok", Version: version.Current().Version, Source: []SourceHealth{}, Error: s.lastError}
 	for _, state := range s.sources {
 		item := SourceHealth{Name: state.Name, Primary: state.Primary, Error: state.Error}
 		if state.Snapshot != nil {

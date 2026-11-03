@@ -1203,6 +1203,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sub-publish/targets/{id}/deploy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 通过 SSH 安装或更新订阅端（后台作业） */
+        post: operations["deploySubscriptionTarget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sub-publish/targets/{id}/deploy/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 检测订阅端部署环境 */
+        post: operations["inspectSubscriptionTargetDeployment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sub-publish/targets/{id}/deploy/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 通过 SSH 回滚订阅端（后台作业） */
+        post: operations["rollbackSubscriptionTarget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sub-publish/targets/{id}/rotate-secret": {
         parameters: {
             query?: never;
@@ -1862,6 +1913,17 @@ export interface components {
             used_by: string[];
             version: string;
         };
+        DeployStatus: {
+            arch: string;
+            os: string;
+            previous_version?: string;
+            service_active: boolean;
+            service_enabled: boolean;
+            /** @enum {string} */
+            state: "uninstalled" | "retained" | "installed";
+            sudo: boolean;
+            version?: string;
+        };
         DepsOutputBody: {
             components: components["schemas"]["DepStatus"][];
         };
@@ -2451,11 +2513,16 @@ export interface components {
             target: components["schemas"]["PublishTargetView"];
         };
         PublishTargetView: {
+            current_version: string;
+            deploy_state: string;
             enabled: boolean;
             host_key_algorithm: string;
             host_key_fingerprint: string;
             /** Format: int64 */
             id: number;
+            /** Format: date-time */
+            last_deploy_at: string;
+            last_deploy_error: string;
             /** Format: date-time */
             last_publish_at: string;
             last_publish_error: string;
@@ -2465,6 +2532,7 @@ export interface components {
             last_test_at: string;
             last_test_error: string;
             name: string;
+            previous_version: string;
             /** Format: int64 */
             remote_port: number;
             secret: string;
@@ -2744,6 +2812,9 @@ export interface components {
             name: string;
             /** @enum {string} */
             status: "succeeded" | "failed" | "skipped";
+        };
+        SubDeployRequest: {
+            version: string;
         };
         SubscriptionLinks: {
             base_url: string;
@@ -5625,6 +5696,103 @@ export interface operations {
             };
         };
     };
+    deploySubscriptionTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubDeployRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskIDOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    inspectSubscriptionTargetDeployment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeployStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    rollbackSubscriptionTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskIDOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     rotateSubscriptionPublishTargetSecret: {
         parameters: {
             query?: never;
@@ -5940,7 +6108,7 @@ export interface operations {
             query?: {
                 source?: "all" | "task" | "job";
                 status?: "all" | "running" | "succeeded" | "failed" | "skipped" | "timeout";
-                kind?: "all" | "apply" | "backup" | "deps" | "self-update" | "db_backup" | "traffic_prune" | "geo_update" | "deps_check" | "deps_upgrade" | "remote_sync" | "reconcile" | "egress_check";
+                kind?: "all" | "apply" | "backup" | "deps" | "self-update" | "subscription-deploy" | "subscription-publish" | "db_backup" | "traffic_prune" | "geo_update" | "deps_check" | "deps_upgrade" | "remote_sync" | "reconcile" | "egress_check";
                 limit?: number;
                 offset?: number;
             };

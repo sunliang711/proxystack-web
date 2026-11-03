@@ -33,6 +33,9 @@ const (
 	ActionSubPublishTarget   = "subscription.publish_target"
 	ActionSubPublishTest     = "subscription.publish_test"
 	ActionSubPublishDeliver  = "subscription.deliver"
+	ActionSubDeployInspect   = "subscription.deploy_inspect"
+	ActionSubDeployApply     = "subscription.deploy_apply"
+	ActionSubDeployRollback  = "subscription.deploy_rollback"
 
 	defaultSSHPort       = 22
 	defaultSubRemotePort = 9444
@@ -77,6 +80,11 @@ type publishTargetState struct {
 	LastPublishAt      int64  `json:"last_publish_at"`
 	LastSequence       int64  `json:"last_sequence"`
 	LastPublishError   string `json:"last_publish_error"`
+	DeployState        string `json:"deploy_state"`
+	CurrentVersion     string `json:"current_version"`
+	PreviousVersion    string `json:"previous_version"`
+	LastDeployAt       int64  `json:"last_deploy_at"`
+	LastDeployError    string `json:"last_deploy_error"`
 }
 
 // PublishTargetInput 是创建或修改订阅端目标的输入。
@@ -111,6 +119,11 @@ type PublishTargetView struct {
 	LastPublishAt      time.Time `json:"last_publish_at"`
 	LastSequence       int64     `json:"last_sequence"`
 	LastPublishError   string    `json:"last_publish_error"`
+	DeployState        string    `json:"deploy_state"`
+	CurrentVersion     string    `json:"current_version"`
+	PreviousVersion    string    `json:"previous_version"`
+	LastDeployAt       time.Time `json:"last_deploy_at"`
+	LastDeployError    string    `json:"last_deploy_error"`
 }
 
 // PublishTargetSetup 是配置订阅端 SSH 转发和发布 Secret 所需的完整材料。
@@ -214,6 +227,8 @@ func targetView(state publishTargetState) PublishTargetView {
 		HostKeyAlgorithm: state.HostKeyAlgorithm, HostKeyFingerprint: state.HostKeyFingerprint,
 		RemotePort: state.RemotePort, Source: state.Source, SecretConfigured: state.Secret != "", Enabled: state.Enabled,
 		LastTestError: state.LastTestError, LastSequence: state.LastSequence, LastPublishError: state.LastPublishError,
+		DeployState: state.DeployState, CurrentVersion: state.CurrentVersion, PreviousVersion: state.PreviousVersion,
+		LastDeployError: state.LastDeployError,
 	}
 	if state.Secret != "" {
 		view.Secret = configdoc.MaskedValue
@@ -223,6 +238,9 @@ func targetView(state publishTargetState) PublishTargetView {
 	}
 	if state.LastPublishAt != 0 {
 		view.LastPublishAt = time.Unix(state.LastPublishAt, 0)
+	}
+	if state.LastDeployAt != 0 {
+		view.LastDeployAt = time.Unix(state.LastDeployAt, 0)
 	}
 	return view
 }
@@ -348,11 +366,11 @@ func (s *Service) targetSetup(ctx context.Context, state publishTargetState, sec
 	if !identity.Configured {
 		return nil, errors.New("SSH publish identity is not configured")
 	}
-	entry := fmt.Sprintf(`restrict,port-forwarding,command="/bin/false",permitopen="127.0.0.1:%d" %s proxystack-web`, state.RemotePort, identity.PublicKey)
+	entry := fmt.Sprintf(`restrict,port-forwarding,permitopen="127.0.0.1:%d" %s proxystack-web`, state.RemotePort, identity.PublicKey)
 	return &PublishTargetSetup{
 		Target: targetView(state), Secret: secret, AuthorizedKeysEntry: entry,
 		PublishTokenCommand: fmt.Sprintf("sudo proxystack-web sub source set-publish-token %s", state.Source),
-		SSHDConfig:          fmt.Sprintf("Match User %s\n    AllowTcpForwarding local\n    PermitOpen 127.0.0.1:%d\n    ForceCommand /bin/false\n    PermitTTY no\n    X11Forwarding no\n    AllowAgentForwarding no\nMatch all", state.SSHUser, state.RemotePort),
+		SSHDConfig:          fmt.Sprintf("Match User %s\n    AllowTcpForwarding local\n    PermitOpen 127.0.0.1:%d\n    PermitTTY no\n    X11Forwarding no\n    AllowAgentForwarding no\nMatch all", state.SSHUser, state.RemotePort),
 	}, nil
 }
 
@@ -431,7 +449,12 @@ func (s *Service) GetPublishTargetSetup(ctx context.Context, actor Actor, id int
 
 // UpdatePublishTarget 修改目标连接信息，不改变发布 Secret。
 func (s *Service) UpdatePublishTarget(ctx context.Context, actor Actor, id int64, input PublishTargetInput) (*PublishTargetView, error) {
-	input, err := normalizePublishTarget(input)
+	unlock, err := s.lockSubTargetMutation(id)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	input, err = normalizePublishTarget(input)
 	if err != nil {
 		return nil, err
 	}
@@ -477,6 +500,11 @@ func (s *Service) UpdatePublishTarget(ctx context.Context, actor Actor, id int64
 
 // DeletePublishTarget 删除目标及其发布 Secret。
 func (s *Service) DeletePublishTarget(ctx context.Context, actor Actor, id int64) error {
+	unlock, err := s.lockSubTargetMutation(id)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	return s.Store.InTx(ctx, func(q *dbq.Queries) error {
 		targets, err := loadPublishTargets(ctx, q)
 		if err != nil {
@@ -506,9 +534,14 @@ func (s *Service) DeletePublishTarget(ctx context.Context, actor Actor, id int64
 
 // RotatePublishTargetSecret 为目标生成新的发布 Secret；管理端立即改用新 Secret，订阅端更新后旧 Secret 才失效。
 func (s *Service) RotatePublishTargetSecret(ctx context.Context, actor Actor, id int64) (*PublishTargetSetup, error) {
+	unlock, err := s.lockSubTargetMutation(id)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
 	secret := auth.RandomToken()
 	var updated publishTargetState
-	err := s.Store.InTx(ctx, func(q *dbq.Queries) error {
+	err = s.Store.InTx(ctx, func(q *dbq.Queries) error {
 		targets, err := loadPublishTargets(ctx, q)
 		if err != nil {
 			return err
@@ -669,16 +702,23 @@ type targetDelivery struct {
 
 // PublishSubscriptionBundleOnline 签发一次订阅包，并在后台向所选目标投递同一份原始数据。
 func (s *Service) PublishSubscriptionBundleOnline(ctx context.Context, actor Actor, targetIDs []int64) (*OnlinePublishStarted, error) {
+	reservedIDs := append([]int64(nil), targetIDs...)
+	if err := s.reserveSubTargets(reservedIDs); err != nil {
+		return nil, err
+	}
 	identity, targets, err := s.selectedPublishTargets(ctx, targetIDs)
 	if err != nil {
+		s.releaseSubTargets(reservedIDs)
 		return nil, err
 	}
 	bundle, err := s.PublishSubscriptionBundle(ctx, actor)
 	if err != nil {
+		s.releaseSubTargets(reservedIDs)
 		return nil, err
 	}
 	taskID, err := s.startTask("subscription-publish", fmt.Sprintf("发布订阅包 #%d", bundle.Sequence), actor.Name,
 		func(ctx context.Context, logf Logf) error {
+			defer s.releaseSubTargets(reservedIDs)
 			logf("Publishing bundle #%d to %d target(s)", bundle.Sequence, len(targets))
 			sem := make(chan struct{}, publishConcurrency)
 			results := make(chan targetDelivery, len(targets))
@@ -726,6 +766,7 @@ func (s *Service) PublishSubscriptionBundleOnline(ctx context.Context, actor Act
 			return nil
 		})
 	if err != nil {
+		s.releaseSubTargets(reservedIDs)
 		return nil, err
 	}
 	return &OnlinePublishStarted{TaskID: taskID, Sequence: bundle.Sequence}, nil

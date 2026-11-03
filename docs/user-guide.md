@@ -69,7 +69,7 @@ curl -fsSL https://raw.githubusercontent.com/sunliang711/proxystack-web/refs/hea
   | sudo bash -s -- --role sub --source main --public-key 'ed25519:...'
 ```
 
-订阅端默认监听 `127.0.0.1:9444`，可以用 `--sub-listen` 和 `--sub-port` 指定。在已经安装订阅端的机器上再次执行 `--role sub` 时，脚本只升级订阅端的二进制并重启订阅服务，配置和已导入的订阅包保持不变。
+订阅端默认监听 `127.0.0.1:9444`，可以用 `--sub-listen` 和 `--sub-port` 指定。安装脚本只是 `sub deploy apply` 的薄封装；再次执行时会保留配置和已导入的订阅包，替换二进制、重启服务并做版本健康检查，失败自动恢复上一版。
 
 脚本地址中的 `main` 只决定安装脚本的版本；未指定 `--binary` 时，脚本下载 GitHub Release 的二进制，默认使用最新正式发布版本，不会从 `main` 源码编译。旧版二进制的 CLI 默认目录仍可能是 `/opt/proxystack-sub`，管理订阅数据时请显式指定 `sub --dir /opt/proxystack-web-sub`，以便与服务读取的目录保持一致。
 
@@ -83,22 +83,16 @@ sudo journalctl -u proxystack-web-sub.service
 
 安装和卸载会检查服务实际执行的命令、配置和安装标记，遇到归属不明的目录或同名服务时退出。普通卸载保留 `.proxystack-web-sub` 标记，便于之后重装或执行 `--purge`；不要手工复制该标记到其他项目目录。
 
-#### 旧版订阅端迁移
-
-如果本项目的订阅端安装在旧目录 `/opt/proxystack-sub`，使用新版脚本显式迁移。先下载脚本，再执行：
+离线使用裸二进制时也调用同一部署命令：
 
 ```bash
-curl -fsSL -o install.sh https://raw.githubusercontent.com/sunliang711/proxystack-web/refs/heads/main/deploy/install.sh
-sudo bash install.sh --role sub --migrate-sub
+sudo ./proxystack-web-linux-amd64 sub --dir /opt/proxystack-web-sub deploy apply \
+  --sha256 '<发布页校验值>' --source main --public-key 'ed25519:...'
+sudo /opt/proxystack-web-sub/bin/proxystack-web sub --dir /opt/proxystack-web-sub deploy rollback
+sudo /opt/proxystack-web-sub/bin/proxystack-web sub --dir /opt/proxystack-web-sub deploy uninstall
 ```
 
-离线安装可加 `--binary /path/to/proxystack-web`，并使用同一发布包的 `deploy` 目录。迁移保持监听地址、端口、受信任公钥、订阅 token、已导入订阅包和 inbox 不变，不接受 `--public-key`、`--sub-listen` 或 `--sub-port` 覆盖；订阅链接无需修改。
-
-迁移要求旧服务的实际命令是 `/opt/proxystack-sub/bin/proxystack-web sub --dir /opt/proxystack-sub serve`，配置能通过本项目校验，且目标目录不存在。它不会迁移 pssub。旧服务缺失、配置无法识别、目录含符号链接或存在 systemd drop-in 时，脚本退出，需要先人工核对并处理；不会自动套用旧服务的本地覆盖配置。
-
-迁移过程中会短暂停止旧服务以复制一致的数据，新服务通过启动和 HTTP 检查后停用并移除旧 unit，释放旧目录名。失败时自动恢复旧服务原来的运行和启用状态。备份位于终端打印的 `/opt/proxystack-web-sub-migration.XXXXXX`：`original/` 保存停止服务后的副本，成功后 `retired/` 保存原目录，另有旧 unit 和 `service-state`。该目录仅 root 可访问，普通卸载和 `--purge` 均保留它。
-
-需要人工回退时，先停用新服务，确认旧目录和旧 unit 没有被 pssub 或其他安装占用，再从备份的 `retired/`（失败时可用 `original/`）恢复旧目录和旧 unit，执行 `systemctl daemon-reload`，按 `service-state` 恢复旧服务的运行和启用状态。若 `/usr/local/bin/proxystack-web` 原先指向旧订阅端，也需恢复该软链接。订阅端运维账号需要重新加入 `proxystack-web-sub` 组，旧组成员关系不会自动复制。
+普通卸载保留配置和订阅数据；追加 `--purge` 才删除整个目录和服务账号。新版不再支持 `--migrate-sub`，旧目录安装应先用支持迁移的旧版本完成迁移，再升级到新版。
 
 ### 2.3 配置 nginx 反向代理
 
@@ -143,17 +137,18 @@ sudo bash install.sh --role sub --migrate-sub
 ### 4.5 发布订阅
 
 1. 在「订阅模板」页面可以查看或自定义 Clash、Premium Clash 和 Surge 三种格式的模板。
-2. 需要在线发布时，先在「SSH 发布设置」生成管理端 SSH Ed25519 密钥。同一公钥可以安装到多台订阅端，私钥只保存在管理端，不通过 API 或页面返回。
+2. 需要在线发布或部署时，先在「SSH 发布与部署」生成管理端 SSH Ed25519 密钥。同一公钥可以安装到多台订阅端，私钥只保存在管理端，不通过 API 或页面返回。
 3. 添加订阅端目标，填写 SSH 地址、SSH 用户、Host Key 算法与 SHA256 指纹、订阅端 HTTP 端口和来源名。远端 HTTP 主机固定为 `127.0.0.1`，不能配置成其他地址。
 4. 按页面的逐步说明，在订阅端完成以下配置：
 
-   - 把页面生成的受限 `authorized_keys` 条目加入 SSH 用户的 `~/.ssh/authorized_keys`。条目中的 `command="/bin/false"` 禁止该公钥执行远程命令，`permitopen` 只允许向指定的订阅端回环端口做正向转发。
-   - 按页面给出的 `sshd_config` 片段限制该 SSH 用户。`ForceCommand /bin/false` 禁止远程命令，`PermitOpen` 和 `AllowTcpForwarding local` 只保留指定回环端口的正向转发。应用配置前先执行 `sshd -t`，然后 reload sshd。
+   - 把页面生成的受限 `authorized_keys` 条目加入 SSH 用户的 `~/.ssh/authorized_keys`。`permitopen` 只允许向指定的订阅端回环端口做正向转发，同时保留部署命令执行能力。
+   - 按页面给出的 `sshd_config` 片段限制转发目标、TTY、X11 和 Agent Forwarding。应用配置前先执行 `sshd -t`，然后 reload sshd。
+   - 非 root SSH 用户按页面命令配置受限的 `sudo -n`。由于部署过程会上传并以 root 执行新二进制，这个 SSH 公钥具有部署级 root 权限，必须使用专用账号并严格保护私钥。
    - 执行 `sudo proxystack-web sub source set-publish-token 来源名`，按提示粘贴页面显示的发布 Secret。订阅端只保存 Secret 的 SHA-256 哈希；每个目标使用独立 Secret。
    - 通过独立可信渠道核对 SSH Host Key 指纹。例如可以在订阅端本机运行 `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`，不要只信任管理端首次网络扫描得到的结果。
 
-5. 回到目标列表点击「测试」。系统依次检查 SSH TCP、Host Key、SSH 公钥认证、到 `127.0.0.1:<订阅端端口>` 的正向转发、`/health` 健康状态和发布 Secret。全部通过后再进行正式发布。
-6. 在「发布订阅包」页面选择「SSH 在线发布」，勾选一个或多个订阅端并提交。管理端只签发一份订阅包，并发发送相同原始文件；每个目标的成功或失败分别记录，部分失败不会回滚已成功目标。再次发布会产生新的序号。
+5. 回到目标列表先点击「检测部署」，检查 Linux、CPU 架构、`sudo -n`、安装状态和当前版本；随后可安装、更新或回滚。管理端下载对应架构的 Release 裸二进制并校验 SHA256，通过 SSH 上传后调用远端同一个 `sub deploy` 实现。
+6. 点击「测试」检查 SSH TCP、Host Key、SSH 公钥认证、到 `127.0.0.1:<订阅端端口>` 的正向转发、`/health` 健康状态和发布 Secret。全部通过后，在「发布订阅包」页面选择「SSH 在线发布」。
 
 在线发布只要求管理端能够连接订阅端的 SSH 端口。订阅端不需要额外监听隧道管理端口，也不会主动连接管理端；订阅导入 HTTP 接口仍可只监听回环地址。管理端严格校验已配置的 SSH Host Key，并禁止 HTTP 重定向。
 

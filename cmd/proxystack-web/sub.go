@@ -38,6 +38,7 @@ func newSubCommand() *cobra.Command {
 		newSubImportCommand(layout),
 		newSubStatusCommand(layout),
 		newSubSourceCommand(layout),
+		newSubDeployCommand(layout),
 	)
 	return cmd
 }

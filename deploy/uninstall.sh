@@ -51,7 +51,7 @@ check_sub_ownership() {
     if [[ -n $state && $state != not-found ]]; then
         sub_unit_owned "$SUB_BASE" "$SUB_UNIT" || die "$SUB_UNIT belongs to another installation; refusing to remove it"
     elif [[ -e $SUB_BASE ]]; then
-        [[ -f $marker && $(cat "$marker") == proxystack-web-sub-v1 ]] || die "cannot confirm ownership of $SUB_BASE"
+        [[ -f $marker && ( $(cat "$marker") == proxystack-web-sub-v1 || $(cat "$marker") == proxystack-web-sub-v2 ) ]] || die "cannot confirm ownership of $SUB_BASE"
     else
         if sub_unit_owned /opt/proxystack-sub proxystack-sub.service; then
             die "old proxystack-web subscription installation found; migrate it with install.sh --role sub --migrate-sub first"
@@ -63,7 +63,7 @@ check_sub_ownership() {
             "$SUB_BASE/bin/proxystack-web" sub --dir "$SUB_BASE" config >/dev/null || die "invalid subscription configuration; refusing to remove $SUB_BASE"
         else
             # 普通卸载会保留此标记，后续 --purge 无需重新安装二进制即可确认归属。
-            [[ -f $marker && $(cat "$marker") == proxystack-web-sub-v1 ]] || die "cannot verify the retained subscription data in $SUB_BASE"
+            [[ -f $marker && ( $(cat "$marker") == proxystack-web-sub-v1 || $(cat "$marker") == proxystack-web-sub-v2 ) ]] || die "cannot verify the retained subscription data in $SUB_BASE"
         fi
     fi
     if getent passwd "$SUB_USER" >/dev/null; then
@@ -99,6 +99,12 @@ uninstall_panel() {
 
 uninstall_sub() {
     [[ -d $SUB_BASE || -e /etc/systemd/system/proxystack-web-sub.service ]] || return 0
+    if [[ -x $SUB_BASE/bin/proxystack-web ]]; then
+        local args=(sub --dir "$SUB_BASE" deploy uninstall)
+        [[ $PURGE -eq 1 ]] && args+=(--purge)
+        "$SUB_BASE/bin/proxystack-web" "${args[@]}"
+        return
+    fi
     echo "==> stopping the subscription server"
     systemctl disable --now proxystack-web-sub.service 2>/dev/null || true
     rm -f /etc/systemd/system/proxystack-web-sub.service

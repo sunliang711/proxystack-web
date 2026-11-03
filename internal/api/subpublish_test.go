@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strconv"
@@ -8,7 +9,25 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"proxystack-web/internal/subpublish"
 )
+
+type apiDeployFake struct {
+	status *subpublish.DeployStatus
+}
+
+func (f apiDeployFake) InspectDeploy(context.Context, subpublish.Identity, subpublish.Target) (*subpublish.DeployStatus, error) {
+	return f.status, nil
+}
+
+func (apiDeployFake) Deploy(context.Context, subpublish.Identity, subpublish.Target, subpublish.DeployRequest) (*subpublish.DeployResult, error) {
+	panic("unexpected deploy call")
+}
+
+func (apiDeployFake) RollbackDeploy(context.Context, subpublish.Identity, subpublish.Target) (*subpublish.DeployResult, error) {
+	panic("unexpected rollback call")
+}
 
 func TestSSHPublishSecretsStayMaskedAndSetupCanBeViewed(t *testing.T) {
 	h, password := newHarness(t)
@@ -34,6 +53,14 @@ func TestSSHPublishSecretsStayMaskedAndSetupCanBeViewed(t *testing.T) {
 	secret := created["secret"].(string)
 	require.NotEmpty(t, secret)
 	targetID := int64(created["target"].(map[string]any)["id"].(float64))
+	h.svc.SubDeployer = apiDeployFake{status: &subpublish.DeployStatus{
+		OS: "linux", Arch: "amd64", Sudo: true, State: "installed", Version: "v0.2.0", PreviousVersion: "v0.1.0",
+		ServiceActive: true, ServiceEnabled: true,
+	}}
+	response, deployStatus := h.do(http.MethodPost, "/api/sub-publish/targets/"+strconv.FormatInt(targetID, 10)+"/deploy/inspect", nil)
+	require.Equal(t, http.StatusOK, response.StatusCode, deployStatus)
+	require.Equal(t, "installed", deployStatus["state"])
+	require.Equal(t, "v0.2.0", deployStatus["version"])
 
 	request, err := http.NewRequest(http.MethodGet, h.base+"/api/sub-publish/targets", nil)
 	require.NoError(t, err)
