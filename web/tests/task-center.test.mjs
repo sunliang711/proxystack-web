@@ -215,3 +215,19 @@ test('完成事件和提交详情同时返回时不重复刷新，离开页面�
   await setImmediate()
   assert.deepEqual(statuses, ['succeeded'])
 })
+
+test('同一定时任务按计划连续失败只提示第一次，恢复成功后再次失败重新提示', async () => {
+  const run = (id, status) => ({ ...item(id, status, 'job'), actor: 'schedule', job_id: 7 })
+  let entries = []
+  const center = harness({ list: async () => ({ items: entries, running: 0, total: entries.length }), detail: async ({ id }) => entries.find((task) => task.id === id) })
+  const notices = []
+  center.onNotice((notice) => notices.push(notice.task.id))
+  await setImmediate()
+  for (const [id, status] of [[1, 'failed'], [2, 'failed'], [3, 'failed'], [4, 'succeeded'], [5, 'failed']]) {
+    entries = [run(id, 'running'), ...entries]
+    await center.refresh()
+    entries = [run(id, status), ...entries.slice(1)]
+    await center.refresh()
+  }
+  assert.deepEqual(notices, [1, 5])
+})

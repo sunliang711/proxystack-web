@@ -221,6 +221,13 @@ type egressProbe struct {
 	startedAt time.Time
 }
 
+// down 表示首次查询和全部重试都没有取得 IPv4 或 IPv6 出口地址。
+func (p egressProbe) down() bool {
+	ipv4, _ := egressFamily(p.results, "ipv4", p.err)
+	ipv6, _ := egressFamily(p.results, "ipv6", p.err)
+	return ipv4 == "" && ipv6 == ""
+}
+
 // probeEgressWithRetries 在单轮内确认故障，任一地址族成功就结束本轮。
 func (s *Service) probeEgressWithRetries(ctx context.Context, target egressTarget, params JobParams, logf Logf) egressProbe {
 	probe := egressProbe{startedAt: s.Now()}
@@ -296,13 +303,24 @@ targetsLoop:
 			if err := ctx.Err(); err != nil {
 				return
 			}
-			if err := s.recordEgressResult(ctx, target, probe); err != nil {
+			recorded, err := s.recordEgressResult(ctx, target, probe)
+			if err != nil {
 				mu.Lock()
 				failures = append(failures, err)
 				mu.Unlock()
 				return
 			}
 			logf("Stack %s: %s, queries=%d", target.name, target.mode, probe.attempts)
+			// 重试耗尽仍取不到出口地址时本次执行记为失败，与告警邮件保持一致。
+			if recorded && target.mode == "ready" && probe.down() {
+				_, ipv4Error := egressFamily(probe.results, "ipv4", probe.err)
+				_, ipv6Error := egressFamily(probe.results, "ipv6", probe.err)
+				logf("Stack %s: IPv4 error: %s", target.name, ipv4Error)
+				logf("Stack %s: IPv6 error: %s", target.name, ipv6Error)
+				mu.Lock()
+				failures = append(failures, fmt.Errorf("Stack %s: 出口检测失败，%d 次查询均未取得 IPv4 或 IPv6 地址", target.name, probe.attempts))
+				mu.Unlock()
+			}
 		}()
 	}
 	wg.Wait()
@@ -351,7 +369,8 @@ func egressFailureLines(family, message string) []string {
 	return lines
 }
 
-func (s *Service) recordEgressResult(ctx context.Context, target egressTarget, probe egressProbe) error {
+// recordEgressResult 保存一轮检测结果；结果因 Stack 已变化而被丢弃时 recorded 为 false。
+func (s *Service) recordEgressResult(ctx context.Context, target egressTarget, probe egressProbe) (recorded bool, err error) {
 	// 等待正在发送的邮件时不占用运行时锁，保持应用和启停操作可用。
 	s.notificationMu.Lock()
 	defer s.notificationMu.Unlock()
@@ -360,26 +379,26 @@ func (s *Service) recordEgressResult(ctx context.Context, target egressTarget, p
 	// 探测过程中可能应用配置、停止或删除 Stack；丢弃这些过期结果，避免误报。
 	current, err := s.egressTargets(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	index := slices.IndexFunc(current, func(item egressTarget) bool { return item.id == target.id })
 	if index < 0 {
-		return nil
+		return false, nil
 	}
 	fresh := current[index]
 	if fresh.mode != target.mode || fresh.fingerprint != target.fingerprint || !fresh.since.Equal(target.since) {
-		return nil
+		return false, nil
 	}
 	settings, err := s.loadSettings(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if settings.Basic.PanelURL == "" {
 		if info, err := s.Info(ctx); err == nil {
 			settings.Basic.PanelURL = info.PanelURL
 		}
 	}
-	return s.Store.InTx(ctx, func(q *dbq.Queries) error {
+	err = s.Store.InTx(ctx, func(q *dbq.Queries) error {
 		row, err := q.GetStackEgressHealth(ctx, target.id)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
@@ -434,6 +453,7 @@ func (s *Service) recordEgressResult(ctx context.Context, target egressTarget, p
 			Ipv4: row.Ipv4, Ipv6: row.Ipv6, Ipv4Error: row.Ipv4Error, Ipv6Error: row.Ipv6Error,
 		})
 	})
+	return err == nil, err
 }
 
 func (s *Service) enqueueEgressNotification(ctx context.Context, q *dbq.Queries, settings configdoc.Settings, target egressTarget, row dbq.StackEgressHealth, event string) error {

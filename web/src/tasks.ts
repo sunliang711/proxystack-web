@@ -38,6 +38,8 @@ export function createTaskCenter(request: Requests = requests) {
   const tracked = new Set<string>()
   const observed = new Set<string>()
   const delivered = new Set<string>()
+  /** 最近一次按计划执行失败的定时任务；连续失败只提示第一次，成功后重新计数。 */
+  const failingJobs = new Set<number>()
   let read = new Set<string>()
   let storageKey = ''
   let generation = 0
@@ -69,7 +71,13 @@ export function createTaskCenter(request: Requests = requests) {
       observed.delete(key)
       for (const listener of completed) listener(task)
       // 常规定时执行成功不逐条打扰；手动任务与失败仍给出提示。
-      if (task.source === 'task' || task.actor === 'manual' || taskFailed(task)) {
+      let notify = task.source === 'task' || task.actor === 'manual' || taskFailed(task)
+      if (task.source === 'job' && task.actor === 'schedule') {
+        if (!taskFailed(task)) failingJobs.delete(task.job_id)
+        else if (failingJobs.has(task.job_id)) notify = false
+        else failingJobs.add(task.job_id)
+      }
+      if (notify) {
         for (const listener of notices) listener({ kind: 'completed', task })
       }
     }
@@ -160,6 +168,7 @@ export function createTaskCenter(request: Requests = requests) {
     tracked.clear()
     observed.clear()
     delivered.clear()
+    failingJobs.clear()
     state.items = []
     state.running = 0
     state.loading = false

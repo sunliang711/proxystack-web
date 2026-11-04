@@ -2,10 +2,11 @@
 import { computed, h, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  NAlert, NButton, NCard, NDataTable, NDescriptions, NDescriptionsItem, NDrawer, NDrawerContent, NForm, NFormItem,
-  NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpace, NStep, NSteps, NSwitch, NTag, NText, useMessage,
-  type DataTableColumns,
+  NAlert, NButton, NCard, NDataTable, NDescriptions, NDescriptionsItem, NDrawer, NDrawerContent, NDropdown, NForm, NFormItem,
+  NIcon, NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpace, NStep, NSteps, NSwitch, NTag, NText, useDialog, useMessage,
+  type DataTableColumns, type DropdownOption,
 } from 'naive-ui'
+import { ChevronDownOutline } from '@vicons/ionicons5'
 import { api, MASKED, problemMessage, saveBlob } from '../api/client'
 import CopyableCode from '../components/CopyableCode.vue'
 import { formatTime } from '../util/format'
@@ -325,18 +326,55 @@ const sshdConfig = (target: PublishTarget) => `Match User ${target.ssh_user}\n  
 const sshdConfigSetupCommand = (target: PublishTarget) =>
   `sudo install -d -m 755 /etc/ssh/sshd_config.d\nsudo tee /etc/ssh/sshd_config.d/proxystack-web-sub.conf >/dev/null <<'EOF'\n${sshdConfig(target)}\nEOF\nsudo sshd -t && sudo systemctl reload ssh`
 
+/** 后端用零值时间表示从未执行。 */
+const hasTime = (value?: string): value is string => !!value && !value.startsWith('0001') && !value.startsWith('1970')
+
 function statusTime(value?: string) {
-  return value && !value.startsWith('0001') && !value.startsWith('1970') ? formatTime(value) : '从未执行'
+  return hasTime(value) ? formatTime(value) : '从未执行'
 }
 
 function sourceSequence(target: PublishTarget, result: TestResult) {
   return result.sources?.find((source) => source.name === target.source)?.sequence
 }
 
+/** 接入流程的下一步，对应的按钮用主色突出；全部完成时返回 null。 */
+function nextStep(row: PublishTarget): 'inspect' | 'deploy' | 'test' | null {
+  if (!row.deploy_state) return 'inspect'
+  if (row.deploy_state !== 'installed') return 'deploy'
+  const testedAfterDeploy = hasTime(row.last_test_at) && (!hasTime(row.last_deploy_at) || Date.parse(row.last_test_at) >= Date.parse(row.last_deploy_at))
+  if (!testedAfterDeploy || row.last_test_error) return 'test'
+  return null
+}
+
+const dialog = useDialog()
+function moreOptions(row: PublishTarget): DropdownOption[] {
+  return [
+    { key: 'rollback', label: row.previous_version ? `回滚到 ${row.previous_version}` : '回滚（没有可回滚的版本）', disabled: !row.previous_version },
+    { key: 'view-secret', label: '查看 Secret' },
+    { key: 'rotate-secret', label: '轮换 Secret' },
+    { type: 'divider', key: 'd1' },
+    { key: 'setup', label: '完整配置' },
+    { key: 'instructions', label: '配置说明' },
+    { type: 'divider', key: 'd2' },
+    { key: 'delete', label: '删除订阅端', props: { style: 'color: var(--ps-danger)' } },
+  ]
+}
+function confirmThen(title: string, content: string, run: () => unknown, danger = false) {
+  dialog[danger ? 'error' : 'warning']({ title, content, positiveText: '继续', negativeText: '取消', onPositiveClick: () => { void run() } })
+}
+function onMore(row: PublishTarget, key: string) {
+  if (key === 'rollback') confirmThen('回滚订阅端', `将订阅端回滚到 ${row.previous_version || '上一版本'}，继续？`, () => rollbackDeploy(row))
+  else if (key === 'view-secret') confirmThen('查看发布 Secret', '将显示明文发布 Secret，查看操作会记录审计日志。继续？', () => viewSecret(row))
+  else if (key === 'rotate-secret') confirmThen('轮换发布 Secret', '管理端将立即改用新 Secret；订阅端更新前在线发布会失败，更新后旧 Secret 才会失效。继续？', () => rotateSecret(row))
+  else if (key === 'setup') viewSetup(row)
+  else if (key === 'instructions') instructions.value = row
+  else if (key === 'delete') confirmThen(`删除订阅端 ${row.name}？`, '只删除管理端保存的这个订阅端配置，不会卸载远端已部署的订阅端；删除后会下载一份远端清理说明。', () => remove(row), true)
+}
+
 function workflowState(row: PublishTarget) {
   if (!row.deploy_state) return { label: '第 1 步：检测部署', type: 'warning' as const, detail: '先确认 SSH、系统和 sudo' }
   if (row.deploy_state !== 'installed') return { label: '第 2 步：部署', type: 'warning' as const, detail: `当前状态：${row.deploy_state}` }
-  const testedAfterDeploy = row.last_test_at && (!row.last_deploy_at || Date.parse(row.last_test_at) >= Date.parse(row.last_deploy_at))
+  const testedAfterDeploy = hasTime(row.last_test_at) && (!hasTime(row.last_deploy_at) || Date.parse(row.last_test_at) >= Date.parse(row.last_deploy_at))
   if (!testedAfterDeploy || row.last_test_error) return { label: '第 3 步：测试', type: 'warning' as const, detail: '部署完成后验证转发和 Secret' }
   return { label: '第 4 步：配置发布 Secret（已自动完成）', type: 'success' as const, detail: 'SSH 部署已配置 Secret，下一步：第 5 步签发订阅包' }
 }
@@ -362,7 +400,7 @@ const columns: DataTableColumns<PublishTarget> = [
       statusTime(row.last_test_at),
       row.last_test_error
         ? h(NText, { type: 'error' }, () => row.last_test_error)
-        : row.last_test_at ? h(NTag, { size: 'small', type: 'success' }, () => '通过') : null,
+        : hasTime(row.last_test_at) ? h(NTag, { size: 'small', type: 'success' }, () => '通过') : null,
     ]),
   },
   {
@@ -383,34 +421,24 @@ const columns: DataTableColumns<PublishTarget> = [
     ]),
   },
   {
-    title: '操作', key: 'actions', width: 660, fixed: 'right',
-    render: (row) => h(NSpace, { size: 4 }, () => [
-      h(NButton, { size: 'small', loading: inspecting.value === row.id, onClick: () => inspectDeploy(row) }, () => '检测部署'),
-      h(NPopconfirm, { onPositiveClick: () => deploy(row) }, {
-        trigger: () => h(NButton, { size: 'small', type: 'primary', loading: deploying.value === row.id }, () => row.deploy_state === 'installed' ? '更新' : '部署'),
-        default: () => row.deploy_state === 'installed' ? '将检查最新稳定版：有新版本时通过 SSH 更新订阅端，已是最新时只同步发布 Secret。继续？' : '将下载最新稳定版并通过 SSH 部署订阅端，继续？',
-      }),
-      h(NButton, { size: 'small', disabled: row.deploy_state !== 'installed', loading: testing.value === row.id, onClick: () => test(row), title: '先完成订阅端部署' }, () => '测试'),
-      h(NPopconfirm, { onPositiveClick: () => rollbackDeploy(row) }, {
-        trigger: () => h(NButton, { size: 'small', disabled: !row.previous_version, loading: rollingBack.value === row.id }, () => '回滚'),
-        default: () => `将订阅端回滚到 ${row.previous_version || '上一版本'}，继续？`,
-      }),
-      h(NButton, { size: 'small', onClick: () => viewSetup(row) }, () => '完整配置'),
-      h(NPopconfirm, { onPositiveClick: () => viewSecret(row) }, {
-        trigger: () => h(NButton, { size: 'small', loading: viewingSecret.value === row.id }, () => '查看 Secret'),
-        default: () => '将显示明文发布 Secret，查看操作会记录审计日志。继续？',
-      }),
-      h(NButton, { size: 'small', onClick: () => (instructions.value = row) }, () => '配置说明'),
-      h(NButton, { size: 'small', onClick: () => open(row) }, () => '编辑'),
-      h(NPopconfirm, { onPositiveClick: () => rotateSecret(row) }, {
-        trigger: () => h(NButton, { size: 'small', quaternary: true }, () => '轮换 Secret'),
-        default: () => '管理端将立即改用新 Secret；订阅端更新前在线发布会失败，更新后旧 Secret 才会失效。继续？',
-      }),
-      h(NPopconfirm, { onPositiveClick: () => remove(row) }, {
-        trigger: () => h(NButton, { size: 'small', type: 'error', quaternary: true }, () => '删除'),
-        default: () => '删除这个订阅端配置？',
-      }),
-    ]),
+    title: '操作', key: 'actions', width: 380, fixed: 'right',
+    render: (row) => {
+      const next = nextStep(row)
+      return h(NSpace, { size: 4, wrap: false }, () => [
+        h(NButton, { size: 'small', type: next === 'inspect' ? 'primary' : 'default', loading: inspecting.value === row.id, onClick: () => inspectDeploy(row) }, () => '检测部署'),
+        h(NPopconfirm, { onPositiveClick: () => deploy(row) }, {
+          trigger: () => h(NButton, { size: 'small', type: next === 'deploy' ? 'primary' : 'default', loading: deploying.value === row.id }, () => row.deploy_state === 'installed' ? '更新' : '部署'),
+          default: () => row.deploy_state === 'installed' ? '将检查最新稳定版：有新版本时通过 SSH 更新订阅端，已是最新时只同步发布 Secret。继续？' : '将下载最新稳定版并通过 SSH 部署订阅端，继续？',
+        }),
+        h(NButton, { size: 'small', type: next === 'test' ? 'primary' : 'default', disabled: row.deploy_state !== 'installed', loading: testing.value === row.id, onClick: () => test(row), title: row.deploy_state === 'installed' ? '' : '先完成订阅端部署' }, () => '测试'),
+        h(NButton, { size: 'small', onClick: () => open(row) }, () => '编辑'),
+        h(NDropdown, { trigger: 'click', placement: 'bottom-end', options: moreOptions(row), onSelect: (key: string) => onMore(row, key) }, () =>
+          h(NButton, { size: 'small', iconPlacement: 'right', loading: rollingBack.value === row.id || viewingSecret.value === row.id }, {
+            default: () => '更多',
+            icon: () => h(NIcon, null, () => h(ChevronDownOutline)),
+          })),
+      ])
+    },
   },
 ]
 
@@ -464,7 +492,7 @@ function hostKeyCommand(algorithm: string) {
       <NAlert type="info" :bordered="false" style="margin-bottom: 12px">
         管理端按需建立 SSH 正向转发，远端主机固定为 127.0.0.1。每个订阅端使用独立发布 Secret，测试会依次检查 SSH、转发、订阅端健康状态和发布鉴权。
       </NAlert>
-      <NDataTable :loading="loading" :columns="columns" :data="targets" :scroll-x="1710" size="small" />
+      <NDataTable :loading="loading" :columns="columns" :data="targets" :scroll-x="1430" size="small" />
     </NCard>
   </NSpace>
 

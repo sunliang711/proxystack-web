@@ -43,14 +43,16 @@ func newEgressHarness(t *testing.T) (*trafficHarness, configdoc.Stack) {
 	return h, doc.Stacks[doc.StackByName("usa1")]
 }
 
-func checkEgress(t *testing.T, h *trafficHarness) {
+// checkEgress 执行一轮出口检测并返回执行记录；出口全部失败时执行记为失败，其余情况记为成功。
+func checkEgress(t *testing.T, h *trafficHarness) *app.JobRun {
 	t.Helper()
 	job := jobNamed(t, h, app.JobEgressCheck)
 	require.NoError(t, h.svc.RunJobNow(context.Background(), h.actor, job.ID))
 	h.svc.WaitJobs()
 	job = jobNamed(t, h, app.JobEgressCheck)
-	require.Equal(t, app.RunSucceeded, job.LastRun.Status, job.LastRun.Log)
+	require.Contains(t, []string{app.RunSucceeded, app.RunFailed}, job.LastRun.Status, job.LastRun.Log)
 	h.now = h.now.Add(time.Minute)
+	return job.LastRun
 }
 
 func egressStatus(t *testing.T, h *trafficHarness, id int64) app.EgressHealth {
@@ -74,13 +76,17 @@ func TestEgressHealthLifecycle(t *testing.T) {
 	h.svc.ProbeEgress = func(context.Context, deps.ProxyConfig, time.Duration) ([]app.EgressResult, error) {
 		return results, nil
 	}
-	checkEgress(t, h)
+	run := checkEgress(t, h)
+	require.Equal(t, app.RunSucceeded, run.Status, run.Log)
 	require.Equal(t, "healthy", egressStatus(t, h, stack.ID).Status)
 	notifications, err := h.svc.ListNotifications(ctx, 100)
 	require.NoError(t, err)
 	require.Empty(t, notifications, "initial successful probe is silent")
 	results = nil
-	checkEgress(t, h)
+	// 重试耗尽仍失败时，告警的同时把本次执行记为失败。
+	run = checkEgress(t, h)
+	require.Equal(t, app.RunFailed, run.Status, run.Log)
+	require.Contains(t, run.Log, "Stack usa1: 出口检测失败")
 	require.Equal(t, "down", egressStatus(t, h, stack.ID).Status)
 	require.EqualValues(t, 1, egressStatus(t, h, stack.ID).Failures)
 	h.svc.DeliverNotifications(ctx)
