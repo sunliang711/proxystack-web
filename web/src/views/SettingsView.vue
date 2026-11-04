@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import {
   NButton, NCheckbox, NCheckboxGroup, NCollapse, NCollapseItem, NDynamicTags, NForm, NFormItem, NGrid, NFormItemGi,
   NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NSwitch, NTimePicker, NAlert, NText,
@@ -12,7 +13,7 @@ import TemplateInput from '../components/TemplateInput.vue'
 import ErrorList from '../components/ErrorList.vue'
 import SettingsSection from '../components/SettingsSection.vue'
 import EntityLink from '../components/EntityLink.vue'
-import { useSettingsSections } from '../composables/useSettingsSections'
+import { settingsSections, useSettingsSections } from '../composables/useSettingsSections'
 import { useDirty } from '../composables/useDirty'
 import { mihomoLogLevels, xrayLogLevels } from '../util/options'
 
@@ -25,7 +26,8 @@ const saving = ref(false)
 const message = useMessage()
 const dialog = useDialog()
 const { dirty, markClean } = useDirty(settings)
-const { expanded, revealErrors } = useSettingsSections()
+const { expanded, revealErrors, setAll } = useSettingsSections()
+const route = useRoute()
 const policyExpanded = computed({
   get: () => expanded.value.includes('policy') ? ['policy'] : [],
   set: (names: Array<string | number>) => {
@@ -172,6 +174,13 @@ onMounted(async () => {
   const { data } = await api.GET('/api/config/settings')
   settings.value = data ?? null
   markClean()
+  // 其他页面可以用 ?section=notify 这样的链接直接打开某个分组。
+  const section = String(route.query.section ?? '')
+  if (section && settingsSections.includes(section)) {
+    if (!expanded.value.includes(section)) expanded.value = [...expanded.value, section]
+    await nextTick()
+    document.getElementById(`settings-${section}`)?.scrollIntoView({ block: 'start' })
+  }
 })
 
 function toggleNoAuth(value: boolean) {
@@ -215,6 +224,11 @@ async function save() {
       <NAlert type="info" :bordered="false" style="margin-bottom: 12px">
         下载代理、通知和采集设置保存后立即影响后续后台任务；涉及 xray / mihomo 生成物的设置会进入“待应用变更”，需要再执行应用。
       </NAlert>
+      <NSpace justify="end" :size="4" style="margin-bottom: 8px">
+        <NButton text size="small" @click="setAll(true)">全部展开</NButton>
+        <NText depth="3">·</NText>
+        <NButton text size="small" @click="setAll(false)">全部收起</NButton>
+      </NSpace>
       <SettingsSection title="基本" name="basic" v-model:expanded-names="expanded">
         <NFormItem label="对外地址" v-bind="f('basic.external_host', '订阅节点默认使用的域名或 IP')">
           <NInput v-model:value="form.basic.external_host" placeholder="proxy.example.com" />
@@ -524,8 +538,10 @@ async function save() {
         </NFormItem>
       </SettingsSection>
 
-      <NSpace class="actions">
+      <NSpace class="actions" :class="{ dirty }" align="center">
         <NButton type="primary" :loading="saving" :disabled="!dirty" @click="save">保存</NButton>
+        <NText v-if="dirty" type="warning">有未保存的修改</NText>
+        <NText v-else depth="3">没有未保存的修改</NText>
       </NSpace>
     </NForm>
   </NSpin>
@@ -541,13 +557,18 @@ async function save() {
   max-width: 420px;
 }
 .actions {
-  position: sticky;
-  bottom: 16px;
-  z-index: 10;
+  margin-top: 6px;
   padding: 14px 20px;
   border: 1px solid var(--ps-border);
   border-radius: 12px;
   background: var(--ps-surface);
+}
+/* 有未保存的修改时保存栏固定在底部，避免没有修改时一直遮挡内容。 */
+.actions.dirty {
+  position: sticky;
+  bottom: 16px;
+  z-index: 10;
+  border-color: var(--ps-accent);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
 }
 </style>

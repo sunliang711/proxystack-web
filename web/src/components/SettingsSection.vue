@@ -10,7 +10,7 @@ function update(names: Array<string | number>) {
 </script>
 
 <template>
-  <NCard size="small" class="settings-section" :class="{ 'is-expanded': expandedNames.includes(name) }" content-style="padding: 0">
+  <NCard :id="`settings-${name}`" size="small" class="settings-section" :class="{ 'is-expanded': expandedNames.includes(name) }" content-style="padding: 0">
     <NCollapse class="settings-collapse" :expanded-names="expandedNames.includes(name) ? [name] : []" @update:expanded-names="update">
       <NCollapseItem :title="title" :name="name" display-directive="show">
         <slot />

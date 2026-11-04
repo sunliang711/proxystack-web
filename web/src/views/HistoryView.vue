@@ -21,6 +21,8 @@ const loading = ref(false)
 const checked = ref<number[]>([])
 const diff = ref<{ title: string; entries: DiffEntry[] } | null>(null)
 const exportRevision = ref<number | null>(null)
+/** 最新版本即当前配置：每次配置写入都会同时生成一个版本。 */
+const currentId = ref<number | null>(null)
 
 async function load() {
   loading.value = true
@@ -28,6 +30,7 @@ async function load() {
   loading.value = false
   items.value = data?.items ?? []
   total.value = data?.total ?? 0
+  if (page.value === 1) currentId.value = items.value[0]?.id ?? null
 }
 onMounted(load)
 
@@ -57,21 +60,26 @@ async function rollback(id: number) {
 
 const columns: DataTableColumns<Revision> = [
   { type: 'selection', disabled: (row) => checked.value.length >= 2 && !checked.value.includes(row.id) },
-  { title: '版本', key: 'id', width: 80, render: (row) => `#${row.id}` },
+  {
+    title: '版本', key: 'id', width: 110,
+    render: (row) => row.id === currentId.value
+      ? h(NSpace, { size: 6, align: 'center', wrap: false }, () => [`#${row.id}`, h(NTag, { size: 'small', type: 'success', bordered: false }, () => '当前')])
+      : `#${row.id}`,
+  },
   { title: '时间', key: 'created_at', width: 190, render: (row) => formatTime(row.created_at) },
   { title: '操作者', key: 'actor', width: 100 },
   { title: '摘要', key: 'summary' },
   {
     title: '操作',
     key: 'actions',
-    width: 260,
+    width: 300,
     render: (row) =>
       h(NSpace, { size: 4 }, () => [
-        h(NButton, { size: 'small', onClick: () => showDiff(row.id, 0) }, () => '与当前比较'),
+        row.id === currentId.value ? null : h(NButton, { size: 'small', onClick: () => showDiff(row.id, 0) }, () => '与当前比较'),
         h(NButton, { size: 'small', onClick: () => (exportRevision.value = row.id) }, () => '导出'),
-        h(NPopconfirm, { onPositiveClick: () => rollback(row.id) }, {
-          trigger: () => h(NButton, { size: 'small', type: 'warning', ghost: true }, () => '回滚'),
-          default: () => '把配置恢复为这个版本的内容，并生成一个新版本？',
+        row.id === currentId.value ? null : h(NPopconfirm, { onPositiveClick: () => rollback(row.id) }, {
+          trigger: () => h(NButton, { size: 'small', quaternary: true }, () => '回滚到此版本'),
+          default: () => '把配置恢复为这个版本的内容，并生成一个新版本？恢复后需要应用才会生效。',
         }),
       ]),
   },

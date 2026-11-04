@@ -2,9 +2,10 @@
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  NBadge, NButton, NCard, NDynamicTags, NForm, NFormItem, NInput, NModal, NPopconfirm, NRadioButton, NRadioGroup,
+  NBadge, NButton, NCard, NDropdown, NDynamicTags, NForm, NFormItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup,
   NSelect, NSpace, NSpin, NSwitch, NTabPane, NTabs, NText, useDialog, useMessage,
 } from 'naive-ui'
+import { ChevronDownOutline } from '@vicons/ionicons5'
 import {
   api, emptyErrors, fieldState, MASKED, splitProblem, type FormErrors, type Schemas,
 } from '../../api/client'
@@ -15,6 +16,7 @@ import PortInput from '../../components/PortInput.vue'
 import SecretInput from '../../components/SecretInput.vue'
 import TriStateSelect from '../../components/TriStateSelect.vue'
 import { useDirty } from '../../composables/useDirty'
+import { usePageTitle } from '../../composables/usePageTitle'
 import { randomString } from '../../util/generate'
 import { mihomoLogLevels, xrayLogLevels } from '../../util/options'
 import GroupsTab from './GroupsTab.vue'
@@ -48,6 +50,9 @@ const tab = ref(String(route.query.tab ?? 'basic'))
 /** 每次保存后递增，生成预览据此重新加载。 */
 const savedVersion = ref(0)
 const { dirty, markClean } = useDirty(stack)
+/** 已保存的名称，用作页面标题，编辑名称输入框时不跟着变。 */
+const savedName = ref('')
+usePageTitle(() => savedName.value)
 
 const f = (path: string, hint?: string) => fieldState(errors.value, path, hint)
 
@@ -63,6 +68,7 @@ async function load() {
     return
   }
   stack.value = stackResult.data
+  savedName.value = stackResult.data.name
   summaries.value = listResult.data?.stacks ?? []
   users.value = userResult.data?.users ?? []
   errors.value = emptyErrors()
@@ -121,6 +127,7 @@ async function save(): Promise<boolean> {
     return false
   }
   stack.value = data!
+  savedName.value = data!.name
   errors.value = emptyErrors()
   markClean()
   savedVersion.value++
@@ -149,6 +156,46 @@ const tabErrors = computed(() => {
 
 const tabLabel = (name: string, label: string) => () =>
   tabErrors.value[name] ? h(NBadge, { dot: true, type: 'error', offset: [6, 0] }, () => label) : label
+
+// 标签页分为两级：先选 Xray / Mihomo 等分组，再选分组内的具体页面。
+const tabGroups = computed(() => [
+  { name: 'general', label: '基本', tabs: ['basic', ...(stack.value?.role === 'auto' ? ['members'] : [])] },
+  { name: 'xray', label: 'Xray', tabs: ['inbounds', 'outbound', 'xray'] },
+  { name: 'mihomo', label: 'Mihomo', tabs: ['upstreams', 'groups', 'rules', 'mihomo'] },
+  { name: 'observe', label: '运行观察', tabs: ['flow', 'usage', 'diagnostics', 'logs', 'preview'] },
+])
+const groupOf = (name: string) => tabGroups.value.find((g) => g.tabs.includes(name))?.name ?? 'general'
+const lastTab: Record<string, string> = {}
+watch(tab, (name) => { lastTab[groupOf(name)] = name }, { immediate: true })
+const group = computed({
+  get: () => groupOf(tab.value),
+  set: (name: string) => { tab.value = lastTab[name] ?? tabGroups.value.find((g) => g.name === name)!.tabs[0]! },
+})
+const groupLabel = (name: string, label: string) => () => {
+  const tabs = tabGroups.value.find((g) => g.name === name)?.tabs ?? []
+  return tabs.some((t) => tabErrors.value[t]) ? h(NBadge, { dot: true, type: 'error', offset: [6, 0] }, () => label) : label
+}
+
+const moreOptions = [
+  { key: 'clone', label: '克隆' },
+  { type: 'divider', key: 'divider' },
+  { key: 'delete', label: '删除 stack', props: { style: 'color: var(--ps-danger)' } },
+]
+function onMore(key: string) {
+  if (key === 'clone') {
+    cloning.value = true
+    cloneName.value = `${stack.value!.name}-copy`
+    cloneErrors.value = emptyErrors()
+  } else if (key === 'delete') {
+    dialog.warning({
+      title: `删除 stack ${savedName.value}？`,
+      content: '删除 stack 的全部配置。被其他 stack 引用时无法删除。',
+      positiveText: '删除',
+      negativeText: '取消',
+      onPositiveClick: remove,
+    })
+  }
+}
 
 const ports = computed(() => (stack.value ? stackPorts(stack.value) : []))
 
@@ -225,16 +272,16 @@ async function saveMembers() {
       <NCard size="small" class="stack-toolbar">
         <NSpace justify="space-between" align="center">
           <NSpace align="center">
-            <NText strong style="font-size: 16px">{{ stack.name }}</NText>
-            <NText v-if="dirty" type="warning">未保存</NText>
             <UnitStatus :stack="stack.name" actions prominent />
+            <NText v-if="dirty" type="warning">有未保存的修改</NText>
           </NSpace>
           <NSpace>
-            <NButton @click="(cloning = true), (cloneName = `${stack.name}-copy`), (cloneErrors = emptyErrors())">克隆</NButton>
-            <NPopconfirm @positive-click="remove">
-              <template #trigger><NButton type="error" ghost>删除</NButton></template>
-              删除 stack 的全部配置。被其他 stack 引用时无法删除。确定？
-            </NPopconfirm>
+            <NDropdown :options="moreOptions" trigger="click" placement="bottom-end" @select="onMore">
+              <NButton icon-placement="right">
+                <template #icon><NIcon><ChevronDownOutline /></NIcon></template>
+                更多
+              </NButton>
+            </NDropdown>
             <NButton :disabled="!dirty" :loading="saving" @click="save">保存</NButton>
             <NButton type="primary" :loading="saving" @click="saveAndApply">{{ dirty ? '保存并应用' : '应用' }}</NButton>
           </NSpace>
@@ -242,166 +289,171 @@ async function saveMembers() {
       </NCard>
       <ErrorList :errors="errors.global" />
 
-      <NTabs v-model:value="tab" type="line" animated class="detail-tabs">
-        <NTabPane name="basic" :tab="tabLabel('basic', '基本')">
-          <NForm label-placement="left" label-width="110" style="max-width: 720px">
-            <NFormItem label="名称" required v-bind="f('name', '改名会同步更新其他 stack 中的引用')">
-              <NInput v-model:value="stack.name" />
-            </NFormItem>
-            <NFormItem label="启用" v-bind="f('enabled', '关闭时不生成配置、不参与对账')">
-              <NSwitch v-model:value="stack.enabled" />
-            </NFormItem>
-            <NFormItem label="期望运行" v-bind="f('desired_running', '关闭时仍生成配置，但对账会让 xray / mihomo 保持停止')">
-              <NSwitch v-model:value="stack.desired_running" />
-            </NFormItem>
-            <NFormItem label="每日流量阈值" v-bind="f('daily_limit_bytes', '按系统设置时区统计上行和下行总量；0 表示无限制')">
-              <ByteSizeInput small :value="stack.daily_limit_bytes ?? 0" @update:value="(value: number) => (stack!.daily_limit_bytes = value)" />
-            </NFormItem>
-            <NFormItem label="角色" v-bind="f('role', 'edge：独立出口，流量经本 stack 的上游出去；auto：聚合多个 edge stack 的 relay 入站，按测速或负载均衡挑选出口')">
-              <NRadioGroup v-model:value="stack.role">
-                <NRadioButton value="edge">edge</NRadioButton>
-                <NRadioButton value="auto">auto</NRadioButton>
-              </NRadioGroup>
-            </NFormItem>
-            <NFormItem label="标签" v-bind="f('labels')">
-              <NDynamicTags v-model:value="stack.labels" />
-            </NFormItem>
-          </NForm>
+      <NTabs v-model:value="group" type="line" animated class="detail-tabs">
+        <NTabPane name="general" :tab="groupLabel('general', '基本')">
+          <NTabs v-model:value="tab" type="segment" size="small" class="sub-tabs" :class="{ single: stack.role !== 'auto' }">
+            <NTabPane name="basic" :tab="tabLabel('basic', '基本')">
+              <NForm label-placement="left" label-width="110" style="max-width: 720px">
+                <NFormItem label="名称" required v-bind="f('name', '改名会同步更新其他 stack 中的引用')">
+                  <NInput v-model:value="stack.name" />
+                </NFormItem>
+                <NFormItem label="启用" v-bind="f('enabled', '关闭时不生成配置、不参与对账')">
+                  <NSwitch v-model:value="stack.enabled" />
+                </NFormItem>
+                <NFormItem label="期望运行" v-bind="f('desired_running', '关闭时仍生成配置，但对账会让 xray / mihomo 保持停止')">
+                  <NSwitch v-model:value="stack.desired_running" />
+                </NFormItem>
+                <NFormItem label="每日流量阈值" v-bind="f('daily_limit_bytes', '按系统设置时区统计上行和下行总量；0 表示无限制')">
+                  <ByteSizeInput small :value="stack.daily_limit_bytes ?? 0" @update:value="(value: number) => (stack!.daily_limit_bytes = value)" />
+                </NFormItem>
+                <NFormItem label="角色" v-bind="f('role', 'edge：独立出口，流量经本 stack 的上游出去；auto：聚合多个 edge stack 的 relay 入站，按测速或负载均衡挑选出口')">
+                  <NRadioGroup v-model:value="stack.role">
+                    <NRadioButton value="edge">edge</NRadioButton>
+                    <NRadioButton value="auto">auto</NRadioButton>
+                  </NRadioGroup>
+                </NFormItem>
+                <NFormItem label="标签" v-bind="f('labels')">
+                  <NDynamicTags v-model:value="stack.labels" />
+                </NFormItem>
+              </NForm>
+            </NTabPane>
+            <NTabPane v-if="stack.role === 'auto'" name="members" tab="成员">
+              <NForm label-placement="top" style="max-width: 640px">
+                <NFormItem label="成员 stack" :feedback="'只列出带 relay SOCKS5 入站的 edge stack；保存后同步上游和代理组成员'">
+                  <NSpace vertical style="width: 100%">
+                    <NSelect v-model:value="members" :options="memberOptions" multiple filterable />
+                    <NSpace :size="8"><EntityLink v-for="name in members" :key="name" kind="stack" :name="name" target="_blank" rel="noopener" /></NSpace>
+                  </NSpace>
+                </NFormItem>
+                <NButton type="primary" @click="saveMembers">保存成员</NButton>
+              </NForm>
+            </NTabPane>
+          </NTabs>
         </NTabPane>
-
-        <NTabPane name="flow" tab="流量拓扑">
-          <FlowTab :stack="stack" :summaries="summaries" />
+        <NTabPane name="xray" :tab="groupLabel('xray', 'Xray')">
+          <NTabs v-model:value="tab" type="segment" size="small" class="sub-tabs">
+            <NTabPane name="inbounds" :tab="tabLabel('inbounds', '入站')">
+              <InboundsTab :stack="stack" :users="users" :errors="errors" :reveal="reveal" />
+            </NTabPane>
+            <NTabPane name="outbound" :tab="tabLabel('outbound', '出站')">
+              <NForm label-placement="left" label-width="110" style="max-width: 720px">
+                <NFormItem label="类型" v-bind="f('xray.outbound.type')">
+                  <NRadioGroup v-model:value="stack.xray.outbound.type">
+                    <NRadioButton value="mihomo">本 stack Mihomo</NRadioButton>
+                    <NRadioButton value="socks5">外部 SOCKS5</NRadioButton>
+                    <NRadioButton value="http">外部 HTTP</NRadioButton>
+                    <NRadioButton value="direct">直连</NRadioButton>
+                  </NRadioGroup>
+                </NFormItem>
+                <NFormItem v-if="stack.xray.outbound.type === 'mihomo'" label="目标监听">
+                  <NText>本 stack 的 Mihomo SOCKS 监听（{{ stack.mihomo.socks.listen }}:{{ stack.mihomo.socks.port }}）</NText>
+                </NFormItem>
+                <template v-if="stack.xray.outbound.type === 'socks5' || stack.xray.outbound.type === 'http'">
+                  <NFormItem label="server" required v-bind="f('xray.outbound.server')">
+                    <NInput v-model:value="stack.xray.outbound.server" />
+                  </NFormItem>
+                  <NFormItem label="port" required v-bind="f('xray.outbound.port')">
+                    <NInput :value="String(stack.xray.outbound.port || '')" @update:value="(v) => (stack!.xray.outbound.port = Number(v) || 0)" />
+                  </NFormItem>
+                  <NFormItem label="username" v-bind="f('xray.outbound.username')">
+                    <NInput v-model:value="stack.xray.outbound.username" />
+                  </NFormItem>
+                  <NFormItem label="password" v-bind="f('xray.outbound.password')">
+                    <SecretInput v-model:value="stack.xray.outbound.password" :reveal="reveal" />
+                  </NFormItem>
+                  <NFormItem label="私网目标直连" v-bind="f('xray.outbound.private_direct')">
+                    <NSwitch v-model:value="stack.xray.outbound.private_direct" />
+                  </NFormItem>
+                </template>
+                <NText v-if="stack.xray.outbound.type !== 'mihomo' && stack.mihomo.enabled" depth="3">
+                  出站不经过 Mihomo 时，可以在「Mihomo」标签关闭本 stack 的 Mihomo。
+                </NText>
+              </NForm>
+            </NTabPane>
+            <NTabPane name="xray" :tab="tabLabel('xray', '设置')">
+              <NForm label-placement="left" label-width="110" style="max-width: 720px">
+                <NFormItem label="启用" v-bind="f('xray.enabled')">
+                  <NSwitch v-model:value="stack.xray.enabled" />
+                </NFormItem>
+                <NFormItem label="日志级别" v-bind="f('xray.loglevel')">
+                  <NSelect
+                    v-model:value="stack.xray.loglevel"
+                    :options="[{ label: '继承全局', value: 'inherit' }, ...xrayLogLevels.map((v) => ({ label: v, value: v }))]"
+                  />
+                </NFormItem>
+                <NFormItem label="记录访问日志" v-bind="f('xray.access_log', '记录客户端请求日志，独立于错误日志级别；日志级别为 none 时关闭全部日志。')">
+                  <TriStateSelect :value="stack.xray.access_log ?? 'inherit'" @update:value="(value) => (stack!.xray.access_log = value as Stack['xray']['access_log'])" />
+                </NFormItem>
+                <NFormItem label="API" v-bind="f('xray.api')"><TriStateSelect v-model:value="stack.xray.api" /></NFormItem>
+                <NFormItem label="stats" v-bind="f('xray.stats')"><TriStateSelect v-model:value="stack.xray.stats" /></NFormItem>
+                <NFormItem label="policy" v-bind="f('xray.policy')"><TriStateSelect v-model:value="stack.xray.policy" /></NFormItem>
+                <NFormItem label="API 端口" v-bind="f('xray.api_port', '监听 127.0.0.1')">
+                  <PortInput v-model:value="stack.xray.api_port" pool="xray_api" :stack-id="stack.id" :exclude="ports" />
+                </NFormItem>
+              </NForm>
+            </NTabPane>
+          </NTabs>
         </NTabPane>
-
-        <NTabPane name="xray" :tab="tabLabel('xray', 'Xray')">
-          <NForm label-placement="left" label-width="110" style="max-width: 720px">
-            <NFormItem label="启用" v-bind="f('xray.enabled')">
-              <NSwitch v-model:value="stack.xray.enabled" />
-            </NFormItem>
-            <NFormItem label="日志级别" v-bind="f('xray.loglevel')">
-              <NSelect
-                v-model:value="stack.xray.loglevel"
-                :options="[{ label: '继承全局', value: 'inherit' }, ...xrayLogLevels.map((v) => ({ label: v, value: v }))]"
-              />
-            </NFormItem>
-            <NFormItem label="记录访问日志" v-bind="f('xray.access_log', '记录客户端请求日志，独立于错误日志级别；日志级别为 none 时关闭全部日志。')">
-              <TriStateSelect :value="stack.xray.access_log ?? 'inherit'" @update:value="(value) => (stack!.xray.access_log = value as Stack['xray']['access_log'])" />
-            </NFormItem>
-            <NFormItem label="API" v-bind="f('xray.api')"><TriStateSelect v-model:value="stack.xray.api" /></NFormItem>
-            <NFormItem label="stats" v-bind="f('xray.stats')"><TriStateSelect v-model:value="stack.xray.stats" /></NFormItem>
-            <NFormItem label="policy" v-bind="f('xray.policy')"><TriStateSelect v-model:value="stack.xray.policy" /></NFormItem>
-            <NFormItem label="API 端口" v-bind="f('xray.api_port', '监听 127.0.0.1')">
-              <PortInput v-model:value="stack.xray.api_port" pool="xray_api" :stack-id="stack.id" :exclude="ports" />
-            </NFormItem>
-          </NForm>
+        <NTabPane name="mihomo" :tab="groupLabel('mihomo', 'Mihomo')">
+          <NTabs v-model:value="tab" type="segment" size="small" class="sub-tabs">
+            <NTabPane name="upstreams" :tab="tabLabel('upstreams', '上游')">
+              <UpstreamsTab :stack="stack" :summaries="summaries" :users="users" :errors="errors" />
+            </NTabPane>
+            <NTabPane name="groups" :tab="tabLabel('groups', '代理组')">
+              <GroupsTab :stack="stack" :errors="errors" />
+            </NTabPane>
+            <NTabPane name="rules" :tab="tabLabel('rules', '规则')">
+              <RulesTab :stack="stack" :errors="errors" />
+            </NTabPane>
+            <NTabPane name="mihomo" :tab="tabLabel('mihomo', '设置与监听')">
+              <NForm label-placement="left" label-width="130" style="max-width: 760px">
+                <NFormItem label="启用" v-bind="f('mihomo.enabled')">
+                  <NSwitch v-model:value="stack.mihomo.enabled" />
+                </NFormItem>
+                <NFormItem label="模式" v-bind="f('mihomo.mode')">
+                  <NRadioGroup v-model:value="stack.mihomo.mode">
+                    <NRadioButton value="inherit">继承全局</NRadioButton>
+                    <NRadioButton value="Rule">Rule</NRadioButton>
+                    <NRadioButton value="Global">Global</NRadioButton>
+                    <NRadioButton value="Direct">Direct</NRadioButton>
+                  </NRadioGroup>
+                </NFormItem>
+                <NFormItem label="日志级别" v-bind="f('mihomo.loglevel')">
+                  <NSelect
+                    v-model:value="stack.mihomo.loglevel"
+                    :options="[{ label: '继承全局', value: 'inherit' }, ...mihomoLogLevels.map((v) => ({ label: v, value: v }))]"
+                  />
+                </NFormItem>
+                <NFormItem label="controller 端口" v-bind="f('mihomo.controller_port', '监听 127.0.0.1')">
+                  <PortInput v-model:value="stack.mihomo.controller_port" pool="mihomo_controller" :stack-id="stack.id" :exclude="ports" />
+                </NFormItem>
+                <NFormItem label="controller secret" required v-bind="f('mihomo.controller_secret')">
+                  <SecretInput v-model:value="stack.mihomo.controller_secret" :generate="() => randomString(32)" :reveal="reveal" />
+                </NFormItem>
+                <ListenerForm title="SOCKS 监听" kind="socks" :listener="stack.mihomo.socks" :errors="errors" prefix="mihomo.socks" :stack-id="stack.id" :ports="ports" :reveal="reveal" />
+                <ListenerForm title="HTTP 监听" kind="http" :listener="stack.mihomo.http" :errors="errors" prefix="mihomo.http" :stack-id="stack.id" :ports="ports" :reveal="reveal" />
+              </NForm>
+            </NTabPane>
+          </NTabs>
         </NTabPane>
-
-        <NTabPane name="inbounds" :tab="tabLabel('inbounds', '入站')">
-          <InboundsTab :stack="stack" :users="users" :errors="errors" :reveal="reveal" />
-        </NTabPane>
-
-        <NTabPane name="outbound" :tab="tabLabel('outbound', '出站')">
-          <NForm label-placement="left" label-width="110" style="max-width: 720px">
-            <NFormItem label="类型" v-bind="f('xray.outbound.type')">
-              <NRadioGroup v-model:value="stack.xray.outbound.type">
-                <NRadioButton value="mihomo">本 stack Mihomo</NRadioButton>
-                <NRadioButton value="socks5">外部 SOCKS5</NRadioButton>
-                <NRadioButton value="http">外部 HTTP</NRadioButton>
-                <NRadioButton value="direct">直连</NRadioButton>
-              </NRadioGroup>
-            </NFormItem>
-            <NFormItem v-if="stack.xray.outbound.type === 'mihomo'" label="目标监听">
-              <NText>本 stack 的 Mihomo SOCKS 监听（{{ stack.mihomo.socks.listen }}:{{ stack.mihomo.socks.port }}）</NText>
-            </NFormItem>
-            <template v-if="stack.xray.outbound.type === 'socks5' || stack.xray.outbound.type === 'http'">
-              <NFormItem label="server" required v-bind="f('xray.outbound.server')">
-                <NInput v-model:value="stack.xray.outbound.server" />
-              </NFormItem>
-              <NFormItem label="port" required v-bind="f('xray.outbound.port')">
-                <NInput :value="String(stack.xray.outbound.port || '')" @update:value="(v) => (stack!.xray.outbound.port = Number(v) || 0)" />
-              </NFormItem>
-              <NFormItem label="username" v-bind="f('xray.outbound.username')">
-                <NInput v-model:value="stack.xray.outbound.username" />
-              </NFormItem>
-              <NFormItem label="password" v-bind="f('xray.outbound.password')">
-                <SecretInput v-model:value="stack.xray.outbound.password" :reveal="reveal" />
-              </NFormItem>
-              <NFormItem label="私网目标直连" v-bind="f('xray.outbound.private_direct')">
-                <NSwitch v-model:value="stack.xray.outbound.private_direct" />
-              </NFormItem>
-            </template>
-            <NText v-if="stack.xray.outbound.type !== 'mihomo' && stack.mihomo.enabled" depth="3">
-              出站不经过 Mihomo 时，可以在「Mihomo」标签关闭本 stack 的 Mihomo。
-            </NText>
-          </NForm>
-        </NTabPane>
-
-        <NTabPane name="mihomo" :tab="tabLabel('mihomo', 'Mihomo')">
-          <NForm label-placement="left" label-width="130" style="max-width: 760px">
-            <NFormItem label="启用" v-bind="f('mihomo.enabled')">
-              <NSwitch v-model:value="stack.mihomo.enabled" />
-            </NFormItem>
-            <NFormItem label="模式" v-bind="f('mihomo.mode')">
-              <NRadioGroup v-model:value="stack.mihomo.mode">
-                <NRadioButton value="inherit">继承全局</NRadioButton>
-                <NRadioButton value="Rule">Rule</NRadioButton>
-                <NRadioButton value="Global">Global</NRadioButton>
-                <NRadioButton value="Direct">Direct</NRadioButton>
-              </NRadioGroup>
-            </NFormItem>
-            <NFormItem label="日志级别" v-bind="f('mihomo.loglevel')">
-              <NSelect
-                v-model:value="stack.mihomo.loglevel"
-                :options="[{ label: '继承全局', value: 'inherit' }, ...mihomoLogLevels.map((v) => ({ label: v, value: v }))]"
-              />
-            </NFormItem>
-            <NFormItem label="controller 端口" v-bind="f('mihomo.controller_port', '监听 127.0.0.1')">
-              <PortInput v-model:value="stack.mihomo.controller_port" pool="mihomo_controller" :stack-id="stack.id" :exclude="ports" />
-            </NFormItem>
-            <NFormItem label="controller secret" required v-bind="f('mihomo.controller_secret')">
-              <SecretInput v-model:value="stack.mihomo.controller_secret" :generate="() => randomString(32)" :reveal="reveal" />
-            </NFormItem>
-            <ListenerForm title="SOCKS 监听" kind="socks" :listener="stack.mihomo.socks" :errors="errors" prefix="mihomo.socks" :stack-id="stack.id" :ports="ports" :reveal="reveal" />
-            <ListenerForm title="HTTP 监听" kind="http" :listener="stack.mihomo.http" :errors="errors" prefix="mihomo.http" :stack-id="stack.id" :ports="ports" :reveal="reveal" />
-          </NForm>
-        </NTabPane>
-
-        <NTabPane name="upstreams" :tab="tabLabel('upstreams', '上游')">
-          <UpstreamsTab :stack="stack" :summaries="summaries" :users="users" :errors="errors" />
-        </NTabPane>
-
-        <NTabPane name="groups" :tab="tabLabel('groups', '代理组')">
-          <GroupsTab :stack="stack" :errors="errors" />
-        </NTabPane>
-
-        <NTabPane name="rules" :tab="tabLabel('rules', '规则')">
-          <RulesTab :stack="stack" :errors="errors" />
-        </NTabPane>
-
-        <NTabPane v-if="stack.role === 'auto'" name="members" tab="成员">
-          <NForm label-placement="top" style="max-width: 640px">
-            <NFormItem label="成员 stack" :feedback="'只列出带 relay SOCKS5 入站的 edge stack；保存后同步上游和代理组成员'">
-              <NSpace vertical style="width: 100%">
-                <NSelect v-model:value="members" :options="memberOptions" multiple filterable />
-                <NSpace :size="8"><EntityLink v-for="name in members" :key="name" kind="stack" :name="name" target="_blank" rel="noopener" /></NSpace>
-              </NSpace>
-            </NFormItem>
-            <NButton type="primary" @click="saveMembers">保存成员</NButton>
-          </NForm>
-        </NTabPane>
-
-        <NTabPane name="usage" tab="用量统计" display-directive="if">
-          <UsageTab :key="id" :stack-id="id" :users="users" />
-        </NTabPane>
-        <NTabPane name="diagnostics" tab="诊断" display-directive="if">
-          <DiagnosticsTab :stack-id="id" />
-        </NTabPane>
-        <NTabPane name="logs" tab="日志" display-directive="if">
-          <LogsTab :stack="stack.name" />
-        </NTabPane>
-
-        <NTabPane name="preview" tab="生成预览">
-          <PreviewTab :stack-id="stack.id!" :dirty="dirty" :version="savedVersion" />
+        <NTabPane name="observe" :tab="groupLabel('observe', '运行观察')">
+          <NTabs v-model:value="tab" type="segment" size="small" class="sub-tabs">
+            <NTabPane name="flow" tab="流量拓扑">
+              <FlowTab :stack="stack" :summaries="summaries" />
+            </NTabPane>
+            <NTabPane name="usage" tab="用量统计" display-directive="if">
+              <UsageTab :key="id" :stack-id="id" :users="users" />
+            </NTabPane>
+            <NTabPane name="diagnostics" tab="诊断" display-directive="if">
+              <DiagnosticsTab :stack-id="id" />
+            </NTabPane>
+            <NTabPane name="logs" tab="日志" display-directive="if">
+              <LogsTab :stack="stack.name" />
+            </NTabPane>
+            <NTabPane name="preview" tab="生成预览">
+              <PreviewTab :stack-id="stack.id!" :dirty="dirty" :version="savedVersion" />
+            </NTabPane>
+          </NTabs>
         </NTabPane>
       </NTabs>
     </template>
@@ -426,6 +478,24 @@ async function saveMembers() {
 </template>
 
 <style scoped>
+.sub-tabs > :deep(.n-tabs-nav) {
+  max-width: 560px;
+  margin-bottom: 16px;
+}
+.sub-tabs.single > :deep(.n-tabs-nav) {
+  display: none;
+}
+/* 分组切换时子标签所在面板先隐藏再显示，组件库的滑块量不到宽度，直接给选中的子标签上色。 */
+.sub-tabs > :deep(.n-tabs-nav .n-tabs-capsule) {
+  display: none;
+}
+.sub-tabs > :deep(.n-tabs-nav .n-tabs-tab--active) {
+  border-radius: 6px;
+  background: var(--ps-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--ps-accent);
+  color: var(--ps-accent);
+  font-weight: 600;
+}
 .stack-toolbar {
   position: sticky;
   top: 0;

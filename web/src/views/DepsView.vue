@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { h, onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import {
   NAlert, NButton, NCard, NDataTable, NDescriptions, NDescriptionsItem, NDrawer, NDrawerContent, NForm, NFormItem,
   NGrid, NGridItem, NInput, NModal, NPopconfirm, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NSwitch, NTag, NText,
@@ -159,10 +160,15 @@ function onFile({ file }: { file: UploadFileInfo }) {
       </template>
       <template v-else>依赖已就绪，正在重新生成配置。</template>
     </NAlert>
-    <NSpace justify="space-between" align="center" style="margin-bottom: 12px">
-      <NText depth="3">安装和升级使用「系统设置 → 下载代理」。</NText>
-      <NButton :loading="checking" @click="checkUpdates">检查更新</NButton>
-    </NSpace>
+    <NCard size="small" style="margin-bottom: 20px">
+      <NSpace justify="space-between" align="center">
+        <NText depth="3">
+          下载经由 <RouterLink :to="{ name: 'settings', query: { section: 'download_proxy' } }">系统设置 → 下载代理</RouterLink>。
+          新版本由 <RouterLink :to="{ name: 'jobs' }">定时任务</RouterLink> 中的「依赖版本检查」按计划自动检查。
+        </NText>
+        <NButton :loading="checking" @click="checkUpdates">立即检查更新</NButton>
+      </NSpace>
+    </NCard>
     <NGrid :cols="1" :y-gap="20">
       <NGridItem v-for="dep in components" :key="dep.component">
         <NCard :title="titles[dep.component]" size="small">
@@ -170,7 +176,10 @@ function onFile({ file }: { file: UploadFileInfo }) {
             <NSpace>
               <NTag v-if="!dep.installed" type="warning" size="small">未安装</NTag>
               <NTag v-else-if="dep.update_available" type="info" size="small">有新版本 {{ dep.latest }}</NTag>
-              <NButton size="small" type="primary" :disabled="dep.installed && !dep.update_available" @click="open(dep.component, 'latest')">{{ dep.installed ? '升级到最新' : '安装最新版' }}</NButton>
+              <NTag v-else-if="dep.latest" type="success" size="small" :bordered="false">已是最新</NTag>
+              <NButton v-if="!dep.installed || dep.update_available" size="small" type="primary" @click="open(dep.component, 'latest')">
+                {{ dep.installed ? `升级到 ${dep.latest}` : '安装最新版' }}
+              </NButton>
               <NButton v-if="dep.component !== 'geo'" size="small" @click="open(dep.component, 'version')">安装指定版本</NButton>
               <NButton size="small" @click="open(dep.component, 'upload')">上传安装包</NButton>
               <NPopconfirm v-if="dep.previous" @positive-click="rollback(dep.component)">
@@ -179,7 +188,7 @@ function onFile({ file }: { file: UploadFileInfo }) {
               </NPopconfirm>
             </NSpace>
           </template>
-          <NDescriptions :column="2" label-placement="left" size="small">
+          <NDescriptions :column="2" label-placement="left" size="small" class="dep-info">
             <NDescriptionsItem label="当前版本">{{ dep.version || (dep.installed ? '未知' : '—') }}</NDescriptionsItem>
             <NDescriptionsItem label="最新版本">{{ dep.latest || '尚未检查' }}</NDescriptionsItem>
             <NDescriptionsItem label="安装时间">{{ dep.installed_at && !dep.installed_at.startsWith('0001') ? formatTime(dep.installed_at) : '—' }}</NDescriptionsItem>
@@ -252,3 +261,8 @@ function onFile({ file }: { file: UploadFileInfo }) {
   </NDrawer>
 
 </template>
+
+<style scoped>
+/* 固定列宽，让各依赖卡片的两列信息上下对齐。 */
+.dep-info :deep(.n-descriptions-table) { table-layout: fixed; }
+</style>

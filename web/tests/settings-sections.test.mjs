@@ -24,9 +24,9 @@ function setup(t, saved = null) {
   return { state: scope.run(useSettingsSections), storage }
 }
 
-test('首次全部折叠，展开状态按面板路径保存并可重新读取', async (t) => {
+test('首次只展开基本，展开状态按面板路径保存并可重新读取', async (t) => {
   const { state, storage } = setup(t)
-  assert.deepEqual(state.expanded.value, [])
+  assert.deepEqual(state.expanded.value, ['basic'])
   state.expanded.value = ['basic', 'notify', 'policy']
   await nextTick()
   assert.equal(storage.get('psw-settings-expanded:/panel/'), '["basic","notify","policy"]')
@@ -53,4 +53,13 @@ test('保存校验错误自动展开对应分组及嵌套 policy，保留已展�
   state.revealErrors({ 'notify.host': '必填', 'defaults.xray.policy.stats_user_uplink': '必须启用', 'download_proxy.port': '无效', unknown: '未知' })
   await nextTick()
   assert.deepEqual(state.expanded.value, ['basic', 'notify', 'defaults', 'policy', 'download_proxy'])
+})
+
+test('全部展开和收起只影响顶层分组', async (t) => {
+  const { state } = setup(t, '["policy"]')
+  state.setAll(true)
+  assert.ok(state.expanded.value.includes('notify'))
+  assert.ok(state.expanded.value.includes('policy'))
+  state.setAll(false)
+  assert.deepEqual(state.expanded.value, ['policy'])
 })

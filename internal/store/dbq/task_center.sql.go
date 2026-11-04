@@ -11,24 +11,31 @@ import (
 
 const countTaskCenter = `-- name: CountTaskCenter :one
 WITH entries AS (
-    SELECT 'task' AS source, kind, status FROM tasks
+    SELECT 'task' AS source, kind, actor, status FROM tasks
     UNION ALL
-    SELECT 'job' AS source, j.kind, r.status FROM job_runs r JOIN jobs j ON j.id = r.job_id
+    SELECT 'job' AS source, j.kind, r.trigger_by AS actor, r.status FROM job_runs r JOIN jobs j ON j.id = r.job_id
 )
 SELECT COUNT(*) FROM entries
 WHERE (CAST(?1 AS TEXT) = 'all' OR source = ?1)
   AND (CAST(?2 AS TEXT) = 'all' OR status = ?2)
   AND (CAST(?3 AS TEXT) = 'all' OR kind = ?3)
+  AND NOT (CAST(?4 AS INTEGER) = 1 AND source = 'job' AND actor != 'manual' AND status IN ('succeeded', 'skipped'))
 `
 
 type CountTaskCenterParams struct {
 	Source string `json:"source"`
 	Status string `json:"status"`
 	Kind   string `json:"kind"`
+	Quiet  int64  `json:"quiet"`
 }
 
 func (q *Queries) CountTaskCenter(ctx context.Context, arg CountTaskCenterParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countTaskCenter, arg.Source, arg.Status, arg.Kind)
+	row := q.db.QueryRowContext(ctx, countTaskCenter,
+		arg.Source,
+		arg.Status,
+		arg.Kind,
+		arg.Quiet,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -76,14 +83,16 @@ SELECT source, id, kind, title, actor, status, started_at, finished_at, log, err
 WHERE (CAST(?1 AS TEXT) = 'all' OR source = ?1)
   AND (CAST(?2 AS TEXT) = 'all' OR status = ?2)
   AND (CAST(?3 AS TEXT) = 'all' OR kind = ?3)
+  AND NOT (CAST(?4 AS INTEGER) = 1 AND source = 'job' AND actor != 'manual' AND status IN ('succeeded', 'skipped'))
 ORDER BY (status = 'running') DESC, started_at DESC, source, id DESC
-LIMIT ?5 OFFSET ?4
+LIMIT ?6 OFFSET ?5
 `
 
 type ListTaskCenterParams struct {
 	Source     string `json:"source"`
 	Status     string `json:"status"`
 	Kind       string `json:"kind"`
+	Quiet      int64  `json:"quiet"`
 	PageOffset int64  `json:"page_offset"`
 	PageSize   int64  `json:"page_size"`
 }
@@ -107,6 +116,7 @@ func (q *Queries) ListTaskCenter(ctx context.Context, arg ListTaskCenterParams) 
 		arg.Source,
 		arg.Status,
 		arg.Kind,
+		arg.Quiet,
 		arg.PageOffset,
 		arg.PageSize,
 	)

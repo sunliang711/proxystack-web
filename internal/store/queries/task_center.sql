@@ -9,19 +9,21 @@ SELECT * FROM entries
 WHERE (CAST(sqlc.arg(source) AS TEXT) = 'all' OR source = sqlc.arg(source))
   AND (CAST(sqlc.arg(status) AS TEXT) = 'all' OR status = sqlc.arg(status))
   AND (CAST(sqlc.arg(kind) AS TEXT) = 'all' OR kind = sqlc.arg(kind))
+  AND NOT (CAST(sqlc.arg(quiet) AS INTEGER) = 1 AND source = 'job' AND actor != 'manual' AND status IN ('succeeded', 'skipped'))
 ORDER BY (status = 'running') DESC, started_at DESC, source, id DESC
 LIMIT sqlc.arg(page_size) OFFSET sqlc.arg(page_offset);
 
 -- name: CountTaskCenter :one
 WITH entries AS (
-    SELECT 'task' AS source, kind, status FROM tasks
+    SELECT 'task' AS source, kind, actor, status FROM tasks
     UNION ALL
-    SELECT 'job' AS source, j.kind, r.status FROM job_runs r JOIN jobs j ON j.id = r.job_id
+    SELECT 'job' AS source, j.kind, r.trigger_by AS actor, r.status FROM job_runs r JOIN jobs j ON j.id = r.job_id
 )
 SELECT COUNT(*) FROM entries
 WHERE (CAST(sqlc.arg(source) AS TEXT) = 'all' OR source = sqlc.arg(source))
   AND (CAST(sqlc.arg(status) AS TEXT) = 'all' OR status = sqlc.arg(status))
-  AND (CAST(sqlc.arg(kind) AS TEXT) = 'all' OR kind = sqlc.arg(kind));
+  AND (CAST(sqlc.arg(kind) AS TEXT) = 'all' OR kind = sqlc.arg(kind))
+  AND NOT (CAST(sqlc.arg(quiet) AS INTEGER) = 1 AND source = 'job' AND actor != 'manual' AND status IN ('succeeded', 'skipped'));
 
 -- name: GetTaskCenterJob :one
 SELECT r.*, j.kind FROM job_runs r JOIN jobs j ON j.id = r.job_id WHERE r.id = ?;

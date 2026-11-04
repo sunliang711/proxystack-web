@@ -8,6 +8,7 @@
   --ps-muted: #65758b;
   --ps-accent: #087f6a;
   --ps-accent-soft: rgba(8, 127, 106, 0.08);
+  --ps-danger: #d03050;
   --ps-shadow: 0 4px 20px rgba(24, 44, 70, 0.035);
 }
 :root[data-theme='dark'] {
@@ -20,6 +21,7 @@
   --ps-muted: #94a6bf;
   --ps-accent: #52d6b4;
   --ps-accent-soft: rgba(82, 214, 180, 0.08);
+  --ps-danger: #e88080;
   --ps-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
 }
 body {

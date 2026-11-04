@@ -78,17 +78,22 @@ func (s *Service) liveCenterTask(item *CenterTask) {
 }
 
 // TaskCenter 查询历史记录，运行中的任务优先显示，筛选和分页在数据库中完成。
-func (s *Service) TaskCenter(ctx context.Context, source, status, kind string, limit, offset int64) (*TaskCenterPage, error) {
+// hideScheduledOK 为真时不返回按计划触发且成功或跳过的定时任务记录，失败和手动执行的记录照常返回。
+func (s *Service) TaskCenter(ctx context.Context, source, status, kind string, hideScheduledOK bool, limit, offset int64) (*TaskCenterPage, error) {
 	out := &TaskCenterPage{Items: []CenterTask{}}
+	var quiet int64
+	if hideScheduledOK {
+		quiet = 1
+	}
 	err := s.Store.InTx(ctx, func(q *dbq.Queries) error {
-		rows, err := q.ListTaskCenter(ctx, dbq.ListTaskCenterParams{Source: source, Status: status, Kind: kind, PageSize: limit, PageOffset: offset})
+		rows, err := q.ListTaskCenter(ctx, dbq.ListTaskCenterParams{Source: source, Status: status, Kind: kind, Quiet: quiet, PageSize: limit, PageOffset: offset})
 		if err != nil {
 			return err
 		}
 		for _, row := range rows {
 			out.Items = append(out.Items, centerTask(row))
 		}
-		out.Total, err = q.CountTaskCenter(ctx, dbq.CountTaskCenterParams{Source: source, Status: status, Kind: kind})
+		out.Total, err = q.CountTaskCenter(ctx, dbq.CountTaskCenterParams{Source: source, Status: status, Kind: kind, Quiet: quiet})
 		if err != nil {
 			return err
 		}

@@ -193,7 +193,7 @@ func (s *Service) deliverNotification(ctx context.Context, settings configdoc.Se
 	}
 	params := dbq.UpdateNotificationParams{ID: item.ID, Attempts: item.Attempts, Status: NotifySkipped}
 	if obsolete {
-		params.Error = "Superseded or disabled egress notification"
+		params.Error = "出口事件已被后续事件取代，或该事件的通知已关闭，未发送"
 	} else {
 		sendErr := s.sendMail(ctx, smtpConfig(settings.Notify), item.Subject, item.Body)
 		params.Attempts, params.Status = item.Attempts+1, NotifySent

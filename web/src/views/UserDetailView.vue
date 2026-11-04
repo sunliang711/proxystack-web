@@ -2,10 +2,11 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
-  NButton, NCard, NCollapse, NCollapseItem, NDatePicker, NEmpty, NForm, NFormItem, NGrid, NGridItem, NInput,
-  NInputNumber, NList, NListItem, NPopconfirm, NRadioButton, NRadioGroup, NSpace, NSpin, NSwitch, NTag, NText,
-  useMessage,
+  NButton, NCard, NCollapse, NCollapseItem, NDatePicker, NDropdown, NEmpty, NForm, NFormItem, NGrid, NGridItem, NIcon,
+  NInput, NInputNumber, NList, NListItem, NPopconfirm, NRadioButton, NRadioGroup, NSpace, NSpin, NSwitch, NTag, NText,
+  useDialog, useMessage,
 } from 'naive-ui'
+import { ChevronDownOutline } from '@vicons/ionicons5'
 import { api, emptyErrors, fieldState, MASKED, splitProblem, type FormErrors, type Schemas } from '../api/client'
 import ByteSizeInput from '../components/ByteSizeInput.vue'
 import ErrorList from '../components/ErrorList.vue'
@@ -14,6 +15,7 @@ import SubscriptionCard from '../components/SubscriptionCard.vue'
 import TemplateInput from '../components/TemplateInput.vue'
 import UsageCard from '../components/UsageCard.vue'
 import { useDirty } from '../composables/useDirty'
+import { usePageTitle } from '../composables/usePageTitle'
 import { randomString, randomUUID, shadowsocksKey } from '../util/generate'
 
 type User = Schemas['User']
@@ -22,6 +24,7 @@ type Reference = Schemas['UserReference']
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
+const dialog = useDialog()
 const id = computed(() => Number(route.params.id))
 const user = ref<User | null>(null)
 const references = ref<Reference[]>([])
@@ -30,6 +33,9 @@ const pausing = ref(false)
 const errors = ref<FormErrors>(emptyErrors())
 const saving = ref(false)
 const { dirty, markClean } = useDirty(user)
+/** 已保存的名称，用作页面标题，编辑名称输入框时不跟着变。 */
+const savedName = ref('')
+usePageTitle(() => savedName.value)
 
 const f = (path: string, hint?: string) => fieldState(errors.value, path, hint)
 
@@ -41,6 +47,7 @@ async function load() {
     return
   }
   user.value = data.user
+  savedName.value = data.user.name
   references.value = data.references
   stacks.value = (await api.GET('/api/stacks')).data?.stacks ?? []
   markClean()
@@ -116,6 +123,7 @@ async function save() {
   }
   errors.value = emptyErrors()
   user.value = data!
+  savedName.value = data!.name
   markClean()
   message.success('已保存')
 }
@@ -133,6 +141,18 @@ async function resetToken() {
   message.success('订阅 token 已重置，旧链接立即失效')
 }
 
+const moreOptions = [{ key: 'delete', label: '删除用户', props: { style: 'color: var(--ps-danger)' } }]
+function onMore(key: string) {
+  if (key !== 'delete') return
+  dialog.warning({
+    title: `删除用户 ${savedName.value}？`,
+    content: '删除后，引用该用户的入站会移除这个用户。',
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: remove,
+  })
+}
+
 async function remove() {
   const { error } = await api.DELETE('/api/users/{id}', { params: { path: { id: id.value } } })
   if (error) {
@@ -148,17 +168,26 @@ async function remove() {
 <template>
   <NSpin :show="!user">
     <NForm v-if="user" label-placement="top" class="user-form">
-      <ErrorList :errors="errors.global" />
-      <NCard :title="`用户 ${user.name}`" size="small" class="card user-basics">
-        <template #header-extra>
+      <NCard size="small" class="user-toolbar">
+        <NSpace justify="space-between" align="center">
+          <NSpace align="center">
+            <NTag size="small" :type="user.enabled ? 'success' : 'default'">{{ user.enabled ? '启用' : '停用' }}</NTag>
+            <NText v-if="dirty" type="warning">有未保存的修改</NText>
+            <NText v-else depth="3">启用开关和各 stack 暂停当场生效；其他修改需要保存</NText>
+          </NSpace>
           <NSpace>
-            <NPopconfirm @positive-click="remove">
-              <template #trigger><NButton type="error" ghost>删除</NButton></template>
-              删除后，引用该用户的入站会移除这个用户。确定删除？
-            </NPopconfirm>
+            <NDropdown :options="moreOptions" trigger="click" placement="bottom-end" @select="onMore">
+              <NButton icon-placement="right">
+                <template #icon><NIcon><ChevronDownOutline /></NIcon></template>
+                更多
+              </NButton>
+            </NDropdown>
             <NButton type="primary" :loading="saving" :disabled="!dirty" @click="save">保存</NButton>
           </NSpace>
-        </template>
+        </NSpace>
+      </NCard>
+      <ErrorList :errors="errors.global" />
+      <NCard title="基本信息" size="small" class="card user-basics">
         <NFormItem label="名称" required v-bind="f('name', '字母或数字开头，可含 _ . -；改名不影响引用')">
           <NInput v-model:value="user.name" />
         </NFormItem>
@@ -320,6 +349,17 @@ async function remove() {
 </template>
 
 <style scoped>
+.user-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin-bottom: 20px;
+  background: var(--n-color);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+@media (max-width: 767px) {
+  .user-toolbar :deep(.n-space) { flex-wrap: wrap; }
+}
 .user-basics :deep(.n-card-content) {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

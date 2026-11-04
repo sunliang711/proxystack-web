@@ -2794,6 +2794,7 @@ export interface components {
             applied_at: string;
             /** Format: int64 */
             applied_revision: number;
+            /** @description 因每日流量阈值自动停止 */
             auto_stopped: boolean;
             desired_running: boolean;
             /** @description 磁盘上的生成物与最近一次应用不一致 */
@@ -6252,6 +6253,8 @@ export interface operations {
                 source?: "all" | "task" | "job";
                 status?: "all" | "running" | "succeeded" | "failed" | "skipped" | "timeout";
                 kind?: "all" | "apply" | "backup" | "deps" | "self-update" | "subscription-deploy" | "subscription-publish" | "db_backup" | "traffic_prune" | "geo_update" | "deps_check" | "deps_upgrade" | "remote_sync" | "reconcile" | "egress_check";
+                /** @description 隐藏按计划触发且成功或跳过的定时任务记录 */
+                hide_scheduled_ok?: boolean;
                 limit?: number;
                 offset?: number;
             };

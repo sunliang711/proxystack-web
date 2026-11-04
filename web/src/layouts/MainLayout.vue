@@ -54,6 +54,7 @@ import { api, type Schemas } from '../api/client'
 import brandLogo from '/favicon.svg?url'
 import TaskCenterDrawer from '../components/TaskCenterDrawer.vue'
 import { taskCenter } from '../tasks'
+import { pageTitleOverride } from '../composables/usePageTitle'
 
 const route = useRoute()
 const router = useRouter()
@@ -176,7 +177,8 @@ const active = computed(() => {
   const name = String(route.name ?? '')
   return parents[name] ?? name
 })
-const title = computed(() => route.meta.title ?? '')
+const title = computed(() => pageTitleOverride.value ?? route.meta.title ?? '')
+watch(title, (value) => { document.title = value ? `${value} · proxystack-web` : 'proxystack-web' }, { immediate: true })
 const description = computed(() => route.meta.description ?? '')
 
 // 面包屑：分组 / 列表页 / 详情页，列表页在详情页中可点击返回。
@@ -208,6 +210,7 @@ onBeforeUnmount(() => {
   taskCenter.stop()
   disconnectEvents()
   mobileQuery.removeEventListener('change', resizeNavigation)
+  document.title = 'proxystack-web'
 })
 watch(() => runtime.connected, (connected) => { if (connected) void taskCenter.refresh() })
 // 任何页面保存后都可能产生待应用变更：路由切换时顺便刷新。

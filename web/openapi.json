@@ -9959,6 +9959,17 @@
             }
           },
           {
+            "description": "隐藏按计划触发且成功或跳过的定时任务记录",
+            "explode": false,
+            "in": "query",
+            "name": "hide_scheduled_ok",
+            "schema": {
+              "default": false,
+              "description": "隐藏按计划触发且成功或跳过的定时任务记录",
+              "type": "boolean"
+            }
+          },
+          {
             "explode": false,
             "in": "query",
             "name": "limit",
