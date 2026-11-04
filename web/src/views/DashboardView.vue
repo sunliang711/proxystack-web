@@ -87,7 +87,7 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
     <template v-if="overview">
     <NAlert v-if="!overview.enabled" type="info" :bordered="false">流量监控未开启，可以在「系统设置 → 流量」中开启。</NAlert>
     <NAlert v-if="overview.failed_notifications" type="error" :bordered="false">
-      有 {{ overview.failed_notifications }} 封通知发送失败，请查看<RouterLink :to="{ name: 'notifications' }">通知记录</RouterLink>。
+      有 {{ overview.failed_notifications }} 封通知发送失败，请查看<RouterLink :to="{ name: 'records', query: { tab: 'notifications' } }">通知记录</RouterLink>。
     </NAlert>
     <NAlert v-for="stack in collectErrors" :key="stack.stack_id" type="warning" :bordered="false">Stack <EntityLink kind="stack" :id="stack.stack_id" :name="stack.stack" /> 采集失败：{{ stack.error }}</NAlert>
 

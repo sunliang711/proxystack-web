@@ -23,7 +23,11 @@ const router = createRouter({
       children: [
         { path: '', name: 'dashboard', component: () => import('./views/DashboardView.vue'), meta: { title: '总览', description: '对比今日和本月的各 Stack 入站与用户流量，并展示最近一小时实时速率与日月用量排行。采集失败、通知发送失败等需要处理的事项会在顶部提示。' } },
         { path: 'traffic', name: 'traffic', component: () => import('./views/TrafficView.vue'), meta: { title: '流量明细', description: '按小时、日、月、年查看用户、入站或出站的流量趋势与明细，可按 stack 和对象筛选，并导出为 CSV。' } },
-        { path: 'notifications', name: 'notifications', component: () => import('./views/NotificationsView.vue'), meta: { title: '通知记录', description: '每日阈值、额度超限、到期暂停等事件产生的邮件通知及其发送状态。发送失败的记录可以手动重发。' } },
+        { path: 'records', name: 'records', component: () => import('./views/RecordsView.vue'), meta: { title: '日志与历史', description: '管理员操作、配置版本和邮件通知的历史记录，用于查看谁在什么时候改了什么、通知是否发出。' } },
+        // 三个页面合并到「日志与历史」后，旧地址跳到对应标签，书签和邮件里的旧链接仍然可用。
+        { path: 'notifications', redirect: { name: 'records', query: { tab: 'notifications' } } },
+        { path: 'audit', redirect: { name: 'records', query: { tab: 'audit' } } },
+        { path: 'history', redirect: { name: 'records', query: { tab: 'history' } } },
         { path: 'stacks', name: 'stacks', component: () => import('./views/StacksView.vue'), meta: { title: 'Stack', description: '每个 stack 是一组独立运行的 xray / mihomo 进程及其配置。在这里新建、导入和导出 stack，进入后编辑入站、出站与规则。' } },
         { path: 'stacks/:id', name: 'stack', component: () => import('./views/stack/StackEditView.vue'), meta: { title: 'Stack 编辑', description: '编辑这个 stack 的入站、出站、上游、代理组和规则。保存只写入数据库，应用后才会生成配置并重启相关服务。' } },
         { path: 'users', name: 'users', component: () => import('./views/UsersView.vue'), meta: { title: '用户', description: '代理用户及其凭据、额度与到期时间。暂停会立即把用户从代理端移除，配置保留，恢复后即可继续使用。' } },
@@ -38,8 +42,6 @@ const router = createRouter({
         { path: 'tasks', name: 'tasks', component: () => import('./views/TasksView.vue'), meta: { title: '任务中心', description: '统一查看后台作业和定时任务的执行状态、耗时与日志。任务在后台运行，可以继续操作其他页面；运行中的任务优先显示。' } },
         { path: 'tasks/:source(task|job)/:id(\\d+)', name: 'task-detail', component: () => import('./views/TaskDetailView.vue'), meta: { title: '任务详情', description: '任务状态与执行日志自动更新，关闭页面不会中止服务器上的任务。' } },
         { path: 'health', name: 'health', component: () => import('./views/HealthView.vue'), meta: { title: '健康检查', description: '汇总依赖、服务状态、配置漂移、端口占用、流量采集、磁盘与备份等检查项，每项给出结论和处理建议。' } },
-        { path: 'audit', name: 'audit', component: () => import('./views/AuditView.vue'), meta: { title: '审计日志', description: '管理员在面板上执行的每一次修改操作及其结果，可按操作类型和操作者筛选。' } },
-        { path: 'history', name: 'history', component: () => import('./views/HistoryView.vue'), meta: { title: '配置历史', description: '每次配置变更都会保存一个完整快照。可以比较任意两个版本的差异，或回滚到选中的版本。' } },
         { path: 'backup', name: 'backup', component: () => import('./views/BackupView.vue'), meta: { title: '备份与还原', description: '导出整机迁移包、下载自动生成的备份文件，或从迁移包恢复整个实例。' } },
         { path: 'settings', name: 'settings', component: () => import('./views/SettingsView.vue'), meta: { title: '系统设置', description: '对外地址、端口池、默认值、安全、订阅、节点导出、流量、通知、依赖源和下载代理等全局设置。' } },
         { path: 'security', name: 'security', component: () => import('./views/SecurityView.vue'), meta: { title: '账号安全', description: '为管理员账号开启两步验证，并了解登录失败锁定和设备丢失时的恢复方法。' } },
