@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, h, onMounted, ref, watch } from 'vue'
 import {
-  NButton, NCard, NDataTable, NDatePicker, NEmpty, NGrid, NGridItem, NRadioButton, NRadioGroup, NSelect, NSpace, NStatistic, NText, useMessage,
+  NButton, NCard, NDataTable, NDatePicker, NEmpty, NGrid, NGridItem, NRadioButton, NRadioGroup, NSelect, NSpace, NStatistic, NTag, NText, useMessage,
   type DataTableColumns,
 } from 'naive-ui'
 import { api, problemMessage, saveBlob, type Schemas } from '../api/client'
@@ -94,6 +94,12 @@ function slotOf(subject: string): number | undefined {
   return slots.get(subject)
 }
 
+/** 聚合 stack 只经成员 stack 的 relay 出网；入站和出站维度下它的流量已在成员 stack 计入，合计不含它。 */
+const deduplicated = computed(() => scope.value !== 'user')
+const aggregatorIds = computed(() => new Set((result.value?.by_stack ?? []).filter((stack) => stack.aggregator).map((stack) => String(stack.stack_id))))
+const aggregatorNames = computed(() => (result.value?.by_stack ?? []).filter((stack) => stack.aggregator).map((stack) => stack.label))
+const isAggregatorRow = (subject: string) => deduplicated.value && groupBy.value === 'stack' && aggregatorIds.value.has(subject)
+
 const chartSeries = computed<ChartSeries[]>(() => {
   const out: ChartSeries[] = []
   let other: number[] | null = null
@@ -101,7 +107,10 @@ const chartSeries = computed<ChartSeries[]>(() => {
     const data = series.up.map((up, index) => up + series.down[index]!)
     const slot = slotOf(series.subject)
     if (slot !== undefined) {
-      out.push({ name: series.label, data, slot, entity: groupBy.value === 'stack' || scope.value === 'user' ? { kind: groupBy.value === 'stack' ? 'stack' : 'user', id: series.subject } : undefined })
+      out.push({
+        name: series.label, data, slot, excludeFromTotal: isAggregatorRow(series.subject),
+        entity: groupBy.value === 'stack' || scope.value === 'user' ? { kind: groupBy.value === 'stack' ? 'stack' : 'user', id: series.subject } : undefined,
+      })
     } else {
       other = other ? other.map((value, index) => value + data[index]!) : data
     }
@@ -126,9 +135,13 @@ const labels = computed(() => {
 const columns: DataTableColumns<Series> = [
   {
     title: () => groupBy.value === 'stack' ? 'Stack' : '对象', key: 'label',
-    render: (row) => groupBy.value === 'stack' || scope.value === 'user'
-      ? h(EntityLink, { kind: groupBy.value === 'stack' ? 'stack' : 'user', id: row.subject, label: row.label })
-      : row.label,
+    render: (row) => {
+      if (!(groupBy.value === 'stack' || scope.value === 'user')) return row.label
+      const link = h(EntityLink, { kind: groupBy.value === 'stack' ? 'stack' : 'user', id: row.subject, label: row.label })
+      return isAggregatorRow(row.subject)
+        ? h(NSpace, { size: 6, align: 'center', wrap: false }, () => [link, h(NTag, { size: 'small', bordered: false }, () => '聚合，不计入合计')])
+        : link
+    },
   },
   { title: '上行', key: 'up', render: (row) => formatBytes(row.up.reduce((a, b) => a + b, 0)) },
   { title: '下行', key: 'down', render: (row) => formatBytes(row.down.reduce((a, b) => a + b, 0)) },
@@ -177,6 +190,9 @@ async function exportCSV() {
       <template v-if="scope === 'user'"><EntityLink v-for="id in subjects" :key="`user:${id}`" kind="user" :id="id" :label="subjectOptions.find((option) => option.value === id)?.label" /></template>
     </NSpace>
     <NText depth="3">当前{{ scope === 'user' ? '按用户计数' : scope === 'inbound' ? '按入站计数' : '按出站计数' }}；总和与下方 Stack 明细使用相同筛选条件。切换「用户」可指定用户；共享账号流量可能无法归属到用户。</NText>
+    <NText v-if="deduplicated && aggregatorNames.length" depth="3">
+      合计不含聚合 stack {{ aggregatorNames.join('、') }}：它们的流量经成员 stack 的 relay 出去，已计入成员 stack。
+    </NText>
     <NText v-if="ready" depth="3">统计范围：{{ rangeLabel }}；按完整{{ level === 'hour' ? '小时' : level === 'day' ? '自然日' : level === 'month' ? '自然月' : '自然年' }}汇总，当前周期统计至最近一次采集。</NText>
     <NGrid cols="2 s:3" responsive="screen" :x-gap="20" :y-gap="20" item-responsive>
       <NGridItem span="2 s:1"><NCard size="small" class="metric-card"><NStatistic label="所选范围合计" :value="formatBytes((result?.total.up ?? 0) + (result?.total.down ?? 0))" /></NCard></NGridItem>
@@ -190,7 +206,8 @@ async function exportCSV() {
           <NRadioButton value="subject">按{{ scope === 'user' ? '用户' : scope === 'inbound' ? '入站' : '出站' }}</NRadioButton>
         </NRadioGroup>
       </template>
-      <TrafficChart v-if="result?.buckets.length" kind="bar" :labels="labels" :series="chartSeries" :format="formatBytes" height="320px" />
+      <!-- 按入站或出站对象分组时，同名对象跨 stack 合并，无法剔除聚合 stack 的重复部分，提示框不显示合计。 -->
+      <TrafficChart v-if="result?.buckets.length" kind="bar" :labels="labels" :series="chartSeries" :format="formatBytes" height="320px" :hide-total="deduplicated && groupBy === 'subject' && aggregatorNames.length > 0" />
       <NEmpty v-else description="所选范围内没有数据" />
     </NCard>
     <NCard :title="groupBy === 'stack' ? '各 Stack 流量明细' : '对象流量明细'" size="small">

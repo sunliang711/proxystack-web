@@ -3,7 +3,7 @@ import { computed, h, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import {
   NAlert, NButton, NCard, NDataTable, NDynamicTags, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NModal, NRadio,
-  NRadioGroup, NSelect, NSpace, NStep, NSteps, NTag, NText, useMessage, type DataTableColumns,
+  NRadioGroup, NSelect, NSpace, NStep, NSteps, NTag, NText, NTooltip, useMessage, type DataTableColumns,
 } from 'naive-ui'
 import { RefreshOutline } from '@vicons/ionicons5'
 import { api, emptyErrors, fieldState, splitProblem, type FormErrors, type Schemas } from '../api/client'
@@ -119,7 +119,19 @@ const columns: DataTableColumns<Summary> = [
         h(EgressHealthStatus, { health: healthByID.value.get(row.id), error: health.error.value }),
       ]),
   },
-  { title: tipTitle('角色', 'edge：独立出口，流量经本 stack 的上游直接出去。auto：聚合多个 edge stack 的 relay 入站，按测速或负载均衡挑选出口。'), key: 'role', width: 90 },
+  {
+    title: tipTitle('角色', 'edge：独立出口，流量经本 stack 的上游直接出去。auto：聚合多个 edge stack 的 relay 入站，按测速或负载均衡挑选出口。'),
+    key: 'role', width: 120,
+    render: (row) => row.relays_only && row.role === 'edge'
+      ? h(NSpace, { size: 4, align: 'center', wrap: false }, () => [
+          row.role,
+          h(NTooltip, null, {
+            trigger: () => h(NTag, { size: 'small', type: 'warning', bordered: false }, () => '应为 auto'),
+            default: () => '所有上游都引用其他 stack 的入站，按结构是聚合 stack。到编辑页「基本」中把角色改为 auto。',
+          }),
+        ])
+      : row.role,
+  },
   {
     title: 'Xray 入站',
     key: 'inbounds',

@@ -19,4 +19,6 @@ export interface ChartSeries {
   slot?: number
   /** 具体对象的数据支持点击打开详情；合计和「其他」不设置。 */
   entity?: EntityReference
+  /** 提示框里的「合计」不计入这一项，例如流量已在其他 stack 计入的聚合 stack。 */
+  excludeFromTotal?: boolean
 }

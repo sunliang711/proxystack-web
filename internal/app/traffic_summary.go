@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"proxystack-web/internal/configdoc"
 	"proxystack-web/internal/store"
 	"proxystack-web/internal/store/dbq"
 	"proxystack-web/internal/traffic"
@@ -19,17 +20,21 @@ type UserLivePoint struct {
 
 // StackTraffic 是总览中一个 stack 的入站用量和用户可归属用量。
 type StackTraffic struct {
-	StackID   int64         `json:"stack_id"`
-	Stack     string        `json:"stack"`
-	Today     traffic.Bytes `json:"today"`
-	Month     traffic.Bytes `json:"month"`
-	UserToday traffic.Bytes `json:"user_today"`
-	UserMonth traffic.Bytes `json:"user_month"`
+	StackID int64  `json:"stack_id"`
+	Stack   string `json:"stack"`
+	// Aggregator 表示只经其他 stack 的 relay 出网的聚合 stack，它的入站流量已在被引用 stack 计入，不进合计。
+	Aggregator bool          `json:"aggregator"`
+	Today      traffic.Bytes `json:"today"`
+	Month      traffic.Bytes `json:"month"`
+	UserToday  traffic.Bytes `json:"user_today"`
+	UserMonth  traffic.Bytes `json:"user_month"`
 }
 
 // StackSeries 保留明细的 stack 归属，同名入站或用户不会跨 stack 混淆。
 type StackSeries struct {
 	StackID int64 `json:"stack_id"`
+	// Aggregator 同 StackTraffic.Aggregator；入站和出站维度的合计不含它。
+	Aggregator bool `json:"aggregator"`
 	TrafficSeries
 }
 
@@ -87,10 +92,14 @@ func (s *Service) trafficOverview(ctx context.Context, userID int64) (*TrafficOv
 	if _, ok := names[userID]; userID != 0 && !ok {
 		return nil, ErrNotFound
 	}
+	aggregators, err := s.aggregatorStacks(ctx)
+	if err != nil {
+		return nil, err
+	}
 	byStack := map[int64]*StackTraffic{}
 	getStack := func(id int64) *StackTraffic {
 		if byStack[id] == nil {
-			byStack[id] = &StackTraffic{StackID: id, Stack: stackName(stacks, id)}
+			byStack[id] = &StackTraffic{StackID: id, Stack: stackName(stacks, id), Aggregator: aggregators[id]}
 		}
 		return byStack[id]
 	}
@@ -186,8 +195,12 @@ func (s *Service) trafficOverview(ctx context.Context, userID int64) (*TrafficOv
 	}
 	s.traffic.mu.Unlock()
 	for _, stack := range byStack {
-		out.Today.Add(stack.Today)
-		out.Month.Add(stack.Month)
+		// 全部流量按入站计数时，聚合 stack 的流量会在成员 stack 的 relay 入站再计一次，合计里跳过；
+		// 指定用户时按用户计数，不存在重复。
+		if userID != 0 || !stack.Aggregator {
+			out.Today.Add(stack.Today)
+			out.Month.Add(stack.Month)
+		}
 		out.UserToday.Add(stack.UserToday)
 		out.UserMonth.Add(stack.UserMonth)
 		out.ByStack = append(out.ByStack, *stack)
@@ -264,5 +277,20 @@ func (s *Service) userStackDaily(ctx context.Context, id int64, now time.Time, l
 		out = append(out, item)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Stack < out[j].Stack })
+	return out, nil
+}
+
+// aggregatorStacks 按当前配置返回只经其他 stack 的 relay 出网的 stack，多个 stack 加总入站流量时排除它们。
+func (s *Service) aggregatorStacks(ctx context.Context) (map[int64]bool, error) {
+	doc, err := s.LoadConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := map[int64]bool{}
+	for index := range doc.Stacks {
+		if configdoc.RelaysOnly(&doc.Stacks[index]) {
+			out[doc.Stacks[index].ID] = true
+		}
+	}
 	return out, nil
 }

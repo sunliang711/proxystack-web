@@ -72,6 +72,14 @@ const total = (bytes: { up: number; down: number }) => bytes.up + bytes.down
 const rankedUsers = computed(() => (rankingPeriod.value === 'day' ? overview.value?.top_users_today : overview.value?.top_users) ?? [])
 const peak = computed(() => Math.max(1, ...rankedUsers.value.map(total)))
 const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stack) => stack.error))
+/** 聚合 stack 的流量经成员 stack 的 relay 出去，已在成员 stack 计入，全部流量的合计不含它们。 */
+const aggregators = computed(() => (overview.value?.by_stack ?? []).filter((stack) => stack.aggregator).map((stack) => stack.stack))
+/** 合计里没能归属到具体用户的部分（例如 SOCKS5/HTTP 共享账号），差额很小时不提示。 */
+function unattributed(all: { up: number; down: number }, users: { up: number; down: number }) {
+  const gap = total(all) - total(users)
+  return gap >= 1024 * 1024 && gap > total(all) * 0.01 ? gap : 0
+}
+const hasUnattributed = computed(() => !!overview.value && (unattributed(overview.value.today, overview.value.user_today) > 0 || unattributed(overview.value.month, overview.value.user_month) > 0))
 </script>
 
 <template>
@@ -92,17 +100,21 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
     <NAlert v-for="stack in collectErrors" :key="stack.stack_id" type="warning" :bordered="false">Stack <EntityLink kind="stack" :id="stack.stack_id" :name="stack.stack" /> 采集失败：{{ stack.error }}</NAlert>
 
     <NGrid cols="2 m:4" responsive="screen" :x-gap="20" :y-gap="20">
-      <NGridItem><NCard size="small" class="metric-card"><NStatistic :label="userId ? '今日流量' : '今日 Stack 入站'" :value="formatBytes(total(overview.today))" /></NCard></NGridItem>
-      <template v-if="!userId">
-        <NGridItem><NCard size="small" class="metric-card"><NStatistic label="今日用户流量" :value="formatBytes(total(overview.user_today))" /></NCard></NGridItem>
-      </template>
-      <NGridItem><NCard size="small" class="metric-card"><NStatistic :label="userId ? '本月流量' : '本月 Stack 入站'" :value="formatBytes(total(overview.month))" /></NCard></NGridItem>
-      <template v-if="!userId">
-        <NGridItem><NCard size="small" class="metric-card"><NStatistic label="本月用户流量" :value="formatBytes(total(overview.user_month))" /></NCard></NGridItem>
-      </template>
+      <NGridItem v-for="period in [{ label: '今日流量', all: overview.today, users: overview.user_today }, { label: '本月流量', all: overview.month, users: overview.user_month }]" :key="period.label">
+        <NCard size="small" class="metric-card">
+          <NStatistic :label="period.label" :value="formatBytes(total(period.all))" />
+          <NText v-if="!userId && unattributed(period.all, period.users)" depth="3" class="metric-note">
+            其中 {{ formatBytes(unattributed(period.all, period.users)) }} 未归属到用户
+          </NText>
+        </NCard>
+      </NGridItem>
       <NGridItem><NCard size="small" class="metric-card"><NStatistic label="当前上行速率" :value="formatRate(latest?.up ?? 0)" /></NCard></NGridItem>
       <NGridItem><NCard size="small" class="metric-card"><NStatistic label="当前下行速率" :value="formatRate(latest?.down ?? 0)" /></NCard></NGridItem>
     </NGrid>
+    <NText v-if="!userId && (aggregators.length || hasUnattributed)" depth="3" class="aggregator-note">
+      <template v-if="aggregators.length">合计和速率不含聚合 stack {{ aggregators.join('、') }}：它们的流量经成员 stack 的 relay 出去，已计入成员 stack。</template>
+      <template v-if="hasUnattributed">未归属到用户的流量通常来自 SOCKS5/HTTP 共享账号。</template>
+    </NText>
 
     <NCard title="实时速率（最近 1 小时）" size="small">
       <TrafficChart v-if="live.length > 1" kind="line" :labels="labels" :series="rateSeries" :format="formatRate" />
@@ -117,7 +129,10 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
         <thead><tr><th>Stack</th><th>{{ userId ? '今日流量' : '今日入站' }}</th><th v-if="!userId">今日用户流量</th><th>{{ userId ? '本月流量' : '本月入站' }}</th><th v-if="!userId">本月用户流量</th><th>当前速率</th></tr></thead>
         <tbody>
           <tr v-for="stack in overview.by_stack" :key="stack.stack_id">
-            <td><EntityLink kind="stack" :id="stack.stack_id" :name="stack.stack" /></td>
+            <td>
+              <EntityLink kind="stack" :id="stack.stack_id" :name="stack.stack" />
+              <NTag v-if="stack.aggregator && !userId" size="small" :bordered="false" style="margin-left: 6px">聚合，不计入合计</NTag>
+            </td>
             <td><div>合计 {{ formatBytes(total(stack.today)) }}</div><NText depth="3">↑ {{ formatBytes(stack.today.up) }} · ↓ {{ formatBytes(stack.today.down) }}</NText></td>
             <td v-if="!userId"><div>合计 {{ formatBytes(total(stack.user_today)) }}</div><NText depth="3">↑ {{ formatBytes(stack.user_today.up) }} · ↓ {{ formatBytes(stack.user_today.down) }}</NText></td>
             <td><div>合计 {{ formatBytes(total(stack.month)) }}</div><NText depth="3">↑ {{ formatBytes(stack.month.up) }} · ↓ {{ formatBytes(stack.month.down) }}</NText></td>
@@ -170,6 +185,8 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
 </template>
 
 <style scoped>
+.metric-note { display: block; margin-top: 4px; font-size: 12px; }
+.aggregator-note { display: block; margin-top: -8px; font-size: 12px; }
 .collection-link { text-decoration: none; border-radius: 6px; }
 .collection-tag { cursor: pointer; }
 .collection-link:hover .collection-tag { filter: brightness(1.15); text-decoration: underline; }

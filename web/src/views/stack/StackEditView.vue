@@ -2,7 +2,7 @@
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  NBadge, NButton, NCard, NDropdown, NDynamicTags, NForm, NFormItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup,
+  NAlert, NBadge, NButton, NCard, NDropdown, NDynamicTags, NForm, NFormItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup,
   NSelect, NSpace, NSpin, NSwitch, NTabPane, NTabs, NText, useDialog, useMessage,
 } from 'naive-ui'
 import { ChevronDownOutline } from '@vicons/ionicons5'
@@ -176,6 +176,15 @@ const groupLabel = (name: string, label: string) => () => {
   return tabs.some((t) => tabErrors.value[t]) ? h(NBadge, { dot: true, type: 'error', offset: [6, 0] }, () => label) : label
 }
 
+/** 按配置结构判断是否为聚合 stack：出站交给本 stack 的 Mihomo，上游全部引用其他 stack 的入站。 */
+const relaysOnly = computed(() => {
+  const s = stack.value
+  if (!s || s.xray.outbound.type !== 'mihomo' || !s.mihomo.enabled || !s.mihomo.upstreams.length) return false
+  return s.mihomo.upstreams.every((upstream) => upstream.type === 'xray-socks5')
+})
+/** 角色是 auto，但上游里混有外部节点。 */
+const mixedAuto = computed(() => stack.value?.role === 'auto' && (stack.value?.mihomo.upstreams ?? []).some((upstream) => upstream.type !== 'xray-socks5'))
+
 const moreOptions = [
   { key: 'clone', label: '克隆' },
   { type: 'divider', key: 'divider' },
@@ -307,10 +316,22 @@ async function saveMembers() {
                   <ByteSizeInput small :value="stack.daily_limit_bytes ?? 0" @update:value="(value: number) => (stack!.daily_limit_bytes = value)" />
                 </NFormItem>
                 <NFormItem label="角色" v-bind="f('role', 'edge：独立出口，流量经本 stack 的上游出去；auto：聚合多个 edge stack 的 relay 入站，按测速或负载均衡挑选出口')">
-                  <NRadioGroup v-model:value="stack.role">
-                    <NRadioButton value="edge">edge</NRadioButton>
-                    <NRadioButton value="auto">auto</NRadioButton>
-                  </NRadioGroup>
+                  <NSpace vertical style="width: 100%">
+                    <NRadioGroup v-model:value="stack.role">
+                      <NRadioButton value="edge">edge</NRadioButton>
+                      <NRadioButton value="auto">auto</NRadioButton>
+                    </NRadioGroup>
+                    <NAlert v-if="relaysOnly && stack.role === 'edge'" type="warning" :bordered="false">
+                      所有上游都引用其他 stack 的入站，按结构这是聚合 stack，但角色是 edge。改为 auto 后才能在「成员」页管理成员，流量拓扑也会按聚合 stack 显示。
+                      <NButton size="small" type="warning" secondary style="margin-left: 8px" @click="stack.role = 'auto'">改为 auto</NButton>
+                    </NAlert>
+                    <NAlert v-else-if="mixedAuto" type="warning" :bordered="false">
+                      角色是 auto，但上游里混有外部节点。流量合计会计入这个 stack，经其他 stack relay 转发的部分会重复计算；建议聚合 stack 只引用其他 stack。
+                    </NAlert>
+                    <NText v-if="relaysOnly" depth="3" style="font-size: 12px">
+                      这个 stack 只经其他 stack 的 relay 出网，流量已在被引用的 stack 计入，多个 stack 加总时不再计入它。
+                    </NText>
+                  </NSpace>
                 </NFormItem>
                 <NFormItem label="标签" v-bind="f('labels')">
                   <NDynamicTags v-model:value="stack.labels" />

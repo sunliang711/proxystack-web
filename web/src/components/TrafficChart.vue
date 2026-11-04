@@ -21,6 +21,8 @@ const props = defineProps<{
   /** 参考线，例如每日阈值。 */
   reference?: { value: number; label: string }
   height?: string
+  /** 柱状图提示框是否显示各项合计；各项之间有重复计数时关闭。 */
+  hideTotal?: boolean
 }>()
 
 const mode = computed(() => (isDark.value ? 'dark' : 'light'))
@@ -39,9 +41,11 @@ function escapeHtml(value: string): string {
 function tooltipFormatter(params: CallbackDataParams | CallbackDataParams[]): string {
   const items = Array.isArray(params) ? params : [params]
   const values = items.map((item) => typeof item.value === 'number' ? item.value : Number(item.value) || 0)
-  const lines = items.map((item, index) => `${item.marker ?? ''}${escapeHtml(item.seriesName ?? '')}: ${props.format(values[index]!)}`)
-  const total = values.reduce((sum, value) => sum + value, 0)
-  return `${escapeHtml(items[0]?.name ?? '')}<br/>${lines.join('<br/>')}<br/><strong>合计：${props.format(total)}</strong>`
+  const excluded = (item: CallbackDataParams) => props.series[item.seriesIndex ?? -1]?.excludeFromTotal === true
+  const lines = items.map((item, index) => `${item.marker ?? ''}${escapeHtml(item.seriesName ?? '')}${excluded(item) ? '（不计入合计）' : ''}: ${props.format(values[index]!)}`)
+  const total = values.reduce((sum, value, index) => (excluded(items[index]!) ? sum : sum + value), 0)
+  const head = `${escapeHtml(items[0]?.name ?? '')}<br/>${lines.join('<br/>')}`
+  return props.hideTotal ? head : `${head}<br/><strong>合计：${props.format(total)}</strong>`
 }
 
 /** 全部为 0 时坐标轴会自动取 0～1，只保留 0 的刻度文字，避免出现无意义的「1 B/s」。 */

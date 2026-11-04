@@ -73,21 +73,23 @@ type InboundSummary struct {
 
 // StackSummary 是 stack 列表的一行。
 type StackSummary struct {
-	ID             int64             `json:"id"`
-	Name           string            `json:"name"`
-	Enabled        bool              `json:"enabled"`
-	DesiredRunning bool              `json:"desired_running"`
-	Role           string            `json:"role"`
-	Labels         []string          `json:"labels"`
-	XrayEnabled    bool              `json:"xray_enabled"`
-	MihomoEnabled  bool              `json:"mihomo_enabled"`
-	Inbounds       []InboundSummary  `json:"inbounds"`
-	MihomoSocks    string            `json:"mihomo_socks"`
-	MihomoHTTP     string            `json:"mihomo_http"`
-	Members        []string          `json:"members"`
-	Loopback       bool              `json:"loopback" doc:"全部入站只监听本机回环地址"`
-	Outbound       OutboundSummary   `json:"outbound"`
-	Upstreams      []UpstreamSummary `json:"upstreams"`
+	ID             int64  `json:"id"`
+	Name           string `json:"name"`
+	Enabled        bool   `json:"enabled"`
+	DesiredRunning bool   `json:"desired_running"`
+	Role           string `json:"role"`
+	// RelaysOnly 表示按配置结构是聚合 stack：只经其他 stack 的 relay 出网，与角色标记无关。
+	RelaysOnly    bool              `json:"relays_only"`
+	Labels        []string          `json:"labels"`
+	XrayEnabled   bool              `json:"xray_enabled"`
+	MihomoEnabled bool              `json:"mihomo_enabled"`
+	Inbounds      []InboundSummary  `json:"inbounds"`
+	MihomoSocks   string            `json:"mihomo_socks"`
+	MihomoHTTP    string            `json:"mihomo_http"`
+	Members       []string          `json:"members"`
+	Loopback      bool              `json:"loopback" doc:"全部入站只监听本机回环地址"`
+	Outbound      OutboundSummary   `json:"outbound"`
+	Upstreams     []UpstreamSummary `json:"upstreams"`
 }
 
 // OutboundSummary 是 xray 出站的去向，用于列表页的流量图示。
@@ -596,7 +598,7 @@ func rawEndpoint(config configdoc.RawMapping) (protocol, server string) {
 func summarizeStack(stack configdoc.Stack) StackSummary {
 	summary := StackSummary{
 		ID: stack.ID, Name: stack.Name, Enabled: stack.Enabled, DesiredRunning: stack.DesiredRunning, Role: stack.Role,
-		Labels: stack.Labels, XrayEnabled: stack.Xray.Enabled, MihomoEnabled: stack.Mihomo.Enabled,
+		RelaysOnly: configdoc.RelaysOnly(&stack), Labels: stack.Labels, XrayEnabled: stack.Xray.Enabled, MihomoEnabled: stack.Mihomo.Enabled,
 		Inbounds: []InboundSummary{}, Members: configdoc.Members(&stack), Loopback: true,
 		Outbound: OutboundSummary{Type: stack.Xray.Outbound.Type}, Upstreams: []UpstreamSummary{},
 	}

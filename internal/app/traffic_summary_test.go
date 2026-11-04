@@ -215,3 +215,89 @@ func TestTrafficOverviewDailyAndMonthlyRankings(t *testing.T) {
 	require.EqualValues(t, 1000, overview.TopUsers[0].ID)
 	require.Equal(t, bob.ID, overview.TopUsersToday[0].ID)
 }
+
+// 聚合 stack 只经成员的 relay 出网，同一份流量会在成员 stack 的入站再计一次：
+// 多个 stack 加总入站和出站时排除它，单个 stack 的数字和用户维度保持原样。
+func TestTrafficTotalsSkipAggregatorStacks(t *testing.T) {
+	h := newTrafficHarness(t)
+	ctx := context.Background()
+	doc, err := h.svc.LoadConfig(ctx)
+	require.NoError(t, err)
+	autoID := doc.Stacks[doc.StackByName("auto")].ID
+	edgeID := doc.Stacks[doc.StackByName("usa1")].ID
+	subject := strconv.FormatInt(h.alice(t).ID, 10)
+	for table, bucket := range map[string]time.Time{
+		"traffic_hour":  h.now.Truncate(time.Hour),
+		"traffic_day":   traffic.DayStart(h.now, h.now.Location()),
+		"traffic_month": traffic.MonthStart(h.now, h.now.Location()),
+	} {
+		for _, row := range []struct {
+			stackID        int64
+			scope, subject string
+			up, down       int64
+		}{
+			// 客户端经聚合 stack 进入，再经 usa1 的 relay 出去：入站各计一次，用户只在入口计一次。
+			{autoID, "inbound", "vmess", 100, 200},
+			{autoID, "user", subject, 100, 200},
+			{edgeID, "inbound", "relay", 100, 200},
+			// usa1 自己的直连用户。
+			{edgeID, "inbound", "vmess", 10, 20},
+			{edgeID, "user", subject, 10, 20},
+		} {
+			_, err := h.svc.Store.DB.ExecContext(ctx, "INSERT INTO "+table+" (bucket_start, stack_id, scope, subject, up, down) VALUES (?, ?, ?, ?, ?, ?)", bucket.Unix(), row.stackID, row.scope, row.subject, row.up, row.down)
+			require.NoError(t, err)
+		}
+	}
+
+	overview, err := h.svc.TrafficOverviewData(ctx, 0)
+	require.NoError(t, err)
+	require.EqualValues(t, 330, overview.Today.Total())
+	require.EqualValues(t, 330, overview.Month.Total())
+	require.EqualValues(t, 330, overview.UserToday.Total())
+	for _, stack := range overview.ByStack {
+		switch stack.StackID {
+		case autoID:
+			require.True(t, stack.Aggregator)
+			require.EqualValues(t, 300, stack.Today.Total(), "单个 stack 的数字不变")
+		case edgeID:
+			require.False(t, stack.Aggregator)
+			require.EqualValues(t, 330, stack.Today.Total())
+		}
+	}
+
+	query := app.TrafficQuery{Level: "day", GroupBy: "stack", From: h.now.AddDate(0, 0, -1), To: h.now.AddDate(0, 0, 1)}
+	query.Scope = "inbound"
+	result, err := h.svc.QueryTraffic(ctx, query)
+	require.NoError(t, err)
+	require.EqualValues(t, 330, result.Total.Total())
+	require.Len(t, result.ByStack, 2)
+	query.Scope = "user"
+	result, err = h.svc.QueryTraffic(ctx, query)
+	require.NoError(t, err)
+	require.EqualValues(t, 330, result.Total.Total(), "用户维度不排除聚合 stack")
+}
+
+// 实时总速率同样不重复相加聚合 stack，各 stack 自己的速率照常保留。
+func TestLiveRateSkipsAggregatorStacks(t *testing.T) {
+	h := newTrafficHarness(t)
+	ctx := context.Background()
+	h.svc.TrafficTick(ctx)
+	h.api.AddStats("127.0.0.1:10150",
+		xrayapi.Stat{Name: "inbound>>>vmess>>>traffic>>>uplink", Value: 600},
+		xrayapi.Stat{Name: "inbound>>>vmess>>>traffic>>>downlink", Value: 1200},
+	)
+	h.api.AddStats(usa1API,
+		xrayapi.Stat{Name: "inbound>>>relay>>>traffic>>>uplink", Value: 600},
+		xrayapi.Stat{Name: "inbound>>>relay>>>traffic>>>downlink", Value: 1200},
+	)
+	h.now = h.now.Add(time.Minute)
+	h.svc.TrafficTick(ctx)
+	overview, err := h.svc.TrafficOverviewData(ctx, 0)
+	require.NoError(t, err)
+	require.NotEmpty(t, overview.Live)
+	point := overview.Live[len(overview.Live)-1]
+	require.EqualValues(t, 10, point.Up)
+	require.EqualValues(t, 20, point.Down)
+	require.EqualValues(t, 10, point.Stacks["auto"].Up)
+	require.EqualValues(t, 10, point.Stacks["usa1"].Up)
+}

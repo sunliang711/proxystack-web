@@ -2803,6 +2803,7 @@ export interface components {
             units: components["schemas"]["UnitView"][];
         };
         StackSeries: {
+            aggregator: boolean;
             down: number[];
             label: string;
             /** Format: int64 */
@@ -2825,11 +2826,13 @@ export interface components {
             mihomo_socks: string;
             name: string;
             outbound: components["schemas"]["OutboundSummary"];
+            relays_only: boolean;
             role: string;
             upstreams: components["schemas"]["UpstreamSummary"][];
             xray_enabled: boolean;
         };
         StackTraffic: {
+            aggregator: boolean;
             month: components["schemas"]["Bytes"];
             stack: string;
             /** Format: int64 */

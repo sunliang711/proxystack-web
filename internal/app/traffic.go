@@ -52,6 +52,8 @@ type collectTarget struct {
 	stackID int64
 	name    string
 	server  string
+	// aggregator 表示只经其他 stack 的 relay 出网，实时总速率不重复相加它。
+	aggregator bool
 	// problem 非空时该 stack 无法采集（未开启统计接口）。
 	problem string
 }
@@ -135,7 +137,7 @@ func (s *Service) collectTargets(ctx context.Context) ([]collectTarget, error) {
 		if stack == nil || !stack.Enabled || !stack.Xray.Enabled {
 			continue
 		}
-		target := collectTarget{stackID: snapshot.Stacks[index].ID, name: row.StackName}
+		target := collectTarget{stackID: snapshot.Stacks[index].ID, name: row.StackName, aggregator: configdoc.RelaysOnly(&snapshot.Stacks[index])}
 		api := domain.ResolveXrayAPIConfig(set.Config.Defaults.Xray, stack.Xray)
 		stats := domain.ResolveXrayStatsConfig(set.Config.Defaults.Xray, stack.Xray)
 		if !api.Enabled || !api.HasService("StatsService") || !stats.Enabled {
@@ -219,7 +221,9 @@ func (s *Service) collectTraffic(ctx context.Context) {
 				user.Stacks[target.name] = bytes
 				point.Users[id] = user
 			}
-			total.Add(delta.Stack)
+			if !target.aggregator {
+				total.Add(delta.Stack)
+			}
 		}
 		statuses[target.stackID] = status
 	}
@@ -579,6 +583,10 @@ func (s *Service) QueryTraffic(ctx context.Context, query TrafficQuery) (*Traffi
 		}
 		result.Series = append(result.Series, series)
 	}
+	aggregators, err := s.aggregatorStacks(ctx)
+	if err != nil {
+		return nil, err
+	}
 	for id, cells := range stackCells {
 		series := TrafficSeries{Subject: strconv.FormatInt(id, 10), Label: stackName(stacks, id), Up: make([]int64, len(ordered)), Down: make([]int64, len(ordered))}
 		for index, bucket := range ordered {
@@ -586,8 +594,11 @@ func (s *Service) QueryTraffic(ctx context.Context, query TrafficQuery) (*Traffi
 			series.Up[index], series.Down[index] = value.Up, value.Down
 			series.Bytes.Add(value)
 		}
-		result.Total.Add(series.Bytes)
-		result.ByStack = append(result.ByStack, StackSeries{StackID: id, TrafficSeries: series})
+		// 入站和出站维度下，聚合 stack 的流量已在被引用 stack 计入，合计不重复相加；用户维度没有重复。
+		if query.Scope == traffic.ScopeUser || !aggregators[id] {
+			result.Total.Add(series.Bytes)
+		}
+		result.ByStack = append(result.ByStack, StackSeries{StackID: id, Aggregator: aggregators[id], TrafficSeries: series})
 	}
 	sort.Slice(result.ByStack, func(i, j int) bool {
 		a, b := result.ByStack[i], result.ByStack[j]

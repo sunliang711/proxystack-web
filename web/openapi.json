@@ -3898,6 +3898,9 @@
       "StackSeries": {
         "additionalProperties": false,
         "properties": {
+          "aggregator": {
+            "type": "boolean"
+          },
           "down": {
             "items": {
               "format": "int64",
@@ -3925,6 +3928,7 @@
         },
         "required": [
           "stack_id",
+          "aggregator",
           "subject",
           "label",
           "up",
@@ -3982,6 +3986,9 @@
           "outbound": {
             "$ref": "#/components/schemas/OutboundSummary"
           },
+          "relays_only": {
+            "type": "boolean"
+          },
           "role": {
             "type": "string"
           },
@@ -4001,6 +4008,7 @@
           "enabled",
           "desired_running",
           "role",
+          "relays_only",
           "labels",
           "xray_enabled",
           "mihomo_enabled",
@@ -4017,6 +4025,9 @@
       "StackTraffic": {
         "additionalProperties": false,
         "properties": {
+          "aggregator": {
+            "type": "boolean"
+          },
           "month": {
             "$ref": "#/components/schemas/Bytes"
           },
@@ -4040,6 +4051,7 @@
         "required": [
           "stack_id",
           "stack",
+          "aggregator",
           "today",
           "month",
           "user_today",

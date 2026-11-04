@@ -164,6 +164,21 @@ func SetMembers(stack *Stack, members []string) {
 	}
 }
 
+// RelaysOnly 判断 stack 是否只经其他 stack 的 relay 出网：xray 出站交给本 stack 的 Mihomo，
+// Mihomo 至少有一个上游且全部引用其他 stack 的入站。这类聚合 stack 的流量会在被引用 stack 的
+// 入站再计一次，多个 stack 加总时应排除。判断只看配置结构，不看角色标记。
+func RelaysOnly(stack *Stack) bool {
+	if stack.Xray.Outbound.Type != "mihomo" || !stack.Mihomo.Enabled || len(stack.Mihomo.Upstreams) == 0 {
+		return false
+	}
+	for _, upstream := range stack.Mihomo.Upstreams {
+		if upstream.Type != "xray-socks5" {
+			return false
+		}
+	}
+	return true
+}
+
 // AddMember 为 auto stack 追加一个成员。
 func AddMember(stack *Stack, member string) {
 	name := member + "-local"
