@@ -112,6 +112,11 @@ func TestNewStackAndClone(t *testing.T) {
 	require.NoError(t, err)
 	doc.Stacks = append(doc.Stacks, auto)
 	require.Empty(t, configdoc.Validate(doc))
+	// 聚合 stack 只经成员出网，代理组里不含 DIRECT。
+	for _, group := range auto.Mihomo.Groups {
+		require.NotContains(t, group.Proxies, configdoc.BuiltinDirect, group.Name)
+	}
+	require.Equal(t, []string{"BalanceProxy", "jp1-local", "usa1-local"}, auto.Mihomo.Groups[1].Proxies)
 
 	clone := configdoc.CloneStack(&doc.Stacks[1], "usa3")
 	require.NoError(t, configdoc.AllocateStackPorts(doc, settings, &clone, nil))

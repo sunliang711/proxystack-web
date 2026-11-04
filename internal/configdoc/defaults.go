@@ -156,9 +156,10 @@ func NewStack(doc *Document, settings Settings, opts NewStackOptions) (Stack, er
 		if opts.Template == TemplateLoadBalance {
 			groupName, groupType, strategy = "BalanceProxy", "load-balance", "consistent-hashing"
 		}
+		// 聚合 stack 的流量全部经成员 stack 的 relay 出去，代理组不放 DIRECT，避免从本机直接出网。
 		stack.Mihomo.Groups = []Group{
 			{Name: groupName, Type: groupType, Proxies: []string{}, URL: DefaultTestURL, Interval: DefaultInterval, Strategy: strategy},
-			{Name: SelectGroup, Type: "select", Proxies: []string{groupName, BuiltinDirect}},
+			{Name: SelectGroup, Type: "select", Proxies: []string{groupName}},
 		}
 		stack.Mihomo.Upstreams = []Upstream{}
 		for _, member := range opts.Members {
