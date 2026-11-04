@@ -91,7 +91,7 @@ const updateModalTitle = computed(() => ({
 const updatePhaseText = computed(() => ({
   idle: '',
   submitting: '正在提交更新任务…',
-  unknown: '提交结果未知，请先在任务中心确认是否已创建自更新任务',
+  unknown: '提交结果未知，请先在后台任务中确认是否已创建自更新任务',
   updating: `正在下载并校验 ${updateTarget.value}…`,
   restarting: '管理服务正在重启…',
   verifying: `服务已恢复，正在确认 ${updateTarget.value}…`,
@@ -384,7 +384,7 @@ onBeforeUnmount(() => {
     <template #footer>
       <NSpace justify="end">
         <NButton v-if="updateTaskID" @click="taskCenter.open({ source: 'task', id: updateTaskID })">查看任务</NButton>
-        <NButton v-else-if="updatePhase === 'unknown'" @click="taskCenter.open()">打开任务中心</NButton>
+        <NButton v-else-if="updatePhase === 'unknown'" @click="taskCenter.open()">打开后台任务</NButton>
         <NButton v-if="updatePhase === 'unknown' || updatePhase === 'failed' || updatePhase === 'timeout'" @click="reloadPage">刷新页面</NButton>
         <NButton v-if="updateModalClosable" type="primary" @click="closeUpdateModal">关闭</NButton>
       </NSpace>

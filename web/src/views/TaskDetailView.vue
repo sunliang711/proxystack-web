@@ -12,7 +12,7 @@ const id = computed(() => Number(route.params.id))
 
 <template>
   <NSpace vertical :size="20">
-    <RouterLink :to="{ name: 'tasks' }">← 返回任务中心</RouterLink>
+    <RouterLink :to="{ name: 'tasks' }">← 返回后台任务</RouterLink>
     <NCard size="small"><TaskDetails :source="source" :id="id" /></NCard>
   </NSpace>
 </template>

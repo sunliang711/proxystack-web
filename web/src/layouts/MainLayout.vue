@@ -138,7 +138,7 @@ const groups: { key: string; label: string; items: NavItem[] }[] = [
     label: '运维',
     items: [
       { name: 'deps', label: '依赖', icon: CubeOutline },
-      { name: 'tasks', label: '任务中心', icon: ListOutline },
+      { name: 'tasks', label: '后台任务', icon: ListOutline },
       { name: 'jobs', label: '定时任务', icon: TimerOutline },
       { name: 'health', label: '健康检查', icon: PulseOutline },
       { name: 'records', label: '日志与历史', icon: ReceiptOutline },

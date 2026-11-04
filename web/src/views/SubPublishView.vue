@@ -73,7 +73,7 @@ async function publishOnline() {
     return
   }
   submitted.value = data
-  message.success(`订阅包 #${data.sequence} 已提交到任务中心`)
+  message.success(`订阅包 #${data.sequence} 已提交到后台任务`)
   await load()
 }
 

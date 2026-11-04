@@ -32,7 +32,7 @@ const { data, loading, error, refresh } = usePolling<Schemas['TaskCenterPage']>(
   return data
 }, 5000)
 const statusOptions = [{ label: '全部状态', value: 'all' }, ...Object.entries(taskStatus).map(([value, view]) => ({ label: view.label, value }))]
-const sourceOptions = [{ label: '全部来源', value: 'all' }, { label: '后台作业', value: 'task' }, { label: '定时任务', value: 'job' }]
+const sourceOptions = [{ label: '全部来源', value: 'all' }, { label: '一次性任务', value: 'task' }, { label: '定时任务', value: 'job' }]
 const allKindOptions = [
   { label: '全部任务', value: 'all' },
   { label: '应用配置', value: 'apply', source: 'task' },
@@ -56,7 +56,7 @@ function onSourceChange() {
 const columns: DataTableColumns<CenterTask> = [
   { title: '任务', key: 'title', width: 260, render: (task) => h('div', [
     h(RouterLink, { to: taskRoute(task) }, () => task.title),
-    h('div', [h(NText, { depth: 3 }, () => `${task.source === 'job' ? '定时任务' : '后台作业'} · #${task.id}`)]),
+    h('div', [h(NText, { depth: 3 }, () => `${task.source === 'job' ? '定时任务' : '一次性任务'} · #${task.id}`)]),
   ]) },
   { title: '状态', key: 'status', width: 100, render: (task) => h(NTag, { round: true, size: 'small', type: taskStatus[task.status].type }, () => taskStatus[task.status].label) },
   { title: '执行者', key: 'actor', width: 110, render: taskActor },

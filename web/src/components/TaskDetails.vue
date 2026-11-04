@@ -42,7 +42,7 @@ onBeforeUnmount(() => { clearInterval(clock); clearTimeout(queued); stopTask(); 
         <NTag round size="small" :type="taskStatus[task.status].type">{{ taskStatus[task.status].label }}</NTag>
       </NSpace>
       <NDescriptions :column="1" label-placement="left" size="small">
-        <NDescriptionsItem label="来源">{{ task.source === 'job' ? '定时任务' : '后台作业' }} · #{{ task.id }}</NDescriptionsItem>
+        <NDescriptionsItem label="来源">{{ task.source === 'job' ? '定时任务' : '一次性任务' }} · #{{ task.id }}</NDescriptionsItem>
         <NDescriptionsItem label="执行者">{{ taskActor(task) }}</NDescriptionsItem>
         <NDescriptionsItem label="开始时间">{{ formatTime(task.started_at) }}</NDescriptionsItem>
         <NDescriptionsItem v-if="task.status !== 'running'" label="结束时间">{{ formatTime(task.finished_at) }}</NDescriptionsItem>

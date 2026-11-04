@@ -51,7 +51,7 @@ export function createTaskCenter(request: Requests = requests) {
   let unsubscribe: (() => void)[] = []
 
   function persistRead() {
-    try { localStorage.setItem(storageKey, JSON.stringify([...read].slice(-500))) } catch { /* 存储不可用时仍可使用任务中心。 */ }
+    try { localStorage.setItem(storageKey, JSON.stringify([...read].slice(-500))) } catch { /* 存储不可用时仍可使用后台任务。 */ }
   }
   function markRead(reference?: TaskReference) {
     const keys = reference ? [taskKey(reference)] : state.unread

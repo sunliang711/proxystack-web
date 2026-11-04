@@ -1,7 +1,7 @@
 import { onScopeDispose } from 'vue'
 import { taskCenter } from '../tasks'
 
-/** 页面只订阅自己提交的任务结果；离开页面后由全局任务中心继续追踪。 */
+/** 页面只订阅自己提交的任务结果；离开页面后由全局后台任务继续追踪。 */
 export function useBackgroundTask(finished?: (status: string) => unknown) {
   const ids = new Set<number>()
   const stop = taskCenter.onFinished((task) => {

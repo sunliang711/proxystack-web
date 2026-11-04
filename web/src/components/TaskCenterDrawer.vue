@@ -28,17 +28,17 @@ const shown = computed(() => state.items.slice(0, 20))
           <NAlert v-if="state.error" type="warning" :bordered="false">{{ state.error }}</NAlert>
           <button v-for="task in shown" :key="taskKey(task)" class="task-item" @click="taskCenter.open(task)">
             <span class="task-item-head"><strong>{{ task.title }}</strong><NTag round size="small" :type="taskStatus[task.status].type">{{ taskStatus[task.status].label }}</NTag></span>
-            <span class="task-meta">{{ task.source === 'job' ? '定时任务' : '后台作业' }} · {{ formatTime(task.started_at) }} · {{ taskDuration(task, now) }}</span>
+            <span class="task-meta">{{ task.source === 'job' ? '定时任务' : '一次性任务' }} · {{ formatTime(task.started_at) }} · {{ taskDuration(task, now) }}</span>
             <span v-if="task.error || task.log.length" class="task-line">{{ task.error || task.log[task.log.length - 1] }}</span>
           </button>
           <NEmpty v-if="!shown.length" :description="state.loading ? '正在读取任务' : '暂无任务记录'" />
-          <NText v-if="state.items.length > 20" depth="3">此处展示最近 20 条，完整记录请进入任务中心。</NText>
+          <NText v-if="state.items.length > 20" depth="3">此处展示最近 20 条，完整记录请进入后台任务页面。</NText>
         </template>
       </NSpace>
       <template #footer>
         <NSpace justify="space-between" align="center">
           <RouterLink v-if="state.selected" :to="taskRoute(state.selected)" target="_blank" rel="noopener">在新标签页查看完整详情 ↗</RouterLink>
-          <RouterLink v-else :to="{ name: 'tasks' }" @click="state.drawer = false">打开任务中心</RouterLink>
+          <RouterLink v-else :to="{ name: 'tasks' }" @click="state.drawer = false">查看全部后台任务</RouterLink>
           <NButton v-if="state.unread.length" size="small" @click="taskCenter.markRead()">失败提醒全部已读</NButton>
         </NSpace>
       </template>
