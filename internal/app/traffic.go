@@ -368,6 +368,7 @@ func (s *Service) TrafficTick(ctx context.Context) {
 		}
 	}
 	s.evaluateAutoPause(ctx)
+	s.evaluateStackLimits(ctx)
 }
 
 // PruneNow 立即清理过期明细。

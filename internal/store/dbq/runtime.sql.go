@@ -9,12 +9,39 @@ import (
 	"context"
 )
 
+const clearStackAutoStopRestore = `-- name: ClearStackAutoStopRestore :exec
+UPDATE stack_auto_stop
+SET restore_xray = CASE WHEN ?1 != 0 THEN 0 ELSE restore_xray END,
+    restore_mihomo = CASE WHEN ?2 != 0 THEN 0 ELSE restore_mihomo END
+WHERE stack_id = (SELECT id FROM stacks WHERE name = ?3)
+`
+
+type ClearStackAutoStopRestoreParams struct {
+	ClearXray   interface{} `json:"clear_xray"`
+	ClearMihomo interface{} `json:"clear_mihomo"`
+	StackName   string      `json:"stack_name"`
+}
+
+func (q *Queries) ClearStackAutoStopRestore(ctx context.Context, arg ClearStackAutoStopRestoreParams) error {
+	_, err := q.db.ExecContext(ctx, clearStackAutoStopRestore, arg.ClearXray, arg.ClearMihomo, arg.StackName)
+	return err
+}
+
 const deleteAppliedState = `-- name: DeleteAppliedState :exec
 DELETE FROM applied_state WHERE stack_name = ?
 `
 
 func (q *Queries) DeleteAppliedState(ctx context.Context, stackName string) error {
 	_, err := q.db.ExecContext(ctx, deleteAppliedState, stackName)
+	return err
+}
+
+const deleteStackAutoStop = `-- name: DeleteStackAutoStop :exec
+DELETE FROM stack_auto_stop WHERE stack_id = ?
+`
+
+func (q *Queries) DeleteStackAutoStop(ctx context.Context, stackID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteStackAutoStop, stackID)
 	return err
 }
 
@@ -112,6 +139,29 @@ func (q *Queries) InsertDepInstall(ctx context.Context, arg InsertDepInstallPara
 		arg.FinishedAt,
 		arg.Result,
 		arg.Error,
+	)
+	return err
+}
+
+const insertStackAutoStop = `-- name: InsertStackAutoStop :exec
+INSERT OR IGNORE INTO stack_auto_stop (stack_id, day, since, restore_xray, restore_mihomo) VALUES (?, ?, ?, ?, ?)
+`
+
+type InsertStackAutoStopParams struct {
+	StackID       int64  `json:"stack_id"`
+	Day           string `json:"day"`
+	Since         int64  `json:"since"`
+	RestoreXray   int64  `json:"restore_xray"`
+	RestoreMihomo int64  `json:"restore_mihomo"`
+}
+
+func (q *Queries) InsertStackAutoStop(ctx context.Context, arg InsertStackAutoStopParams) error {
+	_, err := q.db.ExecContext(ctx, insertStackAutoStop,
+		arg.StackID,
+		arg.Day,
+		arg.Since,
+		arg.RestoreXray,
+		arg.RestoreMihomo,
 	)
 	return err
 }
@@ -217,6 +267,39 @@ func (q *Queries) ListDepInstalls(ctx context.Context, arg ListDepInstallsParams
 			&i.FinishedAt,
 			&i.Result,
 			&i.Error,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStackAutoStops = `-- name: ListStackAutoStops :many
+SELECT stack_id, day, since, restore_xray, restore_mihomo FROM stack_auto_stop ORDER BY stack_id
+`
+
+func (q *Queries) ListStackAutoStops(ctx context.Context) ([]StackAutoStop, error) {
+	rows, err := q.db.QueryContext(ctx, listStackAutoStops)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []StackAutoStop
+	for rows.Next() {
+		var i StackAutoStop
+		if err := rows.Scan(
+			&i.StackID,
+			&i.Day,
+			&i.Since,
+			&i.RestoreXray,
+			&i.RestoreMihomo,
 		); err != nil {
 			return nil, err
 		}

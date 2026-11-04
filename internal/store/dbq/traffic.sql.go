@@ -344,6 +344,41 @@ func (q *Queries) ListNotifications(ctx context.Context, limit int64) ([]Notific
 	return items, nil
 }
 
+const listStackDailyUsage = `-- name: ListStackDailyUsage :many
+SELECT stack_id, up, down
+FROM traffic_day
+WHERE bucket_start = ? AND scope = 'inbound'
+`
+
+type ListStackDailyUsageRow struct {
+	StackID int64 `json:"stack_id"`
+	Up      int64 `json:"up"`
+	Down    int64 `json:"down"`
+}
+
+func (q *Queries) ListStackDailyUsage(ctx context.Context, bucketStart int64) ([]ListStackDailyUsageRow, error) {
+	rows, err := q.db.QueryContext(ctx, listStackDailyUsage, bucketStart)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListStackDailyUsageRow
+	for rows.Next() {
+		var i ListStackDailyUsageRow
+		if err := rows.Scan(&i.StackID, &i.Up, &i.Down); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUserDailySeries = `-- name: ListUserDailySeries :many
 SELECT user_id, day, up, down, exempt FROM user_daily_usage WHERE user_id = ? AND day >= ? ORDER BY day
 `

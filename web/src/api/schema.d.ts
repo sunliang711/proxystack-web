@@ -2749,6 +2749,8 @@ export interface components {
             sequence: number;
         };
         Stack: {
+            /** Format: int64 */
+            daily_limit_bytes?: number;
             desired_running: boolean;
             /** @description 直连节点后缀，留空使用默认值（前导空格加 [DRT]） */
             direct_suffix?: string;
@@ -2792,6 +2794,7 @@ export interface components {
             applied_at: string;
             /** Format: int64 */
             applied_revision: number;
+            auto_stopped: boolean;
             desired_running: boolean;
             /** @description 磁盘上的生成物与最近一次应用不一致 */
             drift: boolean;

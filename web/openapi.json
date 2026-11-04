@@ -3684,6 +3684,11 @@
       "Stack": {
         "additionalProperties": false,
         "properties": {
+          "daily_limit_bytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
           "desired_running": {
             "type": "boolean"
           },
@@ -3858,6 +3863,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "auto_stopped": {
+            "description": "因每日流量阈值自动停止",
+            "type": "boolean"
+          },
           "desired_running": {
             "type": "boolean"
           },
@@ -3878,6 +3887,7 @@
         "required": [
           "name",
           "desired_running",
+          "auto_stopped",
           "applied_revision",
           "applied_at",
           "drift",

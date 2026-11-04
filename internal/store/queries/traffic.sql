@@ -24,6 +24,11 @@ ON CONFLICT (user_id, day) DO UPDATE SET up = up + excluded.up, down = down + ex
 -- name: ListUserDailyUsage :many
 SELECT * FROM user_daily_usage WHERE day = ?;
 
+-- name: ListStackDailyUsage :many
+SELECT stack_id, up, down
+FROM traffic_day
+WHERE bucket_start = ? AND scope = 'inbound';
+
 -- name: ListUserDailySeries :many
 SELECT * FROM user_daily_usage WHERE user_id = ? AND day >= ? ORDER BY day;
 

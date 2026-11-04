@@ -699,7 +699,7 @@ func (q *Queries) ListStackDirectUsers(ctx context.Context) ([]StackDirectUser, 
 }
 
 const listStacks = `-- name: ListStacks :many
-SELECT id, position, name, enabled, desired_running, role, labels, xray_enabled, xray_loglevel, xray_api, xray_stats, xray_policy, xray_api_port, outbound_type, outbound_server, outbound_port, outbound_username, outbound_password, outbound_private_direct, mihomo_enabled, mihomo_mode, mihomo_loglevel, controller_port, controller_secret, rule_profile, rule_final, rule_extra, xray_access_log, direct_suffix FROM stacks ORDER BY position, id
+SELECT id, position, name, enabled, desired_running, role, labels, xray_enabled, xray_loglevel, xray_api, xray_stats, xray_policy, xray_api_port, outbound_type, outbound_server, outbound_port, outbound_username, outbound_password, outbound_private_direct, mihomo_enabled, mihomo_mode, mihomo_loglevel, controller_port, controller_secret, rule_profile, rule_final, rule_extra, xray_access_log, direct_suffix, daily_limit_bytes FROM stacks ORDER BY position, id
 `
 
 func (q *Queries) ListStacks(ctx context.Context) ([]Stack, error) {
@@ -741,6 +741,7 @@ func (q *Queries) ListStacks(ctx context.Context) ([]Stack, error) {
 			&i.RuleExtra,
 			&i.XrayAccessLog,
 			&i.DirectSuffix,
+			&i.DailyLimitBytes,
 		); err != nil {
 			return nil, err
 		}
@@ -851,14 +852,16 @@ func (q *Queries) StopAllStacks(ctx context.Context) error {
 
 const upsertStack = `-- name: UpsertStack :one
 INSERT INTO stacks (id, position, name, enabled, desired_running, role, labels,
+                    daily_limit_bytes,
                     xray_enabled, xray_loglevel, xray_api, xray_stats, xray_policy, xray_api_port,
                     outbound_type, outbound_server, outbound_port, outbound_username, outbound_password,
                     outbound_private_direct, mihomo_enabled, mihomo_mode, mihomo_loglevel,
                     controller_port, controller_secret, rule_profile, rule_final, rule_extra, xray_access_log, direct_suffix)
-VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (id) DO UPDATE SET
     position = excluded.position, name = excluded.name, enabled = excluded.enabled,
     desired_running = excluded.desired_running, role = excluded.role, labels = excluded.labels,
+    daily_limit_bytes = excluded.daily_limit_bytes,
     xray_enabled = excluded.xray_enabled, xray_loglevel = excluded.xray_loglevel, xray_api = excluded.xray_api,
     xray_stats = excluded.xray_stats, xray_policy = excluded.xray_policy, xray_api_port = excluded.xray_api_port,
     outbound_type = excluded.outbound_type, outbound_server = excluded.outbound_server,
@@ -880,6 +883,7 @@ type UpsertStackParams struct {
 	DesiredRunning        int64       `json:"desired_running"`
 	Role                  string      `json:"role"`
 	Labels                string      `json:"labels"`
+	DailyLimitBytes       int64       `json:"daily_limit_bytes"`
 	XrayEnabled           int64       `json:"xray_enabled"`
 	XrayLoglevel          string      `json:"xray_loglevel"`
 	XrayApi               string      `json:"xray_api"`
@@ -913,6 +917,7 @@ func (q *Queries) UpsertStack(ctx context.Context, arg UpsertStackParams) (int64
 		arg.DesiredRunning,
 		arg.Role,
 		arg.Labels,
+		arg.DailyLimitBytes,
 		arg.XrayEnabled,
 		arg.XrayLoglevel,
 		arg.XrayApi,

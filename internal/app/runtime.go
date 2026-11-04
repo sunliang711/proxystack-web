@@ -25,9 +25,10 @@ import (
 
 // 运行时相关的审计动作。
 const (
-	ActionRuntimeApply = "runtime.apply"
-	ActionRuntimeUnit  = "runtime.unit"
-	ActionUserPause    = "user.pause"
+	ActionRuntimeApply  = "runtime.apply"
+	ActionRuntimeUnit   = "runtime.unit"
+	ActionStackAutoStop = "stack.auto_stop"
+	ActionUserPause     = "user.pause"
 )
 
 // componentOf 把引用图里的组件名（clash）映射为 unit 组件名（mihomo）。
@@ -225,8 +226,12 @@ func (s *Service) apply(ctx context.Context, actor Actor, only []string, logf Lo
 
 	// 3. 启停 unit：先停掉不再需要的，再按依赖顺序启动或重启。
 	desired := map[string]bool{}
+	autoStopped, err := s.currentStackAutoStops(ctx)
+	if err != nil {
+		return err
+	}
 	for _, stack := range doc.Stacks {
-		desired[stack.Name] = stack.Enabled && stack.DesiredRunning
+		desired[stack.Name] = stack.Enabled && stack.DesiredRunning && !autoStopped[stack.ID]
 	}
 	allUnits := []string{}
 	for name := range current {
@@ -345,6 +350,7 @@ type UnitView struct {
 type StackRuntime struct {
 	Name            string     `json:"name"`
 	DesiredRunning  bool       `json:"desired_running"`
+	AutoStopped     bool       `json:"auto_stopped" doc:"因每日流量阈值自动停止"`
 	AppliedRevision int64      `json:"applied_revision"`
 	AppliedAt       time.Time  `json:"applied_at"`
 	Drift           bool       `json:"drift" doc:"磁盘上的生成物与最近一次应用不一致"`
@@ -363,6 +369,10 @@ func (s *Service) RuntimeStatus(ctx context.Context) ([]StackRuntime, error) {
 		applied, err = q.ListAppliedState(ctx)
 		return err
 	}); err != nil {
+		return nil, err
+	}
+	autoStopped, err := s.currentStackAutoStops(ctx)
+	if err != nil {
 		return nil, err
 	}
 	byName := map[string]dbq.AppliedState{}
@@ -390,6 +400,7 @@ func (s *Service) RuntimeStatus(ctx context.Context) ([]StackRuntime, error) {
 		view := StackRuntime{Name: name, Units: []UnitView{}}
 		if index := doc.StackByName(name); index >= 0 {
 			view.DesiredRunning = doc.Stacks[index].Enabled && doc.Stacks[index].DesiredRunning
+			view.AutoStopped = autoStopped[doc.Stacks[index].ID]
 		}
 		files, err := s.disk().Read(name)
 		if err != nil {
@@ -416,6 +427,11 @@ func (s *Service) UnitAction(ctx context.Context, actor Actor, stack, component,
 	s.runtimeMu.Lock()
 	defer s.runtimeMu.Unlock()
 	s.collectTraffic(ctx)
+	if action == "start" || action == "restart" {
+		if err := s.checkStackStartLimit(ctx, stack); err != nil {
+			return err
+		}
+	}
 	files, err := s.disk().Read(stack)
 	if err != nil {
 		return err
@@ -428,6 +444,7 @@ func (s *Service) UnitAction(ctx context.Context, actor Actor, stack, component,
 		}
 	}
 	var failures []string
+	clearedRestore := map[string]bool{}
 	for _, component := range components {
 		unit := units.Name(component, stack)
 		if action != "stop" && files.Get(component) == nil {
@@ -448,6 +465,17 @@ func (s *Service) UnitAction(ctx context.Context, actor Actor, stack, component,
 		}
 		if err != nil {
 			failures = append(failures, err.Error())
+		} else if action == "stop" {
+			clearedRestore[component] = true
+		}
+	}
+	if action == "stop" && len(clearedRestore) > 0 {
+		if err := s.Store.InTx(ctx, func(q *dbq.Queries) error {
+			return q.ClearStackAutoStopRestore(ctx, dbq.ClearStackAutoStopRestoreParams{
+				ClearXray: boolInt(clearedRestore[units.Xray]), ClearMihomo: boolInt(clearedRestore[units.Mihomo]), StackName: stack,
+			})
+		}); err != nil {
+			return err
 		}
 	}
 	_ = s.Store.InTx(ctx, func(q *dbq.Queries) error {
@@ -471,6 +499,10 @@ func (s *Service) Reconcile(ctx context.Context, fix bool) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	autoStopped := map[string]bool{}
+	for _, stack := range status {
+		autoStopped[stack.Name] = stack.AutoStopped
+	}
 	var findings []string
 	for _, stack := range status {
 		if stack.Drift {
@@ -478,7 +510,7 @@ func (s *Service) Reconcile(ctx context.Context, fix bool) ([]string, error) {
 		}
 		for _, unit := range stack.Units {
 			running := unit.Active == "active" || unit.Active == "activating"
-			want := stack.DesiredRunning && unit.Present
+			want := stack.DesiredRunning && unit.Present && !autoStopped[stack.Name]
 			switch {
 			case want && !running:
 				findings = append(findings, unit.Unit+" 应运行但未运行")

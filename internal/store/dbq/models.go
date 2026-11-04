@@ -246,6 +246,15 @@ type Stack struct {
 	RuleExtra             string `json:"rule_extra"`
 	XrayAccessLog         string `json:"xray_access_log"`
 	DirectSuffix          string `json:"direct_suffix"`
+	DailyLimitBytes       int64  `json:"daily_limit_bytes"`
+}
+
+type StackAutoStop struct {
+	StackID       int64  `json:"stack_id"`
+	Day           string `json:"day"`
+	Since         int64  `json:"since"`
+	RestoreXray   int64  `json:"restore_xray"`
+	RestoreMihomo int64  `json:"restore_mihomo"`
 }
 
 type StackDirectUser struct {

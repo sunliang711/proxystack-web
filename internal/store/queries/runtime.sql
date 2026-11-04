@@ -1,6 +1,21 @@
 -- name: ListUserPausedStacks :many
 SELECT * FROM user_paused_stacks ORDER BY user_id, stack_id;
 
+-- name: ListStackAutoStops :many
+SELECT * FROM stack_auto_stop ORDER BY stack_id;
+
+-- name: InsertStackAutoStop :exec
+INSERT OR IGNORE INTO stack_auto_stop (stack_id, day, since, restore_xray, restore_mihomo) VALUES (?, ?, ?, ?, ?);
+
+-- name: DeleteStackAutoStop :exec
+DELETE FROM stack_auto_stop WHERE stack_id = ?;
+
+-- name: ClearStackAutoStopRestore :exec
+UPDATE stack_auto_stop
+SET restore_xray = CASE WHEN sqlc.arg(clear_xray) != 0 THEN 0 ELSE restore_xray END,
+    restore_mihomo = CASE WHEN sqlc.arg(clear_mihomo) != 0 THEN 0 ELSE restore_mihomo END
+WHERE stack_id = (SELECT id FROM stacks WHERE name = sqlc.arg(stack_name));
+
 -- name: DeleteUserPausedStacks :exec
 DELETE FROM user_paused_stacks;
 
