@@ -201,7 +201,7 @@ function cleanupGuide(target: PublishTarget, sharedSSHTarget: boolean) {
   const publicKeyEntry = authorizedKeys(target)
   const sshCleanup = sharedSSHTarget
     ? `检测到同一 SSH 主机、端口和用户仍被其他订阅端目标使用。请不要删除以下共享 SSH 配置：\n\n- /etc/ssh/sshd_config.d/proxystack-web-sub.conf\n- /etc/sudoers.d/proxystack-web-sub-deploy\n- SSH 用户 ${target.ssh_user} 的其他公钥条目\n\n确认没有其他目标使用该 SSH 用户后，再按下面步骤清理。`
-    : `确认没有其他目标使用该 SSH 用户后执行：\n\n1. 从 ${target.ssh_user} 用户的 ~/.ssh/authorized_keys 删除下面这一整行：\n\n   ${publicKeyEntry}\n\n2. 删除 sudoers 配置并校验：\n\n   sudo rm -f /etc/sudoers.d/proxystack-web-sub-deploy\n   sudo visudo -c\n\n3. 删除 sshd 限制配置并 reload：\n\n   sudo rm -f /etc/ssh/sshd_config.d/proxystack-web-sub.conf\n   sudo sshd -t && sudo systemctl reload ssh\n\n如果系统服务名是 sshd，将最后的 ssh 替换为 sshd。`
+    : `确认没有其他目标使用该 SSH 用户后执行：\n\n1. 从 ${sshAuthorizedKeysPath(target.ssh_user)} 删除下面这一整行：\n\n   ${publicKeyEntry}\n\n2. 删除 sudoers 配置并校验：\n\n   sudo rm -f /etc/sudoers.d/proxystack-web-sub-deploy\n   sudo visudo -c\n\n3. 删除 sshd 限制配置并 reload：\n\n   sudo rm -f /etc/ssh/sshd_config.d/proxystack-web-sub.conf\n   sudo sshd -t && sudo systemctl reload ssh\n\n如果系统服务名是 sshd，将最后的 ssh 替换为 sshd。`
   return `# proxystack-web 订阅端清理说明
 
 生成时间：${new Date().toISOString()}
@@ -303,6 +303,22 @@ async function rollbackDeploy(target: PublishTarget) {
 const instructions = ref<PublishTarget | null>(null)
 const authorizedKeys = (target: PublishTarget) =>
   `restrict,port-forwarding,permitopen="127.0.0.1:${target.remote_port}" ${identity.value?.public_key ?? ''} proxystack-web`
+const shellQuote = (value: string) => `'${value.replace(/'/g, "'\"'\"'")}'`
+const sshAuthorizedKeysPath = (sshUser: string) => `${sshUser === 'root' ? '/root' : `/home/${sshUser}`}/.ssh/authorized_keys`
+const authorizedKeysSetupCommand = (target: PublishTarget, entry = authorizedKeys(target)) => {
+  const path = sshAuthorizedKeysPath(target.ssh_user)
+  const directory = path.slice(0, path.lastIndexOf('/'))
+  const user = shellQuote(target.ssh_user)
+  const quotedDirectory = shellQuote(directory)
+  const quotedPath = shellQuote(path)
+  const quotedEntry = shellQuote(entry)
+  return `set -eu
+sudo install -d -m 700 -o ${user} -g ${user} ${quotedDirectory}
+sudo touch ${quotedPath}
+sudo grep -qxF -- ${quotedEntry} ${quotedPath} || printf '%s\\n' ${quotedEntry} | sudo tee -a ${quotedPath} >/dev/null
+sudo chown ${user}:${user} ${quotedPath}
+sudo chmod 600 ${quotedPath}`
+}
 const tokenCommand = (target: PublishTarget) =>
   `sudo proxystack-web sub --dir /opt/proxystack-web-sub source set-publish-token ${target.source}`
 const sshdConfig = (target: PublishTarget) => `Match User ${target.ssh_user}\n    AllowTcpForwarding local\n    PermitOpen 127.0.0.1:${target.remote_port}\n    PermitTTY no\n    X11Forwarding no\n    AllowAgentForwarding no\nMatch all`
@@ -508,8 +524,8 @@ function hostKeyCommand(algorithm: string) {
       </NAlert>
       <NSteps vertical :current="1" status="process">
         <NStep title="安装管理端 SSH 公钥">
-          <CopyableCode :value="provisioning.authorized_keys_entry || authorizedKeys(provisioning.target)" />
-          <NText depth="3">把这一整行追加到 SSH 用户的 <NText code>~/.ssh/authorized_keys</NText>，目录权限设为 700，文件权限设为 600。</NText>
+          <CopyableCode label="幂等安装公钥" :value="authorizedKeysSetupCommand(provisioning.target, provisioning.authorized_keys_entry || authorizedKeys(provisioning.target))" />
+          <NText depth="3">命令会把公钥追加到 <NText code>{{ sshAuthorizedKeysPath(provisioning.target.ssh_user) }}</NText>；重复执行不会重复追加，目录权限为 700，文件权限为 600。</NText>
         </NStep>
         <NStep title="限制 SSH 用户的转发范围">
           <NSpace vertical :size="8">
@@ -543,7 +559,7 @@ function hostKeyCommand(algorithm: string) {
 
   <NModal :show="!!instructions" preset="card" title="订阅端配置说明" style="width: 820px; max-width: calc(100vw - 32px)" @update:show="(value) => !value && (instructions = null)">
     <NSpace v-if="instructions" vertical :size="14">
-      <CopyableCode label="authorized_keys" :value="authorizedKeys(instructions)" />
+      <CopyableCode label="幂等安装公钥" :value="authorizedKeysSetupCommand(instructions)" />
       <CopyableCode label="写入 /etc/ssh/sshd_config.d 并 reload" :value="sshdConfigSetupCommand(instructions)" />
       <CopyableCode label="sshd_config 限制" :value="sshdConfig(instructions)" />
       <CopyableCode label="sudo -n 配置" :value="sudoSetupCommand(instructions.ssh_user)" />
