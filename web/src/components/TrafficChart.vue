@@ -5,6 +5,7 @@ import { use } from 'echarts/core'
 import { BarChart, LineChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, MarkLineComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import type { CallbackDataParams } from 'echarts/types/dist/shared'
 import VChart from 'vue-echarts'
 import { isDark } from '../theme'
 import { chartTokens, seriesColors, type ChartSeries } from '../util/chart'
@@ -31,6 +32,18 @@ function openSeries(event: { seriesIndex?: number }) {
   if (record) router.push({ name: entity!.kind, params: { id: record.id! } })
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!)
+}
+
+function tooltipFormatter(params: CallbackDataParams | CallbackDataParams[]): string {
+  const items = Array.isArray(params) ? params : [params]
+  const values = items.map((item) => typeof item.value === 'number' ? item.value : Number(item.value) || 0)
+  const lines = items.map((item, index) => `${item.marker ?? ''}${escapeHtml(item.seriesName ?? '')}: ${props.format(values[index]!)}`)
+  const total = values.reduce((sum, value) => sum + value, 0)
+  return `${escapeHtml(items[0]?.name ?? '')}<br/>${lines.join('<br/>')}<br/><strong>合计：${props.format(total)}</strong>`
+}
+
 const option = computed(() => {
   const tokens = chartTokens[mode.value]
   const palette = seriesColors[mode.value]
@@ -50,6 +63,7 @@ const option = computed(() => {
       textStyle: { color: tokens.text },
       axisPointer: { type: props.kind === 'line' ? 'line' : 'shadow' },
       valueFormatter: (value: number) => props.format(value ?? 0),
+      formatter: props.kind === 'bar' ? tooltipFormatter : undefined,
     },
     xAxis: {
       type: 'category', data: props.labels, boundaryGap: props.kind === 'bar',
