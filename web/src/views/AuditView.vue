@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { h, onMounted, ref, watch } from 'vue'
-import { NCard, NDataTable, NInput, NSelect, NSpace, type DataTableColumns } from 'naive-ui'
+import { NCard, NDataTable, NInput, NSelect, NSpace, NTooltip, type DataTableColumns } from 'naive-ui'
 import { api, type Schemas } from '../api/client'
 import { formatTime } from '../util/format'
 import EntityLink from '../components/EntityLink.vue'
+import { auditActionLabel, auditActorLabel, auditObjectLabel } from '../util/audit'
 
 type Entry = Schemas['AuditEntry']
 
@@ -45,14 +46,20 @@ watch(page, load)
 
 const columns: DataTableColumns<Entry> = [
   { title: '时间', key: 'at', width: 180, render: (row) => formatTime(row.at) },
-  { title: '操作者', key: 'actor', width: 100 },
+  { title: '操作者', key: 'actor', width: 110, render: (row) => auditActorLabel(row.actor) },
   { title: '来源 IP', key: 'source_ip', width: 130 },
-  { title: '动作', key: 'action', width: 160 },
+  {
+    title: '动作', key: 'action', width: 150,
+    render: (row) => h(NTooltip, null, {
+      trigger: () => h('span', { tabindex: 0 }, auditActionLabel(row.action)),
+      default: () => row.action,
+    }),
+  },
   {
     title: '对象', key: 'object', width: 180, ellipsis: { tooltip: true },
     render: (row) => {
       const match = /^(stack|user):(.+)$/.exec(row.object)
-      return match ? h(EntityLink, { kind: match[1] as 'stack' | 'user', name: match[2], label: row.object }) : row.object
+      return match ? h(EntityLink, { kind: match[1] as 'stack' | 'user', name: match[2], label: row.object }) : auditObjectLabel(row.action, row.object)
     },
   },
   { title: '摘要', key: 'summary', minWidth: 280, ellipsis: { tooltip: true } },

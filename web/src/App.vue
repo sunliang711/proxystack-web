@@ -1,19 +1,24 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, h } from 'vue'
 import {
   darkTheme,
   dateZhCN,
   NConfigProvider,
   NDialogProvider,
   NGlobalStyle,
+  NIcon,
   NMessageProvider,
   zhCN,
   type GlobalThemeOverrides,
 } from 'naive-ui'
+import { FileTrayOutline } from '@vicons/ionicons5'
 import { isDark as dark } from './theme'
 import './styles.css'
 
 const theme = computed(() => (dark.value ? darkTheme : null))
+
+// 空状态使用中性的托盘图标，组件库默认图标带叉号，容易被误读为出错。
+const componentOptions = { Empty: { renderIcon: () => h(NIcon, null, () => h(FileTrayOutline)) } }
 
 const fontFamily =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif'
@@ -87,7 +92,7 @@ const overrides = computed<GlobalThemeOverrides>(() => ({
 </script>
 
 <template>
-  <NConfigProvider :theme="theme" :theme-overrides="overrides" :locale="zhCN" :date-locale="dateZhCN">
+  <NConfigProvider :theme="theme" :theme-overrides="overrides" :locale="zhCN" :date-locale="dateZhCN" :component-options="componentOptions">
     <NGlobalStyle />
     <NMessageProvider>
       <NDialogProvider>

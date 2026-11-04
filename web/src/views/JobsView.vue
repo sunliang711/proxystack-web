@@ -7,6 +7,7 @@ import {
 import { api, emptyErrors, fieldState, problemMessage, splitProblem, type FormErrors, type Schemas } from '../api/client'
 import ErrorList from '../components/ErrorList.vue'
 import { formatTime } from '../util/format'
+import { describeCron } from '../util/cron'
 import { onJobTaskEvent } from '../runtime'
 import { taskCenter } from '../tasks'
 
@@ -110,7 +111,14 @@ async function showHistory(job: Job) {
 
 const columns: DataTableColumns<Job> = [
   { title: '任务', key: 'name', minWidth: 260, render: (row) => h('div', [h('div', row.name), h(NText, { depth: 3, style: 'font-size: 12px' }, { default: () => row.description })]) },
-  { title: '计划', key: 'schedule', width: 130, render: (row) => h(NText, { code: true, style: 'white-space: nowrap' }, { default: () => row.schedule }) },
+  {
+    title: '计划', key: 'schedule', width: 150,
+    render: (row) => {
+      const code = h(NText, { code: true, style: 'white-space: nowrap; font-size: 12px' }, { default: () => row.schedule })
+      const text = describeCron(row.schedule)
+      return text ? h('div', [h('div', text), code]) : code
+    },
+  },
   { title: '下次执行', key: 'next', width: 180, render: (row) => (row.enabled && row.next_runs[0] ? formatTime(row.next_runs[0]) : '—') },
   {
     title: '最近一次', key: 'last', width: 200,

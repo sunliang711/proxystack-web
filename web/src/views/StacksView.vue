@@ -3,9 +3,9 @@ import { computed, h, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import {
   NAlert, NButton, NCard, NDataTable, NDynamicTags, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NModal, NRadio,
-  NRadioGroup, NSelect, NSpace, NStep, NSteps, NTag, NText, NTooltip, useMessage, type DataTableColumns,
+  NRadioGroup, NSelect, NSpace, NStep, NSteps, NTag, NText, useMessage, type DataTableColumns,
 } from 'naive-ui'
-import { InformationCircleOutline, RefreshOutline } from '@vicons/ionicons5'
+import { RefreshOutline } from '@vicons/ionicons5'
 import { api, emptyErrors, fieldState, splitProblem, type FormErrors, type Schemas } from '../api/client'
 import EgressCell from '../components/EgressCell.vue'
 import EgressHealthStatus from '../components/EgressHealthStatus.vue'
@@ -20,6 +20,7 @@ import UnitStatus from '../components/UnitStatus.vue'
 import { useEgress } from '../composables/useEgress'
 import { runtime } from '../runtime'
 import { stackTopology, type FlowNode } from '../util/flow'
+import { tipTitle } from '../util/table'
 
 type Summary = Schemas['StackSummary']
 
@@ -90,25 +91,22 @@ const columns: DataTableColumns<Summary> = [
     render: (row) => h(RouterLink, { to: { name: 'stack', params: { id: row.id } } }, { default: () => row.name }),
   },
   {
-    title: '状态',
+    title: tipTitle('状态', '停用：不生成配置，也不参与对账。启用：生成配置并保持进程运行。启用 · 保持停止：生成配置，但对账时让进程保持停止。在 stack 的「基本」页切换。'),
     key: 'enabled',
     width: 150,
-    render: (row) =>
-      h(NSpace, { size: 4 }, () => [
-        h(NTag, { size: 'small', type: row.enabled ? 'success' : 'default' }, () => (row.enabled ? '启用' : '停用')),
-        row.enabled ? h(NTag, { size: 'small', type: row.desired_running ? 'info' : 'warning' }, () => (row.desired_running ? '期望运行' : '期望停止')) : null,
-      ]),
+    render: (row) => {
+      if (!row.enabled) return h(NTag, { size: 'small' }, () => '停用')
+      return row.desired_running
+        ? h(NTag, { size: 'small', type: 'success' }, () => '启用')
+        : h(NTag, { size: 'small', type: 'warning' }, () => '启用 · 保持停止')
+    },
   },
   { title: '运行', key: 'runtime', render: (row) => h(UnitStatus, { stack: row.name, actions: true }) },
   {
-    title: () =>
-      h(NSpace, { size: 4, align: 'center', wrap: false }, () => [
-        '出口 IP',
-        h(NTooltip, null, {
-          trigger: () => h(NIcon, { size: 14, style: 'opacity: 0.5; cursor: help' }, () => h(InformationCircleOutline)),
-          default: () => '经该 stack 的 mihomo 并发查询 IPv4 和 IPv6 出口（IPv4 优先用 ipinfo.io），哪个先完成就先显示；另一项继续检测，失败原因可悬停查看。首次查询后保存在当前浏览器，进入页面或刷新页面时优先使用缓存；点顶部「出口IP」或行内的刷新按钮重新检测并更新缓存。',
-        }),
-      ]),
+    title: tipTitle(
+      '出口 IP',
+      '经该 stack 的 mihomo 并发查询 IPv4 和 IPv6 出口（IPv4 优先用 ipinfo.io），哪个先完成就先显示；另一项继续检测，失败原因可悬停查看。首次查询后保存在当前浏览器，进入页面或刷新页面时优先使用缓存；点顶部「出口IP」或行内的刷新按钮重新检测并更新缓存。',
+    ),
     key: 'egress',
     minWidth: 300,
     render: (row) =>
@@ -121,7 +119,7 @@ const columns: DataTableColumns<Summary> = [
         h(EgressHealthStatus, { health: healthByID.value.get(row.id), error: health.error.value }),
       ]),
   },
-  { title: '角色', key: 'role', width: 70 },
+  { title: tipTitle('角色', 'edge：独立出口，流量经本 stack 的上游直接出去。auto：聚合多个 edge stack 的 relay 入站，按测速或负载均衡挑选出口。'), key: 'role', width: 90 },
   {
     title: 'Xray 入站',
     key: 'inbounds',

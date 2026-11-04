@@ -11,6 +11,7 @@ import ExportDialog from '../components/ExportDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
 import SubscriptionCard from '../components/SubscriptionCard.vue'
 import { formatBytes } from '../util/format'
+import { tipTitle } from '../util/table'
 
 type User = Schemas['User']
 type Usage = Schemas['UserUsage']
@@ -101,11 +102,11 @@ const columns: DataTableColumns<User> = [
     trigger: () => h('span', { tabindex: 0 }, used(usage.value[row.id ?? 0]?.period)),
     default: () => row.reset_mode === 'monthly' ? `本周期用量，每月 ${row.reset_day} 日重置` : '累计用量：不按周期重置，包含历史流量',
   }) },
-  { title: '每日阈值', key: 'daily_limit_bytes', width: 100, render: (row) => (row.daily_limit_bytes ? formatBytes(row.daily_limit_bytes) : '不限') },
-  { title: '额度', key: 'quota_bytes', width: 90, render: (row) => (row.quota_bytes ? formatBytes(row.quota_bytes) : '不限') },
-  { title: '重置', key: 'reset_mode', width: 100, render: (row) => (row.reset_mode === 'monthly' ? `每月 ${row.reset_day} 日` : '不重置') },
+  { title: tipTitle('每日阈值', '当日用量（上行与下行合计，全部 stack）达到阈值后，按用户详情中的设置暂停或只通知；暂停在次日自动恢复。'), key: 'daily_limit_bytes', width: 110, render: (row) => (row.daily_limit_bytes ? formatBytes(row.daily_limit_bytes) : '不限') },
+  { title: tipTitle('额度', '流量总额度。用量达到额度后自动暂停；到重置日或调高额度后自动恢复。'), key: 'quota_bytes', width: 90, render: (row) => (row.quota_bytes ? formatBytes(row.quota_bytes) : '不限') },
+  { title: '额度重置', key: 'reset_mode', width: 100, render: (row) => (row.reset_mode === 'monthly' ? `每月 ${row.reset_day} 日` : '不重置') },
   { title: '到期', key: 'expire_at', render: (row) => (row.expire_at ? new Date(row.expire_at).toLocaleString() : '—') },
-  { title: '档案', key: 'profiles', width: 60, align: 'center', render: (row) => String(row.profiles.length + 1) },
+  { title: tipTitle('凭据档案', '该用户的凭据档案数量，含用户本身的 default 档案。入站引用用户时可以改选其他档案，使用不同的 UUID 或密码。'), key: 'profiles', width: 100, align: 'center', render: (row) => String(row.profiles.length + 1) },
   {
     title: '订阅',
     key: 'subscription',

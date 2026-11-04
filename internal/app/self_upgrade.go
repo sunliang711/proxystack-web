@@ -225,7 +225,7 @@ func (s *Service) checkSelfUpgradeSchedule(ctx context.Context) {
 		if err != nil {
 			state.LastError = err.Error()
 		} else {
-			state.LastError = fmt.Sprintf("release %s has no SHA-256 asset for this platform", release.Tag)
+			state.LastError = fmt.Sprintf("版本 %s 没有当前平台的 SHA-256 校验文件", release.Tag)
 		}
 		_ = s.saveSelfUpgradeSchedule(ctx, state)
 		return
@@ -238,7 +238,7 @@ func (s *Service) checkSelfUpgradeSchedule(ctx context.Context) {
 			return
 		}
 		state.Status, state.ResolvedVersion, state.FinishedAt, state.NextCheckAt = SelfUpgradeSucceeded, release.Tag, now, time.Time{}
-		state.LastError = "current version is already up to date"
+		state.LastError = "当前已是最新版本，无需升级"
 		_ = s.saveSelfUpgradeSchedule(ctx, state)
 		return
 	}

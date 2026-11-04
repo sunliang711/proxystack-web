@@ -83,7 +83,9 @@ body {
 .n-drawer { max-width: 100vw; }
 .n-drawer-header { border-bottom: 1px solid var(--ps-border); }
 .n-descriptions-table-content { overflow-wrap: anywhere; }
-.n-form-item-feedback-wrapper { font-size: 12px; line-height: 1.65; }
+/* 帮助文字与下一个字段之间留出间距；选择器加一层以覆盖组件库自带的字号。 */
+.n-form-item .n-form-item-feedback-wrapper { font-size: 12px; line-height: 1.6; }
+.n-form-item .n-form-item-feedback-wrapper:has(.n-form-item-feedback__line) { padding-bottom: 10px; }
 .n-form-item-blank { min-width: 0; }
 .n-alert { border-radius: 10px; }
 .n-tag { font-weight: 500; }

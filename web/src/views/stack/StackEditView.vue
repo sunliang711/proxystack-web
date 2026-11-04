@@ -251,13 +251,13 @@ async function saveMembers() {
             <NFormItem label="启用" v-bind="f('enabled', '关闭时不生成配置、不参与对账')">
               <NSwitch v-model:value="stack.enabled" />
             </NFormItem>
-            <NFormItem label="期望运行" v-bind="f('desired_running')">
+            <NFormItem label="期望运行" v-bind="f('desired_running', '关闭时仍生成配置，但对账会让 xray / mihomo 保持停止')">
               <NSwitch v-model:value="stack.desired_running" />
             </NFormItem>
             <NFormItem label="每日流量阈值" v-bind="f('daily_limit_bytes', '按系统设置时区统计上行和下行总量；0 表示无限制')">
               <ByteSizeInput small :value="stack.daily_limit_bytes ?? 0" @update:value="(value: number) => (stack!.daily_limit_bytes = value)" />
             </NFormItem>
-            <NFormItem label="角色" v-bind="f('role')">
+            <NFormItem label="角色" v-bind="f('role', 'edge：独立出口，流量经本 stack 的上游出去；auto：聚合多个 edge stack 的 relay 入站，按测速或负载均衡挑选出口')">
               <NRadioGroup v-model:value="stack.role">
                 <NRadioButton value="edge">edge</NRadioButton>
                 <NRadioButton value="auto">auto</NRadioButton>

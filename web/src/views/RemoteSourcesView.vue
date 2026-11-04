@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, h, onMounted, ref } from 'vue'
 import {
-  NAlert, NButton, NCard, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NPopconfirm, NSpace, NSwitch,
+  NAlert, NButton, NCard, NDataTable, NDrawer, NDrawerContent, NEmpty, NForm, NFormItem, NInput, NPopconfirm, NSpace, NSwitch,
   NTag, NText, useMessage, type DataTableColumns,
 } from 'naive-ui'
 import { api, emptyErrors, fieldState, splitProblem, type FormErrors, type Schemas } from '../api/client'
@@ -106,7 +106,13 @@ const f = (path: string, hint?: string) => fieldState(errors.value, `[${editing.
       拉取到的节点按用户名分给本机同名用户，每 30 分钟自动同步一次。
     </NAlert>
     <ErrorList :errors="errors.global" />
-    <NDataTable :columns="columns" :data="sources" :scroll-x="860" size="small" />
+    <NDataTable :columns="columns" :data="sources" :scroll-x="860" size="small">
+      <template #empty>
+        <NEmpty description="还没有远端节点源">
+          <template #extra><NButton size="small" type="primary" @click="open(sources.length)">添加节点源</NButton></template>
+        </NEmpty>
+      </template>
+    </NDataTable>
   </NCard>
 
   <NDrawer :show="!!editing" :width="520" @update:show="(v) => !v && (editing = null)">

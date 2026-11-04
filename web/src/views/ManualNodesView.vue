@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, h, onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import YAML from 'yaml'
 import {
-  NAlert, NButton, NCard, NCode, NCollapse, NCollapseItem, NDataTable, NDrawer, NDrawerContent, NDropdown, NDynamicInput, NForm,
+  NAlert, NButton, NCard, NCode, NCollapse, NCollapseItem, NDataTable, NDrawer, NDrawerContent, NDropdown, NDynamicInput, NEmpty, NForm,
   NFormItem, NGrid, NGridItem, NInput, NInputNumber, NModal, NPopconfirm, NRadioButton, NRadioGroup, NSelect, NSpace, NSwitch, NTag,
   NText, useDialog, useMessage, type DataTableColumns,
 } from 'naive-ui'
@@ -265,7 +266,17 @@ function cloneChecked() {
         删除选中的 {{ checked.length }} 个节点？
       </NPopconfirm>
     </NSpace>
-    <NDataTable v-model:checked-row-keys="checked" :columns="columns" :data="rows" :scroll-x="900" :row-key="(row: Node) => row.id ?? -1" size="small" />
+    <NDataTable v-model:checked-row-keys="checked" :columns="columns" :data="rows" :scroll-x="900" :row-key="(row: Node) => row.id ?? -1" size="small">
+      <template #empty>
+        <NEmpty v-if="!users.length" description="手工节点要归属到用户，请先创建用户">
+          <template #extra><RouterLink :to="{ name: 'users' }">前往用户页</RouterLink></template>
+        </NEmpty>
+        <NEmpty v-else-if="nodes.length" description="所选用户没有手工节点" />
+        <NEmpty v-else description="还没有手工节点。添加的节点会进入所属用户的订阅">
+          <template #extra><NButton size="small" type="primary" @click="open(nodes.length)">添加第一个节点</NButton></template>
+        </NEmpty>
+      </template>
+    </NDataTable>
   </NCard>
 
   <NModal :show="batchServer !== null" preset="card" title="批量设置 server" style="max-width: 420px" @update:show="(v) => !v && (batchServer = null)">
