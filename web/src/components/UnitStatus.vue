@@ -44,6 +44,7 @@ async function run(key: string) {
         {{ unit.unit }}<span v-if="unit.since && !unit.since.startsWith('0001')">，自 {{ new Date(unit.since).toLocaleString() }}</span>
       </NTooltip>
       <NTag v-if="state.drift" size="small" type="error">生成物被改动</NTag>
+      <NTag v-if="state.auto_stopped" size="small" type="warning">每日阈值已停止</NTag>
       <NTag v-if="!state.applied_revision" size="small">未应用</NTag>
     </template>
     <NDropdown v-if="actions" v-model:show="showMenu" :options="options" trigger="click" @select="run">

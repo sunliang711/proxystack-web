@@ -84,14 +84,16 @@ RETURNING id;
 
 -- name: UpsertStack :one
 INSERT INTO stacks (id, position, name, enabled, desired_running, role, labels,
+                    daily_limit_bytes,
                     xray_enabled, xray_loglevel, xray_api, xray_stats, xray_policy, xray_api_port,
                     outbound_type, outbound_server, outbound_port, outbound_username, outbound_password,
                     outbound_private_direct, mihomo_enabled, mihomo_mode, mihomo_loglevel,
                     controller_port, controller_secret, rule_profile, rule_final, rule_extra, xray_access_log, direct_suffix)
-VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (id) DO UPDATE SET
     position = excluded.position, name = excluded.name, enabled = excluded.enabled,
     desired_running = excluded.desired_running, role = excluded.role, labels = excluded.labels,
+    daily_limit_bytes = excluded.daily_limit_bytes,
     xray_enabled = excluded.xray_enabled, xray_loglevel = excluded.xray_loglevel, xray_api = excluded.xray_api,
     xray_stats = excluded.xray_stats, xray_policy = excluded.xray_policy, xray_api_port = excluded.xray_api_port,
     outbound_type = excluded.outbound_type, outbound_server = excluded.outbound_server,

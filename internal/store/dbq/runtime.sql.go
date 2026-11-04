@@ -18,6 +18,15 @@ func (q *Queries) DeleteAppliedState(ctx context.Context, stackName string) erro
 	return err
 }
 
+const deleteStackAutoStop = `-- name: DeleteStackAutoStop :exec
+DELETE FROM stack_auto_stop WHERE stack_id = ?
+`
+
+func (q *Queries) DeleteStackAutoStop(ctx context.Context, stackID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteStackAutoStop, stackID)
+	return err
+}
+
 const deleteUserPausedStacks = `-- name: DeleteUserPausedStacks :exec
 DELETE FROM user_paused_stacks
 `
@@ -112,6 +121,29 @@ func (q *Queries) InsertDepInstall(ctx context.Context, arg InsertDepInstallPara
 		arg.FinishedAt,
 		arg.Result,
 		arg.Error,
+	)
+	return err
+}
+
+const insertStackAutoStop = `-- name: InsertStackAutoStop :exec
+INSERT OR IGNORE INTO stack_auto_stop (stack_id, day, since, restore_xray, restore_mihomo) VALUES (?, ?, ?, ?, ?)
+`
+
+type InsertStackAutoStopParams struct {
+	StackID       int64  `json:"stack_id"`
+	Day           string `json:"day"`
+	Since         int64  `json:"since"`
+	RestoreXray   int64  `json:"restore_xray"`
+	RestoreMihomo int64  `json:"restore_mihomo"`
+}
+
+func (q *Queries) InsertStackAutoStop(ctx context.Context, arg InsertStackAutoStopParams) error {
+	_, err := q.db.ExecContext(ctx, insertStackAutoStop,
+		arg.StackID,
+		arg.Day,
+		arg.Since,
+		arg.RestoreXray,
+		arg.RestoreMihomo,
 	)
 	return err
 }
@@ -217,6 +249,39 @@ func (q *Queries) ListDepInstalls(ctx context.Context, arg ListDepInstallsParams
 			&i.FinishedAt,
 			&i.Result,
 			&i.Error,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStackAutoStops = `-- name: ListStackAutoStops :many
+SELECT stack_id, day, since, restore_xray, restore_mihomo FROM stack_auto_stop ORDER BY stack_id
+`
+
+func (q *Queries) ListStackAutoStops(ctx context.Context) ([]StackAutoStop, error) {
+	rows, err := q.db.QueryContext(ctx, listStackAutoStops)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []StackAutoStop
+	for rows.Next() {
+		var i StackAutoStop
+		if err := rows.Scan(
+			&i.StackID,
+			&i.Day,
+			&i.Since,
+			&i.RestoreXray,
+			&i.RestoreMihomo,
 		); err != nil {
 			return nil, err
 		}

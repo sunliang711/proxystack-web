@@ -10,6 +10,7 @@ import {
 } from '../../api/client'
 import ErrorList from '../../components/ErrorList.vue'
 import EntityLink from '../../components/EntityLink.vue'
+import ByteSizeInput from '../../components/ByteSizeInput.vue'
 import PortInput from '../../components/PortInput.vue'
 import SecretInput from '../../components/SecretInput.vue'
 import TriStateSelect from '../../components/TriStateSelect.vue'
@@ -252,6 +253,9 @@ async function saveMembers() {
             </NFormItem>
             <NFormItem label="期望运行" v-bind="f('desired_running')">
               <NSwitch v-model:value="stack.desired_running" />
+            </NFormItem>
+            <NFormItem label="每日流量阈值" v-bind="f('daily_limit_bytes', '按系统设置时区统计上行和下行总量；0 表示无限制')">
+              <ByteSizeInput small :value="stack.daily_limit_bytes ?? 0" @update:value="(value: number) => (stack!.daily_limit_bytes = value)" />
             </NFormItem>
             <NFormItem label="角色" v-bind="f('role')">
               <NRadioGroup v-model:value="stack.role">

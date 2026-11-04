@@ -30,13 +30,13 @@ const notifyPollInterval = 15 * time.Second
 var notifyRetryDelays = []time.Duration{time.Minute, 5 * time.Minute, 15 * time.Minute}
 
 var eventLabels = map[string]string{
-	configdoc.EventDailyLimit:   "达到每日用量阈值",
-	configdoc.EventDailyWarning: "每日用量预警",
-	configdoc.EventQuotaLimit:   "超出月度额度",
-	configdoc.EventQuotaWarning: "额度预警",
-	configdoc.EventExpired:      "用户已到期",
-	configdoc.EventExpiring:     "用户即将到期",
-	configdoc.EventEgressDown: "Stack 出口异常",
+	configdoc.EventDailyLimit:      "达到每日用量阈值",
+	configdoc.EventDailyWarning:    "每日用量预警",
+	configdoc.EventQuotaLimit:      "超出月度额度",
+	configdoc.EventQuotaWarning:    "额度预警",
+	configdoc.EventExpired:         "用户已到期",
+	configdoc.EventExpiring:        "用户即将到期",
+	configdoc.EventEgressDown:      "Stack 出口异常",
 	configdoc.EventEgressRecovered: "Stack 出口恢复",
 }
 
@@ -46,12 +46,14 @@ type notifyUser struct {
 	remark string
 }
 
-// pendingEvent 是判定时发现的通知事件。period 限定去重范围：同一用户的同一事件在一个周期内只记录一次。
+// pendingEvent 是判定时发现的通知事件。period 限定去重范围：同一用户或 Stack 的同一事件在一个周期内只记录一次。
 type pendingEvent struct {
-	event  string
-	user   notifyUser
-	period string
-	lines  []string
+	event     string
+	user      notifyUser
+	stackID   int64
+	stackName string
+	period    string
+	lines     []string
 }
 
 func formatBytes(value int64) string {
@@ -87,9 +89,18 @@ func expiryEvent(event string, user notifyUser, period string, expire time.Time,
 	}}
 }
 
+func stackUsageEvent(stackID int64, stackName, period string, used, limit int64) pendingEvent {
+	return pendingEvent{event: configdoc.EventDailyLimit, stackID: stackID, stackName: stackName, period: period, lines: []string{
+		"每日用量：" + formatBytes(used) + " / " + formatBytes(limit), "执行的动作：已停止该 Stack",
+	}}
+}
+
 // enqueueNotification 记录一条通知。邮件未启用或未订阅该事件时只记录、不发送。
 func (s *Service) enqueueNotification(ctx context.Context, settings configdoc.Settings, event pendingEvent) {
 	key := fmt.Sprintf("%s:%d:%s", event.event, event.user.id, event.period)
+	if event.stackID != 0 {
+		key = fmt.Sprintf("%s:stack:%d:%s", event.event, event.stackID, event.period)
+	}
 	if s.autoPause.notified[key] {
 		return
 	}
@@ -99,19 +110,30 @@ func (s *Service) enqueueNotification(ctx context.Context, settings configdoc.Se
 		status = NotifyPending
 	}
 	label := eventLabels[event.event]
-	subject := fmt.Sprintf("[proxystack-web] %s：%s", label, event.user.name)
-	lines := []string{"事件：" + label, "用户：" + event.user.name}
-	if event.user.remark != "" {
-		lines = append(lines, "备注："+event.user.remark)
+	subjectName := event.user.name
+	lines := []string{"事件：" + label}
+	if event.stackID != 0 {
+		subjectName = event.stackName
+		lines = append(lines, "Stack："+event.stackName)
+	} else {
+		lines = append(lines, "用户："+event.user.name)
+		if event.user.remark != "" {
+			lines = append(lines, "备注："+event.user.remark)
+		}
 	}
+	subject := fmt.Sprintf("[proxystack-web] %s：%s", label, subjectName)
 	lines = append(lines, event.lines...)
 	if info, err := s.Info(ctx); err == nil {
-		lines = append(lines, fmt.Sprintf("用户详情：%susers/%d", info.PanelURL, event.user.id))
+		if event.stackID != 0 {
+			lines = append(lines, fmt.Sprintf("Stack 详情：%sstacks/%d", info.PanelURL, event.stackID))
+		} else {
+			lines = append(lines, fmt.Sprintf("用户详情：%susers/%d", info.PanelURL, event.user.id))
+		}
 	}
 	err := s.Store.InTx(ctx, func(q *dbq.Queries) error {
 		_, err := q.InsertNotification(ctx, dbq.InsertNotificationParams{
 			At: s.Now().Unix(), Event: event.event, UserID: event.user.id, UserName: event.user.name, DedupKey: key,
-			Subject: subject, Body: strings.Join(lines, "\n") + "\n", Status: status,
+			Subject: subject, Body: strings.Join(lines, "\n") + "\n", Status: status, StackID: event.stackID, StackName: event.stackName,
 		})
 		return err
 	})
@@ -213,18 +235,18 @@ func (s *Service) runNotifications(ctx context.Context) {
 
 // Notification 是通知记录页的一行。
 type Notification struct {
-	ID       int64     `json:"id"`
-	At       time.Time `json:"at"`
-	Event    string    `json:"event"`
-	Label    string    `json:"label"`
-	UserID   int64     `json:"user_id"`
-	UserName string    `json:"user_name"`
-	StackID int64 `json:"stack_id"`
-	StackName string `json:"stack_name"`
-	Subject  string    `json:"subject"`
-	Status   string    `json:"status" enum:"pending,sent,failed,skipped"`
-	Error    string    `json:"error"`
-	Attempts int64     `json:"attempts"`
+	ID        int64     `json:"id"`
+	At        time.Time `json:"at"`
+	Event     string    `json:"event"`
+	Label     string    `json:"label"`
+	UserID    int64     `json:"user_id"`
+	UserName  string    `json:"user_name"`
+	StackID   int64     `json:"stack_id"`
+	StackName string    `json:"stack_name"`
+	Subject   string    `json:"subject"`
+	Status    string    `json:"status" enum:"pending,sent,failed,skipped"`
+	Error     string    `json:"error"`
+	Attempts  int64     `json:"attempts"`
 }
 
 // ListNotifications 返回最近的通知记录。

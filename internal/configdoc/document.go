@@ -336,6 +336,8 @@ type Stack struct {
 	Name           string   `json:"name" yaml:"name"`
 	Enabled        bool     `json:"enabled" yaml:"enabled"`
 	DesiredRunning bool     `json:"desired_running" yaml:"desired_running"`
+	// DailyLimitBytes 是 Stack 每日用量阈值（上下行合计，按设置时区的自然日统计），0 表示不限。
+	DailyLimitBytes int64 `json:"daily_limit_bytes" yaml:"daily_limit_bytes,omitempty" minimum:"0" required:"false"`
 	Role           string   `json:"role" yaml:"role" enum:"edge,auto"`
 	Labels         []string `json:"labels" yaml:"labels,omitempty"`
 	Xray           Xray     `json:"xray" yaml:"xray"`

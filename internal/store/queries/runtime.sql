@@ -1,6 +1,15 @@
 -- name: ListUserPausedStacks :many
 SELECT * FROM user_paused_stacks ORDER BY user_id, stack_id;
 
+-- name: ListStackAutoStops :many
+SELECT * FROM stack_auto_stop ORDER BY stack_id;
+
+-- name: InsertStackAutoStop :exec
+INSERT OR IGNORE INTO stack_auto_stop (stack_id, day, since, restore_xray, restore_mihomo) VALUES (?, ?, ?, ?, ?);
+
+-- name: DeleteStackAutoStop :exec
+DELETE FROM stack_auto_stop WHERE stack_id = ?;
+
 -- name: DeleteUserPausedStacks :exec
 DELETE FROM user_paused_stacks;
 

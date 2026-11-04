@@ -338,6 +338,9 @@ func validateUsers(issues *Issues, doc *Document) {
 
 func validateStack(issues *Issues, doc *Document, path string, stack *Stack) {
 	checkIdentifier(issues, path+".name", stack.Name)
+	if stack.DailyLimitBytes < 0 {
+		issues.add(path+".daily_limit_bytes", "must be at least 0")
+	}
 	if strings.ContainsAny(stack.DirectSuffix, "\r\n\t") {
 		issues.add(path+".direct_suffix", "must not contain line breaks or tabs")
 	}

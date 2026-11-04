@@ -472,6 +472,9 @@ func (s *Service) enqueueEgressNotification(ctx context.Context, q *dbq.Queries,
 
 // obsoleteEgressNotification 阻止旧故障、旧恢复和已删除 Stack 的事件重新发送。
 func (s *Service) obsoleteEgressNotification(ctx context.Context, item dbq.Notification) (bool, error) {
+	if item.Event != configdoc.EventEgressDown && item.Event != configdoc.EventEgressRecovered {
+		return false, nil
+	}
 	if item.StackID == 0 {
 		return false, nil
 	}
