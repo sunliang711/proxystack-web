@@ -74,7 +74,10 @@ const peak = computed(() => Math.max(1, ...rankedUsers.value.map(total)))
 const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stack) => stack.error))
 /** 聚合 stack 的流量经成员 stack 的 relay 出去，已在成员 stack 计入，全部流量的合计不含它们。 */
 const aggregators = computed(() => (overview.value?.by_stack ?? []).filter((stack) => stack.aggregator).map((stack) => stack.stack))
-/** 合计里没能归属到具体用户的部分（例如 SOCKS5/HTTP 共享账号），差额很小时不提示。 */
+/**
+ * 今日、本月流量按用户计数，与用户详情、排行和额度判定一致；去重后的入站计数只用来估算没能归属到用户的部分
+ * （例如 SOCKS5/HTTP 共享账号）。两套计数器在同一入站上本身相差 1%～3%，差额很小时不提示。
+ */
 function unattributed(all: { up: number; down: number }, users: { up: number; down: number }) {
   const gap = total(all) - total(users)
   return gap >= 1024 * 1024 && gap > total(all) * 0.01 ? gap : 0
@@ -102,17 +105,17 @@ const hasUnattributed = computed(() => !!overview.value && (unattributed(overvie
     <NGrid cols="2 m:4" responsive="screen" :x-gap="20" :y-gap="20">
       <NGridItem v-for="period in [{ label: '今日流量', all: overview.today, users: overview.user_today }, { label: '本月流量', all: overview.month, users: overview.user_month }]" :key="period.label">
         <NCard size="small" class="metric-card">
-          <NStatistic :label="period.label" :value="formatBytes(total(period.all))" />
+          <NStatistic :label="period.label" :value="formatBytes(total(period.users))" />
           <NText v-if="!userId && unattributed(period.all, period.users)" depth="3" class="metric-note">
-            其中 {{ formatBytes(unattributed(period.all, period.users)) }} 未归属到用户
+            另有 {{ formatBytes(unattributed(period.all, period.users)) }} 未归属到用户
           </NText>
         </NCard>
       </NGridItem>
       <NGridItem><NCard size="small" class="metric-card"><NStatistic label="当前上行速率" :value="formatRate(latest?.up ?? 0)" /></NCard></NGridItem>
       <NGridItem><NCard size="small" class="metric-card"><NStatistic label="当前下行速率" :value="formatRate(latest?.down ?? 0)" /></NCard></NGridItem>
     </NGrid>
-    <NText v-if="!userId && (aggregators.length || hasUnattributed)" depth="3" class="aggregator-note">
-      <template v-if="aggregators.length">合计和速率不含聚合 stack {{ aggregators.join('、') }}：它们的流量经成员 stack 的 relay 出去，已计入成员 stack。</template>
+    <NText v-if="!userId" depth="3" class="aggregator-note">
+      今日、本月流量按用户计数，与用户详情和用量排行一致。实时速率按各 stack 入站计数<template v-if="aggregators.length">，不含聚合 stack {{ aggregators.join('、') }}（它们的流量经成员 stack 的 relay 出去，已计入成员 stack）</template>。
       <template v-if="hasUnattributed">未归属到用户的流量通常来自 SOCKS5/HTTP 共享账号。</template>
     </NText>
 

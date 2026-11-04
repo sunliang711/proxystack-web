@@ -21,7 +21,7 @@ const router = createRouter({
       path: '/',
       component: () => import('./layouts/MainLayout.vue'),
       children: [
-        { path: '', name: 'dashboard', component: () => import('./views/DashboardView.vue'), meta: { title: '总览', description: '今日和本月的总流量、最近一小时实时速率、各 Stack 用量和用户排行。总流量不重复计算经其他 stack 转发的聚合 stack；采集失败、通知发送失败等需要处理的事项会在顶部提示。' } },
+        { path: '', name: 'dashboard', component: () => import('./views/DashboardView.vue'), meta: { title: '总览', description: '今日和本月的总流量（按用户计数）、最近一小时实时速率、各 Stack 用量和用户排行。采集失败、通知发送失败等需要处理的事项会在顶部提示。' } },
         { path: 'traffic', name: 'traffic', component: () => import('./views/TrafficView.vue'), meta: { title: '流量明细', description: '按小时、日、月、年查看用户、入站或出站的流量趋势与明细，可按 stack 和对象筛选，并导出为 CSV。' } },
         { path: 'records', name: 'records', component: () => import('./views/RecordsView.vue'), meta: { title: '日志与历史', description: '管理员操作、配置版本和邮件通知的历史记录，用于查看谁在什么时候改了什么、通知是否发出。' } },
         // 三个页面合并到「日志与历史」后，旧地址跳到对应标签，书签和邮件里的旧链接仍然可用。
