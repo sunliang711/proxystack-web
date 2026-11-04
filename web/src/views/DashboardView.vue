@@ -65,8 +65,8 @@ const filteredLive = computed(() => live.value.map(selectedPoint))
 const latest = computed(() => filteredLive.value[filteredLive.value.length - 1])
 const labels = computed(() => live.value.map((point) => new Date(point.at).toLocaleTimeString('zh-CN', { hour12: false })))
 const rateSeries = computed(() => [
-  { name: '↑', data: filteredLive.value.map((point) => point.up), slot: 0 },
-  { name: '↓', data: filteredLive.value.map((point) => point.down), slot: 1 },
+  { name: '上行', data: filteredLive.value.map((point) => point.up), slot: 0 },
+  { name: '下行', data: filteredLive.value.map((point) => point.down), slot: 1 },
 ])
 const total = (bytes: { up: number; down: number }) => bytes.up + bytes.down
 const rankedUsers = computed(() => (rankingPeriod.value === 'day' ? overview.value?.top_users_today : overview.value?.top_users) ?? [])
@@ -100,8 +100,8 @@ const collectErrors = computed(() => (overview.value?.stacks ?? []).filter((stac
       <template v-if="!userId">
         <NGridItem><NCard size="small" class="metric-card"><NStatistic label="本月用户流量" :value="formatBytes(total(overview.user_month))" /></NCard></NGridItem>
       </template>
-      <NGridItem><NCard size="small" class="metric-card"><NStatistic label="当前 ↑" :value="formatRate(latest?.up ?? 0)" /></NCard></NGridItem>
-      <NGridItem><NCard size="small" class="metric-card"><NStatistic label="当前 ↓" :value="formatRate(latest?.down ?? 0)" /></NCard></NGridItem>
+      <NGridItem><NCard size="small" class="metric-card"><NStatistic label="当前上行速率" :value="formatRate(latest?.up ?? 0)" /></NCard></NGridItem>
+      <NGridItem><NCard size="small" class="metric-card"><NStatistic label="当前下行速率" :value="formatRate(latest?.down ?? 0)" /></NCard></NGridItem>
     </NGrid>
 
     <NCard title="实时速率（最近 1 小时）" size="small">

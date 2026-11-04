@@ -2,7 +2,7 @@
 import { computed, h, onMounted, ref } from 'vue'
 import {
   NAlert, NButton, NCard, NCheckbox, NDataTable, NDescriptions, NDescriptionsItem, NForm, NFormItem, NInput, NModal, NPopconfirm, NRadioButton, NRadioGroup,
-  NSpace, NSwitch, NTag, NText, useMessage, type DataTableColumns,
+  NSpace, NSwitch, NTag, NText, NTooltip, useMessage, type DataTableColumns,
 } from 'naive-ui'
 import { api, getCSRFToken, handleUnauthorizedResponse, panelBase, problemMessage, type Schemas } from '../api/client'
 import ExportDialog from '../components/ExportDialog.vue'
@@ -59,14 +59,19 @@ const columns: DataTableColumns<BackupFile> = [
   { title: '大小', key: 'size', width: 110, render: (row) => formatBytes(row.size) },
   { title: '时间', key: 'modified_at', width: 180, render: (row) => formatTime(row.modified_at) },
   {
-    title: '', key: 'actions', width: 210,
+    title: '', key: 'actions', width: 250,
     render: (row) => h(NSpace, { size: 6 }, {
       default: () => [
         h('a', { href: `${panelBase}api/backup/files/${encodeURIComponent(row.name)}/download` }, [h(NButton, { size: 'tiny' }, { default: () => '下载' })]),
-        row.kind === 'snapshot' ? h(NButton, { size: 'tiny', onClick: () => openPacking(row.name) }, { default: () => '打包' }) : null,
+        row.kind === 'snapshot'
+          ? h(NTooltip, null, {
+              trigger: () => h(NButton, { size: 'tiny', onClick: () => openPacking(row.name) }, { default: () => '转为迁移包' }),
+              default: () => '用这个数据库快照生成整机迁移包，可选口令加密，用于迁移到另一台机器',
+            })
+          : null,
         h(NPopconfirm, { onPositiveClick: () => remove(row.name) }, {
-          trigger: () => h(NButton, { size: 'tiny' }, { default: () => '删除' }),
-          default: () => `删除 ${row.name}？`,
+          trigger: () => h(NButton, { size: 'tiny', type: 'error', ghost: true }, { default: () => '删除' }),
+          default: () => `删除 ${row.name}？删除后无法恢复。`,
         }),
       ],
     }),

@@ -85,7 +85,7 @@ const columns: DataTableColumns<Node & { _index: number }> = [
     render: (row) => h(NSpace, { size: 4 }, () => [row.remark, rowErrors(row._index) ? h(NTag, { size: 'small', type: 'error' }, () => '有错误') : null]),
   },
   { title: '模式', key: 'mode', width: 90, render: (row) => (row.mode === 'direct' ? '原生' : protocolLabels[row.protocol] ?? row.protocol) },
-  { title: 'server', key: 'server', render: (row) => (row.mode === 'direct' ? configValue(row, 'server') : `${row.server}:${row.port}`) },
+  { title: '服务器', key: 'server', render: (row) => (row.mode === 'direct' ? configValue(row, 'server') : `${row.server}:${row.port}`) },
   { title: '地区', key: 'region', width: 70 },
   {
     title: '操作',
@@ -205,7 +205,7 @@ const headers = computed({
 const batchServer = ref<string | null>(null)
 async function setServer() {
   const next = nodes.value.map((node) => (checked.value.includes(node.id!) && node.mode === 'standard' ? { ...node, server: batchServer.value! } : node))
-  if (await save(next, '已批量设置 server')) batchServer.value = null
+  if (await save(next, '已批量设置服务器')) batchServer.value = null
 }
 function cloneChecked() {
   const copies = nodes.value
@@ -221,7 +221,7 @@ function cloneChecked() {
       <NSpace justify="end">
         <NSelect v-model:value="filterUser" :options="users.map((u) => ({ label: u.name, value: u.name }))" clearable placeholder="全部用户" style="width: 160px" />
         <NButton @click="showImport = true">导入</NButton>
-        <NButton type="primary" :disabled="!users.length" @click="open(nodes.length)">添加节点</NButton>
+        <NButton type="primary" :disabled="!users.length" @click="open(nodes.length)">新建节点</NButton>
       </NSpace>
     </template>
     <NCollapse style="margin-bottom: 12px">
@@ -258,7 +258,7 @@ function cloneChecked() {
     <ErrorList :errors="errors.global" />
     <NSpace v-if="checked.length" style="margin-bottom: 8px" align="center">
       <span>已选 {{ checked.length }} 个</span>
-      <NButton size="small" @click="batchServer = ''">批量设置 server</NButton>
+      <NButton size="small" @click="batchServer = ''">批量设置服务器</NButton>
       <NButton size="small" @click="cloneChecked">克隆</NButton>
       <NButton size="small" @click="showExport = true">导出所选</NButton>
       <NPopconfirm @positive-click="save(nodes.filter((n) => !checked.includes(n.id!)), '已删除')">
@@ -273,13 +273,13 @@ function cloneChecked() {
         </NEmpty>
         <NEmpty v-else-if="nodes.length" description="所选用户没有手工节点" />
         <NEmpty v-else description="还没有手工节点。添加的节点会进入所属用户的订阅">
-          <template #extra><NButton size="small" type="primary" @click="open(nodes.length)">添加第一个节点</NButton></template>
+          <template #extra><NButton size="small" type="primary" @click="open(nodes.length)">新建第一个节点</NButton></template>
         </NEmpty>
       </template>
     </NDataTable>
   </NCard>
 
-  <NModal :show="batchServer !== null" preset="card" title="批量设置 server" style="max-width: 420px" @update:show="(v) => !v && (batchServer = null)">
+  <NModal :show="batchServer !== null" preset="card" title="批量设置服务器" style="max-width: 420px" @update:show="(v) => !v && (batchServer = null)">
     <NInput v-model:value="batchServer" placeholder="域名或 IP" />
     <template #footer>
       <NSpace justify="end">
@@ -316,10 +316,10 @@ function cloneChecked() {
               <NRadioButton v-for="(label, value) in protocolLabels" :key="value" :value="value">{{ label }}</NRadioButton>
             </NRadioGroup>
           </NFormItem>
-          <NFormItem label="server" required v-bind="f('server')">
+          <NFormItem label="服务器" required v-bind="f('server', '域名或 IP')">
             <NInput v-model:value="editing.draft.server" />
           </NFormItem>
-          <NFormItem label="port" required v-bind="f('port')">
+          <NFormItem label="端口" required v-bind="f('port')">
             <NInputNumber v-model:value="editing.draft.port" :min="1" :max="65535" :show-button="false" />
           </NFormItem>
           <NFormItem v-if="editing.draft.protocol !== 'http'" label="UDP">

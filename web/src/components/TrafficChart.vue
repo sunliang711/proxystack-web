@@ -44,6 +44,9 @@ function tooltipFormatter(params: CallbackDataParams | CallbackDataParams[]): st
   return `${escapeHtml(items[0]?.name ?? '')}<br/>${lines.join('<br/>')}<br/><strong>合计：${props.format(total)}</strong>`
 }
 
+/** 全部为 0 时坐标轴会自动取 0～1，只保留 0 的刻度文字，避免出现无意义的「1 B/s」。 */
+const allZero = computed(() => props.series.every((series) => series.data.every((value) => !value)))
+
 const option = computed(() => {
   const tokens = chartTokens[mode.value]
   const palette = seriesColors[mode.value]
@@ -72,7 +75,7 @@ const option = computed(() => {
     },
     yAxis: {
       type: 'value', splitNumber: 4, minInterval: 1,
-      axisLabel: { color: tokens.muted, formatter: (value: number) => props.format(value) },
+      axisLabel: { color: tokens.muted, formatter: (value: number) => (allZero.value && value !== 0 ? '' : props.format(value)) },
       splitLine: { lineStyle: { color: tokens.grid } },
     },
     series: props.series.map((series, index) => {

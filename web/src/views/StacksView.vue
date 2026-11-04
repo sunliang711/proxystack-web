@@ -127,7 +127,7 @@ const columns: DataTableColumns<Summary> = [
     render: (row) => h(InboundSummary, { stack: row }),
   },
   {
-    title: 'Mihomo',
+    title: 'Mihomo 监听',
     key: 'mihomo',
     minWidth: 140,
     render: (row) => h(MihomoSummary, { stack: row }),

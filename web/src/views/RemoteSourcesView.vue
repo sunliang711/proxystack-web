@@ -98,12 +98,11 @@ const f = (path: string, hint?: string) => fieldState(errors.value, `[${editing.
     <template #header-extra>
       <NSpace justify="end">
         <NButton :loading="syncing === 0" @click="sync(0)">全部同步</NButton>
-        <NButton type="primary" @click="open(sources.length)">添加</NButton>
+        <NButton type="primary" @click="open(sources.length)">添加节点源</NButton>
       </NSpace>
     </template>
     <NAlert type="info" :bordered="false" style="margin-bottom: 12px">
       在另一台 proxystack-web 的「系统设置 → 节点导出」中开启导出，把那里显示的导出地址和 token 填到这里。
-      拉取到的节点按用户名分给本机同名用户，每 30 分钟自动同步一次。
     </NAlert>
     <ErrorList :errors="errors.global" />
     <NDataTable :columns="columns" :data="sources" :scroll-x="860" size="small">

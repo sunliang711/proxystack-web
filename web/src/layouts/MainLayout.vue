@@ -261,7 +261,7 @@ async function onAccount(key: string) {
       :width="232"
       :collapsed="collapsed"
       :native-scrollbar="false"
-      :show-trigger="mobile ? false : 'bar'"
+      :show-trigger="mobile ? false : 'arrow-circle'"
       @collapse="collapsed = true"
       @expand="collapsed = false"
     >
@@ -439,7 +439,8 @@ async function onAccount(key: string) {
   margin: 0 auto;
 }
 .workspace-content { height: calc(100vh - 64px); height: calc(100dvh - 64px); }
-.page:is([data-page='user'], [data-page='settings'], [data-page='backup'], [data-page='sub-publish'], [data-page='system'], [data-page='security']) { max-width: 1160px; }
+/* 表单类页面内容较窄，但仍与其他页面左对齐，切换页面时标题位置不跳动。 */
+.page:is([data-page='user'], [data-page='settings'], [data-page='backup'], [data-page='sub-publish'], [data-page='system'], [data-page='security']) > :is(.page-head, .page-body) { max-width: 1160px; }
 .page-head {
   margin-bottom: 24px;
 }
