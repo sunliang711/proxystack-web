@@ -52,6 +52,21 @@ const scheduleBusy = ref(false)
 let scheduleTimer: number | undefined
 let scheduleReloadTimer: number | undefined
 const scheduleActive = computed(() => upgradeSchedule.value?.status === 'waiting' || upgradeSchedule.value?.status === 'updating')
+/** 预约已结束（成功、超时、失败或取消），结果只供查看，可以关闭。 */
+const scheduleFinished = computed(() => !!upgradeSchedule.value && !scheduleActive.value && upgradeSchedule.value.status !== 'idle')
+const scheduleView = computed(() => {
+  const state = upgradeSchedule.value
+  if (!state) return { type: 'info' as const, label: '' }
+  const latest = state.target === 'latest'
+  switch (state.status) {
+    case 'waiting': return { type: 'info' as const, label: latest ? '等待新版本发布' : '等待目标版本发布' }
+    case 'updating': return { type: 'info' as const, label: '正在升级' }
+    case 'succeeded': return { type: 'success' as const, label: '已完成' }
+    case 'timeout': return latest ? { type: 'info' as const, label: '等待结束，没有新版本' } : { type: 'error' as const, label: '已超时' }
+    case 'cancelled': return { type: 'default' as const, label: '已取消' }
+    default: return { type: 'error' as const, label: '失败' }
+  }
+})
 const updateBusy = computed(() => !['idle', 'failed', 'timeout'].includes(updatePhase.value))
 const updateModalVisible = computed(() => updatePhase.value !== 'idle')
 const updateModalClosable = computed(() => updatePhase.value === 'failed' || updatePhase.value === 'timeout')
@@ -102,6 +117,8 @@ const trackTask = useBackgroundTask((status) => {
 async function checkUpdate() {
   checking.value = true
   updateError.value = ''
+  // 重新检查时，上一次预约的结果已经过时，一并清除。
+  if (scheduleFinished.value) await clearUpgradeSchedule()
   const { data, error } = await api.GET('/api/system/update')
   checking.value = false
   if (error) {
@@ -148,6 +165,12 @@ async function cancelUpgradeSchedule() {
     return
   }
   upgradeSchedule.value = data
+}
+
+/** 清除已结束预约的结果；失败时保留原样，不打断其他操作。 */
+async function clearUpgradeSchedule() {
+  const { data } = await api.DELETE('/api/system/upgrade-schedule')
+  if (data) upgradeSchedule.value = data
 }
 
 async function runUpdate() {
@@ -270,15 +293,22 @@ onBeforeUnmount(() => {
           下载并校验新版本后替换并重启管理服务，页面会短暂断开。继续？
         </NPopconfirm>
       </NSpace>
-      <NAlert v-if="upgradeSchedule && upgradeSchedule.status !== 'idle'" :type="upgradeSchedule.status === 'succeeded' ? 'success' : upgradeSchedule.status === 'failed' || upgradeSchedule.status === 'timeout' ? 'error' : 'info'" :bordered="false">
+      <NAlert
+        v-if="upgradeSchedule && upgradeSchedule.status !== 'idle'"
+        :type="scheduleView.type"
+        :bordered="false"
+        :closable="scheduleFinished"
+        @close="clearUpgradeSchedule"
+      >
         <NSpace vertical :size="4">
-          <NText>
-            预约升级：{{ upgradeSchedule.target }} · {{ upgradeSchedule.status === 'waiting' ? '等待版本发布' : upgradeSchedule.status === 'updating' ? '正在升级' : upgradeSchedule.status === 'succeeded' ? '已完成' : upgradeSchedule.status === 'timeout' ? '已超时' : upgradeSchedule.status === 'cancelled' ? '已取消' : '失败' }}
-          </NText>
+          <NText>预约升级：{{ upgradeSchedule.target }} · {{ scheduleView.label }}</NText>
           <NText v-if="upgradeSchedule.status === 'waiting'" depth="3">
-            截止 {{ formatTime(upgradeSchedule.deadline_at) }}，每 {{ upgradeSchedule.interval_seconds }} 秒检查一次。
+            截止 {{ formatTime(upgradeSchedule.deadline_at) }}，每 {{ upgradeSchedule.interval_seconds }} 秒检查一次；{{ upgradeSchedule.target === 'latest' ? '期间发布比当前更新的版本就自动升级。' : '目标版本发布后自动升级。' }}
           </NText>
-          <NText v-if="upgradeSchedule.resolved_version" depth="3">已解析版本：{{ upgradeSchedule.resolved_version }}</NText>
+          <NText v-if="upgradeSchedule.resolved_version && upgradeSchedule.status === 'waiting' && upgradeSchedule.target === 'latest'" depth="3">
+            目前最新版本 {{ upgradeSchedule.resolved_version }}，不比当前版本新，继续等待。
+          </NText>
+          <NText v-else-if="upgradeSchedule.resolved_version" depth="3">目标版本：{{ upgradeSchedule.resolved_version }}</NText>
           <NText v-if="upgradeSchedule.last_error" depth="3">{{ upgradeSchedule.last_error }}</NText>
           <NButton v-if="scheduleActive" size="small" :loading="scheduleBusy" @click="cancelUpgradeSchedule">取消预约</NButton>
         </NSpace>
@@ -310,6 +340,7 @@ onBeforeUnmount(() => {
     </NForm>
     <NAlert type="info" :bordered="false">
       管理服务会在后台持续检查，不需要保持页面打开。找到目标版本后会自动下载、校验、替换并重启管理服务；预约状态会在服务重启后继续恢复。
+      目标为 latest 时，在整个等待时长内只要发布了比当前更新的版本就升级，等满时长仍没有新版本则结束预约。
     </NAlert>
     <template #footer>
       <NSpace justify="end">

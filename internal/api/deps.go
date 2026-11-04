@@ -178,7 +178,7 @@ func registerDeps(api huma.API, s *Server) {
 			}
 			return &selfUpgradeScheduleOutput{Body: *result}, nil
 		})
-	huma.Register(api, reg(huma.Operation{OperationID: "cancelSelfUpgradeSchedule", Method: http.MethodDelete, Path: "/api/system/upgrade-schedule", Summary: "取消管理服务预约升级", Tags: []string{"system"}}),
+	huma.Register(api, reg(huma.Operation{OperationID: "cancelSelfUpgradeSchedule", Method: http.MethodDelete, Path: "/api/system/upgrade-schedule", Summary: "取消等待中的预约升级，或清除已结束预约的结果", Tags: []string{"system"}}),
 		func(ctx context.Context, _ *struct{}) (*selfUpgradeScheduleOutput, error) {
 			result, err := s.svc.CancelSelfUpgrade(ctx, actorFrom(ctx))
 			if err != nil {

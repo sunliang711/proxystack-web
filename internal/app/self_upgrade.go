@@ -99,7 +99,7 @@ func (s *Service) ScheduleSelfUpgrade(ctx context.Context, actor Actor, request 
 	return &state, nil
 }
 
-// CancelSelfUpgrade 取消等待中的预约；已经开始替换二进制的更新不可中断。
+// CancelSelfUpgrade 取消等待中的预约，或清除已结束预约的结果；已经开始替换二进制的更新不可中断。
 func (s *Service) CancelSelfUpgrade(ctx context.Context, _ Actor) (*SelfUpgradeSchedule, error) {
 	s.selfUpgradeMu.Lock()
 	defer s.selfUpgradeMu.Unlock()
@@ -111,8 +111,10 @@ func (s *Service) CancelSelfUpgrade(ctx context.Context, _ Actor) (*SelfUpgradeS
 		return nil, &FieldError{Field: "status", Message: "the upgrade is already being applied"}
 	}
 	if state.Status != SelfUpgradeWaiting {
-		if state.Status == "" {
-			state.Status = SelfUpgradeIdle
+		// 已结束的预约只保留结果供查看，清除后回到空闲状态。
+		state = SelfUpgradeSchedule{Status: SelfUpgradeIdle}
+		if err := s.saveSelfUpgradeSchedule(ctx, state); err != nil {
+			return nil, err
 		}
 		return &state, nil
 	}
@@ -202,7 +204,10 @@ func (s *Service) checkSelfUpgradeSchedule(ctx context.Context) {
 	}
 	if !now.Before(state.DeadlineAt) {
 		state.Status, state.FinishedAt, state.NextCheckAt = SelfUpgradeTimeout, now, time.Time{}
-		state.LastError = "target release was not available before the deadline"
+		state.LastError = "目标版本在截止时间前没有发布"
+		if state.Target == "latest" {
+			state.LastError = "等待期内没有发布比当前更新的版本"
+		}
 		_ = s.saveSelfUpgradeSchedule(ctx, state)
 		return
 	}
@@ -231,14 +236,15 @@ func (s *Service) checkSelfUpgradeSchedule(ctx context.Context) {
 		return
 	}
 	if !deps.IsNewerVersion(version.Current().Version, release.Tag) {
-		if state.Target == "latest" && state.ResolvedVersion == "" {
+		// latest 表示等待期内一旦发布更新的版本就升级：当前已是最新时继续等到截止时间。
+		if state.Target == "latest" {
 			state.ResolvedVersion = release.Tag
 			state.LastError = ""
 			_ = s.saveSelfUpgradeSchedule(ctx, state)
 			return
 		}
 		state.Status, state.ResolvedVersion, state.FinishedAt, state.NextCheckAt = SelfUpgradeSucceeded, release.Tag, now, time.Time{}
-		state.LastError = "当前已是最新版本，无需升级"
+		state.LastError = "当前已是目标版本或更新的版本，无需升级"
 		_ = s.saveSelfUpgradeSchedule(ctx, state)
 		return
 	}

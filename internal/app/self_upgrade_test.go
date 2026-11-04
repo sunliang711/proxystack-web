@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -49,12 +50,19 @@ func TestSelfUpgradeScheduleValidation(t *testing.T) {
 	}
 }
 
-func TestSelfUpgradeLatestCurrentWaitsForNextCheck(t *testing.T) {
+// 目标为 latest 且当前已是最新版本时，预约在整个等待时长内持续检查，到截止时间才结束，结束后可以清除结果。
+func TestSelfUpgradeLatestKeepsWaitingUntilDeadline(t *testing.T) {
 	h := newRuntimeHarness(t)
 	fakeSelfGitHub(t, "v0.4.2")
 	previousVersion := version.Version
 	version.Version = "v0.4.2"
 	t.Cleanup(func() { version.Version = previousVersion })
+
+	start := time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)
+	var clock atomic.Int64
+	clock.Store(start.UnixNano())
+	h.svc.Now = func() time.Time { return time.Unix(0, clock.Load()).UTC() }
+	advance := func(d time.Duration) { clock.Store(start.Add(d).UnixNano()) }
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer func() {
@@ -69,11 +77,32 @@ func TestSelfUpgradeLatestCurrentWaitsForNextCheck(t *testing.T) {
 	require.Eventually(t, func() bool {
 		state, err = h.svc.SelfUpgradeSchedule(ctx)
 		return err == nil && state.Status == app.SelfUpgradeWaiting && state.ResolvedVersion == "v0.4.2"
-	}, 3*time.Second, 20*time.Millisecond)
+	}, 5*time.Second, 20*time.Millisecond)
+
+	// 多个检查周期之后仍在等待，没有提前标记完成。
+	for _, offset := range []time.Duration{10 * time.Second, 30 * time.Second} {
+		advance(offset)
+		require.Eventually(t, func() bool {
+			state, err = h.svc.SelfUpgradeSchedule(ctx)
+			return err == nil && state.LastCheckAt.Equal(start.Add(offset))
+		}, 5*time.Second, 20*time.Millisecond)
+		require.Equal(t, app.SelfUpgradeWaiting, state.Status)
+	}
+
+	advance(61 * time.Second)
 	require.Eventually(t, func() bool {
 		state, err = h.svc.SelfUpgradeSchedule(ctx)
-		return err == nil && state.Status == app.SelfUpgradeSucceeded
-	}, 8*time.Second, 20*time.Millisecond)
+		return err == nil && state.Status == app.SelfUpgradeTimeout
+	}, 5*time.Second, 20*time.Millisecond)
+	require.Equal(t, "等待期内没有发布比当前更新的版本", state.LastError)
+
+	state, err = h.svc.CancelSelfUpgrade(ctx, h.actor)
+	require.NoError(t, err)
+	require.Equal(t, app.SelfUpgradeIdle, state.Status)
+	state, err = h.svc.SelfUpgradeSchedule(ctx)
+	require.NoError(t, err)
+	require.Equal(t, app.SelfUpgradeIdle, state.Status)
+	require.Empty(t, state.Target)
 }
 
 func TestSelfUpgradeSpecificCurrentCompletesImmediately(t *testing.T) {

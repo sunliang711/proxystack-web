@@ -1404,7 +1404,7 @@ export interface paths {
         put?: never;
         /** 预约管理服务升级 */
         post: operations["scheduleSelfUpgrade"];
-        /** 取消管理服务预约升级 */
+        /** 取消等待中的预约升级，或清除已结束预约的结果 */
         delete: operations["cancelSelfUpgradeSchedule"];
         options?: never;
         head?: never;
