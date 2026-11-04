@@ -56,6 +56,12 @@ export function auditActorLabel(actor: string): string {
   return actorLabels[actor] ?? actor
 }
 
+/** 筛选框里输入的中文名称（例如「预约升级」）换回记录中保存的原始操作者，其余输入原样使用。 */
+export function auditActorQuery(input: string): string {
+  const text = input.trim()
+  return Object.entries(actorLabels).find(([, label]) => label === text)?.[0] ?? text
+}
+
 const objectLabels: Record<string, string> = {
   manual_nodes: '手工节点',
   remote_sources: '远端节点源',

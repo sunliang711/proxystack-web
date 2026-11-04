@@ -3,11 +3,23 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   NAlert, NButton, NCard, NDescriptions, NDescriptionsItem, NForm, NFormItem, NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpace, NSpin, NTag, NText, NTooltip,
 } from 'naive-ui'
+import { RouterLink, useRouter } from 'vue-router'
 import { api, problemMessage, type Schemas } from '../api/client'
 import { useBackgroundTask } from '../composables/useBackgroundTask'
 import { taskCenter } from '../tasks'
 import { VersionCheckTimeoutError, waitForVersion } from '../util/self-update'
 import { formatTime } from '../util/format'
+
+const router = useRouter()
+/** 面板地址以某个页面路径结尾时返回该路径，例如误把订阅模板页的地址填成了面板地址。 */
+const panelURLPage = computed(() => {
+  const raw = info.value?.panel_url
+  if (!raw) return ''
+  let last = ''
+  try { last = new URL(raw).pathname.replace(/\/+$/, '').split('/').pop() ?? '' } catch { return '' }
+  const pages = new Set(router.getRoutes().map((route) => route.path.split('/')[1]).filter(Boolean))
+  return last && pages.has(last) ? last : ''
+})
 
 const info = ref<Schemas['SystemInfo'] | null>(null)
 
@@ -280,6 +292,11 @@ onBeforeUnmount(() => {
         <NDescriptionsItem label="运行环境">{{ info.go_version }} · {{ info.platform }}</NDescriptionsItem>
         <NDescriptionsItem label="面板地址">{{ info.panel_url }}</NDescriptionsItem>
       </NDescriptions>
+      <NAlert v-if="panelURLPage" type="warning" :bordered="false" style="margin-top: 12px">
+        面板地址以页面路径 /{{ panelURLPage }}/ 结尾，通知邮件里的链接会打不开。请到
+        <RouterLink :to="{ name: 'settings', query: { section: 'basic' } }">系统设置 → 基本</RouterLink>
+        把它改成面板首页地址。
+      </NAlert>
     </NSpin>
     <NSpace vertical style="margin-top: 20px">
       <NSpace>

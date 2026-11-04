@@ -30,7 +30,7 @@ function setup(t, reveal, initialValue = MASKED) {
     render: () => (node = h(component, { value: model.value, reveal: () => reveal?.(model), 'onUpdate:value': (value) => { model.value = value } })),
   })
   app.provide(ssrContextKey, {})
-  app.provide('n-message-api', { error: (text) => errors.push(text) })
+  app.provide('n-message-api', { error: (text) => errors.push(text), warning: (text) => errors.push(text), success: () => {} })
   app.mount({})
   t.after(() => app.unmount())
   return { model, errors, state: node.component.setupState }
@@ -107,4 +107,18 @@ test('新生成凭据直接切换显隐，保存后重新遮蔽时清除显示�
   model.value = MASKED
   await nextTick()
   assert.equal(state.visible, false)
+})
+
+test('遮蔽状态下点击复制先取回明文再复制，字段保持隐藏', async (t) => {
+  const copied = []
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { clipboard: { writeText: async (text) => { copied.push(text) } } } })
+  t.after(() => { if (previous) Object.defineProperty(globalThis, 'navigator', previous); else delete globalThis.navigator })
+  let calls = 0
+  const { state, errors } = setup(t, async (model) => { calls++; model.value = 'test-secret' })
+  await state.copy()
+  assert.equal(calls, 1)
+  assert.deepEqual(copied, ['test-secret'])
+  assert.equal(state.visible, false)
+  assert.deepEqual(errors, [])
 })

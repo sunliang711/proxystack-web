@@ -48,9 +48,10 @@ async function run(key: string) {
       <NTag v-if="!state.applied_revision" size="small">未应用</NTag>
     </template>
     <NDropdown v-if="actions" v-model:show="showMenu" :options="options" trigger="click" @select="run">
-      <NButton :class="{ 'runtime-menu': prominent }" :size="prominent ? 'small' : 'tiny'" :quaternary="!prominent" icon-placement="right" aria-haspopup="menu" :aria-expanded="showMenu">
-        {{ prominent ? '运行操作' : '操作' }}
-        <template v-if="prominent" #icon><NIcon :size="14"><ChevronDownOutline /></NIcon></template>
+      <NButton :class="{ 'runtime-menu': prominent }" :size="prominent ? 'small' : 'tiny'" :secondary="!prominent" icon-placement="right" aria-haspopup="menu" :aria-expanded="showMenu">
+        {{ prominent ? '运行操作' : '启停' }}
+        <!-- 带下拉箭头，表明点击后有菜单；列表中的紧凑按钮也保留箭头。 -->
+        <template #icon><NIcon :size="prominent ? 14 : 12"><ChevronDownOutline /></NIcon></template>
       </NButton>
     </NDropdown>
   </NSpace>

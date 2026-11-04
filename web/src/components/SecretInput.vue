@@ -46,12 +46,36 @@ async function toggleVisibility() {
   }
 }
 
+const copying = ref(false)
+
+/** 值仍是遮蔽占位时先取回明文再复制，不需要先点「显示」；取回后字段保持隐藏。 */
 async function copy() {
+  if (copying.value) return
+  let fetched = false
+  if (masked.value) {
+    if (!props.reveal) return
+    copying.value = true
+    try {
+      await props.reveal()
+      await nextTick()
+    } catch {
+      // 下面统一按取回失败处理。
+    } finally {
+      copying.value = false
+    }
+    if (masked.value) {
+      message.error('获取明文失败，请重试')
+      return
+    }
+    fetched = true
+  }
   try {
     await copyText(value.value)
     message.success('已复制')
   } catch {
-    message.error('复制失败：浏览器不允许访问剪贴板')
+    // 等待网络请求后，部分浏览器不再允许复制；明文已取回，再点一次即可直接复制。
+    if (fetched) message.warning('已取回明文，请再点一次「复制」')
+    else message.error('复制失败：浏览器不允许访问剪贴板')
   }
 }
 </script>
@@ -66,7 +90,7 @@ async function copy() {
       :readonly="masked"
     />
     <NButton v-if="!plain || masked" :loading="revealing" :disabled="masked && !props.reveal" :aria-pressed="visible" @click="toggleVisibility">{{ visible ? '隐藏' : '显示' }}</NButton>
-    <NButton :disabled="masked || !value" @click="copy">复制</NButton>
+    <NButton :disabled="(masked && !props.reveal) || !value" :loading="copying" @click="copy">复制</NButton>
     <NButton v-if="props.generate" @click="value = props.generate()">生成</NButton>
   </NInputGroup>
 </template>

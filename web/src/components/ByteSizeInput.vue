@@ -36,7 +36,8 @@ function updateUnit(next: number) {
 
 <template>
   <NInputGroup>
-    <NInputNumber :value="amount" @update:value="updateAmount" :min="0" :precision="2" style="flex: 1" placeholder="0 表示不限" />
+    <!-- 0 表示不限：输入框留空并显示「不限」，避免出现 0.00 这种看不出含义的数字。 -->
+    <NInputNumber :value="amount || null" @update:value="updateAmount" :min="0" :precision="2" style="flex: 1" placeholder="不限" />
     <NSelect :value="unit" @update:value="updateUnit" :options="units" style="width: 80px" />
   </NInputGroup>
 </template>

@@ -4,7 +4,7 @@ import { NCard, NDataTable, NInput, NSelect, NSpace, NTooltip, type DataTableCol
 import { api, type Schemas } from '../api/client'
 import { formatTime } from '../util/format'
 import EntityLink from '../components/EntityLink.vue'
-import { auditActionLabel, auditActorLabel, auditObjectLabel } from '../util/audit'
+import { auditActionLabel, auditActorLabel, auditActorQuery, auditObjectLabel } from '../util/audit'
 
 type Entry = Schemas['AuditEntry']
 
@@ -31,7 +31,7 @@ const actions = [
 async function load() {
   loading.value = true
   const { data } = await api.GET('/api/audit', {
-    params: { query: { action: action.value, actor: actor.value, limit: PAGE, offset: (page.value - 1) * PAGE } },
+    params: { query: { action: action.value, actor: auditActorQuery(actor.value), limit: PAGE, offset: (page.value - 1) * PAGE } },
   })
   items.value = data?.items ?? []
   total.value = data?.total ?? 0
@@ -71,7 +71,7 @@ const columns: DataTableColumns<Entry> = [
     <template #header-extra>
       <NSpace>
         <NSelect v-model:value="action" :options="actions" size="small" style="width: 140px" />
-        <NInput v-model:value="actor" size="small" clearable placeholder="操作者" style="width: 140px" />
+        <NInput v-model:value="actor" size="small" clearable placeholder="操作者，如 admin、预约升级" style="width: 200px" />
       </NSpace>
     </template>
     <NDataTable

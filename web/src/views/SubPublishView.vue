@@ -108,6 +108,15 @@ const addSourceCommand = computed(() =>
 /** 构建时跳过的节点数；跳过的节点不进入订阅包，其余内容照常签发。 */
 const skipped = computed(() => status.value?.build_warnings.length ?? 0)
 const actionLabel = computed(() => mode.value === 'online' ? '签发并在线发布' : '签发并下载')
+/** 签发按钮不可用的原因；可以签发时为空。 */
+const blockedReason = computed(() => {
+  if (!status.value) return '正在读取订阅包状态'
+  if (mode.value !== 'online') return ''
+  if (!targets.value.length) return '还没有启用的订阅端，请先在「SSH 发布与部署」中添加'
+  if (!targets.value.some(targetReady)) return '还没有部署并测试通过的订阅端'
+  if (!selected.value.length) return '请先在上方勾选要发布的订阅端'
+  return ''
+})
 
 function targetSummary(target: PublishTarget) {
   const address = `${target.ssh_host}:${target.ssh_port}`
@@ -140,17 +149,6 @@ function openSSHSettings() {
 <template>
   <NSpace vertical :size="20">
     <NCard title="订阅包状态">
-      <template #header-extra>
-        <NSpace justify="end">
-          <NPopconfirm v-if="skipped" @positive-click="publish">
-            <template #trigger>
-              <NButton type="primary" :loading="busy" :disabled="!status || (mode === 'online' && !selected.length)">{{ actionLabel }}</NButton>
-            </template>
-            有 {{ skipped }} 项内容在构建时被跳过，签发的订阅包里不包含它们。确定继续？
-          </NPopconfirm>
-          <NButton v-else type="primary" :loading="busy" :disabled="!status || (mode === 'online' && !selected.length)" @click="publish">{{ actionLabel }}</NButton>
-        </NSpace>
-      </template>
       <NSpace v-if="status" vertical>
         <NAlert v-if="status.sequence === 0" type="info" :bordered="false">还没有发布过订阅包。</NAlert>
         <NAlert v-else-if="status.pending" type="warning" :bordered="false">
@@ -229,7 +227,24 @@ function openSSHSettings() {
             <NText code>proxystack-web sub status</NText> 查看各来源已导入的序号。
           </NText>
         </template>
+
+        <!-- 选好发布方式和目标后再签发，按钮不可用时就地说明原因。 -->
+        <NSpace align="center" class="publish-actions">
+          <NPopconfirm v-if="skipped" @positive-click="publish">
+            <template #trigger>
+              <NButton type="primary" :loading="busy" :disabled="!!blockedReason">{{ actionLabel }}</NButton>
+            </template>
+            有 {{ skipped }} 项内容在构建时被跳过，签发的订阅包里不包含它们。确定继续？
+          </NPopconfirm>
+          <NButton v-else type="primary" :loading="busy" :disabled="!!blockedReason" @click="publish">{{ actionLabel }}</NButton>
+          <NText v-if="blockedReason" depth="3">{{ blockedReason }}</NText>
+          <NText v-else-if="mode === 'online'" depth="3">将向选中的 {{ selected.length }} 个订阅端发布</NText>
+        </NSpace>
       </NSpace>
     </NCard>
   </NSpace>
 </template>
+
+<style scoped>
+.publish-actions { padding-top: 4px; }
+</style>

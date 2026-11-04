@@ -2,7 +2,7 @@
 import { computed, h, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import {
-  NButton, NCard, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NModal, NPopconfirm, NSelect, NSpace, NTag, NTooltip, useMessage,
+  NButton, NCard, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NModal, NPopconfirm, NSelect, NSpace, NTag, NText, NTooltip, useMessage,
   type DataTableColumns,
 } from 'naive-ui'
 import { api, emptyErrors, fieldState, problemMessage, splitProblem, type FormErrors, type Schemas } from '../api/client'
@@ -176,6 +176,9 @@ async function create() {
           <NInput v-model:value="draft.remark" />
         </NFormItem>
       </NForm>
+      <NText depth="3" tag="p" style="font-size: 12px; margin: 0">
+        UUID、密码和订阅 token 会随机生成。创建后自动进入用户详情页，可以在那里设置流量额度、每日阈值和到期时间。
+      </NText>
       <template #footer>
         <NButton type="primary" :disabled="!draft.name" @click="create">创建</NButton>
       </template>

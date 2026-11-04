@@ -94,6 +94,7 @@ async function save() {
     <template #header-extra>
       <NSpace justify="end" align="center">
         <NText v-if="dirty" type="warning" class="header-note">未保存</NText>
+        <NText v-else-if="!customized" depth="3" class="header-note">正在使用内置模板，无需保存；点「基于内置模板修改」后可编辑</NText>
         <NButton type="primary" :disabled="!dirty" :loading="saving" @click="save">保存</NButton>
       </NSpace>
     </template>

@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -195,9 +197,36 @@ func (s *Service) UpdateSettings(ctx context.Context, actor Actor, settings conf
 	change := &ConfigChange{Action: ActionConfigSettings, Object: "settings", Summary: "更新系统设置", Scope: "settings"}
 	return s.mutateConfig(ctx, actor, change, func(doc *configdoc.Document) error {
 		configdoc.UnmaskSettings(&settings, doc.Settings)
+		if page := panelURLPage(settings.Basic.PanelURL); page != "" {
+			return &ValidationError{Scope: change.Scope, doc: doc, Issues: configdoc.Issues{{
+				Path:    "settings.basic.panel_url",
+				Message: fmt.Sprintf("面板地址应填面板首页地址，不能以页面路径 /%s 结尾；通知邮件里的链接由它拼接", page),
+			}}}
+		}
 		doc.Settings = &settings
 		return nil
 	})
+}
+
+// panelPages 是面板前端的一级页面路径，面板地址以它们结尾通常是误把某个页面的地址填了进来。
+var panelPages = []string{
+	"stacks", "users", "manual-nodes", "remote-sources", "templates", "sub-publish", "sub-publish-settings",
+	"deps", "tasks", "jobs", "health", "records", "audit", "history", "notifications", "backup", "settings",
+	"security", "system", "traffic", "login", "reset", "change-password",
+}
+
+// panelURLPage 返回面板地址末尾的页面路径；地址为空、无法解析或没有以页面路径结尾时返回空串。
+func panelURLPage(raw string) string {
+	parsed, err := url.Parse(raw)
+	if raw == "" || err != nil {
+		return ""
+	}
+	segments := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	last := segments[len(segments)-1]
+	if slices.Contains(panelPages, last) {
+		return last
+	}
+	return ""
 }
 
 // CreateUser 新建用户。凭据为空时自动生成。
