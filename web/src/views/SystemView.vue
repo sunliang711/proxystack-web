@@ -50,6 +50,7 @@ const scheduleTimeoutSeconds = ref(300)
 const scheduleIntervalSeconds = ref(20)
 const scheduleBusy = ref(false)
 let scheduleTimer: number | undefined
+let scheduleReloadTimer: number | undefined
 const scheduleActive = computed(() => upgradeSchedule.value?.status === 'waiting' || upgradeSchedule.value?.status === 'updating')
 const updateBusy = computed(() => !['idle', 'failed', 'timeout'].includes(updatePhase.value))
 const updateModalVisible = computed(() => updatePhase.value !== 'idle')
@@ -112,7 +113,12 @@ async function checkUpdate() {
 
 async function loadUpgradeSchedule() {
   const { data } = await api.GET('/api/system/upgrade-schedule')
-  if (data) upgradeSchedule.value = data
+  if (!data) return
+  const wasActive = scheduleActive.value
+  upgradeSchedule.value = data
+  if (wasActive && data.status === 'succeeded' && scheduleReloadTimer === undefined) {
+    scheduleReloadTimer = window.setTimeout(() => window.location.reload(), 800)
+  }
 }
 
 async function scheduleUpgrade() {
@@ -233,6 +239,7 @@ onBeforeUnmount(() => {
   submitController = null
   stopUpdateMonitor()
   if (reloadTimer !== undefined) window.clearTimeout(reloadTimer)
+  if (scheduleReloadTimer !== undefined) window.clearTimeout(scheduleReloadTimer)
   if (scheduleTimer !== undefined) window.clearInterval(scheduleTimer)
 })
 </script>
