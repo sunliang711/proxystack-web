@@ -1,3 +1,11 @@
+/** 升级阶段：前五个来自后台作业上报，confirm 是页面等待重启后的服务报告新版本，done 表示全部完成。 */
+export type UpgradeStage = 'resolve' | 'download' | 'verify' | 'install' | 'restart' | 'confirm' | 'done'
+
+/** 后台作业上报的阶段名转换为升级阶段；未知阶段返回 null。 */
+export function upgradeStage(stage: string | undefined): UpgradeStage | null {
+  return stage && ['resolve', 'download', 'verify', 'install', 'restart'].includes(stage) ? (stage as UpgradeStage) : null
+}
+
 export class VersionCheckTimeoutError extends Error {
   constructor() {
     super('version check timed out')

@@ -5,10 +5,11 @@ import { createServer } from 'vite'
 let server
 let VersionCheckTimeoutError
 let waitForVersion
+let upgradeStage
 
 before(async () => {
   server = await createServer({ configFile: false, server: { middlewareMode: true }, logLevel: 'silent' })
-  ;({ VersionCheckTimeoutError, waitForVersion } = await server.ssrLoadModule('/src/util/self-update.ts'))
+  ;({ VersionCheckTimeoutError, waitForVersion, upgradeStage } = await server.ssrLoadModule('/src/util/self-update.ts'))
 })
 
 after(async () => server?.close())
@@ -61,4 +62,11 @@ test('取消后不再请求版本', async () => {
     probe: async () => { probes++; return '2.0.0' },
   }), (error) => error?.name === 'AbortError')
   assert.equal(probes, 0)
+})
+
+test('后台作业上报的阶段转换为升级阶段', () => {
+  assert.equal(upgradeStage('download'), 'download')
+  assert.equal(upgradeStage('restart'), 'restart')
+  assert.equal(upgradeStage('confirm'), null)
+  assert.equal(upgradeStage(undefined), null)
 })

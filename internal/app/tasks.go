@@ -30,14 +30,33 @@ type Task struct {
 	FinishedAt time.Time `json:"finished_at"`
 	Log        []string  `json:"log"`
 	Error      string    `json:"error"`
+	// Progress 是运行中作业最近一次上报的阶段和下载进度；没有上报过或作业已结束时为空。
+	Progress *TaskProgress `json:"progress,omitempty"`
 }
 
-// TaskEvent 是作业进度事件：新的一行日志或状态变化。
+// TaskProgress 是作业的当前阶段；下载阶段附带已下载和总字节数（总数未知时为 0）。
+type TaskProgress struct {
+	Stage string `json:"stage"`
+	Done  int64  `json:"done,omitempty"`
+	Total int64  `json:"total,omitempty"`
+}
+
+// TaskEvent 是作业进度事件：新的一行日志、阶段进度或状态变化。
 type TaskEvent struct {
-	ID     int64  `json:"id"`
-	Status string `json:"status"`
-	Line   string `json:"line,omitempty"`
-	Error  string `json:"error,omitempty"`
+	ID       int64         `json:"id"`
+	Status   string        `json:"status"`
+	Line     string        `json:"line,omitempty"`
+	Error    string        `json:"error,omitempty"`
+	Progress *TaskProgress `json:"progress,omitempty"`
+}
+
+type taskProgressKey struct{}
+
+// reportTaskProgress 上报当前作业的阶段进度；ctx 不属于后台作业时忽略。
+func reportTaskProgress(ctx context.Context, progress TaskProgress) {
+	if report, ok := ctx.Value(taskProgressKey{}).(func(TaskProgress)); ok {
+		report(progress)
+	}
 }
 
 type taskRegistry struct {
@@ -77,16 +96,23 @@ func (s *Service) startTask(kind, title, actor string, fn func(ctx context.Conte
 			s.tasks.mu.Unlock()
 			s.publish("task", TaskEvent{ID: id, Status: TaskRunning, Line: line})
 		}
+		taskCtx := context.WithValue(ctx, taskProgressKey{}, func(progress TaskProgress) {
+			s.tasks.mu.Lock()
+			task.Progress = &progress
+			s.tasks.mu.Unlock()
+			s.publish("task", TaskEvent{ID: id, Status: TaskRunning, Progress: &progress})
+		})
 		runErr := func() (err error) {
 			defer func() {
 				if r := recover(); r != nil {
 					err = fmt.Errorf("internal error: %v", r)
 				}
 			}()
-			return fn(ctx, logf)
+			return fn(taskCtx, logf)
 		}()
 		s.tasks.mu.Lock()
 		task.FinishedAt = s.Now()
+		task.Progress = nil
 		task.Status = TaskSucceeded
 		if runErr != nil {
 			task.Status, task.Error = TaskFailed, runErr.Error()
@@ -112,6 +138,10 @@ func (s *Service) GetTask(ctx context.Context, id int64) (*Task, error) {
 	if task, ok := s.tasks.running[id]; ok {
 		copy := *task
 		copy.Log = append([]string(nil), task.Log...)
+		if task.Progress != nil {
+			progress := *task.Progress
+			copy.Progress = &progress
+		}
 		s.tasks.mu.Unlock()
 		return &copy, nil
 	}

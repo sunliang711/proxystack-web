@@ -2934,6 +2934,7 @@ export interface components {
             id: number;
             kind: string;
             log: string[];
+            progress?: components["schemas"]["TaskProgress"];
             /** Format: date-time */
             started_at: string;
             /** @enum {string} */
@@ -2952,6 +2953,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             line?: string;
+            progress?: components["schemas"]["TaskProgress"];
             status: string;
         };
         TaskIDOutputBody: {
@@ -2960,6 +2962,13 @@ export interface components {
         };
         TaskListOutputBody: {
             tasks: components["schemas"]["Task"][];
+        };
+        TaskProgress: {
+            /** Format: int64 */
+            done?: number;
+            stage: string;
+            /** Format: int64 */
+            total?: number;
         };
         TemplatePreviewInputBody: {
             /** @description 为空时预览内置模板 */

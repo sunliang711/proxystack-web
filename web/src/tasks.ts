@@ -123,8 +123,10 @@ export function createTaskCenter(request: Requests = requests) {
     })()
     return pending
   }
-  function handleEvent(source: TaskSource, event: { id: number; status: string }) {
+  function handleEvent(source: TaskSource, event: { id: number; status: string; line?: string; progress?: unknown }) {
     if (!active) return
+    // 只有阶段进度的事件不改变任务列表，不触发刷新。
+    if (event.status === 'running' && event.progress && !event.line) return
     observed.add(taskKey({ source, id: event.id }))
     if (!queued) queued = setTimeout(() => { queued = undefined; void refresh() }, 300)
   }

@@ -4363,6 +4363,9 @@
             },
             "type": "array"
           },
+          "progress": {
+            "$ref": "#/components/schemas/TaskProgress"
+          },
           "started_at": {
             "format": "date-time",
             "type": "string"
@@ -4430,6 +4433,9 @@
           "line": {
             "type": "string"
           },
+          "progress": {
+            "$ref": "#/components/schemas/TaskProgress"
+          },
           "status": {
             "type": "string"
           }
@@ -4465,6 +4471,26 @@
         },
         "required": [
           "tasks"
+        ],
+        "type": "object"
+      },
+      "TaskProgress": {
+        "additionalProperties": false,
+        "properties": {
+          "done": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stage"
         ],
         "type": "object"
       },

@@ -829,6 +829,7 @@ func (s *Service) SelfUpdateVersion(ctx context.Context, actor Actor, target str
 			return err
 		}
 		logf("下载代理：%s", proxy.Redacted())
+		reportTaskProgress(ctx, TaskProgress{Stage: "resolve"})
 		release, err := deps.FindRelease(ctx, fetcher, deps.Self, target)
 		if err != nil {
 			return err
@@ -841,10 +842,15 @@ func (s *Service) SelfUpdateVersion(ctx context.Context, actor Actor, target str
 			return fmt.Errorf("release %s has no sha256 file for %s", release.Tag, asset.Name)
 		}
 		logf("下载 %s %s", release.Tag, asset.Name)
-		data, err := fetcher.Download(ctx, asset.URL, nil)
+		reportTaskProgress(ctx, TaskProgress{Stage: "download"})
+		data, err := fetcher.Download(ctx, asset.URL, func(done, total int64) {
+			reportTaskProgress(ctx, TaskProgress{Stage: "download", Done: done, Total: max(total, 0)})
+		})
 		if err != nil {
 			return err
 		}
+		logf("已下载 %.1f MiB", float64(len(data))/(1<<20))
+		reportTaskProgress(ctx, TaskProgress{Stage: "verify"})
 		text, err := fetcher.Get(ctx, digest.URL)
 		if err != nil {
 			return err
@@ -857,6 +863,7 @@ func (s *Service) SelfUpdateVersion(ctx context.Context, actor Actor, target str
 			return err
 		}
 		logf("sha256 校验通过")
+		reportTaskProgress(ctx, TaskProgress{Stage: "install"})
 		executable, err := os.Executable()
 		if err != nil {
 			return err
@@ -883,6 +890,7 @@ func (s *Service) SelfUpdateVersion(ctx context.Context, actor Actor, target str
 			return audit.Write(ctx, q, s.Now(), audit.Entry{Actor: actor.Name, SourceIP: actor.IP, Action: ActionSelfUpdate, Object: "proxystack-web", Summary: version.Current().Version + " → " + release.Tag})
 		})
 		logf("已替换为 %s，管理服务即将重启", release.Tag)
+		reportTaskProgress(ctx, TaskProgress{Stage: "restart"})
 		if s.RequestRestart != nil {
 			go func() {
 				time.Sleep(time.Second)
