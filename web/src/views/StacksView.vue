@@ -8,7 +8,6 @@ import {
 import { RefreshOutline } from '@vicons/ionicons5'
 import { api, emptyErrors, fieldState, splitProblem, type FormErrors, type Schemas } from '../api/client'
 import EgressCell from '../components/EgressCell.vue'
-import EgressHealthStatus from '../components/EgressHealthStatus.vue'
 import { usePolling } from '../composables/usePolling'
 import InboundSummary from '../components/InboundSummary.vue'
 import MihomoSummary from '../components/MihomoSummary.vue'
@@ -121,25 +120,29 @@ const allColumns: DataTableColumns<Summary> = [
         : h(NTag, { size: 'small', type: 'warning' }, () => '启用 · 保持停止')
     },
   },
-  // 两个进程状态加「启停」按钮约 250px；状态标签较多时在列内换行，不溢出到相邻列。
-  { title: '运行', key: 'runtime', width: 270, render: (row) => h(UnitStatus, { stack: row.name, actions: true, wrap: true }) },
+  // 紧凑显示：运行中只显示进程名；状态标签较多时在列内换行，不溢出到相邻列。
+  {
+    title: tipTitle('运行', '绿色：运行中。灰色：未生成，或按「保持停止」设置停止。红色：失败，或本应运行却已停止。蓝色、黄色：启动中、停止中。悬停查看服务名和运行时间。'),
+    key: 'runtime',
+    width: 200,
+    render: (row) => h(UnitStatus, { stack: row.name, actions: true, wrap: true, compact: true }),
+  },
   {
     title: tipTitle(
       '出口 IP',
-      '经该 stack 的 mihomo 并发查询 IPv4 和 IPv6 出口（IPv4 优先用 ipinfo.io），哪个先完成就先显示；另一项继续检测，失败原因可悬停查看。首次查询后保存在当前浏览器，进入页面或刷新页面时优先使用缓存；点顶部「出口IP」或行内的刷新按钮重新检测并更新缓存。',
+      '地址由浏览器经该 stack 的 mihomo 查询（IPv4 优先用 ipinfo.io），结果缓存在当前浏览器，点顶部按钮或行内刷新按钮重新检测；IPv6 有地址时才显示第二行。行首圆点是服务端定时检测的结果：绿色正常，黄色待确认，红色异常，灰色未检测或暂停，异常时圆点旁附文字。后台查到的 IPv4 与浏览器结果不同时会额外提示。悬停查看完整地区、运营商和检测详情。',
     ),
     key: 'egress',
     // 放得下完整的 IPv4 和常见长度的 IPv6。
-    width: 360,
+    width: 300,
     render: (row) =>
-      h('div', [
-        h(EgressCell, {
-          state: egress.states[row.id],
-          mihomoEnabled: row.mihomo_enabled,
-          onRefresh: () => egress.refreshOne(row),
-        }),
-        h(EgressHealthStatus, { health: healthByID.value.get(row.id), error: health.error.value }),
-      ]),
+      h(EgressCell, {
+        state: egress.states[row.id],
+        mihomoEnabled: row.mihomo_enabled,
+        health: healthByID.value.get(row.id),
+        healthError: health.error.value,
+        onRefresh: () => egress.refreshOne(row),
+      }),
   },
   {
     title: tipTitle('角色', 'edge：独立出口，流量经本 stack 的上游直接出去。auto：聚合多个 edge stack 的 relay 入站，按测速或负载均衡挑选出口。'),
@@ -280,7 +283,7 @@ async function create() {
       :data="stacks"
       :loading="loading"
       :row-key="rowKey"
-      :scroll-x="mobile ? 1100 : 1660"
+      :scroll-x="mobile ? 960 : 1520"
       class="pre-line"
     >
       <template #empty>

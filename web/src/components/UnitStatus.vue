@@ -2,13 +2,19 @@
 import { computed, ref } from 'vue'
 import { NButton, NDropdown, NIcon, NSpace, NTag, NTooltip, useMessage } from 'naive-ui'
 import { ChevronDownOutline } from '@vicons/ionicons5'
-import { api, problemMessage } from '../api/client'
+import { api, problemMessage, type Schemas } from '../api/client'
 import { runtime, unitLabel } from '../runtime'
+import { unitBrief } from '../util/unit-status'
 
-/** wrap 允许标签在空间不足时换行，用于列表等宽度受限的位置。 */
-const props = defineProps<{ stack: string; actions?: boolean; prominent?: boolean; wrap?: boolean }>()
+/** wrap 允许标签在空间不足时换行；compact 用紧凑文字（运行中只显示进程名），用于列表。 */
+const props = defineProps<{ stack: string; actions?: boolean; prominent?: boolean; wrap?: boolean; compact?: boolean }>()
 const message = useMessage()
 const state = computed(() => runtime.stacks[props.stack])
+function view(unit: Schemas['UnitView']) {
+  if (props.compact) return unitBrief(unit, state.value?.desired_running ?? true)
+  const label = unitLabel(unit)
+  return { text: `${unit.unit.includes('xray') ? 'xray' : 'mihomo'} ${label.text}`, type: label.type }
+}
 const showMenu = ref(false)
 
 const options = [
@@ -38,11 +44,9 @@ async function run(key: string) {
     <template v-if="state">
       <NTooltip v-for="unit in state.units" :key="unit.unit">
         <template #trigger>
-          <NTag size="small" :type="unitLabel(unit).type" :bordered="false">
-            {{ unit.unit.includes('xray') ? 'xray' : 'mihomo' }} {{ unitLabel(unit).text }}
-          </NTag>
+          <NTag size="small" :type="view(unit).type" :bordered="false">{{ view(unit).text }}</NTag>
         </template>
-        {{ unit.unit }}<span v-if="unit.since && !unit.since.startsWith('0001')">，自 {{ new Date(unit.since).toLocaleString() }}</span>
+        {{ unit.unit }}：{{ unitLabel(unit).text }}<span v-if="unit.since && !unit.since.startsWith('0001')">，自 {{ new Date(unit.since).toLocaleString() }}</span>
       </NTooltip>
       <NTag v-if="state.drift" size="small" type="error">生成物被改动</NTag>
       <NTag v-if="state.auto_stopped" size="small" type="warning">每日阈值已停止</NTag>
