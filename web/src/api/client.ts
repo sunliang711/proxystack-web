@@ -46,11 +46,25 @@ const unauthorized: Middleware = {
   },
 }
 
+let mutationHandler: (() => void) | null = null
+
+/** 注册写操作成功后的回调，用于刷新待应用变更这类依赖数据库内容的状态。 */
+export function setMutationHandler(handler: () => void) {
+  mutationHandler = handler
+}
+
+const mutation: Middleware = {
+  onResponse({ request, response, schemaPath }) {
+    if (response.ok && !['GET', 'HEAD', 'OPTIONS'].includes(request.method) && !schemaPath.startsWith('/api/auth/')) mutationHandler?.()
+    return response
+  },
+}
+
 export const api = createClient<paths>({
   baseUrl: new URL('.', document.baseURI).href.replace(/\/$/, ''),
   credentials: 'same-origin',
 })
-api.use(csrf, unauthorized)
+api.use(csrf, unauthorized, mutation)
 
 /** Huma 返回的 RFC 9457 错误体。 */
 export type ProblemDetail = Schemas['ErrorModel']

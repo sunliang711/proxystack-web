@@ -16,6 +16,7 @@ import TemplateInput from '../components/TemplateInput.vue'
 import UsageCard from '../components/UsageCard.vue'
 import { useDirty } from '../composables/useDirty'
 import { usePageTitle } from '../composables/usePageTitle'
+import { notifySaved } from '../runtime'
 import { randomString, randomUUID, shadowsocksKey } from '../util/generate'
 
 type User = Schemas['User']
@@ -125,7 +126,7 @@ async function save() {
   user.value = data!
   savedName.value = data!.name
   markClean()
-  message.success('已保存')
+  void notifySaved(message)
 }
 
 async function resetToken() {

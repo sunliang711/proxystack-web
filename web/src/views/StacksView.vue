@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, h, onMounted, ref, watch } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
-  NAlert, NButton, NCard, NDataTable, NDynamicTags, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NModal, NRadio,
+  NAlert, NButton, NCard, NDataTable, NDynamicTags, NEmpty, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NModal, NRadio,
   NRadioGroup, NSelect, NSpace, NStep, NSteps, NTag, NText, NTooltip, useMessage, type DataTableColumns,
 } from 'naive-ui'
 import { RefreshOutline } from '@vicons/ionicons5'
@@ -18,6 +18,7 @@ import ExportDialog from '../components/ExportDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
 import UnitStatus from '../components/UnitStatus.vue'
 import { useEgress } from '../composables/useEgress'
+import { useMobile } from '../composables/useMobile'
 import { runtime } from '../runtime'
 import { stackTopology, type FlowNode } from '../util/flow'
 import { tipTitle } from '../util/table'
@@ -25,6 +26,8 @@ import { tipTitle } from '../util/table'
 type Summary = Schemas['StackSummary']
 
 const router = useRouter()
+const route = useRoute()
+const mobile = useMobile()
 const message = useMessage()
 const stacks = ref<Summary[]>([])
 const loading = ref(true)
@@ -39,7 +42,14 @@ async function load() {
   loading.value = false
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  // 初始化清单等入口用 ?create=1 直接打开新建向导。
+  if (route.query.create) {
+    void openWizard()
+    router.replace({ query: { ...route.query, create: undefined } })
+  }
+})
 
 // 流量拓扑：展开状态记在浏览器里。
 const topology = computed(() => stackTopology(stacks.value))
@@ -82,12 +92,17 @@ function mihomoActive(name: string): boolean {
   return runtime.stacks[name]?.units.some((unit) => unit.unit.includes('mihomo') && unit.active === 'active') ?? false
 }
 
-const columns: DataTableColumns<Summary> = [
-  { type: 'selection' },
+/** 窄屏按此顺序优先显示运行状态、出口 IP 和角色，入站、监听和标记在编辑页查看。 */
+const mobileKeys = ['name', 'runtime', 'egress', 'role', 'enabled']
+
+const allColumns: DataTableColumns<Summary> = [
+  { type: 'selection', fixed: 'left' },
   {
     title: '名称',
     key: 'name',
-    minWidth: 120,
+    width: 120,
+    fixed: 'left',
+    ellipsis: { tooltip: true },
     render: (row) => h(RouterLink, { to: { name: 'stack', params: { id: row.id } } }, { default: () => row.name }),
   },
   {
@@ -156,6 +171,12 @@ const columns: DataTableColumns<Summary> = [
       ]),
   },
 ]
+const columnKey = (column: (typeof allColumns)[number]) => ('key' in column ? String(column.key) : '')
+const columns = computed(() => {
+  if (!mobile.value) return allColumns
+  const picked = mobileKeys.flatMap((key) => allColumns.filter((column) => columnKey(column) === key))
+  return [allColumns[0], ...picked]
+})
 
 const rowKey = (row: Summary) => row.name
 
@@ -251,9 +272,17 @@ async function create() {
       :data="stacks"
       :loading="loading"
       :row-key="rowKey"
-      :scroll-x="1440"
+      :scroll-x="mobile ? 980 : 1440"
       class="pre-line"
-    />
+    >
+      <template #empty>
+        <div v-if="loading" />
+        <NEmpty v-else description="还没有 Stack。Stack 是一组独立运行的 xray / mihomo 进程，即一个代理实例。">
+          <template #extra><NButton size="small" type="primary" @click="openWizard">创建第一个 Stack</NButton></template>
+        </NEmpty>
+      </template>
+    </NDataTable>
+    <NText v-if="mobile && stacks.length" depth="3" class="mobile-table-note">窄屏只显示运行状态、出口 IP 和角色，左右滑动查看更多；入站、监听和标记在编辑页查看。</NText>
   </NCard>
 
   <NModal v-model:show="wizard" preset="card" title="新建 stack" style="max-width: 760px">

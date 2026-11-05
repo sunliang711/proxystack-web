@@ -5,7 +5,7 @@
   --ps-surface-raised: #f8fafc;
   --ps-border: #dce4ed;
   --ps-text: #17283d;
-  --ps-muted: #65758b;
+  --ps-muted: #55657b;
   --ps-accent: #087f6a;
   --ps-accent-soft: rgba(8, 127, 106, 0.08);
   --ps-danger: #d03050;
@@ -51,6 +51,7 @@ body {
 .n-data-table .n-data-table-empty { padding: 44px 16px; }
 .n-data-table .n-data-table__pagination { margin-top: 20px; }
 .table-scroll { max-width: 100%; overflow-x: auto; }
+.mobile-table-note { display: block; margin-top: 12px; font-size: 12px; }
 .table-scroll .n-table { min-width: 640px; font-variant-numeric: tabular-nums; }
 .n-empty { padding: 24px 0; }
 .n-data-table .n-data-table-empty .n-empty { padding: 0; }

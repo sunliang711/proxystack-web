@@ -5,6 +5,7 @@ import { NAlert, NButton, NCard, NEmpty, NGrid, NGridItem, NRadioButton, NRadioG
 import { api, problemMessage, type Schemas } from '../api/client'
 import TrafficChart from '../components/TrafficChart.vue'
 import EntityLink from '../components/EntityLink.vue'
+import SetupChecklist from '../components/SetupChecklist.vue'
 import { onTrafficEvent } from '../runtime'
 import { formatBytes, formatRate } from '../util/format'
 
@@ -87,6 +88,7 @@ const hasUnattributed = computed(() => !!overview.value && (unattributed(overvie
 
 <template>
   <NSpace vertical :size="20">
+    <SetupChecklist />
     <NCard size="small">
       <div class="filter-bar overview-filters">
         <span class="section-label" style="margin: 0">统计范围</span>
@@ -96,7 +98,9 @@ const hasUnattributed = computed(() => !!overview.value && (unattributed(overvie
       </div>
     </NCard>
     <template v-if="overview">
-    <NAlert v-if="!overview.enabled" type="info" :bordered="false">流量监控未开启，可以在「系统设置 → 流量」中开启。</NAlert>
+    <NAlert v-if="!overview.enabled" type="info" :bordered="false">
+      流量监控未开启，下面的流量和速率不会更新。<RouterLink :to="{ name: 'settings', query: { section: 'traffic' } }">去系统设置开启</RouterLink>
+    </NAlert>
     <NAlert v-if="overview.failed_notifications" type="error" :bordered="false">
       有 {{ overview.failed_notifications }} 封通知发送失败，请查看<RouterLink :to="{ name: 'records', query: { tab: 'notifications' } }">通知记录</RouterLink>。
     </NAlert>
@@ -127,7 +131,9 @@ const hasUnattributed = computed(() => !!overview.value && (unattributed(overvie
     </NCard>
 
     <NCard title="各 Stack 用量" size="small">
-      <NEmpty v-if="!overview.by_stack.length" description="还没有 Stack 流量数据" />
+      <NEmpty v-if="!overview.by_stack.length" description="还没有 Stack 流量数据">
+        <template #extra><RouterLink :to="{ name: 'stacks' }">查看 Stack 列表</RouterLink></template>
+      </NEmpty>
       <div v-else class="table-scroll"><NTable :bordered="false" size="small" :single-line="false">
         <thead><tr><th>Stack</th><th>{{ userId ? '今日流量' : '今日入站' }}</th><th v-if="!userId">今日用户流量</th><th>{{ userId ? '本月流量' : '本月入站' }}</th><th v-if="!userId">本月用户流量</th><th>当前速率</th></tr></thead>
         <tbody>

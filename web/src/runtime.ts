@@ -1,5 +1,6 @@
-import { reactive } from 'vue'
-import { api, panelBase, type Schemas } from './api/client'
+import { h, reactive } from 'vue'
+import { NButton, type MessageApi } from 'naive-ui'
+import { api, panelBase, setMutationHandler, type Schemas } from './api/client'
 
 type StackRuntime = Schemas['StackRuntime']
 type TaskEvent = Schemas['TaskEvent']
@@ -8,7 +9,11 @@ type TaskEvent = Schemas['TaskEvent']
 export const runtime = reactive({
   stacks: {} as Record<string, StackRuntime>,
   pendingCount: 0,
+  /** 有待应用变更的 stack 数。 */
+  pendingStacks: 0,
   pendingError: '',
+  /** 待应用变更抽屉是否打开，保存提示里的入口也用它打开抽屉。 */
+  pendingDrawer: false,
   connected: false,
 })
 
@@ -67,10 +72,54 @@ export function disconnectEvents() {
   runtime.connected = false
 }
 
-export async function refreshPending() {
-  const { data } = await api.GET('/api/runtime/pending')
-  runtime.pendingCount = data?.changes.length ?? 0
-  runtime.pendingError = data?.error ?? ''
+let pendingRequest: Promise<void> | null = null
+let pendingAgain = false
+
+/** 重新读取待应用变更；并发调用合并为一次请求，期间再有调用时结束后补查一次。 */
+export function refreshPending(): Promise<void> {
+  if (pendingRequest) {
+    pendingAgain = true
+    return pendingRequest
+  }
+  pendingRequest = (async () => {
+    do {
+      pendingAgain = false
+      const { data } = await api.GET('/api/runtime/pending')
+      runtime.pendingCount = data?.changes.length ?? 0
+      runtime.pendingStacks = new Set(data?.changes.map((change) => change.stack)).size
+      runtime.pendingError = data?.error ?? ''
+    } while (pendingAgain)
+  })().finally(() => (pendingRequest = null))
+  return pendingRequest
+}
+
+// 任何写操作成功后都可能产生或消除待应用变更，徽标随之刷新。
+setMutationHandler(() => void refreshPending())
+
+/** 待应用变更的简短说明，例如“2 个 Stack 共 5 项待应用”。 */
+export function pendingSummary(): string {
+  if (runtime.pendingError) return '当前配置无法生成，打开查看原因'
+  if (!runtime.pendingCount) return '没有待应用的变更'
+  return `${runtime.pendingStacks} 个 Stack 共 ${runtime.pendingCount} 项待应用`
+}
+
+/**
+ * 保存成功后的提示：等待应用的变更刷新完毕，有待应用变更时提醒需要应用并提供查看入口。
+ * immediate 是没有待应用变更时的提示文字。
+ */
+export async function notifySaved(message: MessageApi, immediate = '已保存') {
+  await refreshPending()
+  if (!runtime.pendingCount) {
+    message.success(immediate)
+    return
+  }
+  message.warning(
+    () => h('span', [
+      `已保存。当前 ${pendingSummary()}，应用后才会生成配置并重启相关服务。`,
+      h(NButton, { text: true, type: 'primary', style: 'margin-left: 12px', onClick: () => (runtime.pendingDrawer = true) }, () => '查看待应用变更'),
+    ]),
+    { duration: 8000, closable: true },
+  )
 }
 
 /** unit 状态的显示文字和颜色。 */

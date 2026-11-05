@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, h, onMounted, ref } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
-  NButton, NCard, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NModal, NPopconfirm, NSelect, NSpace, NTag, NText, NTooltip, useMessage,
+  NButton, NCard, NDataTable, NDrawer, NDrawerContent, NEmpty, NForm, NFormItem, NInput, NModal, NPopconfirm, NSelect, NSpace, NTag, NText, NTooltip, useMessage,
   type DataTableColumns,
 } from 'naive-ui'
 import { api, emptyErrors, fieldState, problemMessage, splitProblem, type FormErrors, type Schemas } from '../api/client'
@@ -10,6 +10,7 @@ import ErrorList from '../components/ErrorList.vue'
 import ExportDialog from '../components/ExportDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
 import SubscriptionCard from '../components/SubscriptionCard.vue'
+import { useMobile } from '../composables/useMobile'
 import { formatBytes } from '../util/format'
 import { tipTitle } from '../util/table'
 
@@ -19,6 +20,8 @@ type Usage = Schemas['UserUsage']
 const pauseLabels = { daily: '每日阈值', quota: '额度', expired: '到期' } as const
 
 const router = useRouter()
+const route = useRoute()
+const mobile = useMobile()
 const message = useMessage()
 const users = ref<User[]>([])
 const usage = ref<Record<number, Usage>>({})
@@ -39,7 +42,20 @@ async function load() {
   usage.value = Object.fromEntries((usageData ?? []).map((item) => [item.user_id, item]))
   loading.value = false
 }
-onMounted(load)
+onMounted(() => {
+  load()
+  // 初始化清单等入口用 ?create=1 直接打开新建抽屉。
+  if (route.query.create) {
+    openCreate()
+    router.replace({ query: { ...route.query, create: undefined } })
+  }
+})
+
+function openCreate() {
+  draft.value = { name: '', remark: '' }
+  errors.value = emptyErrors()
+  creating.value = true
+}
 
 const autoPauses = (user: User) => usage.value[user.id ?? 0]?.auto_pauses ?? []
 const rows = computed(() => users.value.filter((user) => {
@@ -78,11 +94,17 @@ async function setEnabled(enabled: boolean) {
   load()
 }
 
-const columns: DataTableColumns<User> = [
-  { type: 'selection' },
+/** 窄屏只显示这些列，其余字段在用户详情页查看。 */
+const mobileKeys = new Set(['name', 'enabled', 'today', 'period', 'quota_bytes', 'expire_at', 'subscription'])
+
+const allColumns: DataTableColumns<User> = [
+  { type: 'selection', fixed: 'left' },
   {
     title: '名称',
     key: 'name',
+    width: 120,
+    fixed: 'left',
+    ellipsis: { tooltip: true },
     render: (row) => h(RouterLink, { to: { name: 'user', params: { id: row.id } } }, { default: () => row.name }),
   },
   {
@@ -115,6 +137,7 @@ const columns: DataTableColumns<User> = [
   },
   { title: '备注', key: 'remark' },
 ]
+const columns = computed(() => mobile.value ? allColumns.filter((column) => column.type === 'selection' || ('key' in column && mobileKeys.has(String(column.key)))) : allColumns)
 
 const rowKey = (row: User) => row.name
 const selectedNames = computed(() => checked.value)
@@ -151,7 +174,7 @@ async function create() {
         <NButton :disabled="!selectedNames.length" @click="setEnabled(true)">恢复所选</NButton>
         <NButton @click="showImport = true">导入</NButton>
         <NButton :disabled="!selectedNames.length" @click="showExport = true">导出所选</NButton>
-        <NButton type="primary" @click="(creating = true), (draft = { name: '', remark: '' }), (errors = emptyErrors())">新建用户</NButton>
+        <NButton type="primary" @click="openCreate">新建用户</NButton>
       </NSpace>
     </template>
     <NDataTable
@@ -160,9 +183,18 @@ async function create() {
       :data="rows"
       :loading="loading"
       :row-key="rowKey"
-      :scroll-x="1200"
+      :scroll-x="mobile ? 760 : 1200"
       :pagination="{ pageSize: 50 }"
-    />
+    >
+      <template #empty>
+        <div v-if="loading" />
+        <NEmpty v-else-if="filter === 'all'" description="还没有用户。Stack 的入站引用用户，先创建一个用户。">
+          <template #extra><NButton size="small" type="primary" @click="openCreate">创建第一个用户</NButton></template>
+        </NEmpty>
+        <NEmpty v-else description="没有符合条件的用户" />
+      </template>
+    </NDataTable>
+    <NText v-if="mobile && rows.length" depth="3" class="mobile-table-note">窄屏只显示主要字段，左右滑动查看更多；完整信息在用户详情页。</NText>
   </NCard>
 
   <NDrawer v-model:show="creating" :width="420">

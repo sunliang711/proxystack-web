@@ -15,6 +15,7 @@ import SettingsSection from '../components/SettingsSection.vue'
 import EntityLink from '../components/EntityLink.vue'
 import { settingsSections, useSettingsSections } from '../composables/useSettingsSections'
 import { useDirty } from '../composables/useDirty'
+import { notifySaved } from '../runtime'
 import { mihomoLogLevels, xrayLogLevels } from '../util/options'
 
 type Settings = Schemas['Settings']
@@ -213,7 +214,7 @@ async function save() {
   errors.value = emptyErrors()
   settings.value = data!
   markClean()
-  message.success('已保存；需要应用的生成物变更已进入“待应用变更”')
+  void notifySaved(message, '已保存，后续后台任务立即使用新设置；生成的配置没有变化，无需应用')
 }
 </script>
 

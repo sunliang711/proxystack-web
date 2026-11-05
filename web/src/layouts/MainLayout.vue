@@ -47,7 +47,7 @@ import {
 import { logout, session } from '../session'
 import { themePreference, type ThemePreference } from '../theme'
 import PendingDrawer from '../components/PendingDrawer.vue'
-import { connectEvents, disconnectEvents, refreshPending, runtime } from '../runtime'
+import { connectEvents, disconnectEvents, pendingSummary, refreshPending, runtime } from '../runtime'
 import { api, type Schemas } from '../api/client'
 import brandLogo from '/favicon.svg?url'
 import TaskCenterDrawer from '../components/TaskCenterDrawer.vue'
@@ -193,8 +193,8 @@ const crumbs = computed(() => {
   return items
 })
 
-const showPending = ref(false)
-watch(() => taskState.drawer, (show) => { if (show) showPending.value = false })
+watch(() => taskState.drawer, (show) => { if (show) runtime.pendingDrawer = false })
+watch(() => runtime.pendingDrawer, (show) => { if (show) taskState.drawer = false })
 onMounted(() => {
   loadVersion()
   taskCenter.start(session.admin!.username)
@@ -209,7 +209,7 @@ onBeforeUnmount(() => {
   document.title = 'proxystack-web'
 })
 watch(() => runtime.connected, (connected) => { if (connected) void taskCenter.refresh() })
-// 任何页面保存后都可能产生待应用变更：路由切换时顺便刷新。
+// 本页的写操作会自动刷新待应用变更；路由切换时再查一次，覆盖其他标签页或其他管理员的修改。
 router.afterEach(() => refreshPending())
 
 const themeIcons: Record<ThemePreference, Component> = { system: DesktopOutline, light: SunnyOutline, dark: MoonOutline }
@@ -300,18 +300,18 @@ async function onAccount(key: string) {
         </NBreadcrumb>
         <div class="header-actions">
           <NDropdown :options="themeOptions" trigger="click" placement="bottom-end" @select="(key: ThemePreference) => (themePreference = key)">
-            <NButton quaternary circle size="small" :title="`主题：${themeLabels[themePreference]}`">
+            <NButton quaternary circle size="small" :title="`主题：${themeLabels[themePreference]}`" :aria-label="`切换主题，当前：${themeLabels[themePreference]}`">
               <template #icon><NIcon><component :is="themeIcons[themePreference]" /></NIcon></template>
             </NButton>
           </NDropdown>
           <NBadge :value="taskState.running" :show="taskState.running > 0 || taskState.unread.length > 0" :dot="!taskState.running && taskState.unread.length > 0" :type="taskState.unread.length ? 'error' : 'info'">
-            <NButton secondary size="small" class="task-button" aria-label="后台任务" :title="`${taskState.running} 个运行中，${taskState.unread.length} 个未读失败提醒`" @click="showPending = false; taskCenter.open()">
+            <NButton secondary size="small" class="task-button" aria-label="后台任务" :title="`${taskState.running} 个运行中，${taskState.unread.length} 个未读失败提醒`" @click="runtime.pendingDrawer = false; taskCenter.open()">
               <template #icon><NIcon><ListOutline /></NIcon></template>
               <span class="task-label">后台任务</span>
             </NButton>
           </NBadge>
           <NBadge :value="runtime.pendingCount" :show="runtime.pendingCount > 0 || !!runtime.pendingError" :dot="!!runtime.pendingError && !runtime.pendingCount">
-            <NButton :type="runtime.pendingCount ? 'warning' : 'default'" secondary size="small" class="pending-button" aria-label="待应用变更" @click="taskState.drawer = false; showPending = true">
+            <NButton :type="runtime.pendingCount ? 'warning' : 'default'" secondary size="small" class="pending-button" :aria-label="`待应用变更：${pendingSummary()}`" :title="pendingSummary()" @click="runtime.pendingDrawer = true">
               <template #icon><NIcon><GitPullRequestOutline /></NIcon></template>
               <span class="pending-label">待应用变更</span>
             </NButton>
@@ -338,7 +338,7 @@ async function onAccount(key: string) {
       </NLayoutContent>
     </NLayout>
   </NLayout>
-  <PendingDrawer v-model:show="showPending" />
+  <PendingDrawer v-model:show="runtime.pendingDrawer" />
   <TaskCenterDrawer />
 </template>
 

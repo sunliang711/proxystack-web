@@ -31,7 +31,7 @@ import FlowTab from './FlowTab.vue'
 import UsageTab from './UsageTab.vue'
 import { useBackgroundTask } from '../../composables/useBackgroundTask'
 import UnitStatus from '../../components/UnitStatus.vue'
-import { refreshPending } from '../../runtime'
+import { notifySaved, refreshPending } from '../../runtime'
 import { stackPorts } from './ports'
 
 type Stack = Schemas['Stack']
@@ -131,8 +131,7 @@ async function save(): Promise<boolean> {
   errors.value = emptyErrors()
   markClean()
   savedVersion.value++
-  refreshPending()
-  message.success('已保存，配置变更将在下次应用时生效')
+  void notifySaved(message, '已保存，生成的配置与当前运行的一致，无需应用')
   return true
 }
 
