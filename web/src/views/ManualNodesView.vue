@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, h, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import YAML from 'yaml'
 import {
@@ -20,11 +20,15 @@ import { protocolLabels, regions, ssMethods } from '../util/options'
 
 type Node = Schemas['ManualNode']
 
+/** initialUser 让其他页面（例如用户详情）打开时直接筛选到某个用户；count 通知外层页面节点总数。 */
+const props = defineProps<{ initialUser?: string }>()
+const emit = defineEmits<{ count: [value: number] }>()
 const message = useMessage()
 const dialog = useDialog()
 const nodes = ref<Node[]>([])
 const users = ref<Schemas['User'][]>([])
-const filterUser = ref<string | null>(null)
+const filterUser = ref<string | null>(props.initialUser || null)
+watch(() => nodes.value.length, (value) => emit('count', value))
 const checked = ref<number[]>([])
 const errors = ref<FormErrors>(emptyErrors())
 const saving = ref(false)

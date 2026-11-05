@@ -81,6 +81,8 @@ body {
 .detail-tabs > .n-tabs-nav { padding: 0 24px; }
 .detail-tabs > .n-tabs-pane-wrapper { padding: 24px; min-height: 300px; }
 .detail-tabs > .n-tabs-pane-wrapper > .n-tab-pane { padding-top: 0; }
+/* 不带切换动画的标签页没有 pane-wrapper，面板直接挂在标签页下。 */
+.n-tabs.detail-tabs > .n-tab-pane { padding: 24px; min-height: 300px; }
 .detail-tabs > .n-tabs-pane-wrapper > .n-tab-pane > .n-form { max-width: 860px !important; }
 .n-modal.n-card { max-width: calc(100vw - 32px); }
 .n-drawer { max-width: 100vw; }

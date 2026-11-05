@@ -1,91 +1,30 @@
 import assert from 'node:assert/strict'
 import { before, after, test } from 'node:test'
-import { effectScope, nextTick } from 'vue'
 import { createServer } from 'vite'
 
 let server
-let useSettingsSections
-let isAdvancedField
+let mod
+
 before(async () => {
-  globalThis.document = { baseURI: 'http://localhost/panel/' }
   server = await createServer({ configFile: false, server: { middlewareMode: true }, logLevel: 'silent' })
-  ;({ useSettingsSections, isAdvancedField } = await server.ssrLoadModule('/src/composables/useSettingsSections.ts'))
+  mod = await server.ssrLoadModule('/src/composables/useSettingsSections.ts')
 })
-after(async () => {
-  await server?.close()
-  delete globalThis.document
-  delete globalThis.localStorage
-})
+after(async () => server?.close())
 
-function setup(t, saved = null) {
-  const storage = new Map(saved === null ? [] : [['psw-settings-expanded:/panel/', saved]])
-  globalThis.localStorage = { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) }
-  const scope = effectScope()
-  t.after(() => scope.stop())
-  return { state: scope.run(useSettingsSections), storage }
-}
-
-test('首次只展开基本，展开状态按面板路径保存并可重新读取', async (t) => {
-  const { state, storage } = setup(t)
-  assert.deepEqual(state.expanded.value, ['basic'])
-  state.expanded.value = ['basic', 'notify', 'policy']
-  await nextTick()
-  assert.equal(storage.get('psw-settings-expanded:/panel/'), '["basic","notify","policy"]')
-  const scope = effectScope()
-  t.after(() => scope.stop())
-  assert.deepEqual(scope.run(useSettingsSections).expanded.value, ['basic', 'notify', 'policy'])
+test('每个设置分组只属于一个标签页，并且都有生效方式', () => {
+  const placed = mod.settingsTabs.flatMap((tab) => tab.sections)
+  assert.equal(new Set(placed).size, placed.length)
+  assert.deepEqual([...placed].sort(), [...mod.settingsSections].sort())
+  for (const section of mod.settingsSections) assert.ok(mod.sectionEffects[section]?.label, section)
+  assert.deepEqual(mod.settingsTabs.map((tab) => tab.name), ['basic', 'subscription', 'monitor', 'download', 'advanced'])
 })
 
-test('忽略损坏缓存和失效分组，浏览器禁止存储时仍可展开', async (t) => {
-  assert.deepEqual(setup(t, '{bad json').state.expanded.value, [])
-  assert.deepEqual(setup(t, '["basic","unknown",12,"basic"]').state.expanded.value, ['basic'])
-  globalThis.localStorage = { getItem() { throw new Error('Storage blocked') }, setItem() { throw new Error('Storage blocked') } }
-  const scope = effectScope()
-  t.after(() => scope.stop())
-  const state = scope.run(useSettingsSections)
-  assert.deepEqual(state.expanded.value, [])
-  state.expanded.value = ['subscription']
-  await nextTick()
-  assert.deepEqual(state.expanded.value, ['subscription'])
-})
-
-test('保存校验错误自动展开对应分组及嵌套 policy，保留已展开分组', async (t) => {
-  const { state } = setup(t, '["basic"]')
-  state.revealErrors({ 'notify.host': '必填', 'defaults.xray.policy.stats_user_uplink': '必须启用', 'download_proxy.port': '无效', unknown: '未知' })
-  await nextTick()
-  assert.deepEqual(state.expanded.value, ['basic', 'notify', 'defaults', 'policy', 'download_proxy'])
-})
-
-test('全部展开和收起只影响顶层分组', async (t) => {
-  const { state } = setup(t, '["policy"]')
-  state.setAll(true)
-  assert.ok(state.expanded.value.includes('notify'))
-  assert.ok(state.expanded.value.includes('policy'))
-  state.setAll(false)
-  assert.deepEqual(state.expanded.value, ['policy'])
-})
-
-test('高级设置默认隐藏，开关状态按面板路径保存', async (t) => {
-  const { state, storage } = setup(t)
-  assert.equal(state.showAdvanced.value, false)
-  state.showAdvanced.value = true
-  await nextTick()
-  assert.equal(storage.get('psw-settings-advanced:/panel/'), 'shown')
-  const scope = effectScope()
-  t.after(() => scope.stop())
-  assert.equal(scope.run(useSettingsSections).showAdvanced.value, true)
-})
-
-test('高级字段的校验错误自动显示高级设置', async (t) => {
-  assert.equal(isAdvancedField('port_pools.xray_inbound'), true)
-  assert.equal(isAdvancedField('defaults.xray.api_services'), true)
-  assert.equal(isAdvancedField('defaults.xray.policy.stats_user_uplink'), true)
-  assert.equal(isAdvancedField('defaults.xray.loglevel'), false)
-  assert.equal(isAdvancedField('defaults.xray.stats_extra'), false)
-  const { state } = setup(t)
-  state.revealErrors({ 'notify.host': '必填' })
-  assert.equal(state.showAdvanced.value, false)
-  state.revealErrors({ 'deps.xray.sha256': '必填' })
-  assert.equal(state.showAdvanced.value, true)
-  assert.ok(state.expanded.value.includes('deps'))
+test('分组和校验错误字段定位到所在标签页', () => {
+  assert.equal(mod.tabOfSection('notify'), 'monitor')
+  assert.equal(mod.tabOfSection('port_pools'), 'advanced')
+  assert.equal(mod.tabOfSection('unknown'), 'basic')
+  assert.equal(mod.tabForField('defaults.xray.policy.stats_user_uplink'), 'advanced')
+  assert.equal(mod.tabForField('download_proxy.port'), 'download')
+  assert.equal(mod.tabForField('basic.external_host'), 'basic')
+  assert.equal(mod.tabForField('subscription.interval'), 'subscription')
 })

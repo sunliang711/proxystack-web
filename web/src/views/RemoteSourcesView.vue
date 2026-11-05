@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, h, onMounted, ref, watch } from 'vue'
 import {
   NAlert, NButton, NCard, NDataTable, NDrawer, NDrawerContent, NEmpty, NForm, NFormItem, NInput, NPopconfirm, NSpace, NSwitch,
   NTag, NText, useMessage, type DataTableColumns,
@@ -12,8 +12,11 @@ import { formatTime } from '../util/format'
 type Source = Schemas['RemoteSourceView']
 type Plain = Schemas['RemoteSource']
 
+/** count 通知外层页面节点源数量。 */
+const emit = defineEmits<{ count: [value: number] }>()
 const message = useMessage()
 const sources = ref<Source[]>([])
+watch(() => sources.value.length, (value) => emit('count', value))
 const errors = ref<FormErrors>(emptyErrors())
 const syncing = ref<number | null>(null)
 

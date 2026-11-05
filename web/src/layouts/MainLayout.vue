@@ -21,7 +21,6 @@ import {
   ArchiveOutline,
   CheckmarkOutline,
   ChevronDownOutline,
-  CloudDownloadOutline,
   CubeOutline,
   DesktopOutline,
   DocumentTextOutline,
@@ -120,14 +119,13 @@ const groups: { key: string; label: string; items: NavItem[] }[] = [
     items: [
       { name: 'stacks', label: 'Stack', icon: LayersOutline },
       { name: 'users', label: '用户', icon: PeopleOutline },
-      { name: 'manual-nodes', label: '手工节点', icon: ServerOutline },
-      { name: 'remote-sources', label: '远端节点源', icon: CloudDownloadOutline },
     ],
   },
   {
     key: 'subscription',
     label: '订阅',
     items: [
+      { name: 'extra-nodes', label: '额外节点', icon: ServerOutline },
       { name: 'templates', label: '订阅模板', icon: DocumentTextOutline },
       { name: 'sub-publish', label: '发布订阅包', icon: PaperPlaneOutline },
       { name: 'sub-publish-settings', label: 'SSH 发布与部署', icon: GitNetworkOutline },

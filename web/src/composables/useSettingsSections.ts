@@ -1,7 +1,28 @@
-import { ref, watch } from 'vue'
-import { panelBase } from '../api/client'
+/** 系统设置的分组、所在标签页和生效方式。 */
 
-export const settingsSections = ['basic', 'port_pools', 'defaults', 'security', 'subscription', 'node_export', 'traffic', 'notify', 'deps', 'download_proxy', 'policy']
+export const settingsSections = ['basic', 'security', 'subscription', 'traffic', 'notify', 'download_proxy', 'deps', 'defaults', 'port_pools', 'node_export'] as const
+export type SettingsSectionName = (typeof settingsSections)[number]
+
+export type SettingsTab = 'basic' | 'subscription' | 'monitor' | 'download' | 'advanced'
+
+/** 标签页按用途划分；「高级」放平时很少调整、需要了解 xray / mihomo 细节的设置。 */
+export const settingsTabs: { name: SettingsTab; label: string; sections: SettingsSectionName[] }[] = [
+  { name: 'basic', label: '基本', sections: ['basic', 'security'] },
+  { name: 'subscription', label: '订阅', sections: ['subscription'] },
+  { name: 'monitor', label: '流量与通知', sections: ['traffic', 'notify'] },
+  { name: 'download', label: '下载与依赖', sections: ['download_proxy', 'deps'] },
+  { name: 'advanced', label: '高级', sections: ['defaults', 'port_pools', 'node_export'] },
+]
+
+/** 分组所在的标签页；未知分组归入「基本」。 */
+export function tabOfSection(section: string): SettingsTab {
+  return settingsTabs.find((tab) => (tab.sections as string[]).includes(section))?.name ?? 'basic'
+}
+
+/** 校验错误的字段路径（例如 notify.host）所在的标签页。 */
+export function tabForField(path: string): SettingsTab {
+  return tabOfSection(path.split('.')[0]!)
+}
 
 /** 分组的生效方式。 */
 export interface SectionEffect {
@@ -11,7 +32,7 @@ export interface SectionEffect {
 }
 
 /** 各分组保存后的生效方式，显示在分组标题右侧。 */
-export const sectionEffects: Record<string, SectionEffect> = {
+export const sectionEffects: Record<SettingsSectionName, SectionEffect> = {
   basic: { label: '部分随订阅包生效', type: 'info', tip: '对外地址写入订阅节点，重新发布订阅包后生效；面板地址和时区保存后立即生效。' },
   port_pools: { label: '立即生效', type: 'success', tip: '只影响之后自动分配的端口，已有 stack 的端口保持不变。' },
   defaults: { label: '需要应用', type: 'warning', tip: '作为各 stack 的默认值写入生成的 xray / mihomo 配置，保存后进入「待应用变更」，应用后生效。' },
@@ -22,66 +43,4 @@ export const sectionEffects: Record<string, SectionEffect> = {
   notify: { label: '立即生效', type: 'success', tip: '保存后之后的通知按新设置发送。' },
   deps: { label: '立即生效', type: 'success', tip: '保存后之后的安装、升级和自动升级按新设置执行。' },
   download_proxy: { label: '立即生效', type: 'success', tip: '保存后依赖管理和面板自更新的对外请求立即使用新设置。' },
-}
-
-/** 默认隐藏的高级分组；「显示高级设置」打开后才出现。 */
-export const advancedSections = ['port_pools', 'node_export', 'deps']
-
-/** 字段是否属于高级设置：高级分组内的字段，以及默认值中的 Xray API、stats 和 policy。 */
-export function isAdvancedField(path: string): boolean {
-  const section = path.split('.')[0]!
-  if (advancedSections.includes(section)) return true
-  return /^defaults\.xray\.(api_enabled|api_services|stats|policy)(\.|$)/.test(path)
-}
-
-/** 折叠状态只存浏览器本地，按面板路径区分；存储不可用时仍可正常展开。 */
-export function useSettingsSections() {
-  const key = `psw-settings-expanded:${panelBase}`
-  const advancedKey = `psw-settings-advanced:${panelBase}`
-  const showAdvanced = ref(false)
-  try {
-    showAdvanced.value = localStorage.getItem(advancedKey) === 'shown'
-  } catch {
-    // 浏览器禁止存储时默认隐藏高级设置。
-  }
-  watch(showAdvanced, (show) => {
-    try {
-      localStorage.setItem(advancedKey, show ? 'shown' : 'hidden')
-    } catch {
-      // 浏览器禁止存储时只在当前页面保留状态。
-    }
-  })
-  // 首次使用时展开「基本」，缓存损坏或存储不可用时全部折叠。
-  const expanded = ref<string[]>([])
-  try {
-    const raw = localStorage.getItem(key)
-    const saved: unknown = raw === null ? ['basic'] : JSON.parse(raw)
-    if (Array.isArray(saved)) expanded.value = settingsSections.filter((name) => saved.includes(name))
-  } catch {
-    // 缓存损坏或浏览器禁止存储。
-  }
-  watch(expanded, (names) => {
-    try {
-      localStorage.setItem(key, JSON.stringify(names))
-    } catch {
-      // 浏览器禁止存储时只在当前页面保留状态。
-    }
-  })
-
-  function revealErrors(fields: Record<string, string>) {
-    const names = new Set(expanded.value)
-    for (const path of Object.keys(fields)) {
-      const section = path.split('.')[0]!
-      if (settingsSections.includes(section)) names.add(section)
-      if (path === 'defaults.xray.policy' || path.startsWith('defaults.xray.policy.')) names.add('policy')
-      if (isAdvancedField(path)) showAdvanced.value = true
-    }
-    expanded.value = [...names]
-  }
-  /** 展开或收起全部顶层分组；嵌套的 policy 保持原状。 */
-  function setAll(open: boolean) {
-    const nested = expanded.value.filter((name) => name === 'policy')
-    expanded.value = open ? [...settingsSections.filter((name) => name !== 'policy'), ...nested] : nested
-  }
-  return { expanded, showAdvanced, revealErrors, setAll }
 }

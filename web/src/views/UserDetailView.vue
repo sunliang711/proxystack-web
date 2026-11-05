@@ -32,6 +32,8 @@ const id = computed(() => Number(route.params.id))
 const user = ref<User | null>(null)
 const references = ref<Reference[]>([])
 const stacks = ref<Schemas['StackSummary'][]>([])
+/** 归属该用户的手工节点数，显示在「订阅」标签页。 */
+const manualNodes = ref(0)
 const pausing = ref(false)
 const errors = ref<FormErrors>(emptyErrors())
 const saving = ref(false)
@@ -104,7 +106,9 @@ async function load() {
   user.value = data.user
   savedName.value = data.user.name
   references.value = data.references
-  stacks.value = (await api.GET('/api/stacks')).data?.stacks ?? []
+  const [stackResult, nodeResult] = await Promise.all([api.GET('/api/stacks'), api.GET('/api/manual-nodes')])
+  stacks.value = stackResult.data?.stacks ?? []
+  manualNodes.value = (nodeResult.data ?? []).filter((node) => node.user === data.user.name).length
   markClean()
   void loadUsage()
 }
@@ -309,6 +313,11 @@ async function remove() {
 
         <NTabPane name="subscription" :tab="tabLabel('subscription', '订阅')">
           <SubscriptionCard :user-id="id" :bordered="false" class="embedded-card" />
+          <NText depth="3" tag="p" class="pane-desc">
+            <template v-if="manualNodes">该用户有 {{ manualNodes }} 个手工节点，随本机 stack 节点一起进入订阅。</template>
+            <template v-else>该用户没有手工节点。</template>
+            <RouterLink :to="{ name: 'extra-nodes', query: { user: savedName } }">{{ manualNodes ? '查看手工节点' : '添加手工节点' }}</RouterLink>
+          </NText>
           <section class="pane-section">
             <h3 class="pane-title">订阅设置</h3>
             <div class="grid-2">
