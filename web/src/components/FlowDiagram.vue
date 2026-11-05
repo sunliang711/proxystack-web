@@ -4,7 +4,7 @@ import { useThemeVars } from 'naive-ui'
 import { isDark } from '../theme'
 import type { FlowEdge, FlowNode, FlowTone } from '../util/flow'
 
-const props = defineProps<{ nodes: FlowNode[]; edges: FlowEdge[]; columns: string[] }>()
+const props = defineProps<{ nodes: FlowNode[]; edges: FlowEdge[]; columns: string[]; selected?: string | null }>()
 const emit = defineEmits<{ select: [node: FlowNode] }>()
 
 const theme = useThemeVars()
@@ -185,14 +185,14 @@ const scale = computed(() => (available.value ? Math.min(1, Math.max(MIN_SCALE, 
         :class="['node', { clickable: node.clickable, faded: related && !related.has(node.id), dim: node.dim }]"
         :role="node.clickable ? 'link' : undefined"
         :tabindex="node.clickable ? 0 : undefined"
-        :aria-label="node.clickable ? `查看 Stack ${node.title} 的详情` : undefined"
+        :aria-label="node.clickable ? (node.filter ? `在列表中筛选：${node.filter.label}` : `查看 Stack ${node.title} 的详情`) : undefined"
         @mouseenter="hovered = node.id"
         @mouseleave="hovered = null"
         @click="node.clickable && emit('select', node)"
         @keydown.enter="node.clickable && emit('select', node)"
       >
         <title>{{ [node.title, node.subtitle, ...(node.lines ?? []), node.hint].filter(Boolean).join('\n') }}</title>
-        <rect :x="node.x" :y="node.y" :width="NODE_WIDTH" :height="node.height" rx="10" :fill="theme.cardColor" :stroke="theme.borderColor" />
+        <rect :x="node.x" :y="node.y" :width="NODE_WIDTH" :height="node.height" rx="10" :fill="theme.cardColor" :stroke="selected === node.id ? tone(node.tone) : theme.borderColor" :stroke-width="selected === node.id ? 2 : 1" />
         <rect :x="node.x" :y="node.y" width="4" :height="node.height" rx="2" :fill="tone(node.tone)" />
         <text :x="node.x + 14" :y="node.y + PAD_Y + 14" class="title" :fill="theme.textColor1">{{ clip(node.title, node.badge ? 15 : 22) }}</text>
         <g v-if="node.badge">

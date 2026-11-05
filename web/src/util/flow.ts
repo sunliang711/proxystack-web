@@ -18,6 +18,8 @@ export interface FlowNode {
   clickable?: boolean
   /** 点击后打开的 stack。 */
   stackId?: number
+  /** 点击后在列表中筛选的 stack；用于按类别汇总的节点。 */
+  filter?: { label: string; stackIds: number[] }
 }
 
 /** 有向边：流量从 from 流向 to；dashed 表示备选路径（例如 select 组里没有默认选中的成员）。 */
@@ -69,124 +71,109 @@ const protocolNames: Record<string, string> = { vmess: 'VMess', shadowsocks: 'Sh
 const groupTypes: Record<string, string> = { select: '手动选择', 'url-test': '自动测速', 'load-balance': '负载均衡', fallback: '故障转移' }
 
 /**
- * Stack 列表页的整体拓扑：客户端 → stack（按引用关系分层）→ 出口 → 互联网。
- * 每个 stack 一个节点，节点内列出入站和 Xray 出站；Mihomo 上游画成出口节点，引用其他 stack 时画成 stack 之间的箭头。
+ * Stack 列表页的概要流向：客户端 → 聚合测速 Stack → 独立出口 Stack → 出口类别 → 互联网。
+ * 节点按类别汇总、显示数量，不逐个列出 stack；每个类别节点带上所含 stack，点击后在列表中筛选。
+ * 单个 stack 的详细流向在 stack 详情页查看。
  */
 export function stackTopology(stacks: Summary[]): FlowGraph {
   const nodes: FlowNode[] = []
   const edges: FlowEdge[] = []
   if (!stacks.length) return { nodes, edges, columns: [] }
 
-  const names = new Set(stacks.map((stack) => stack.name))
+  const byName = new Map(stacks.map((stack) => [stack.name, stack]))
   // 只有 Xray 出站经过 Mihomo 时，Mihomo 的上游才承载流量。
   const viaMihomo = (stack: Summary) => stack.xray_enabled && stack.mihomo_enabled && stack.outbound.type === 'mihomo'
-  // A 的上游引用 B 的入站时，流量从 A 流向 B。
-  const referrers = new Map<string, string[]>()
-  const references = new Map<string, { stack: string; inbound: string }[]>()
-  for (const stack of stacks) {
-    if (!viaMihomo(stack)) continue
-    for (const upstream of stack.upstreams) {
-      if (upstream.type !== 'xray-socks5' || !names.has(upstream.stack)) continue
-      referrers.set(upstream.stack, [...(referrers.get(upstream.stack) ?? []), stack.name])
-      references.set(stack.name, [...(references.get(stack.name) ?? []), { stack: upstream.stack, inbound: upstream.inbound }])
-    }
-  }
-  const layer = layers(
-    stacks.map((stack) => stack.name),
-    referrers,
-  )
-  const deepest = Math.max(...layer.values())
-  const exitColumn = deepest + 2
-  const columns = ['客户端', ...Array.from({ length: deepest + 1 }, (_, index) => (deepest ? `Stack · 第 ${index + 1} 跳` : 'Stack')), '出口', '互联网']
+  // 上游里引用的其他 stack（经其入站转发）。
+  const referenced = (stack: Summary) =>
+    viaMihomo(stack) ? [...new Set(stack.upstreams.filter((upstream) => upstream.type === 'xray-socks5' && byName.has(upstream.stack)).map((upstream) => upstream.stack))] : []
 
-  const subInbounds = stacks.flatMap((stack) => stack.inbounds.filter((inbound) => inbound.sub))
-  nodes.push({ id: 'client', column: 0, title: '客户端', subtitle: '订阅用户', tone: 'client', lines: [`${subInbounds.length} 个订阅入站`] })
-
-  const outboundLine = (stack: Summary) => {
-    if (!stack.xray_enabled) return '出 Xray 未启用'
-    switch (stack.outbound.type) {
-      case 'mihomo':
-        return `出 Mihomo ${stack.mihomo_socks || '未启用'}`
-      case 'direct':
-        return '出 直连'
-      default:
-        return `出 外部 ${stack.outbound.type.toUpperCase()} ${stack.outbound.target}`
-    }
+  type Exit = 'upstream' | 'external' | 'direct'
+  /** stack 自己的出口；只经其他 stack 转发、或 Xray / Mihomo 未启用时没有自己的出口。 */
+  const exitOf = (stack: Summary): Exit | null => {
+    if (!stack.xray_enabled) return null
+    if (stack.outbound.type === 'direct') return 'direct'
+    if (stack.outbound.type !== 'mihomo') return 'external'
+    if (!viaMihomo(stack)) return null
+    if (stack.upstreams.some((upstream) => upstream.type === 'raw')) return 'upstream'
+    // 没有任何上游时代理组里只剩 DIRECT。
+    return referenced(stack).length ? null : 'direct'
   }
 
-  let usesDirect = false
-  for (const stack of stacks) {
-    const id = `stack:${stack.name}`
-    const auto = stack.role === 'auto'
-    const inboundLines = stack.inbounds.map((inbound) => `入 ${inbound.name} ${inbound.protocol} :${inbound.port}`)
-    nodes.push({
-      id,
-      column: 1 + (layer.get(stack.name) ?? 0),
-      title: stack.name,
-      badge: !stack.enabled ? '停用' : undefined,
-      subtitle: auto ? `auto · 聚合测速 · ${stack.members.length} 个成员` : 'edge · 独立出口',
-      lines: [...(inboundLines.length > 2 ? [inboundLines[0], `入 … 另 ${inboundLines.length - 1} 个`] : inboundLines), outboundLine(stack)],
-      tone: auto ? 'auto' : 'stack',
-      dim: !stack.enabled,
+  const autos = stacks.filter((stack) => stack.role === 'auto')
+  const plain = stacks.filter((stack) => stack.role !== 'auto')
+  const hasAuto = autos.length > 0
+  const exitColumn = hasAuto ? 3 : 2
+  const columns = hasAuto ? ['客户端', '聚合 Stack', '独立出口 Stack', '出口', '互联网'] : ['客户端', 'Stack', '出口', '互联网']
+
+  const MAX_NAMES = 8
+  const names = (members: Summary[]) =>
+    members.length > MAX_NAMES ? `${members.slice(0, MAX_NAMES).map((stack) => stack.name).join('、')} 等 ${members.length} 个` : members.map((stack) => stack.name).join('、')
+  const filterOf = (label: string, members: Summary[]) => ({ label, stackIds: members.map((stack) => stack.id) })
+  const group = (id: string, column: number, title: string, members: Summary[], tone: FlowTone, label: string, lines: string[] = []): FlowNode => {
+    const disabled = members.filter((stack) => !stack.enabled).length
+    return {
+      id, column, title, tone, lines,
+      subtitle: `${members.length} 个 Stack${disabled ? `（${disabled} 个停用）` : ''}`,
+      hint: `包含：${names(members)}\n点击在下方列表中只显示这些 Stack`,
       clickable: true,
-      stackId: stack.id,
-      hint: '点击打开编辑页',
-    })
-    if (stack.inbounds.some((inbound) => inbound.sub)) edges.push({ from: 'client', to: id })
-    for (const reference of references.get(stack.name) ?? []) {
-      edges.push({ from: id, to: `stack:${reference.stack}`, label: reference.inbound })
-    }
-
-    if (!stack.xray_enabled) continue
-    if (stack.outbound.type === 'direct') {
-      usesDirect = true
-      edges.push({ from: id, to: 'direct', label: 'Xray 直连' })
-    } else if (stack.outbound.type !== 'mihomo') {
-      const exit = `external:${stack.outbound.target}`
-      if (!nodes.some((node) => node.id === exit)) {
-        nodes.push({ id: exit, column: exitColumn, title: '外部代理', subtitle: stack.outbound.type.toUpperCase(), lines: [stack.outbound.target], tone: 'upstream' })
-        edges.push({ from: exit, to: 'internet' })
-      }
-      edges.push({ from: id, to: exit })
-    } else if (viaMihomo(stack)) {
-      const raw = stack.upstreams.filter((upstream) => upstream.type === 'raw')
-      if (raw.length) {
-        const exit = `upstreams:${stack.name}`
-        nodes.push({
-          id: exit,
-          column: exitColumn,
-          title: `${stack.name} 的上游`,
-          subtitle: `${raw.length} 个外部节点`,
-          lines: limit(raw.map((upstream) => `${upstream.name} · ${upstream.protocol || '?'}`)),
-          tone: 'upstream',
-        })
-        edges.push({ from: id, to: exit }, { from: exit, to: 'internet' })
-      } else if (!references.has(stack.name)) {
-        // 没有任何上游时代理组里只剩 DIRECT。
-        usesDirect = true
-        edges.push({ from: id, to: 'direct', label: '无上游' })
-      }
+      filter: filterOf(label, members),
     }
   }
-  if (usesDirect) {
-    nodes.push({ id: 'direct', column: exitColumn, title: '直连', subtitle: 'DIRECT', tone: 'internet', lines: ['由本机直接访问目标'] })
-    edges.push({ from: 'direct', to: 'internet' })
+  const count = (members: Summary[]) => `${members.length} 个 Stack`
+
+  const subscribed = stacks.filter((stack) => stack.inbounds.some((inbound) => inbound.sub))
+  const subInbounds = stacks.reduce((sum, stack) => sum + stack.inbounds.filter((inbound) => inbound.sub).length, 0)
+  nodes.push({
+    id: 'client', column: 0, title: '客户端', subtitle: '订阅用户', tone: 'client', lines: [`${subInbounds} 个订阅入站`],
+    hint: subscribed.length ? `订阅入站所在：${names(subscribed)}\n点击在下方列表中只显示这些 Stack` : '还没有加入订阅的入站',
+    clickable: subscribed.length > 0,
+    filter: subscribed.length ? filterOf('有订阅入站', subscribed) : undefined,
+  })
+
+  // 引用关系：A 的上游引用 B 时流量从 A 流向 B，按类别汇总成一条边。
+  const autoTargets = new Set(autos.flatMap(referenced))
+  const chained = plain.filter((stack) => referenced(stack).length)
+  if (hasAuto) {
+    nodes.push(group('auto', 1, '聚合测速 Stack', autos, 'auto', '聚合测速 Stack', [`共 ${autos.reduce((sum, stack) => sum + stack.members.length, 0)} 个成员引用`]))
+  }
+  if (plain.length) {
+    const lines = chained.length ? [`其中 ${chained.length} 个经其他 Stack 转发`] : []
+    nodes.push(group('edge', hasAuto ? 2 : 1, '独立出口 Stack', plain, 'stack', '独立出口 Stack', lines))
+  }
+  const subscribedAutos = autos.filter((stack) => subscribed.includes(stack))
+  const subscribedPlain = plain.filter((stack) => subscribed.includes(stack))
+  if (subscribedAutos.length) edges.push({ from: 'client', to: 'auto', label: count(subscribedAutos) })
+  if (subscribedPlain.length) edges.push({ from: 'client', to: 'edge', label: count(subscribedPlain) })
+  const autoToPlain = [...autoTargets].filter((name) => byName.get(name)?.role !== 'auto')
+  if (hasAuto && plain.length && autoToPlain.length) edges.push({ from: 'auto', to: 'edge', label: `引用 ${autoToPlain.length} 个` })
+
+  const exits: { id: Exit; title: string; subtitle?: string; tone: FlowTone; label: string; lines: (members: Summary[]) => string[] }[] = [
+    {
+      id: 'upstream', title: '上游节点', tone: 'upstream', label: '经上游节点出口',
+      lines: (members) => [`${members.reduce((sum, stack) => sum + stack.upstreams.filter((upstream) => upstream.type === 'raw').length, 0)} 个外部节点`],
+    },
+    {
+      id: 'external', title: '外部代理', tone: 'upstream', label: '经外部代理出口',
+      lines: (members) => limit([...new Set(members.map((stack) => `${stack.outbound.type.toUpperCase()} ${stack.outbound.target}`))]),
+    },
+    { id: 'direct', title: '本机直连', tone: 'internet', label: '本机直连出口', lines: () => ['由本机直接访问目标'] },
+  ]
+  const exitLabels: string[] = []
+  for (const exit of exits) {
+    const members = stacks.filter((stack) => exitOf(stack) === exit.id)
+    if (!members.length) continue
+    nodes.push(group(exit.id, exitColumn, exit.title, members, exit.tone, exit.label, exit.lines(members)))
+    edges.push({ from: exit.id, to: 'internet' })
+    const fromAuto = members.filter((stack) => stack.role === 'auto')
+    const fromPlain = members.filter((stack) => stack.role !== 'auto')
+    if (fromAuto.length) edges.push({ from: 'auto', to: exit.id, label: count(fromAuto) })
+    if (fromPlain.length) edges.push({ from: 'edge', to: exit.id, label: count(fromPlain) })
+    exitLabels.push(`${exit.title}（${members.length}）`)
   }
   nodes.push({ id: 'internet', column: exitColumn + 1, title: '互联网', subtitle: '目标网站', tone: 'internet' })
 
-  const autoCount = stacks.filter((stack) => stack.role === 'auto').length
-  const upstreamGroups = nodes.filter((node) => node.id.startsWith('upstreams:')).length
-  const externals = nodes.filter((node) => node.id.startsWith('external:')).length
-  const exits = [
-    upstreamGroups ? `${upstreamGroups} 组上游节点` : '',
-    externals ? `${externals} 个外部代理` : '',
-    usesDirect ? '本机直连' : '',
-  ].filter(Boolean)
-  const via = [
-    `${stacks.length - autoCount} 个独立出口 Stack（edge）`,
-    autoCount ? `${autoCount} 个聚合测速 Stack（auto）` : '',
-  ].filter(Boolean).join('、')
-  const summary = `从 ${subInbounds.length} 个订阅入站进入 → 经过 ${via} → ${exits.length ? `从${exits.join('、')}出去` : '还没有可用的出口'}`
+  const via = [`${plain.length} 个独立出口 Stack`, hasAuto ? `${autos.length} 个聚合测速 Stack` : ''].filter(Boolean).join('、')
+  const summary = `从 ${subInbounds} 个订阅入站进入 → 经过 ${via} → ${exitLabels.length ? `从${exitLabels.join('、')}出去` : '还没有可用的出口'}`
   return { nodes, edges, columns, summary }
 }
 

@@ -67,9 +67,33 @@ watch(showTopology, (show) => {
     // 存不下时只在本次会话生效。
   }
 })
-function openStack(node: FlowNode) {
-  if (node.stackId) router.push({ name: 'stack', params: { id: node.stackId } })
+// 点击拓扑中的类别节点筛选下方列表，再次点击同一节点取消。
+const topologyFilter = ref<{ node: string; label: string; stackIds: number[] } | null>(null)
+const tablePanel = ref<{ $el: HTMLElement } | null>(null)
+function selectTopology(node: FlowNode) {
+  if (node.stackId) {
+    void router.push({ name: 'stack', params: { id: node.stackId } })
+    return
+  }
+  if (!node.filter) return
+  if (topologyFilter.value?.node === node.id) {
+    topologyFilter.value = null
+    return
+  }
+  topologyFilter.value = { node: node.id, ...node.filter }
+  tablePanel.value?.$el.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
+// 列表重新加载后按新的拓扑更新筛选；对应类别消失时取消筛选。
+watch(topology, (graph) => {
+  const current = topologyFilter.value
+  if (!current) return
+  const node = graph.nodes.find((item) => item.id === current.node)
+  topologyFilter.value = node?.filter ? { node: node.id, ...node.filter } : null
+})
+const shownStacks = computed(() => {
+  const filter = topologyFilter.value
+  return filter ? stacks.value.filter((stack) => filter.stackIds.includes(stack.id)) : stacks.value
+})
 
 // 出口 IP：优先读取浏览器本地缓存，没有缓存时查询，手动刷新后更新缓存。
 const egress = useEgress()
@@ -258,14 +282,14 @@ async function create() {
     <template v-if="showTopology">
       <NText v-if="topology.summary" strong tag="div" class="topology-summary">{{ topology.summary }}</NText>
       <NText depth="3" tag="div" class="topology-help">
-        stack 之间的箭头表示上游引用，例如聚合测速（auto）stack 经成员 edge stack 的 relay 入站转发。点击 stack 节点打开编辑页，悬停突出相连的路径。
+        按类别汇总流向，箭头上的数字是走这条路的 Stack 数量；聚合测速 Stack 经成员 Stack 的 relay 入站转发。悬停节点查看包含的 Stack，点击节点在下方列表中只显示这些 Stack。单个 Stack 的详细流向在其详情页的「流量拓扑」标签页查看。
       </NText>
-      <FlowDiagram v-if="topology.nodes.length" :nodes="topology.nodes" :edges="topology.edges" :columns="topology.columns" @select="openStack" />
+      <FlowDiagram v-if="topology.nodes.length" :nodes="topology.nodes" :edges="topology.edges" :columns="topology.columns" :selected="topologyFilter?.node" @select="selectTopology" />
       <NText v-else-if="!loading" depth="3">还没有 stack。</NText>
     </template>
   </NCard>
 
-  <NCard title="Stack 列表" class="table-panel">
+  <NCard ref="tablePanel" title="Stack 列表" class="table-panel">
     <template #header-extra>
       <NSpace justify="end">
         <NButton :loading="egress.refreshing.value" :disabled="!egressTargets.length" @click="egress.refresh(egressTargets)">
@@ -277,10 +301,14 @@ async function create() {
         <NButton type="primary" @click="openWizard">新建 Stack</NButton>
       </NSpace>
     </template>
+    <NSpace v-if="topologyFilter" align="center" :size="8" class="topology-filter">
+      <NText depth="3">按流量拓扑筛选：</NText>
+      <NTag closable type="info" :bordered="false" @close="topologyFilter = null">{{ topologyFilter.label }} · {{ shownStacks.length }} / {{ stacks.length }}</NTag>
+    </NSpace>
     <NDataTable
       v-model:checked-row-keys="checked"
       :columns="columns"
-      :data="stacks"
+      :data="shownStacks"
       :loading="loading"
       :row-key="rowKey"
       :scroll-x="mobile ? 960 : 1520"
@@ -361,6 +389,7 @@ async function create() {
 }
 .topology-summary { margin-bottom: 4px; font-size: 14px; }
 .topology-help { margin-bottom: 8px; font-size: 13px; }
+.topology-filter { margin-bottom: 12px; }
 .pre-line :deep(td) {
   white-space: pre-line;
 }
