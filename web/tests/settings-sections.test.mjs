@@ -5,10 +5,11 @@ import { createServer } from 'vite'
 
 let server
 let useSettingsSections
+let isAdvancedField
 before(async () => {
   globalThis.document = { baseURI: 'http://localhost/panel/' }
   server = await createServer({ configFile: false, server: { middlewareMode: true }, logLevel: 'silent' })
-  ;({ useSettingsSections } = await server.ssrLoadModule('/src/composables/useSettingsSections.ts'))
+  ;({ useSettingsSections, isAdvancedField } = await server.ssrLoadModule('/src/composables/useSettingsSections.ts'))
 })
 after(async () => {
   await server?.close()
@@ -62,4 +63,29 @@ test('全部展开和收起只影响顶层分组', async (t) => {
   assert.ok(state.expanded.value.includes('policy'))
   state.setAll(false)
   assert.deepEqual(state.expanded.value, ['policy'])
+})
+
+test('高级设置默认隐藏，开关状态按面板路径保存', async (t) => {
+  const { state, storage } = setup(t)
+  assert.equal(state.showAdvanced.value, false)
+  state.showAdvanced.value = true
+  await nextTick()
+  assert.equal(storage.get('psw-settings-advanced:/panel/'), 'shown')
+  const scope = effectScope()
+  t.after(() => scope.stop())
+  assert.equal(scope.run(useSettingsSections).showAdvanced.value, true)
+})
+
+test('高级字段的校验错误自动显示高级设置', async (t) => {
+  assert.equal(isAdvancedField('port_pools.xray_inbound'), true)
+  assert.equal(isAdvancedField('defaults.xray.api_services'), true)
+  assert.equal(isAdvancedField('defaults.xray.policy.stats_user_uplink'), true)
+  assert.equal(isAdvancedField('defaults.xray.loglevel'), false)
+  assert.equal(isAdvancedField('defaults.xray.stats_extra'), false)
+  const { state } = setup(t)
+  state.revealErrors({ 'notify.host': '必填' })
+  assert.equal(state.showAdvanced.value, false)
+  state.revealErrors({ 'deps.xray.sha256': '必填' })
+  assert.equal(state.showAdvanced.value, true)
+  assert.ok(state.expanded.value.includes('deps'))
 })

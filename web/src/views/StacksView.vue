@@ -88,6 +88,11 @@ watch(
   (started) => started.forEach((stack) => egress.refreshOne(stack)),
 )
 
+/** 角色保留英文名，并附上中文含义。 */
+function roleLabel(role: Summary['role']) {
+  return role === 'auto' ? 'auto · 聚合测速' : 'edge · 独立出口'
+}
+
 function mihomoActive(name: string): boolean {
   return runtime.stacks[name]?.units.some((unit) => unit.unit.includes('mihomo') && unit.active === 'active') ?? false
 }
@@ -136,16 +141,16 @@ const allColumns: DataTableColumns<Summary> = [
   },
   {
     title: tipTitle('角色', 'edge：独立出口，流量经本 stack 的上游直接出去。auto：聚合多个 edge stack 的 relay 入站，按测速或负载均衡挑选出口。'),
-    key: 'role', width: 120,
+    key: 'role', width: 160,
     render: (row) => row.relays_only && row.role === 'edge'
       ? h(NSpace, { size: 4, align: 'center', wrap: false }, () => [
-          row.role,
+          roleLabel(row.role),
           h(NTooltip, null, {
             trigger: () => h(NTag, { size: 'small', type: 'warning', bordered: false }, () => '应为 auto'),
             default: () => '所有上游都引用其他 stack 的入站，按结构是聚合 stack。到编辑页「基本」中把角色改为 auto。',
           }),
         ])
-      : row.role,
+      : roleLabel(row.role),
   },
   {
     title: 'Xray 入站',
@@ -246,8 +251,9 @@ async function create() {
       <NButton text size="small" @click="showTopology = !showTopology">{{ showTopology ? '收起' : '展开' }}</NButton>
     </template>
     <template v-if="showTopology">
-      <NText depth="3" style="display: block; margin-bottom: 8px; font-size: 13px">
-        客户端经订阅连到各 stack 的入站，节点里列出入站和 Xray 出站；stack 之间的箭头表示上游引用（例如自动测速 stack 经成员的 relay 入站转发），最后经上游节点、外部代理或直连到达互联网。点击 stack 节点打开编辑页，悬停突出相连的路径。
+      <NText v-if="topology.summary" strong tag="div" class="topology-summary">{{ topology.summary }}</NText>
+      <NText depth="3" tag="div" class="topology-help">
+        stack 之间的箭头表示上游引用，例如聚合测速（auto）stack 经成员 edge stack 的 relay 入站转发。点击 stack 节点打开编辑页，悬停突出相连的路径。
       </NText>
       <FlowDiagram v-if="topology.nodes.length" :nodes="topology.nodes" :edges="topology.edges" :columns="topology.columns" @select="openStack" />
       <NText v-else-if="!loading" depth="3">还没有 stack。</NText>
@@ -348,6 +354,8 @@ async function create() {
 .selected {
   border-color: var(--n-color-target, #18a058);
 }
+.topology-summary { margin-bottom: 4px; font-size: 14px; }
+.topology-help { margin-bottom: 8px; font-size: 13px; }
 .pre-line :deep(td) {
   white-space: pre-line;
 }

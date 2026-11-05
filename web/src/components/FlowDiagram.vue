@@ -33,6 +33,35 @@ const tones: Record<FlowTone, [light: string, dark: string]> = {
 }
 const tone = (name: FlowTone = 'internet') => tones[name][isDark.value ? 1 : 0]
 
+/** 图例文字：只列出图中出现的配色。 */
+const toneLabels: Record<FlowTone, string> = {
+  client: '客户端 / 来源',
+  inbound: '入站',
+  stack: 'edge Stack：独立出口',
+  auto: 'auto Stack：聚合多个 edge 测速或负载均衡',
+  xray: 'Xray 出站',
+  mihomo: 'Mihomo 监听',
+  rules: '规则',
+  group: '代理组',
+  upstream: '上游节点 / 外部代理',
+  internet: '直连 / 互联网',
+  reject: '拒绝',
+}
+const legend = computed(() => {
+  const seen = new Set<FlowTone>()
+  const items: { key: string; label: string; color: string }[] = []
+  for (const node of props.nodes) {
+    const name = node.tone ?? 'internet'
+    // 颜色相同、含义相近的类别合并为一项。
+    const label = toneLabels[name]
+    if (seen.has(name) || items.some((item) => item.label === label)) continue
+    seen.add(name)
+    items.push({ key: name, label, color: tone(name) })
+  }
+  return items
+})
+const hasDashed = computed(() => props.edges.some((edge) => edge.dashed))
+
 /** 按显示宽度截断文字：中日韩字符按两个单位计。 */
 function clip(text: string, units: number): string {
   let used = 0
@@ -186,6 +215,13 @@ const scale = computed(() => (available.value ? Math.min(1, Math.max(MIN_SCALE, 
       </g>
     </svg>
   </div>
+  <div v-if="legend.length" class="legend" aria-label="图例">
+    <span v-for="item in legend" :key="item.key" class="legend-item">
+      <span class="swatch" :style="{ background: item.color }" />{{ item.label }}
+    </span>
+    <span v-if="edges.length" class="legend-item"><svg width="26" height="8" aria-hidden="true"><path d="M1,4 H25" :stroke="theme.textColor3" stroke-width="1.5" class="stream" /></svg>流动的虚线：流量方向</span>
+    <span v-if="hasDashed" class="legend-item"><svg width="26" height="8" aria-hidden="true"><path d="M1,4 H25" :stroke="theme.textColor3" stroke-width="1.5" class="static" /></svg>静止的虚线：备选路径</span>
+  </div>
 </template>
 
 <style scoped>
@@ -196,6 +232,24 @@ const scale = computed(() => (available.value ? Math.min(1, Math.max(MIN_SCALE, 
   border: 1px solid var(--ps-border);
   border-radius: 10px;
   background: radial-gradient(circle, var(--ps-border) 0.7px, transparent 0.7px) 0 0 / 18px 18px, var(--ps-bg);
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--ps-muted);
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
 }
 svg {
   display: block;

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   NButton, NCheckbox, NCheckboxGroup, NCollapse, NCollapseItem, NDynamicTags, NForm, NFormItem, NGrid, NFormItemGi,
-  NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NSwitch, NTimePicker, NAlert, NText,
+  NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NSwitch, NTimePicker, NAlert, NText, NEmpty, NIcon,
   useDialog, useMessage,
 } from 'naive-ui'
 import { api, emptyErrors, fieldState, MASKED, problemMessage, splitProblem, type FormErrors, type Schemas } from '../api/client'
@@ -13,7 +13,8 @@ import TemplateInput from '../components/TemplateInput.vue'
 import ErrorList from '../components/ErrorList.vue'
 import SettingsSection from '../components/SettingsSection.vue'
 import EntityLink from '../components/EntityLink.vue'
-import { settingsSections, useSettingsSections } from '../composables/useSettingsSections'
+import { SearchOutline } from '@vicons/ionicons5'
+import { advancedSections, sectionEffects, settingsSections, useSettingsSections } from '../composables/useSettingsSections'
 import { useDirty } from '../composables/useDirty'
 import { notifySaved } from '../runtime'
 import { mihomoLogLevels, xrayLogLevels } from '../util/options'
@@ -27,12 +28,69 @@ const saving = ref(false)
 const message = useMessage()
 const dialog = useDialog()
 const { dirty, markClean } = useDirty(settings)
-const { expanded, revealErrors, setAll } = useSettingsSections()
+const { expanded, showAdvanced, revealErrors, setAll } = useSettingsSections()
+
+/** 顶层分组（policy 嵌套在「默认值」里，不单独参与搜索和显示）。 */
+const topSections = settingsSections.filter((name) => name !== 'policy')
+const query = ref('')
+/** 搜索命中的分组；未搜索时为 null。 */
+const matches = ref<string[] | null>(null)
+/** 搜索期间的展开状态，与保存在浏览器里的展开偏好分开。 */
+const searchExpanded = ref<string[]>([])
+const searching = computed(() => matches.value !== null)
+
+/** 折叠面板首次展开前不渲染内容；首次搜索时先把全部分组渲染一遍，之后内容一直保留在页面中。 */
+let rendered = false
+let searchVersion = 0
+
+/** 按分组内已渲染的标签、说明和选项文字匹配；多个关键词需要同时命中。 */
+async function runSearch() {
+  const version = ++searchVersion
+  const terms = query.value.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  if (!terms.length) {
+    matches.value = null
+    return
+  }
+  if (!rendered) {
+    matches.value = [...topSections]
+    searchExpanded.value = [...settingsSections]
+    await nextTick()
+    rendered = true
+    if (version !== searchVersion) return
+  }
+  matches.value = topSections.filter((name) => {
+    const text = (document.getElementById(`settings-${name}`)?.textContent ?? '').toLowerCase()
+    return terms.every((term) => text.includes(term))
+  })
+  const policyText = (document.getElementById('settings-policy')?.textContent ?? '').toLowerCase()
+  const policyHit = terms.every((term) => policyText.includes(term))
+  searchExpanded.value = [...matches.value, ...(policyHit ? ['policy'] : [])]
+}
+watch(query, runSearch)
+
+function sectionVisible(name: string) {
+  if (matches.value) return matches.value.includes(name)
+  return showAdvanced.value || !advancedSections.includes(name)
+}
+/** 分组的展开状态、生效方式和高级标记。 */
+function sectionProps(name: string) {
+  return {
+    expandedNames: searching.value ? searchExpanded.value : expanded.value,
+    'onUpdate:expandedNames': (names: string[]) => {
+      if (searching.value) searchExpanded.value = names
+      else expanded.value = names
+    },
+    effect: sectionEffects[name],
+    advanced: advancedSections.includes(name),
+  }
+}
+const hiddenCount = computed(() => (showAdvanced.value ? 0 : advancedSections.length))
 const route = useRoute()
 const policyExpanded = computed({
-  get: () => expanded.value.includes('policy') ? ['policy'] : [],
+  get: () => (searching.value ? searchExpanded.value : expanded.value).includes('policy') ? ['policy'] : [],
   set: (names: Array<string | number>) => {
-    expanded.value = [...expanded.value.filter((name) => name !== 'policy'), ...names.map(String)]
+    const target = searching.value ? searchExpanded : expanded
+    target.value = [...target.value.filter((name) => name !== 'policy'), ...names.map(String)]
   },
 })
 
@@ -178,6 +236,7 @@ onMounted(async () => {
   // 其他页面可以用 ?section=notify 这样的链接直接打开某个分组。
   const section = String(route.query.section ?? '')
   if (section && settingsSections.includes(section)) {
+    if (advancedSections.includes(section)) showAdvanced.value = true
     if (!expanded.value.includes(section)) expanded.value = [...expanded.value, section]
     await nextTick()
     document.getElementById(`settings-${section}`)?.scrollIntoView({ block: 'start' })
@@ -223,14 +282,29 @@ async function save() {
     <NForm v-if="settings" label-placement="left" label-width="180" class="settings-form">
       <ErrorList :errors="errors.global" />
       <NAlert type="info" :bordered="false" style="margin-bottom: 12px">
-        下载代理、通知和采集设置保存后立即影响后续后台任务；涉及 xray / mihomo 生成物的设置会进入“待应用变更”，需要再执行应用。
+        每个分组标题右侧标明保存后的生效方式：「立即生效」的设置保存后马上用于后续操作；「需要应用」的设置进入「待应用变更」，应用后才影响运行中的代理；「随订阅包生效」的设置在重新发布订阅包后生效。悬停标签查看详情。
       </NAlert>
-      <NSpace justify="end" :size="4" style="margin-bottom: 8px">
-        <NButton text size="small" @click="setAll(true)">全部展开</NButton>
-        <NText depth="3">·</NText>
-        <NButton text size="small" @click="setAll(false)">全部收起</NButton>
-      </NSpace>
-      <SettingsSection title="基本" name="basic" v-model:expanded-names="expanded">
+      <div class="settings-toolbar">
+        <NInput v-model:value="query" clearable placeholder="搜索设置项，例如 SMTP、端口、时区" class="settings-search" :input-props="{ 'aria-label': '搜索设置项' }">
+          <template #prefix><NIcon><SearchOutline /></NIcon></template>
+        </NInput>
+        <label class="advanced-toggle">
+          <NSwitch v-model:value="showAdvanced" size="small" />
+          <span>显示高级设置</span>
+        </label>
+        <NSpace :size="8" class="expand-buttons">
+          <NButton size="small" secondary :disabled="searching" @click="setAll(true)">全部展开</NButton>
+          <NButton size="small" secondary :disabled="searching" @click="setAll(false)">全部收起</NButton>
+        </NSpace>
+      </div>
+      <NText v-if="searching" depth="3" class="settings-hint">
+        找到 {{ matches!.length }} 个分组<template v-if="matches!.length">，已展开匹配的分组（含高级设置）</template>。清空搜索后恢复原来的展开状态。
+      </NText>
+      <NText v-else-if="hiddenCount" depth="3" class="settings-hint">
+        已隐藏 {{ hiddenCount }} 个高级分组（端口池、节点导出、依赖源）以及默认值中的 Xray API、统计和 policy 开关；打开「显示高级设置」或直接搜索即可查看。
+      </NText>
+      <NEmpty v-if="searching && !matches!.length" description="没有匹配的设置项" style="margin: 24px 0" />
+      <SettingsSection v-show="sectionVisible('basic')" title="基本" name="basic" v-bind="sectionProps('basic')">
         <NFormItem label="对外地址" v-bind="f('basic.external_host', '订阅节点默认使用的域名或 IP')">
           <NInput v-model:value="form.basic.external_host" placeholder="proxy.example.com" />
         </NFormItem>
@@ -242,7 +316,7 @@ async function save() {
         </NFormItem>
       </SettingsSection>
 
-      <SettingsSection title="端口池" name="port_pools" v-model:expanded-names="expanded">
+      <SettingsSection v-show="sectionVisible('port_pools')" title="端口池" name="port_pools" v-bind="sectionProps('port_pools')">
         <NFormItem v-for="pool in pools" :key="pool.key" :label="pool.label" v-bind="f(`port_pools.${pool.key}`)">
           <div class="range-inputs">
             <NInputNumber v-model:value="form.port_pools[pool.key].start" :min="1" :max="65535" :show-button="false" />
@@ -252,7 +326,7 @@ async function save() {
         </NFormItem>
       </SettingsSection>
 
-      <SettingsSection title="默认值" name="defaults" v-model:expanded-names="expanded">
+      <SettingsSection v-show="sectionVisible('defaults')" title="默认值" name="defaults" v-bind="sectionProps('defaults')">
         <NFormItem label="Mihomo 模式">
           <NRadioGroup v-model:value="form.defaults.mihomo.mode">
             <NRadioButton value="Rule">Rule</NRadioButton>
@@ -269,6 +343,8 @@ async function save() {
         <NFormItem label="Xray 记录访问日志" v-bind="f('defaults.xray.access_log', '记录客户端请求日志，独立于错误日志级别；日志级别为 none 时关闭全部日志。')">
           <NSwitch :value="form.defaults.xray.access_log ?? true" @update:value="(value) => (form.defaults.xray.access_log = value)" aria-label="Xray 记录访问日志" />
         </NFormItem>
+        <div v-show="showAdvanced || searching" class="advanced-fields">
+        <NText depth="3" class="advanced-fields-title">高级：Xray API、统计与 policy</NText>
         <NFormItem label="Xray API">
           <NSwitch v-model:value="form.defaults.xray.api_enabled" />
         </NFormItem>
@@ -286,7 +362,7 @@ async function save() {
         <NFormItem label="Xray policy">
           <NSwitch v-model:value="form.defaults.xray.policy.enabled" />
         </NFormItem>
-        <NCollapse v-model:expanded-names="policyExpanded">
+        <NCollapse id="settings-policy" v-model:expanded-names="policyExpanded">
           <NCollapseItem title="policy 统计开关" name="policy">
             <NGrid :cols="1">
               <NFormItemGi v-for="flag in policyFlags" :key="flag.key" :label="flag.label" label-width="280">
@@ -295,9 +371,10 @@ async function save() {
             </NGrid>
           </NCollapseItem>
         </NCollapse>
+        </div>
       </SettingsSection>
 
-      <SettingsSection title="安全" name="security" v-model:expanded-names="expanded">
+      <SettingsSection v-show="sectionVisible('security')" title="安全" name="security" v-bind="sectionProps('security')">
         <NFormItem label="公开入站必须认证" label-width="200">
           <NSwitch v-model:value="form.security.require_auth_for_public_socks_http" />
         </NFormItem>
@@ -306,7 +383,7 @@ async function save() {
         </NFormItem>
       </SettingsSection>
 
-      <SettingsSection title="订阅" name="subscription" v-model:expanded-names="expanded">
+      <SettingsSection v-show="sectionVisible('subscription')" title="订阅" name="subscription" v-bind="sectionProps('subscription')">
         <NAlert type="info" :bordered="false" style="margin-bottom: 12px">
           订阅由单独部署的订阅端提供。这里的设置随订阅包下发，在「发布订阅包」页签发并拷贝到订阅端后生效。
         </NAlert>
@@ -339,7 +416,7 @@ async function save() {
         </NFormItem>
       </SettingsSection>
 
-      <SettingsSection title="节点导出" name="node_export" v-model:expanded-names="expanded">
+      <SettingsSection v-show="sectionVisible('node_export')" title="节点导出" name="node_export" v-bind="sectionProps('node_export')">
         <NFormItem label="开启只读导出" v-bind="f('node_export.enabled', '其他 proxystack-web 实例可以凭 token 拉取本机节点（远端节点源）')">
           <NSwitch v-model:value="form.node_export.enabled" />
         </NFormItem>
@@ -353,7 +430,7 @@ async function save() {
         </template>
       </SettingsSection>
 
-      <SettingsSection title="流量" name="traffic" v-model:expanded-names="expanded">
+      <SettingsSection v-show="sectionVisible('traffic')" title="流量" name="traffic" v-bind="sectionProps('traffic')">
         <NFormItem label="启用流量监控" v-bind="f('traffic.enabled', '开启后所有 stack 强制启用 stats 和用户级计数，生成物变化需要应用')">
           <NSwitch v-model:value="form.traffic.enabled" />
         </NFormItem>
@@ -381,7 +458,7 @@ async function save() {
         </NFormItem>
       </SettingsSection>
 
-      <SettingsSection title="通知" name="notify" v-model:expanded-names="expanded">
+      <SettingsSection v-show="sectionVisible('notify')" title="通知" name="notify" v-bind="sectionProps('notify')">
         <NFormItem label="启用邮件通知" v-bind="f('notify.enabled', '未启用时事件只记录在「通知记录」页')">
           <NSwitch v-model:value="form.notify.enabled" />
         </NFormItem>
@@ -433,7 +510,7 @@ async function save() {
         </NFormItem>
       </SettingsSection>
 
-      <SettingsSection title="依赖源" name="deps" v-model:expanded-names="expanded">
+      <SettingsSection v-show="sectionVisible('deps')" title="依赖源" name="deps" v-bind="sectionProps('deps')">
         <template v-for="dep in depKeys" :key="dep.key">
           <NFormItem :label="`${dep.label} 版本`" v-bind="f(`deps.${dep.key}.version`, 'latest 或具体版本号；「依赖」页的升级按钮按此安装')">
             <NInput v-model:value="form.deps[dep.key].version" />
@@ -479,7 +556,7 @@ async function save() {
         </NFormItem>
       </SettingsSection>
 
-      <SettingsSection title="下载代理" name="download_proxy" v-model:expanded-names="expanded">
+      <SettingsSection v-show="sectionVisible('download_proxy')" title="下载代理" name="download_proxy" v-bind="sectionProps('download_proxy')">
         <NFormItem label="模式" v-bind="f('download_proxy.mode', '作用于依赖管理和面板自更新的全部对外请求，保存后立即生效')">
           <NRadioGroup v-model:value="form.download_proxy.mode">
             <NRadioButton value="direct">直连</NRadioButton>
@@ -549,6 +626,13 @@ async function save() {
 </template>
 
 <style scoped>
+.settings-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; margin-bottom: 10px; }
+.settings-search { flex: 1 1 280px; max-width: 420px; }
+.advanced-toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; }
+.expand-buttons { margin-left: auto; }
+.settings-hint { display: block; margin-bottom: 12px; font-size: 13px; }
+.advanced-fields { margin-top: 4px; padding-top: 12px; border-top: 1px dashed var(--ps-border); }
+.advanced-fields-title { display: block; margin-bottom: 8px; font-size: 13px; }
 .range-inputs {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);

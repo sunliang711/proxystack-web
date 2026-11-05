@@ -32,6 +32,8 @@ export interface FlowGraph {
   nodes: FlowNode[]
   edges: FlowEdge[]
   columns: string[]
+  /** 一句话概括从哪里进、经过哪里、从哪里出。 */
+  summary?: string
 }
 
 type Summary = Schemas['StackSummary']
@@ -121,8 +123,8 @@ export function stackTopology(stacks: Summary[]): FlowGraph {
       id,
       column: 1 + (layer.get(stack.name) ?? 0),
       title: stack.name,
-      badge: !stack.enabled ? '停用' : auto ? 'auto' : undefined,
-      subtitle: auto ? `${stack.members.length} 个成员` : 'edge',
+      badge: !stack.enabled ? '停用' : undefined,
+      subtitle: auto ? `auto · 聚合测速 · ${stack.members.length} 个成员` : 'edge · 独立出口',
       lines: [...(inboundLines.length > 2 ? [inboundLines[0], `入 … 另 ${inboundLines.length - 1} 个`] : inboundLines), outboundLine(stack)],
       tone: auto ? 'auto' : 'stack',
       dim: !stack.enabled,
@@ -171,7 +173,21 @@ export function stackTopology(stacks: Summary[]): FlowGraph {
     edges.push({ from: 'direct', to: 'internet' })
   }
   nodes.push({ id: 'internet', column: exitColumn + 1, title: '互联网', subtitle: '目标网站', tone: 'internet' })
-  return { nodes, edges, columns }
+
+  const autoCount = stacks.filter((stack) => stack.role === 'auto').length
+  const upstreamGroups = nodes.filter((node) => node.id.startsWith('upstreams:')).length
+  const externals = nodes.filter((node) => node.id.startsWith('external:')).length
+  const exits = [
+    upstreamGroups ? `${upstreamGroups} 组上游节点` : '',
+    externals ? `${externals} 个外部代理` : '',
+    usesDirect ? '本机直连' : '',
+  ].filter(Boolean)
+  const via = [
+    `${stacks.length - autoCount} 个独立出口 Stack（edge）`,
+    autoCount ? `${autoCount} 个聚合测速 Stack（auto）` : '',
+  ].filter(Boolean).join('、')
+  const summary = `从 ${subInbounds.length} 个订阅入站进入 → 经过 ${via} → ${exits.length ? `从${exits.join('、')}出去` : '还没有可用的出口'}`
+  return { nodes, edges, columns, summary }
 }
 
 /**
