@@ -113,7 +113,7 @@ const allColumns: DataTableColumns<Summary> = [
   {
     title: tipTitle('状态', '停用：不生成配置，也不参与对账。启用：生成配置并保持进程运行。启用 · 保持停止：生成配置，但对账时让进程保持停止。在 stack 的「基本」页切换。'),
     key: 'enabled',
-    width: 150,
+    width: 140,
     render: (row) => {
       if (!row.enabled) return h(NTag, { size: 'small' }, () => '停用')
       return row.desired_running
@@ -121,14 +121,16 @@ const allColumns: DataTableColumns<Summary> = [
         : h(NTag, { size: 'small', type: 'warning' }, () => '启用 · 保持停止')
     },
   },
-  { title: '运行', key: 'runtime', render: (row) => h(UnitStatus, { stack: row.name, actions: true }) },
+  // 两个进程状态加「启停」按钮约 250px；状态标签较多时在列内换行，不溢出到相邻列。
+  { title: '运行', key: 'runtime', width: 270, render: (row) => h(UnitStatus, { stack: row.name, actions: true, wrap: true }) },
   {
     title: tipTitle(
       '出口 IP',
       '经该 stack 的 mihomo 并发查询 IPv4 和 IPv6 出口（IPv4 优先用 ipinfo.io），哪个先完成就先显示；另一项继续检测，失败原因可悬停查看。首次查询后保存在当前浏览器，进入页面或刷新页面时优先使用缓存；点顶部「出口IP」或行内的刷新按钮重新检测并更新缓存。',
     ),
     key: 'egress',
-    minWidth: 300,
+    // 放得下完整的 IPv4 和常见长度的 IPv6。
+    width: 360,
     render: (row) =>
       h('div', [
         h(EgressCell, {
@@ -143,7 +145,7 @@ const allColumns: DataTableColumns<Summary> = [
     title: tipTitle('角色', 'edge：独立出口，流量经本 stack 的上游直接出去。auto：聚合多个 edge stack 的 relay 入站，按测速或负载均衡挑选出口。'),
     key: 'role', width: 160,
     render: (row) => row.relays_only && row.role === 'edge'
-      ? h(NSpace, { size: 4, align: 'center', wrap: false }, () => [
+      ? h(NSpace, { size: 4, align: 'center' }, () => [
           roleLabel(row.role),
           h(NTooltip, null, {
             trigger: () => h(NTag, { size: 'small', type: 'warning', bordered: false }, () => '应为 auto'),
@@ -155,19 +157,19 @@ const allColumns: DataTableColumns<Summary> = [
   {
     title: 'Xray 入站',
     key: 'inbounds',
-    minWidth: 190,
+    width: 200,
     render: (row) => h(InboundSummary, { stack: row }),
   },
   {
     title: 'Mihomo 监听',
     key: 'mihomo',
-    minWidth: 140,
+    width: 170,
     render: (row) => h(MihomoSummary, { stack: row }),
   },
   {
     title: '标记',
     key: 'labels',
-    minWidth: 120,
+    minWidth: 180,
     render: (row) =>
       h(NSpace, { size: 4 }, () => [
         ...row.labels.map((label) => h(NTag, { size: 'small', bordered: false }, () => label)),
@@ -278,7 +280,7 @@ async function create() {
       :data="stacks"
       :loading="loading"
       :row-key="rowKey"
-      :scroll-x="mobile ? 980 : 1440"
+      :scroll-x="mobile ? 1100 : 1660"
       class="pre-line"
     >
       <template #empty>

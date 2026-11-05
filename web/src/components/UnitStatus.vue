@@ -5,7 +5,8 @@ import { ChevronDownOutline } from '@vicons/ionicons5'
 import { api, problemMessage } from '../api/client'
 import { runtime, unitLabel } from '../runtime'
 
-const props = defineProps<{ stack: string; actions?: boolean; prominent?: boolean }>()
+/** wrap 允许标签在空间不足时换行，用于列表等宽度受限的位置。 */
+const props = defineProps<{ stack: string; actions?: boolean; prominent?: boolean; wrap?: boolean }>()
 const message = useMessage()
 const state = computed(() => runtime.stacks[props.stack])
 const showMenu = ref(false)
@@ -33,7 +34,7 @@ async function run(key: string) {
 </script>
 
 <template>
-  <NSpace :size="4" align="center" :wrap="false" :class="{ 'unit-status-prominent': prominent }">
+  <NSpace :size="4" align="center" :wrap="!!wrap" :class="{ 'unit-status-prominent': prominent }">
     <template v-if="state">
       <NTooltip v-for="unit in state.units" :key="unit.unit">
         <template #trigger>

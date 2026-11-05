@@ -17,6 +17,16 @@ const labels: Record<Schemas['EgressHealth']['status'], { text: string; type: 'd
 }
 const view = computed(() => props.health ? labels[props.health.status] : labels.unknown)
 const checked = computed(() => props.health?.checked_at && !props.health.checked_at.startsWith('0001-') ? formatTime(props.health.checked_at) : '')
+/** 列表中的紧凑时间：当天只显示时分秒，其他日期显示月日和时分。 */
+const checkedShort = computed(() => {
+  const value = props.health?.checked_at
+  if (!checked.value || !value) return ''
+  const date = new Date(value)
+  const today = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  if (date.toDateString() === today.toDateString()) return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  return `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+})
 </script>
 
 <template>
@@ -24,7 +34,7 @@ const checked = computed(() => props.health?.checked_at && !props.health.checked
     <template #trigger>
       <div class="egress-health">
         <NTag size="tiny" :bordered="false" :type="error ? 'warning' : view.type">{{ error ? '状态刷新失败' : view.text }}</NTag>
-        <NText v-if="checked" depth="3" style="font-size: 11px">{{ checked }}</NText>
+        <NText v-if="checkedShort" depth="3" class="checked-time">{{ checkedShort }}</NText>
       </div>
     </template>
     <div v-if="error">{{ error }}，当前保留上次结果</div>
@@ -48,5 +58,10 @@ const checked = computed(() => props.health?.checked_at && !props.health.checked
   align-items: center;
   gap: 6px;
   margin-top: 6px;
+  white-space: nowrap;
+}
+.checked-time {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 </style>
