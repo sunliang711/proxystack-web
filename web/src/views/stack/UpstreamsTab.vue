@@ -93,7 +93,8 @@ function open(index: number) {
   editing.value = { index, draft, config: (draft.config ?? {}) as RawConfig }
   yamlText.value = YAML.stringify(editing.value.config)
   yamlError.value = ''
-  editorTab.value = 'form'
+  // 表单不支持的协议直接打开 YAML。
+  editorTab.value = protocol.value === 'other' ? 'yaml' : 'form'
 }
 
 function confirm() {
@@ -179,15 +180,35 @@ watch(yamlText, (text) => {
 })
 
 const protocols = ['vmess', 'shadowsocks', 'socks5', 'http']
+const protocolOf = (config: RawConfig | undefined) => {
+  const type = String(config?.type ?? '')
+  return protocols.includes(type) ? type : 'other'
+}
+/**
+ * 节点协议由 config.type 决定。表单只支持 protocols 中的协议；选择「其他」时保留 server 和 port、清空 type，
+ * 切到 YAML 由用户填写，type 不是表单支持的协议期间表单页保持禁用；改回表单支持的协议时回到表单页。
+ */
 const protocol = computed({
-  get: () => {
-    const type = String(editing.value?.config.type ?? '')
-    return protocols.includes(type) ? type : 'other'
-  },
+  get: () => protocolOf(editing.value?.config),
   set: (value: string) => {
-    if (editing.value && value !== 'other') editing.value.config.type = value
+    const current = editing.value
+    if (!current) return
+    if (value === 'other') {
+      if (protocolOf(current.config) === 'other') return
+      const { server, port } = current.config
+      editorTab.value = 'yaml'
+      current.config = { type: '', ...(server !== undefined ? { server } : {}), ...(port !== undefined ? { port } : {}) }
+      yamlText.value = YAML.stringify(current.config)
+      yamlError.value = ''
+      return
+    }
+    const wasOther = protocolOf(current.config) === 'other'
+    current.config.type = value
+    if (wasOther) editorTab.value = 'form'
   },
 })
+/** 外部节点必须填写协议类型。 */
+const typeMissing = computed(() => editing.value?.draft.type === 'raw' && !String(editing.value.config.type ?? '').trim())
 
 function field<T>(key: string) {
   return computed<T | null>({
@@ -311,7 +332,7 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
           <NFormItem label="节点协议">
             <NSelect v-model:value="protocol" :options="[...protocols.map((p) => ({ label: p, value: p })), { label: '其他（只能编辑 YAML）', value: 'other' }]" />
           </NFormItem>
-          <NTabs v-model:value="editorTab" type="segment" size="small" style="margin-bottom: 12px">
+          <NTabs v-model:value="editorTab" type="segment" size="small" class="accent-segment" style="margin-bottom: 12px">
             <NTabPane name="form" tab="表单" :disabled="protocol === 'other'">
               <NFormItem label="server" v-bind="f('config')"><NInput v-model:value="server" /></NFormItem>
               <NFormItem label="port"><NInputNumber v-model:value="port" :min="1" :max="65535" /></NFormItem>
@@ -339,6 +360,9 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
               <NFormItem label="udp"><NSwitch :value="!!udp" @update:value="(v) => (udp = v || null)" /></NFormItem>
             </NTabPane>
             <NTabPane name="yaml" tab="YAML">
+              <NAlert v-if="protocol === 'other'" :type="typeMissing ? 'warning' : 'info'" :bordered="false" style="margin-bottom: 8px">
+                在 type 中填写 mihomo 支持的代理类型，例如 vless、trojan、hysteria2、tuic，其余字段按 mihomo 的代理配置格式填写，不需要写 name。type 改为表单支持的协议后可以切回表单。
+              </NAlert>
               <CodeEditor v-model:value="yamlText" language="yaml" min-height="260px" />
               <NAlert v-if="yamlError" type="error" :bordered="false" style="margin-top: 8px">{{ yamlError }}</NAlert>
             </NTabPane>
@@ -347,9 +371,10 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
         </template>
       </NForm>
       <template #footer>
-        <NSpace>
+        <NSpace align="center">
           <NButton @click="editing = null">取消</NButton>
-          <NButton type="primary" :disabled="!editing.draft.name || !!yamlError" @click="confirm">确定</NButton>
+          <NText v-if="typeMissing" type="warning">先在 YAML 中填写 type</NText>
+          <NButton type="primary" :disabled="!editing.draft.name || !!yamlError || typeMissing" @click="confirm">确定</NButton>
         </NSpace>
       </template>
     </NDrawerContent>

@@ -299,7 +299,7 @@ async function saveMembers() {
 
       <NTabs v-model:value="group" type="line" animated class="detail-tabs">
         <NTabPane name="general" :tab="groupLabel('general', '基本')">
-          <NTabs v-model:value="tab" type="segment" size="small" class="sub-tabs" :class="{ single: stack.role !== 'auto' }">
+          <NTabs v-model:value="tab" type="segment" size="small" class="sub-tabs accent-segment" :class="{ single: stack.role !== 'auto' }">
             <NTabPane name="basic" :tab="tabLabel('basic', '基本')">
               <NForm label-placement="left" label-width="110" style="max-width: 720px">
                 <NFormItem label="名称" required v-bind="f('name', '改名会同步更新其他 stack 中的引用')">
@@ -351,7 +351,7 @@ async function saveMembers() {
           </NTabs>
         </NTabPane>
         <NTabPane name="xray" :tab="groupLabel('xray', 'Xray')">
-          <NTabs v-model:value="tab" type="segment" size="small" class="sub-tabs">
+          <NTabs v-model:value="tab" type="segment" size="small" class="sub-tabs accent-segment">
             <NTabPane name="inbounds" :tab="tabLabel('inbounds', '入站')">
               <InboundsTab :stack="stack" :users="users" :errors="errors" :reveal="reveal" />
             </NTabPane>
@@ -415,7 +415,7 @@ async function saveMembers() {
           </NTabs>
         </NTabPane>
         <NTabPane name="mihomo" :tab="groupLabel('mihomo', 'Mihomo')">
-          <NTabs v-model:value="tab" type="segment" size="small" class="sub-tabs">
+          <NTabs v-model:value="tab" type="segment" size="small" class="sub-tabs accent-segment">
             <NTabPane name="upstreams" :tab="tabLabel('upstreams', '上游')">
               <UpstreamsTab :stack="stack" :summaries="summaries" :users="users" :errors="errors" />
             </NTabPane>
@@ -457,7 +457,7 @@ async function saveMembers() {
           </NTabs>
         </NTabPane>
         <NTabPane name="observe" :tab="groupLabel('observe', '运行观察')">
-          <NTabs v-model:value="tab" type="segment" size="small" class="sub-tabs">
+          <NTabs v-model:value="tab" type="segment" size="small" class="sub-tabs accent-segment">
             <NTabPane name="flow" tab="流量拓扑">
               <FlowTab :stack="stack" :summaries="summaries" />
             </NTabPane>
@@ -504,17 +504,6 @@ async function saveMembers() {
 }
 .sub-tabs.single > :deep(.n-tabs-nav) {
   display: none;
-}
-/* 分组切换时子标签所在面板先隐藏再显示，组件库的滑块量不到宽度，直接给选中的子标签上色。 */
-.sub-tabs > :deep(.n-tabs-nav .n-tabs-capsule) {
-  display: none;
-}
-.sub-tabs > :deep(.n-tabs-nav .n-tabs-tab--active) {
-  border-radius: 6px;
-  background: var(--ps-accent-soft);
-  box-shadow: inset 0 0 0 1px var(--ps-accent);
-  color: var(--ps-accent);
-  font-weight: 600;
 }
 .stack-toolbar {
   position: sticky;

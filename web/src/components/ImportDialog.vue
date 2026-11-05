@@ -173,7 +173,7 @@ const columns: DataTableColumns<Entry> = [
 
 <template>
   <NModal v-model:show="show" preset="card" title="导入配置" style="max-width: 820px">
-    <NTabs v-model:value="source" type="segment" size="small">
+    <NTabs v-model:value="source" type="segment" size="small" class="accent-segment">
       <NTabPane name="file" tab="上传文件">
         <NUpload :max="1" :show-file-list="false" :custom-request="() => {}" @before-upload="onFile">
           <NUploadDragger>

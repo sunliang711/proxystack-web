@@ -128,3 +128,18 @@ input[type='file']::file-selector-button {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* 分段标签：所在面板先隐藏再显示时组件库的滑块量不到宽度，深色主题下滑块又与底色相近，直接给选中的标签上色；禁用的标签半透明。 */
+.n-tabs.accent-segment > .n-tabs-nav .n-tabs-rail .n-tabs-capsule {
+  display: none;
+}
+.n-tabs.accent-segment > .n-tabs-nav .n-tabs-rail .n-tabs-tab--active {
+  border-radius: 6px;
+  background: var(--ps-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--ps-accent);
+  color: var(--ps-accent);
+  font-weight: 600;
+}
+.n-tabs.accent-segment > .n-tabs-nav .n-tabs-rail .n-tabs-tab--disabled {
+  opacity: 0.45;
+}
