@@ -69,3 +69,22 @@ export function trafficBounds(level: TrafficLevel, range: TrafficRange, timezone
 export function trafficRangeLabel(bounds: { from: number; to: number }, timezone: string): string {
   return `${text(localTime(bounds.from * 1000, timezone))} ～ ${text(localTime(bounds.to * 1000 - 1000, timezone))}（${timezone}）`
 }
+
+/** 截至当前小时（含）的最近 hours 个小时，按统计时区的整点计算。 */
+export function recentHourRange(hours: number, timezone: string, now = Date.now()): TrafficRange {
+  const end = floor(localTime(now, timezone), 'hour')
+  return [text(step(end, 'hour', 1 - hours)), text(end)]
+}
+
+/** 查询范围内的全部小时桶起点（Unix 秒）。明细查询只返回有流量的桶，图表需要按它补齐。 */
+export function hourBuckets(bounds: { from: number; to: number }): number[] {
+  const out: number[] = []
+  for (let at = bounds.from; at < bounds.to; at += 3600) out.push(at)
+  return out
+}
+
+/** 把只含有流量桶的序列对齐到完整的桶列表，缺失的桶记为 0。 */
+export function alignBuckets(expected: number[], buckets: string[], values: number[]): number[] {
+  const byBucket = new Map(buckets.map((bucket, index) => [Date.parse(bucket) / 1000, values[index] ?? 0]))
+  return expected.map((at) => byBucket.get(at) ?? 0)
+}

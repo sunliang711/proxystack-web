@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { NAlert, NButton, NCard, NEmpty, NPopconfirm, NProgress, NSelect, NSpace, NTable, NTag, NText, useMessage } from 'naive-ui'
+import { NAlert, NButton, NCard, NEmpty, NPopconfirm, NProgress, NRadioButton, NRadioGroup, NSelect, NSpace, NTable, NTag, NText, useMessage } from 'naive-ui'
+import { RouterLink } from 'vue-router'
 import { api, problemMessage, type Schemas } from '../api/client'
 import { usePolling } from '../composables/usePolling'
 import { formatBytes, formatTime } from '../util/format'
 import type { ChartSeries } from '../util/chart'
+import { alignBuckets, hourBuckets, recentHourRange, trafficBounds } from '../util/traffic-range'
 import TrafficChart from './TrafficChart.vue'
 import EntityLink from './EntityLink.vue'
 
@@ -53,6 +55,55 @@ const series = computed(() => {
 })
 const days = computed(() => daily.value.map((item) => item.day.slice(5)))
 const reference = computed(() => (!stackId.value && props.dailyLimit ? { value: props.dailyLimit, label: '每日阈值' } : undefined))
+
+/** 趋势图可在近 30 天日用量和最近若干小时的小时用量之间切换；小时用量来自流量明细，随用量轮询一起刷新。 */
+const view = ref<'daily' | 'hourly'>('daily')
+const hours = ref(24)
+const hourOptions = [{ label: '24 小时', value: 24 }, { label: '48 小时', value: 48 }, { label: '7 天', value: 168 }]
+let timezone: Promise<string> | null = null
+const loadTimezone = () => (timezone ??= api.GET('/api/config/settings').then(({ data }) => data?.basic.timezone || 'UTC'))
+const hourly = ref<{ buckets: number[]; timezone: string; series: ChartSeries[] } | null>(null)
+const hourlyError = ref('')
+let hourlyVersion = 0
+async function loadHourly() {
+  if (view.value !== 'hourly') return
+  const version = ++hourlyVersion
+  const zone = await loadTimezone()
+  const bounds = trafficBounds('hour', recentHourRange(hours.value, zone), zone)
+  const { data, error } = await api.GET('/api/traffic/query', {
+    params: { query: { level: 'hour', scope: 'user', group_by: 'stack', ...bounds, subjects: String(props.userId), stacks: stackId.value ? String(stackId.value) : '' } },
+  })
+  if (version !== hourlyVersion) return
+  if (!data) {
+    hourlyError.value = problemMessage(error, '小时用量查询失败')
+    return
+  }
+  hourlyError.value = ''
+  const buckets = hourBuckets(bounds)
+  const stacks = data.series.map((item) => ({ item, data: alignBuckets(buckets, data.buckets, item.up.map((up, index) => up + item.down[index]!)) }))
+  const shown: ChartSeries[] = stacks.slice(0, 7).map(({ item, data }, index) => ({ name: item.label, data, slot: index, entity: { kind: 'stack', id: item.subject } }))
+  const rest = stacks.slice(7)
+  if (rest.length) shown.push({ name: '其他 Stack', data: buckets.map((_, index) => rest.reduce((sum, stack) => sum + stack.data[index]!, 0)), slot: undefined })
+  hourly.value = { buckets, timezone: data.timezone, series: shown }
+}
+watch([view, hours, stackId, () => props.userId], () => {
+  hourly.value = null
+  void loadHourly()
+})
+watch(usage, () => void loadHourly())
+const hourLabels = computed(() => {
+  const data = hourly.value
+  if (!data) return []
+  const parts: Intl.DateTimeFormatOptions = hours.value > 24 ? { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' } : { hour: '2-digit', minute: '2-digit' }
+  const formatter = new Intl.DateTimeFormat('zh-CN', { ...parts, hourCycle: 'h23', timeZone: data.timezone })
+  return data.buckets.map((at) => formatter.format(at * 1000))
+})
+const hourlyEmpty = computed(() => !hourly.value?.series.some((item) => item.data.some((value) => value > 0)))
+/** 在流量明细页查看同一用户、同一 Stack 的更长范围或导出。 */
+const trafficLink = computed(() => ({
+  name: 'traffic',
+  query: { level: view.value === 'hourly' ? 'hour' : 'day', scope: 'user', subjects: String(props.userId), ...(stackId.value ? { stacks: String(stackId.value) } : {}) },
+}))
 </script>
 
 <template>
@@ -93,7 +144,7 @@ const reference = computed(() => (!stackId.value && props.dailyLimit ? { value: 
         <NText strong>按 Stack 查看用量</NText>
         <NSelect v-model:value="stackId" :options="usage.by_stack.map((stack) => ({ label: stack.stack, value: stack.stack_id }))" clearable filterable placeholder="全部 Stack" style="width: 220px" />
       </NSpace>
-      <NText depth="3">下方展示各 Stack 的今日用量和最近 30 天已保留的流量明细；额度和暂停仍以全部 Stack 的总用量判定。</NText>
+      <NText depth="3">下方展示各 Stack 的今日用量和最近 30 天已保留的流量明细，趋势图可按天或按小时查看；额度和暂停仍以全部 Stack 的总用量判定。</NText>
       <div v-if="selectedStacks.length" class="table-scroll"><NTable :bordered="false" size="small">
         <thead><tr><th>Stack</th><th>今日上行 / 下行</th><th>今日合计</th><th>近 30 天上行 / 下行</th><th>近 30 天合计</th></tr></thead>
         <tbody>
@@ -111,9 +162,33 @@ const reference = computed(() => (!stackId.value && props.dailyLimit ? { value: 
           </tr>
         </tbody>
       </NTable></div>
-      <TrafficChart v-if="daily.some((day) => total(day) > 0)" kind="bar" :labels="days" :series="series" :format="formatBytes" :reference="reference" height="220px" />
-      <NEmpty v-else size="small" description="最近 30 天没有用量" />
+      <div class="trend-head">
+        <NRadioGroup v-model:value="view" size="small">
+          <NRadioButton value="daily">按天</NRadioButton>
+          <NRadioButton value="hourly">按小时</NRadioButton>
+        </NRadioGroup>
+        <NRadioGroup v-if="view === 'hourly'" v-model:value="hours" size="small">
+          <NRadioButton v-for="option in hourOptions" :key="option.value" :value="option.value">{{ option.label }}</NRadioButton>
+        </NRadioGroup>
+        <RouterLink :to="trafficLink" class="trend-link">在流量明细中查看</RouterLink>
+      </div>
+      <template v-if="view === 'daily'">
+        <TrafficChart v-if="daily.some((day) => total(day) > 0)" kind="bar" :labels="days" :series="series" :format="formatBytes" :reference="reference" height="220px" />
+        <NEmpty v-else size="small" description="最近 30 天没有用量" />
+      </template>
+      <template v-else>
+        <NAlert v-if="hourlyError" type="warning" :bordered="false">{{ hourlyError }}</NAlert>
+        <TrafficChart v-if="hourly && !hourlyEmpty" kind="bar" :labels="hourLabels" :series="hourly.series" :format="formatBytes" height="220px" />
+        <NEmpty v-else-if="hourly" size="small" :description="`最近 ${hourOptions.find((option) => option.value === hours)?.label} 没有用量`" />
+        <NEmpty v-else-if="!hourlyError" size="small" description="正在加载小时用量" />
+        <NText depth="3">按统计时区的整点汇总，当前小时统计至最近一次采集。</NText>
+      </template>
     </NSpace>
     <NEmpty v-else size="small" :description="loading ? '正在加载用量' : '暂无用量数据'" />
   </NCard>
 </template>
+
+<style scoped>
+.trend-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.trend-link { margin-left: auto; }
+</style>

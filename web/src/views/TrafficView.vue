@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, h, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import {
   NButton, NCard, NDataTable, NDatePicker, NEmpty, NGrid, NGridItem, NRadioButton, NRadioGroup, NSelect, NSpace, NStatistic, NTag, NText, useMessage,
   type DataTableColumns,
@@ -16,17 +17,21 @@ type Scope = 'user' | 'inbound' | 'outbound'
 type Series = Schemas['TrafficSeries']
 
 const message = useMessage()
-const level = ref<Level>('hour')
-const scope = ref<Scope>('inbound')
-const groupBy = ref<'stack' | 'subject'>('stack')
+// 其他页面可通过链接参数预置筛选，例如用户详情页带上 scope=user 和该用户。
+const linked = useRoute().query
+const pick = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T => ((allowed as readonly unknown[]).includes(value) ? (value as T) : fallback)
+const listParam = (value: unknown) => (typeof value === 'string' && value ? value.split(',') : [])
+const level = ref<Level>(pick(linked.level, ['hour', 'day', 'month', 'year'], 'hour'))
+const scope = ref<Scope>(pick(linked.scope, ['user', 'inbound', 'outbound'], 'inbound'))
+const groupBy = ref<'stack' | 'subject'>(pick(linked.group_by, ['stack', 'subject'], 'stack'))
 const timezone = ref('UTC')
 const ready = ref(false)
 const range = ref<TrafficRange>(defaultTrafficRange(level.value, timezone.value))
 const pickerType = computed(() => ({ hour: 'datetimerange', day: 'daterange', month: 'monthrange', year: 'yearrange' } as const)[level.value])
 const bounds = computed(() => trafficBounds(level.value, range.value, timezone.value))
 const rangeLabel = computed(() => trafficRangeLabel(bounds.value, timezone.value))
-const stacks = ref<number[]>([])
-const subjects = ref<string[]>([])
+const stacks = ref<number[]>(listParam(linked.stacks).map(Number).filter((id) => Number.isInteger(id) && id > 0))
+const subjects = ref<string[]>(listParam(linked.subjects))
 const stackOptions = ref<{ label: string; value: number }[]>([])
 const subjectOptions = ref<{ label: string; value: string }[]>([])
 const result = ref<Schemas['TrafficResult'] | null>(null)
