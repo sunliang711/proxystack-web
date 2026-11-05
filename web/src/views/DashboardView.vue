@@ -130,28 +130,6 @@ const hasUnattributed = computed(() => !!overview.value && (unattributed(overvie
       </NEmpty>
     </NCard>
 
-    <NCard title="各 Stack 用量" size="small">
-      <NEmpty v-if="!overview.by_stack.length" description="还没有 Stack 流量数据">
-        <template #extra><RouterLink :to="{ name: 'stacks' }">查看 Stack 列表</RouterLink></template>
-      </NEmpty>
-      <div v-else class="table-scroll"><NTable :bordered="false" size="small" :single-line="false">
-        <thead><tr><th>Stack</th><th>{{ userId ? '今日流量' : '今日入站' }}</th><th v-if="!userId">今日用户流量</th><th>{{ userId ? '本月流量' : '本月入站' }}</th><th v-if="!userId">本月用户流量</th><th>当前速率</th></tr></thead>
-        <tbody>
-          <tr v-for="stack in overview.by_stack" :key="stack.stack_id">
-            <td>
-              <EntityLink kind="stack" :id="stack.stack_id" :name="stack.stack" />
-              <NTag v-if="stack.aggregator && !userId" size="small" :bordered="false" style="margin-left: 6px">聚合，不计入合计</NTag>
-            </td>
-            <td><div>合计 {{ formatBytes(total(stack.today)) }}</div><NText depth="3">↑ {{ formatBytes(stack.today.up) }} · ↓ {{ formatBytes(stack.today.down) }}</NText></td>
-            <td v-if="!userId"><div>合计 {{ formatBytes(total(stack.user_today)) }}</div><NText depth="3">↑ {{ formatBytes(stack.user_today.up) }} · ↓ {{ formatBytes(stack.user_today.down) }}</NText></td>
-            <td><div>合计 {{ formatBytes(total(stack.month)) }}</div><NText depth="3">↑ {{ formatBytes(stack.month.up) }} · ↓ {{ formatBytes(stack.month.down) }}</NText></td>
-            <td v-if="!userId"><div>合计 {{ formatBytes(total(stack.user_month)) }}</div><NText depth="3">↑ {{ formatBytes(stack.user_month.up) }} · ↓ {{ formatBytes(stack.user_month.down) }}</NText></td>
-            <td><div>↑ {{ formatRate(latest?.stacks[stack.stack]?.up ?? 0) }}</div><NText depth="3">↓ {{ formatRate(latest?.stacks[stack.stack]?.down ?? 0) }}</NText></td>
-          </tr>
-        </tbody>
-      </NTable></div>
-    </NCard>
-
     <NCard title="用量排行" size="small">
       <template #header-extra>
         <NRadioGroup v-model:value="rankingPeriod" size="small" aria-label="排行周期">
@@ -175,6 +153,28 @@ const hasUnattributed = computed(() => !!overview.value && (unattributed(overvie
                 <NText>{{ formatBytes(total(user)) }}</NText>
               </div>
             </td>
+          </tr>
+        </tbody>
+      </NTable></div>
+    </NCard>
+
+    <NCard title="各 Stack 用量" size="small">
+      <NEmpty v-if="!overview.by_stack.length" description="还没有 Stack 流量数据">
+        <template #extra><RouterLink :to="{ name: 'stacks' }">查看 Stack 列表</RouterLink></template>
+      </NEmpty>
+      <div v-else class="table-scroll"><NTable :bordered="false" size="small" :single-line="false">
+        <thead><tr><th>Stack</th><th>{{ userId ? '今日流量' : '今日入站' }}</th><th v-if="!userId">今日用户流量</th><th>{{ userId ? '本月流量' : '本月入站' }}</th><th v-if="!userId">本月用户流量</th><th>当前速率</th></tr></thead>
+        <tbody>
+          <tr v-for="stack in overview.by_stack" :key="stack.stack_id">
+            <td>
+              <EntityLink kind="stack" :id="stack.stack_id" :name="stack.stack" />
+              <NTag v-if="stack.aggregator && !userId" size="small" :bordered="false" style="margin-left: 6px">聚合，不计入合计</NTag>
+            </td>
+            <td><div>合计 {{ formatBytes(total(stack.today)) }}</div><NText depth="3">↑ {{ formatBytes(stack.today.up) }} · ↓ {{ formatBytes(stack.today.down) }}</NText></td>
+            <td v-if="!userId"><div>合计 {{ formatBytes(total(stack.user_today)) }}</div><NText depth="3">↑ {{ formatBytes(stack.user_today.up) }} · ↓ {{ formatBytes(stack.user_today.down) }}</NText></td>
+            <td><div>合计 {{ formatBytes(total(stack.month)) }}</div><NText depth="3">↑ {{ formatBytes(stack.month.up) }} · ↓ {{ formatBytes(stack.month.down) }}</NText></td>
+            <td v-if="!userId"><div>合计 {{ formatBytes(total(stack.user_month)) }}</div><NText depth="3">↑ {{ formatBytes(stack.user_month.up) }} · ↓ {{ formatBytes(stack.user_month.down) }}</NText></td>
+            <td><div>↑ {{ formatRate(latest?.stacks[stack.stack]?.up ?? 0) }}</div><NText depth="3">↓ {{ formatRate(latest?.stacks[stack.stack]?.down ?? 0) }}</NText></td>
           </tr>
         </tbody>
       </NTable></div>
