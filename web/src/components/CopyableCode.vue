@@ -3,9 +3,11 @@ import { CopyOutline } from '@vicons/ionicons5'
 import { NButton, NCode, NIcon, NSpace, NTooltip, useMessage } from 'naive-ui'
 import { copyText } from '../util/clipboard'
 
+/** language 为 bash 时按 shell 命令高亮；公钥、Secret 等普通文本不传。 */
 const props = defineProps<{
   value: string
   label?: string
+  language?: 'bash'
 }>()
 
 const message = useMessage()
@@ -24,7 +26,7 @@ async function copy() {
   <NSpace vertical :size="6">
     <div v-if="label" class="copyable-label">{{ label }}</div>
     <div class="copyable-code">
-      <NCode :code="value" word-wrap />
+      <NCode :code="value" :language="language" word-wrap />
       <NTooltip>
         <template #trigger>
           <NButton size="small" secondary circle :disabled="!value" aria-label="复制" @click="copy">

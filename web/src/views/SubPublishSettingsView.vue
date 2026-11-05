@@ -511,9 +511,9 @@ function hostKeyCommand(algorithm: string) {
         <NFormItem v-if="!draft.id" label="SSH 用户创建">
           <NSpace vertical :size="8" style="width: 100%">
             <NText depth="3">需要在订阅端主机上创建此专用 SSH 用户。该用户与运行订阅服务的 <NText code>proxystack-web-sub</NText> 用户不同：</NText>
-            <CopyableCode :value="sshUserSetupCommand(draft.ssh_user)" />
+            <CopyableCode :value="sshUserSetupCommand(draft.ssh_user)" language="bash" />
             <NText depth="3">非 root 用户还要允许部署命令使用 <NText code>sudo -n</NText>：</NText>
-            <CopyableCode :value="sudoSetupCommand(draft.ssh_user)" />
+            <CopyableCode :value="sudoSetupCommand(draft.ssh_user)" language="bash" />
             <NText depth="3">如果用户已存在，第一行会跳过创建；后续命令会初始化 <NText code>~/.ssh/authorized_keys</NText> 及所需权限。保存后再把管理端生成的完整公钥配置追加到该文件。</NText>
           </NSpace>
         </NFormItem>
@@ -524,7 +524,7 @@ function hostKeyCommand(algorithm: string) {
         <NFormItem label="指纹获取方式">
           <NSpace vertical :size="8" style="width: 100%">
             <NText depth="3">这是订阅端 SSH 服务的 Host Key，不是管理端生成的登录公钥。在订阅端主机本机执行：</NText>
-            <CopyableCode :value="hostKeyCommand(draft.host_key_algorithm)" />
+            <CopyableCode :value="hostKeyCommand(draft.host_key_algorithm)" language="bash" />
             <NText depth="3">从输出中只复制完整的 <NText code>SHA256:...</NText>；例如输出末尾为 <NText code>(ED25519)</NText> 时，算法应选择 Ed25519。</NText>
           </NSpace>
         </NFormItem>
@@ -557,19 +557,19 @@ function hostKeyCommand(algorithm: string) {
       </NAlert>
       <NSteps vertical :current="1" status="process">
         <NStep title="安装管理端 SSH 公钥">
-          <CopyableCode label="幂等安装公钥" :value="authorizedKeysSetupCommand(provisioning.target, provisioning.authorized_keys_entry || authorizedKeys(provisioning.target))" />
+          <CopyableCode label="幂等安装公钥" :value="authorizedKeysSetupCommand(provisioning.target, provisioning.authorized_keys_entry || authorizedKeys(provisioning.target))" language="bash" />
           <NText depth="3">命令会把公钥追加到 <NText code>{{ sshAuthorizedKeysPath(provisioning.target.ssh_user) }}</NText>；重复执行不会重复追加，目录权限为 700，文件权限为 600。</NText>
         </NStep>
         <NStep title="限制 SSH 用户的转发范围">
           <NSpace vertical :size="8">
             <NText depth="3">推荐写入订阅端的 <NText code>/etc/ssh/sshd_config.d/proxystack-web-sub.conf</NText>：</NText>
-            <CopyableCode label="写入 sshd_config.d 并 reload" :value="sshdConfigSetupCommand(provisioning.target)" />
+            <CopyableCode label="写入 sshd_config.d 并 reload" :value="sshdConfigSetupCommand(provisioning.target)" language="bash" />
             <CopyableCode label="sshd 限制片段" :value="provisioning.sshd_config || sshdConfig(provisioning.target)" />
             <NText depth="3">命令会先执行 <NText code>sshd -t</NText>，校验通过后再 reload SSH 服务；如果系统服务名是 <NText code>sshd</NText>，将最后的 <NText code>ssh</NText> 替换为 <NText code>sshd</NText>。</NText>
           </NSpace>
         </NStep>
         <NStep title="允许非交互部署">
-          <CopyableCode :value="sudoSetupCommand(provisioning.target.ssh_user)" />
+          <CopyableCode :value="sudoSetupCommand(provisioning.target.ssh_user)" language="bash" />
           <NText depth="3">部署检测要求 <NText code>sudo -n /bin/true</NText> 成功。root 用户不需要此步骤。</NText>
         </NStep>
         <NStep title="核对 Host Key 并测试">
@@ -586,16 +586,16 @@ function hostKeyCommand(algorithm: string) {
       </NAlert>
       <CopyableCode label="发布 Secret" :value="secretSetup.secret" />
       <NText depth="3">首次通过 SSH 安装或更新时，管理端会在部署完成后自动配置此 Secret；离线安装或手工重置时，先完成订阅端安装，再执行下面的命令并按提示粘贴 Secret。</NText>
-      <CopyableCode label="安装完成后配置发布 Secret" :value="secretSetup.publish_token_command || tokenCommand(secretSetup.target)" />
+      <CopyableCode label="安装完成后配置发布 Secret" :value="secretSetup.publish_token_command || tokenCommand(secretSetup.target)" language="bash" />
     </NSpace>
   </NModal>
 
   <NModal :show="!!instructions" preset="card" title="订阅端配置说明" style="width: 820px; max-width: calc(100vw - 32px)" @update:show="(value) => !value && (instructions = null)">
     <NSpace v-if="instructions" vertical :size="14">
-      <CopyableCode label="幂等安装公钥" :value="authorizedKeysSetupCommand(instructions)" />
-      <CopyableCode label="写入 /etc/ssh/sshd_config.d 并 reload" :value="sshdConfigSetupCommand(instructions)" />
+      <CopyableCode label="幂等安装公钥" :value="authorizedKeysSetupCommand(instructions)" language="bash" />
+      <CopyableCode label="写入 /etc/ssh/sshd_config.d 并 reload" :value="sshdConfigSetupCommand(instructions)" language="bash" />
       <CopyableCode label="sshd_config 限制" :value="sshdConfig(instructions)" />
-      <CopyableCode label="sudo -n 配置" :value="sudoSetupCommand(instructions.ssh_user)" />
+      <CopyableCode label="sudo -n 配置" :value="sudoSetupCommand(instructions.ssh_user)" language="bash" />
       <NAlert type="info" :bordered="false">此说明不包含明文发布 Secret；需要查看或重新配置时，请从目标列表单独点击“查看 Secret”。</NAlert>
     </NSpace>
   </NModal>

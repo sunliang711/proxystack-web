@@ -13,6 +13,7 @@ import {
 } from 'naive-ui'
 import { FileTrayOutline } from '@vicons/ionicons5'
 import { isDark as dark } from './theme'
+import { hljs } from './util/highlight'
 import './styles.css'
 
 const theme = computed(() => (dark.value ? darkTheme : null))
@@ -93,7 +94,7 @@ const overrides = computed<GlobalThemeOverrides>(() => ({
 </script>
 
 <template>
-  <NConfigProvider :theme="theme" :theme-overrides="overrides" :locale="zhCN" :date-locale="dateZhCN" :component-options="componentOptions">
+  <NConfigProvider :theme="theme" :theme-overrides="overrides" :locale="zhCN" :date-locale="dateZhCN" :component-options="componentOptions" :hljs="hljs">
     <NGlobalStyle />
     <NMessageProvider>
       <NDialogProvider>

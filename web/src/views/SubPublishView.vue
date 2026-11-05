@@ -273,10 +273,10 @@ function openSSHSettings() {
             离线模式会下载签名订阅包。通过可信方式把文件拷贝到订阅端，执行导入后删除传输副本。
           </NAlert>
           <CopyableCode label="订阅包验签公钥" :value="status.public_key" />
-          <CopyableCode label="安装或更新订阅端" :value="installCommand" />
-          <CopyableCode label="回滚到上一版本" :value="rollbackCommand" />
-          <CopyableCode label="卸载并保留配置与数据" :value="uninstallCommand" />
-          <CopyableCode label="已有订阅端添加本机为来源" :value="addSourceCommand" />
+          <CopyableCode label="安装或更新订阅端" :value="installCommand" language="bash" />
+          <CopyableCode label="回滚到上一版本" :value="rollbackCommand" language="bash" />
+          <CopyableCode label="卸载并保留配置与数据" :value="uninstallCommand" language="bash" />
+          <CopyableCode label="已有订阅端添加本机为来源" :value="addSourceCommand" language="bash" />
           <NText depth="3">
             执行 <NText code>proxystack-web sub import 文件</NText>，或把文件放进订阅端目录下的 <NText code>inbox/</NText>；
             <NText code>proxystack-web sub status</NText> 查看各来源已导入的序号。
