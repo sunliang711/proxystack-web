@@ -82,3 +82,30 @@ for (const [label, small, low, high] of [['流量额度', false, GB, TB], ['每�
     assert.equal(state.amount, 0)
   })
 }
+
+test('流量额度的小数保存后重新加载仍按原单位显示，不出现长串小数', async (t) => {
+  for (const [bytes, unit, amount] of [
+    [Math.round(0.1 * GB), GB, 0.1],
+    [Math.round(1.23 * TB), TB, 1.23],
+    [500 * MB, MB, 500],
+    [1000 * GB, GB, 1000],
+    [Math.round(0.5 * MB), MB, 0.5],
+  ]) {
+    const { state } = setup(t, false, bytes)
+    assert.equal(state.unit, unit, `${bytes}`)
+    assert.equal(state.amount, amount, `${bytes}`)
+  }
+})
+
+test('无法用两位小数准确还原的旧数据取数值不小于 1 的最大单位并保留两位小数', async (t) => {
+  const { state } = setup(t, false, 123456789)
+  assert.equal(state.unit, MB)
+  assert.equal(state.amount, 117.74)
+})
+
+test('流量额度可选 MB / GB / TB，每日阈值可选 MB / GB', async (t) => {
+  assert.deepEqual(setup(t, false).state.units.map((u) => u.label), ['MB', 'GB', 'TB'])
+  assert.deepEqual(setup(t, true).state.units.map((u) => u.label), ['MB', 'GB'])
+  assert.equal(setup(t, false).state.unit, GB)
+  assert.equal(setup(t, true).state.unit, MB)
+})
