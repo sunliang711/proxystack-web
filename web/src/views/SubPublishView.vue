@@ -2,14 +2,14 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  NAlert, NButton, NCard, NCheckbox, NCheckboxGroup, NDescriptions, NDescriptionsItem, NPopconfirm, NRadioButton,
+  NAlert, NButton, NCard, NCheckbox, NDescriptions, NDescriptionsItem, NPopconfirm, NRadioButton,
   NRadioGroup, NSpace, NTag, NText, useMessage,
 } from 'naive-ui'
 import { api, problemMessage, saveBlob, type Schemas } from '../api/client'
 import CopyableCode from '../components/CopyableCode.vue'
 import PublishFlowBar from '../components/PublishFlowBar.vue'
 import { formatTime } from '../util/format'
-import { targetNextStep as nextStepOf, targetReady as readyOf } from '../util/subPublish'
+import { hasTime, targetNextStep as nextStepOf, targetReady as readyOf } from '../util/subPublish'
 
 interface PublishTarget {
   id: number
@@ -129,12 +129,29 @@ const blockedReason = computed(() => {
   return ''
 })
 
-function targetSummary(target: PublishTarget) {
-  const address = `${target.ssh_host}:${target.ssh_port}`
-  if (target.last_test_error) return `${address} · 最近测试失败`
-  if (target.last_sequence) return `${address} · 当前 #${target.last_sequence}`
-  return `${address} · 尚未发布`
+/** 订阅端最近一次发布的情况：序号和时间，或从未发布。 */
+function publishSummary(target: PublishTarget) {
+  if (!target.last_sequence) return '尚未发布'
+  return hasTime(target.last_publish_at) ? `当前 #${target.last_sequence} · ${formatTime(target.last_publish_at)}` : `当前 #${target.last_sequence}`
 }
+
+/** 状态标签：可签发为绿色，测试失败为红色，其余未就绪为黄色。 */
+function targetStatus(target: PublishTarget): { text: string; type: 'success' | 'warning' | 'error' } {
+  if (targetReady(target)) return { text: '可签发', type: 'success' }
+  if (target.last_test_error) return { text: '最近测试失败', type: 'error' }
+  return { text: targetNextStep(target), type: 'warning' }
+}
+
+const readyTargets = computed(() => targets.value.filter(targetReady))
+const allReadySelected = computed(() => readyTargets.value.length > 0 && readyTargets.value.every((target) => selected.value.includes(target.id)))
+function toggleAll(checked: boolean) {
+  selected.value = checked ? readyTargets.value.map((target) => target.id) : []
+}
+function toggleTarget(target: PublishTarget) {
+  if (!targetReady(target)) return
+  selected.value = selected.value.includes(target.id) ? selected.value.filter((id) => id !== target.id) : [...selected.value, target.id]
+}
+const selectedNames = computed(() => targets.value.filter((target) => selected.value.includes(target.id)).map((target) => target.name).join('、'))
 
 function targetReady(target: PublishTarget) {
   return readyOf(target)
@@ -201,29 +218,50 @@ function openSSHSettings() {
         </NRadioGroup>
 
         <template v-if="mode === 'online'">
-          <NSpace justify="end">
-            <NButton text type="primary" @click="openSSHSettings">SSH 发布与部署设置</NButton>
-          </NSpace>
           <NAlert v-if="!targets.length" type="warning" :bordered="false">
-            还没有启用的订阅端目标。请先到“SSH 发布与部署设置”生成 SSH 密钥并配置订阅端。
+            还没有启用的订阅端。请先到「SSH 发布与部署」生成 SSH 密钥并添加订阅端。
+            <NButton size="small" style="margin-left: 8px" @click="openSSHSettings">去添加订阅端</NButton>
           </NAlert>
-          <NAlert v-else type="info" :bordered="false">
-            在线签发流程：检测部署 → 部署 → 测试 → 配置发布 Secret → 签发订阅包。SSH 部署会自动配置 Secret；只有部署完成且测试通过的目标可以选择。
-          </NAlert>
-          <NCheckboxGroup v-if="targets.length" v-model:value="selected">
-            <NSpace vertical>
-              <NCheckbox v-for="target in targets" :key="target.id" :value="target.id" :disabled="!targetReady(target)">
-                <NSpace :size="8" align="center">
-                  <NText strong>{{ target.name }}</NText>
-                  <NText depth="3">{{ targetSummary(target) }}</NText>
-                  <NTag size="small" :type="targetReady(target) ? 'success' : 'warning'">{{ targetNextStep(target) }}</NTag>
-                </NSpace>
+          <div v-else class="target-list">
+            <div class="target-head">
+              <NCheckbox
+                :checked="allReadySelected"
+                :indeterminate="!!selected.length && !allReadySelected"
+                :disabled="!readyTargets.length"
+                @update:checked="toggleAll"
+              >
+                全选可签发
               </NCheckbox>
-            </NSpace>
-          </NCheckboxGroup>
-          <NAlert type="info" :bordered="false">
-            本次只签发一份订阅包，并向所有选中目标发送相同内容。部分目标失败时，已经成功的目标不会回滚；再次发布会生成新的序号。
-          </NAlert>
+              <NText depth="3">已选 {{ selected.length }} 个，可签发 {{ readyTargets.length }} / {{ targets.length }} 个</NText>
+              <NButton text type="primary" class="head-link" @click="openSSHSettings">管理订阅端</NButton>
+            </div>
+            <div
+              v-for="target in targets"
+              :key="target.id"
+              class="target-row"
+              :class="{ ready: targetReady(target), checked: selected.includes(target.id) }"
+              @click="toggleTarget(target)"
+            >
+              <span class="target-check" @click.stop>
+                <NCheckbox :checked="selected.includes(target.id)" :disabled="!targetReady(target)" :aria-label="`选择 ${target.name}`" @update:checked="toggleTarget(target)" />
+              </span>
+              <div class="target-name">
+                <NText strong>{{ target.name }}</NText>
+                <NText depth="3" class="target-sub">{{ target.ssh_host }}:{{ target.ssh_port }}</NText>
+              </div>
+              <div class="target-publish">
+                <NText :depth="target.last_sequence ? undefined : 3">{{ publishSummary(target) }}</NText>
+                <NText v-if="target.last_publish_error" type="error" class="target-sub">上次发布失败：{{ target.last_publish_error }}</NText>
+              </div>
+              <div class="target-status">
+                <NTag size="small" :type="targetStatus(target).type" :bordered="false">{{ targetStatus(target).text }}</NTag>
+                <NButton v-if="!targetReady(target)" text type="primary" size="small" @click.stop="openSSHSettings">去处理</NButton>
+              </div>
+            </div>
+          </div>
+          <NText depth="3" class="publish-note">
+            只有部署完成且测试通过的目标可以选择（流程：检测部署 → 部署 → 测试 → 配置发布 Secret → 签发订阅包，SSH 部署会自动配置 Secret）。本次只签发一份订阅包，并向所有选中目标发送相同内容；部分目标失败时，已经成功的目标不会回滚，再次发布会生成新的序号。
+          </NText>
           <NAlert v-if="submitted" type="success" :bordered="false">
             订阅包 #{{ submitted.sequence }} 已提交，任务编号 #{{ submitted.task_id }}。
             <NButton text type="primary" @click="openTask">查看发布详情</NButton>
@@ -255,8 +293,8 @@ function openSSHSettings() {
           </NPopconfirm>
           <NButton v-else type="primary" :loading="busy" :disabled="!!blockedReason" @click="publish">{{ actionLabel }}</NButton>
           <NText v-if="blockedReason" depth="3">{{ blockedReason }}</NText>
+          <NText v-else-if="mode === 'online'" depth="3">将向 {{ selected.length }} 个订阅端发布：{{ selectedNames }}</NText>
           <NButton v-if="blockedByTargets" size="small" @click="openSSHSettings">去配置订阅端</NButton>
-          <NText v-else-if="mode === 'online'" depth="3">将向选中的 {{ selected.length }} 个订阅端发布</NText>
         </NSpace>
       </NSpace>
     </NCard>
@@ -265,4 +303,39 @@ function openSSHSettings() {
 
 <style scoped>
 .publish-actions { padding-top: 4px; }
+.target-list { border: 1px solid var(--ps-border); border-radius: 10px; overflow: hidden; }
+.target-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--ps-surface-raised);
+  border-bottom: 1px solid var(--ps-border);
+  font-size: 13px;
+}
+.head-link { margin-left: auto; }
+.target-row {
+  display: grid;
+  /* 每行独立排版，列宽不随内容变化，才能上下对齐。 */
+  grid-template-columns: 20px minmax(0, 1fr) minmax(0, 1.3fr) 190px;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 12px 16px;
+  cursor: not-allowed;
+  transition: background 0.15s;
+}
+.target-row + .target-row { border-top: 1px solid var(--ps-border); }
+.target-row.ready { cursor: pointer; }
+.target-row.ready:hover { background: var(--ps-accent-soft); }
+.target-row.checked { background: var(--ps-accent-soft); box-shadow: inset 3px 0 0 var(--ps-accent); }
+.target-row:not(.ready) .target-name,
+.target-row:not(.ready) .target-publish { opacity: 0.7; }
+.target-name, .target-publish { display: flex; flex-direction: column; min-width: 0; }
+.target-sub { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.target-status { display: flex; align-items: center; justify-content: flex-end; gap: 10px; white-space: nowrap; }
+.publish-note { display: block; font-size: 12px; line-height: 1.7; }
+@media (max-width: 767px) {
+  .target-row { grid-template-columns: auto minmax(0, 1fr); }
+  .target-publish, .target-status { grid-column: 2; justify-content: flex-start; }
+}
 </style>
