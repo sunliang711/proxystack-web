@@ -9,9 +9,11 @@ let trafficRangeLabel
 let recentHourRange
 let hourBuckets
 let alignBuckets
+let recentDayRange
+let dayBuckets
 before(async () => {
   server = await createServer({ configFile: false, server: { middlewareMode: true }, logLevel: 'silent' })
-  ;({ defaultTrafficRange, trafficBounds, trafficRangeLabel, recentHourRange, hourBuckets, alignBuckets } = await server.ssrLoadModule('/src/util/traffic-range.ts'))
+  ;({ defaultTrafficRange, trafficBounds, trafficRangeLabel, recentHourRange, hourBuckets, alignBuckets, recentDayRange, dayBuckets } = await server.ssrLoadModule('/src/util/traffic-range.ts'))
 })
 after(async () => { await server?.close() })
 
@@ -77,4 +79,15 @@ test('最近24小时含当前小时，按统计时区整点切分并补齐无流
   const kolkata = hourBuckets(trafficBounds('hour', recentHourRange(2, 'Asia/Kolkata', now), 'Asia/Kolkata'))
   assert.deepEqual(kolkata.map((at) => new Date(at * 1000).toISOString()), ['2026-11-01T22:30:00.000Z', '2026-11-01T23:30:00.000Z'])
   assert.deepEqual(alignBuckets(buckets.slice(0, 3), ['2026-11-01T01:00:00Z'], [5]), [0, 5, 0])
+})
+
+test('最近30个自然日按统计时区的零点切分，夏令时日照常各算一天', () => {
+  const now = Date.parse('2026-11-01T23:49:04Z')
+  const range = recentDayRange(30, 'Asia/Shanghai', now)
+  assert.deepEqual(range, ['2026-10-04 00:00:00', '2026-11-02 00:00:00'])
+  const buckets = dayBuckets(range, 'Asia/Shanghai')
+  assert.equal(buckets.length, 30)
+  assert.equal(new Date(buckets[0] * 1000).toISOString(), '2026-10-03T16:00:00.000Z')
+  const ny = dayBuckets(['2026-10-31 00:00:00', '2026-11-02 00:00:00'], 'America/New_York')
+  assert.deepEqual(ny.map((at) => new Date(at * 1000).toISOString()), ['2026-10-31T04:00:00.000Z', '2026-11-01T04:00:00.000Z', '2026-11-02T05:00:00.000Z'])
 })

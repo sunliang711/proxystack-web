@@ -63,7 +63,19 @@ const rows = computed(() => users.value.filter((user) => {
   if (filter.value === 'paused') return !user.enabled || autoPauses(user).length > 0
   return true
 }))
-const used = (bytes?: { up: number; down: number }) => formatBytes((bytes?.up ?? 0) + (bytes?.down ?? 0))
+const sum = (bytes?: { up: number; down: number }) => (bytes?.up ?? 0) + (bytes?.down ?? 0)
+const used = (bytes?: { up: number; down: number }) => formatBytes(sum(bytes))
+const todayOf = (user: User) => sum(usage.value[user.id ?? 0]?.today)
+const periodOf = (user: User) => sum(usage.value[user.id ?? 0]?.period)
+/** 限额单元格：限额值下方显示已用百分比，80% 起标黄，达到限额标红。 */
+function limitCell(limit: number, usedBytes: number, label: string) {
+  if (!limit) return '不限'
+  const percent = Math.round((usedBytes / limit) * 100)
+  return h('div', [
+    h('div', formatBytes(limit)),
+    h(NText, { depth: percent >= 80 ? undefined : 3, type: percent >= 100 ? 'error' : percent >= 80 ? 'warning' : 'default', style: 'font-size: 12px' }, () => `${label} ${percent}%`),
+  ])
+}
 const usageTitle = computed(() => {
   if (!rows.value.length) return '用量'
   if (rows.value.every((user) => user.reset_mode !== 'monthly')) return '累计用量'
@@ -119,13 +131,13 @@ const allColumns: DataTableColumns<User> = [
       return h(NTag, { size: 'small', type: row.enabled ? 'success' : 'default' }, { default: () => (row.enabled ? '启用' : '停用') })
     },
   },
-  { title: '今日用量', key: 'today', render: (row) => used(usage.value[row.id ?? 0]?.today) },
-  { title: () => usageTitle.value, key: 'period', render: (row) => h(NTooltip, null, {
+  { title: '今日用量', key: 'today', width: 120, sorter: (a, b) => todayOf(a) - todayOf(b), render: (row) => used(usage.value[row.id ?? 0]?.today) },
+  { title: () => usageTitle.value, key: 'period', width: 150, sorter: (a, b) => periodOf(a) - periodOf(b), render: (row) => h(NTooltip, null, {
     trigger: () => h('span', { tabindex: 0 }, used(usage.value[row.id ?? 0]?.period)),
     default: () => row.reset_mode === 'monthly' ? `本周期用量，每月 ${row.reset_day} 日重置` : '累计用量：不按周期重置，包含历史流量',
   }) },
-  { title: tipTitle('每日阈值', '当日用量（上行与下行合计，全部 stack）达到阈值后，按用户详情中的设置暂停或只通知；暂停在次日自动恢复。'), key: 'daily_limit_bytes', width: 110, render: (row) => (row.daily_limit_bytes ? formatBytes(row.daily_limit_bytes) : '不限') },
-  { title: tipTitle('额度', '流量总额度。用量达到额度后自动暂停；到重置日或调高额度后自动恢复。'), key: 'quota_bytes', width: 90, render: (row) => (row.quota_bytes ? formatBytes(row.quota_bytes) : '不限') },
+  { title: tipTitle('每日阈值', '当日用量（上行与下行合计，全部 stack）达到阈值后，按用户详情中的设置暂停或只通知；暂停在次日自动恢复。'), key: 'daily_limit_bytes', width: 110, render: (row) => limitCell(row.daily_limit_bytes ?? 0, todayOf(row), '今日') },
+  { title: tipTitle('额度', '流量总额度。用量达到额度后自动暂停；到重置日或调高额度后自动恢复。'), key: 'quota_bytes', width: 110, sorter: (a, b) => (a.quota_bytes ? periodOf(a) / a.quota_bytes : -1) - (b.quota_bytes ? periodOf(b) / b.quota_bytes : -1), render: (row) => limitCell(row.quota_bytes, periodOf(row), '已用') },
   { title: '额度重置', key: 'reset_mode', width: 100, render: (row) => (row.reset_mode === 'monthly' ? `每月 ${row.reset_day} 日` : '不重置') },
   { title: '到期', key: 'expire_at', render: (row) => (row.expire_at ? new Date(row.expire_at).toLocaleString() : '—') },
   { title: tipTitle('凭据档案', '该用户的凭据档案数量，含用户本身的 default 档案。入站引用用户时可以改选其他档案，使用不同的 UUID 或密码。'), key: 'profiles', width: 100, align: 'center', render: (row) => String(row.profiles.length + 1) },

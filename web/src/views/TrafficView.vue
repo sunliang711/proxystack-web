@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, h, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   NButton, NCard, NDataTable, NDatePicker, NEmpty, NGrid, NGridItem, NRadioButton, NRadioGroup, NSelect, NSpace, NStatistic, NTag, NText, useMessage,
   type DataTableColumns,
@@ -17,8 +17,15 @@ type Scope = 'user' | 'inbound' | 'outbound'
 type Series = Schemas['TrafficSeries']
 
 const message = useMessage()
-// 其他页面可通过链接参数预置筛选，例如用户详情页带上 scope=user 和该用户。
-const linked = useRoute().query
+// 筛选条件记在地址栏：刷新或分享链接后打开同一视图，其他页面也可通过链接参数预置筛选。
+const route = useRoute()
+const router = useRouter()
+const linked = route.query
+const rangeParam = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
+const linkedRange: TrafficRange | null =
+  typeof linked.from === 'string' && typeof linked.to === 'string' && rangeParam.test(linked.from) && rangeParam.test(linked.to) && linked.from <= linked.to
+    ? [linked.from, linked.to]
+    : null
 const pick = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T => ((allowed as readonly unknown[]).includes(value) ? (value as T) : fallback)
 const listParam = (value: unknown) => (typeof value === 'string' && value ? value.split(',') : [])
 const level = ref<Level>(pick(linked.level, ['hour', 'day', 'month', 'year'], 'hour'))
@@ -74,7 +81,7 @@ onMounted(async () => {
     return
   }
   timezone.value = settings.basic.timezone || 'UTC'
-  range.value = defaultTrafficRange(level.value, timezone.value)
+  range.value = linkedRange ?? defaultTrafficRange(level.value, timezone.value)
   stackOptions.value = (data?.stacks ?? []).map((stack) => ({ label: stack.name, value: stack.id }))
   await loadSubjects()
   ready.value = true
@@ -90,6 +97,23 @@ watch(scope, () => {
 })
 watch(groupBy, () => slots.clear())
 watch([level, scope, groupBy, range, stacks, subjects], load)
+// 只写入与默认值不同的条件；时间范围等于该粒度的默认范围时不写，刷新后仍显示最新的默认范围。
+watch([ready, level, scope, groupBy, range, stacks, subjects], () => {
+  if (!ready.value) return
+  const custom = range.value.join() !== defaultTrafficRange(level.value, timezone.value).join()
+  const query = {
+    level: level.value === 'hour' ? undefined : level.value,
+    scope: scope.value === 'inbound' ? undefined : scope.value,
+    group_by: groupBy.value === 'stack' ? undefined : groupBy.value,
+    from: custom ? range.value[0] : undefined,
+    to: custom ? range.value[1] : undefined,
+    stacks: stacks.value.length ? stacks.value.join(',') : undefined,
+    subjects: subjects.value.length ? subjects.value.join(',') : undefined,
+  }
+  const current = route.query
+  if ((Object.keys(query) as (keyof typeof query)[]).every((key) => (current[key] ?? undefined) === query[key])) return
+  void router.replace({ query })
+})
 
 /** 颜色跟随对象而不是排名：对象首次出现时占一个槽位，筛选后保持不变。放不下的并入「其他」。 */
 const MAX_SLOTS = 7

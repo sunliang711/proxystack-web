@@ -6,7 +6,7 @@ import { api, problemMessage, type Schemas } from '../api/client'
 import { usePolling } from '../composables/usePolling'
 import { formatBytes, formatTime } from '../util/format'
 import type { ChartSeries } from '../util/chart'
-import { alignBuckets, hourBuckets, recentHourRange, trafficBounds } from '../util/traffic-range'
+import { useTrafficTrend } from '../composables/useTrafficTrend'
 import TrafficChart from './TrafficChart.vue'
 import EntityLink from './EntityLink.vue'
 
@@ -60,45 +60,10 @@ const reference = computed(() => (!stackId.value && props.dailyLimit ? { value: 
 const view = ref<'daily' | 'hourly'>('daily')
 const hours = ref(24)
 const hourOptions = [{ label: '24 小时', value: 24 }, { label: '48 小时', value: 48 }, { label: '7 天', value: 168 }]
-let timezone: Promise<string> | null = null
-const loadTimezone = () => (timezone ??= api.GET('/api/config/settings').then(({ data }) => data?.basic.timezone || 'UTC'))
-const hourly = ref<{ buckets: number[]; timezone: string; series: ChartSeries[] } | null>(null)
-const hourlyError = ref('')
-let hourlyVersion = 0
-async function loadHourly() {
-  if (view.value !== 'hourly') return
-  const version = ++hourlyVersion
-  const zone = await loadTimezone()
-  const bounds = trafficBounds('hour', recentHourRange(hours.value, zone), zone)
-  const { data, error } = await api.GET('/api/traffic/query', {
-    params: { query: { level: 'hour', scope: 'user', group_by: 'stack', ...bounds, subjects: String(props.userId), stacks: stackId.value ? String(stackId.value) : '' } },
-  })
-  if (version !== hourlyVersion) return
-  if (!data) {
-    hourlyError.value = problemMessage(error, '小时用量查询失败')
-    return
-  }
-  hourlyError.value = ''
-  const buckets = hourBuckets(bounds)
-  const stacks = data.series.map((item) => ({ item, data: alignBuckets(buckets, data.buckets, item.up.map((up, index) => up + item.down[index]!)) }))
-  const shown: ChartSeries[] = stacks.slice(0, 7).map(({ item, data }, index) => ({ name: item.label, data, slot: index, entity: { kind: 'stack', id: item.subject } }))
-  const rest = stacks.slice(7)
-  if (rest.length) shown.push({ name: '其他 Stack', data: buckets.map((_, index) => rest.reduce((sum, stack) => sum + stack.data[index]!, 0)), slot: undefined })
-  hourly.value = { buckets, timezone: data.timezone, series: shown }
-}
-watch([view, hours, stackId, () => props.userId], () => {
-  hourly.value = null
-  void loadHourly()
-})
+const { trend: hourly, error: hourlyError, load: loadHourly } = useTrafficTrend(() => view.value === 'hourly'
+  ? { level: 'hour', span: hours.value, scope: 'user', groupBy: 'stack', stacks: stackId.value ? [stackId.value] : [], subjects: [String(props.userId)], entity: 'stack' }
+  : null)
 watch(usage, () => void loadHourly())
-const hourLabels = computed(() => {
-  const data = hourly.value
-  if (!data) return []
-  const parts: Intl.DateTimeFormatOptions = hours.value > 24 ? { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' } : { hour: '2-digit', minute: '2-digit' }
-  const formatter = new Intl.DateTimeFormat('zh-CN', { ...parts, hourCycle: 'h23', timeZone: data.timezone })
-  return data.buckets.map((at) => formatter.format(at * 1000))
-})
-const hourlyEmpty = computed(() => !hourly.value?.series.some((item) => item.data.some((value) => value > 0)))
 /** 在流量明细页查看同一用户、同一 Stack 的更长范围或导出。 */
 const trafficLink = computed(() => ({
   name: 'traffic',
@@ -178,7 +143,7 @@ const trafficLink = computed(() => ({
       </template>
       <template v-else>
         <NAlert v-if="hourlyError" type="warning" :bordered="false">{{ hourlyError }}</NAlert>
-        <TrafficChart v-if="hourly && !hourlyEmpty" kind="bar" :labels="hourLabels" :series="hourly.series" :format="formatBytes" height="220px" />
+        <TrafficChart v-if="hourly && !hourly.empty" kind="bar" :labels="hourly.labels" :series="hourly.series" :format="formatBytes" height="220px" />
         <NEmpty v-else-if="hourly" size="small" :description="`最近 ${hourOptions.find((option) => option.value === hours)?.label} 没有用量`" />
         <NEmpty v-else-if="!hourlyError" size="small" description="正在加载小时用量" />
         <NText depth="3">按统计时区的整点汇总，当前小时统计至最近一次采集。</NText>

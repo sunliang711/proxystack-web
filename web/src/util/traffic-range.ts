@@ -88,3 +88,17 @@ export function alignBuckets(expected: number[], buckets: string[], values: numb
   const byBucket = new Map(buckets.map((bucket, index) => [Date.parse(bucket) / 1000, values[index] ?? 0]))
   return expected.map((at) => byBucket.get(at) ?? 0)
 }
+
+/** 截至今天（含）的最近 days 个自然日，按统计时区计算。 */
+export function recentDayRange(days: number, timezone: string, now = Date.now()): TrafficRange {
+  const end = floor(localTime(now, timezone), 'day')
+  return [text(step(end, 'day', 1 - days)), text(end)]
+}
+
+/** 日期范围内每个自然日的起点（Unix 秒），按统计时区计算，夏令时日长不固定。 */
+export function dayBuckets(range: TrafficRange, timezone: string): number[] {
+  const out: number[] = []
+  const end = floor(civil(range[1]), 'day')
+  for (let at = floor(civil(range[0]), 'day'); at <= end; at = step(at, 'day', 1)) out.push(instant(at, timezone) / 1000)
+  return out
+}

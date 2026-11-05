@@ -83,6 +83,18 @@ function unattributed(all: { up: number; down: number }, users: { up: number; do
   const gap = total(all) - total(users)
   return gap >= 1024 * 1024 && gap > total(all) * 0.01 ? gap : 0
 }
+/** 最近一次采集中速率最高的用户，用于回答「现在是谁在占带宽」。 */
+const ACTIVE_LIMIT = 5
+const activeUsers = computed(() => {
+  const point = live.value[live.value.length - 1]
+  if (!point?.users) return []
+  const names = new Map(users.value.map((user) => [user.id, user.name]))
+  return Object.entries(point.users)
+    .map(([id, rate]) => ({ id: Number(id), name: names.get(Number(id)) ?? `#${id}`, up: rate.up, down: rate.down, stacks: Object.entries(rate.stacks ?? {}).filter(([, bytes]) => bytes.up + bytes.down > 0).map(([name]) => name) }))
+    .filter((user) => user.up + user.down > 0)
+    .sort((a, b) => b.up + b.down - (a.up + a.down))
+})
+const activePeak = computed(() => Math.max(1, ...activeUsers.value.map((user) => user.up + user.down)))
 const hasUnattributed = computed(() => !!overview.value && (unattributed(overview.value.today, overview.value.user_today) > 0 || unattributed(overview.value.month, overview.value.user_month) > 0))
 </script>
 
@@ -128,6 +140,30 @@ const hasUnattributed = computed(() => !!overview.value && (unattributed(overvie
       <NEmpty v-else description="最近一小时还没有采集到速率数据">
         <template #extra><RouterLink :to="{ name: 'health' }">查看采集状态</RouterLink></template>
       </NEmpty>
+      <template v-if="!userId && live.length">
+        <div class="active-head">
+          <NText strong>当前占用带宽的用户</NText>
+          <NText depth="3">最近一次采集的速率，按上下行合计排序<template v-if="activeUsers.length > ACTIVE_LIMIT">，共 {{ activeUsers.length }} 个用户在用</template></NText>
+        </div>
+        <NText v-if="!activeUsers.length" depth="3" class="active-empty">最近一次采集时没有用户在传输数据。</NText>
+        <div v-else class="table-scroll"><NTable :bordered="false" size="small">
+          <thead><tr><th>用户</th><th>↑</th><th>↓</th><th style="width: 40%">合计</th><th>Stack</th></tr></thead>
+          <tbody>
+            <tr v-for="user in activeUsers.slice(0, ACTIVE_LIMIT)" :key="user.id">
+              <td><EntityLink kind="user" :id="user.id" :name="user.name" /></td>
+              <td>{{ formatRate(user.up) }}</td>
+              <td>{{ formatRate(user.down) }}</td>
+              <td>
+                <div class="bar-cell">
+                  <span class="bar" :style="{ width: `${((user.up + user.down) / activePeak) * MAX_BAR}%` }" />
+                  <NText>{{ formatRate(user.up + user.down) }}</NText>
+                </div>
+              </td>
+              <td><NText depth="3">{{ user.stacks.join('、') }}</NText></td>
+            </tr>
+          </tbody>
+        </NTable></div>
+      </template>
     </NCard>
 
     <NCard title="用量排行" size="small">
@@ -197,6 +233,8 @@ const hasUnattributed = computed(() => !!overview.value && (unattributed(overvie
 .metric-note { display: block; margin-top: 4px; font-size: 12px; }
 .aggregator-note { display: block; margin-top: -8px; font-size: 12px; }
 .collection-link { text-decoration: none; border-radius: 6px; }
+.active-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 16px 0 8px; }
+.active-empty { display: block; font-size: 13px; }
 .collection-tag { cursor: pointer; }
 .collection-link:hover .collection-tag { filter: brightness(1.15); text-decoration: underline; }
 .overview-filters > .n-select { width: 260px; }
