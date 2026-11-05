@@ -25,5 +25,16 @@ export function useDirty<T>(state: Ref<T | null>) {
   onMounted(() => window.addEventListener('beforeunload', beforeUnload))
   onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 
-  return { dirty, markClean }
+  /** 修改基准快照中的部分字段：当场生效的操作或取回明文凭据后，不应让页面显示为有未保存修改。 */
+  function patchBaseline(patch: (saved: T) => void) {
+    if (!baseline.value) return
+    const saved = JSON.parse(baseline.value) as T
+    patch(saved)
+    baseline.value = JSON.stringify(saved)
+  }
+
+  /** 基准快照的解析结果，供页面按区域判断哪些字段改过。 */
+  const saved = computed(() => (baseline.value ? (JSON.parse(baseline.value) as T) : null))
+
+  return { dirty, markClean, patchBaseline, saved }
 }

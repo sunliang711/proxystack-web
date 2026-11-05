@@ -9,6 +9,8 @@ import TrafficChart from './TrafficChart.vue'
 import EntityLink from './EntityLink.vue'
 
 const props = defineProps<{ userId: number; dailyLimit: number; quota: number }>()
+/** 每次刷新到新的用量时通知页面，用于同步页面顶部的摘要。 */
+const emit = defineEmits<{ update: [usage: Schemas['UserUsage']] }>()
 const message = useMessage()
 const stackId = ref<number | null>(null)
 const labels = { daily: '每日阈值', quota: '月度额度', expired: '到期' } as const
@@ -19,6 +21,7 @@ const { data: usage, loading, error, updatedAt, refresh: load } = usePolling<Sch
   return data
 })
 watch(() => props.userId, () => { stackId.value = null })
+watch(usage, (data) => { if (data) emit('update', data) })
 watch(usage, (data) => {
   if (data && !data.by_stack.some((stack) => stack.stack_id === stackId.value)) stackId.value = null
 })
