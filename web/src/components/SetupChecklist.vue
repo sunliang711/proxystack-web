@@ -5,6 +5,7 @@ import { NButton, NCard, NIcon, NProgress, NTag, NText } from 'naive-ui'
 import { CheckmarkCircle, EllipseOutline } from '@vicons/ionicons5'
 import { api, type Schemas } from '../api/client'
 import { runtime } from '../runtime'
+import { hasTime, targetReady } from '../util/subPublish'
 
 /** 初始化清单：按顺序列出首次使用需要完成的步骤，每一步由当前数据判定是否完成。 */
 
@@ -64,8 +65,8 @@ onMounted(async () => {
 
 const installed = (component: string) => deps.value.some((dep) => dep.component === component && dep.installed)
 const applied = computed(() => stacks.value.some((stack) => (runtime.stacks[stack.name]?.applied_revision ?? 0) > 0))
-const readyTargets = computed(() => targets.value.filter((target) => target.enabled && target.deploy_state === 'installed' && target.last_test_at && !target.last_test_error))
-const published = computed(() => targets.value.some((target) => target.enabled && target.last_publish_at && !target.last_publish_error))
+const readyTargets = computed(() => targets.value.filter((target) => target.enabled && targetReady(target)))
+const published = computed(() => readyTargets.value.some((target) => target.last_sequence && hasTime(target.last_publish_at) && !target.last_publish_error))
 
 const steps = computed<Step[]>(() => [
   {

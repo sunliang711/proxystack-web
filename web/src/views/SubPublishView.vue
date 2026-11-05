@@ -7,7 +7,9 @@ import {
 } from 'naive-ui'
 import { api, problemMessage, saveBlob, type Schemas } from '../api/client'
 import CopyableCode from '../components/CopyableCode.vue'
+import PublishFlowBar from '../components/PublishFlowBar.vue'
 import { formatTime } from '../util/format'
+import { targetNextStep as nextStepOf, targetReady as readyOf } from '../util/subPublish'
 
 interface PublishTarget {
   id: number
@@ -20,6 +22,8 @@ interface PublishTarget {
   last_deploy_at?: string
   last_test_at?: string
   last_test_error?: string
+  last_publish_at?: string
+  last_publish_error?: string
   last_sequence?: number
 }
 
@@ -32,16 +36,23 @@ const router = useRouter()
 const message = useMessage()
 const status = ref<Schemas['BundleStatus'] | null>(null)
 const targets = ref<PublishTarget[]>([])
+/** 管理端 SSH 密钥是否已生成；null 表示尚未读取。 */
+const identityConfigured = ref<boolean | null>(null)
+/** 首次加载完成后才显示进度条，避免先闪出第 1 步。 */
+const loaded = ref(false)
 const selected = ref<number[]>([])
 const mode = ref<'online' | 'offline'>('online')
 const busy = ref(false)
 const submitted = ref<OnlinePublishResult | null>(null)
 
 async function load() {
-  const [statusResult, targetsResult] = await Promise.all([
+  const [statusResult, targetsResult, identityResult] = await Promise.all([
     api.GET('/api/sub-bundle'),
     api.GET('/api/sub-publish/targets'),
+    api.GET('/api/sub-publish/identity'),
   ])
+  identityConfigured.value = identityResult.data?.configured ?? null
+  loaded.value = true
   if (statusResult.error) message.error(problemMessage(statusResult.error))
   if (targetsResult.error) message.error(problemMessage(targetsResult.error, '读取订阅端失败'))
   status.value = statusResult.data ?? null
@@ -126,15 +137,19 @@ function targetSummary(target: PublishTarget) {
 }
 
 function targetReady(target: PublishTarget) {
-  if (target.deploy_state !== 'installed' || !!target.last_test_error || !target.last_test_at) return false
-  return !target.last_deploy_at || Date.parse(target.last_test_at) >= Date.parse(target.last_deploy_at)
+  return readyOf(target)
 }
 
 function targetNextStep(target: PublishTarget) {
-  if (target.deploy_state !== 'installed') return target.deploy_state ? '先完成部署' : '先检测部署'
-  if (!targetReady(target)) return '先完成部署后的测试'
+  const next = nextStepOf(target)
+  if (next === 'inspect') return '先检测部署'
+  if (next === 'deploy') return '先完成部署'
+  if (next === 'test') return '先完成部署后的测试'
   return '可签发'
 }
+
+/** 签发受阻于订阅端未就绪时，给出去配置订阅端的入口。 */
+const blockedByTargets = computed(() => mode.value === 'online' && !!status.value && !targets.value.some(targetReady))
 
 function openTask() {
   if (!submitted.value) return
@@ -148,6 +163,8 @@ function openSSHSettings() {
 
 <template>
   <NSpace vertical :size="20">
+    <PublishFlowBar v-if="loaded && mode === 'online'" :input="{ identity: identityConfigured, targets, bundlePending: !!status?.pending }" page="publish" />
+
     <NCard title="订阅包状态">
       <NSpace v-if="status" vertical>
         <NAlert v-if="status.sequence === 0" type="info" :bordered="false">还没有发布过订阅包。</NAlert>
@@ -238,6 +255,7 @@ function openSSHSettings() {
           </NPopconfirm>
           <NButton v-else type="primary" :loading="busy" :disabled="!!blockedReason" @click="publish">{{ actionLabel }}</NButton>
           <NText v-if="blockedReason" depth="3">{{ blockedReason }}</NText>
+          <NButton v-if="blockedByTargets" size="small" @click="openSSHSettings">去配置订阅端</NButton>
           <NText v-else-if="mode === 'online'" depth="3">将向选中的 {{ selected.length }} 个订阅端发布</NText>
         </NSpace>
       </NSpace>

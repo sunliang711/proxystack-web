@@ -9,7 +9,9 @@ import {
 import { ChevronDownOutline } from '@vicons/ionicons5'
 import { api, MASKED, problemMessage, saveBlob } from '../api/client'
 import CopyableCode from '../components/CopyableCode.vue'
+import PublishFlowBar from '../components/PublishFlowBar.vue'
 import { formatTime } from '../util/format'
+import { hasTime, targetNextStep, testedAfterDeploy, type FlowStepKey, type PublishTargetState } from '../util/subPublish'
 
 interface SSHIdentity {
   configured: boolean
@@ -70,6 +72,10 @@ const router = useRouter()
 const identity = ref<SSHIdentity | null>(null)
 const targets = ref<PublishTarget[]>([])
 const currentSource = ref('main')
+/** 订阅内容在上次签发后有变化。 */
+const bundlePending = ref(false)
+/** 首次加载完成后才显示进度条，避免先闪出第 1 步。 */
+const loaded = ref(false)
 const loading = ref(false)
 const generating = ref(false)
 const saving = ref(false)
@@ -92,8 +98,22 @@ async function load() {
   identity.value = identityResult.data ?? null
   targets.value = targetsResult.data ?? []
   currentSource.value = statusResult.data?.source ?? 'main'
+  bundlePending.value = !!statusResult.data?.pending
+  loaded.value = true
 }
 onMounted(load)
+
+const flowBusy = computed(() => generating.value || inspecting.value !== null || deploying.value !== null || testing.value !== null)
+/** 进度条上的主操作。 */
+function onFlowAction(key: FlowStepKey, state: PublishTargetState | null) {
+  const target = targets.value.find((candidate) => candidate.id === state?.id)
+  if (key === 'identity') void generateIdentity()
+  else if (key === 'target') open()
+  else if (key === 'deploy' && target) {
+    if (!target.deploy_state) void inspectDeploy(target)
+    else confirmThen(`部署订阅端 ${target.name}`, '将下载最新稳定版并通过 SSH 部署订阅端，继续？', () => deploy(target))
+  } else if (key === 'test' && target) void test(target)
+}
 
 async function generateIdentity() {
   generating.value = true
@@ -326,9 +346,6 @@ const sshdConfig = (target: PublishTarget) => `Match User ${target.ssh_user}\n  
 const sshdConfigSetupCommand = (target: PublishTarget) =>
   `sudo install -d -m 755 /etc/ssh/sshd_config.d\nsudo tee /etc/ssh/sshd_config.d/proxystack-web-sub.conf >/dev/null <<'EOF'\n${sshdConfig(target)}\nEOF\nsudo sshd -t && sudo systemctl reload ssh`
 
-/** 后端用零值时间表示从未执行。 */
-const hasTime = (value?: string): value is string => !!value && !value.startsWith('0001') && !value.startsWith('1970')
-
 function statusTime(value?: string) {
   return hasTime(value) ? formatTime(value) : '从未执行'
 }
@@ -338,13 +355,7 @@ function sourceSequence(target: PublishTarget, result: TestResult) {
 }
 
 /** 接入流程的下一步，对应的按钮用主色突出；全部完成时返回 null。 */
-function nextStep(row: PublishTarget): 'inspect' | 'deploy' | 'test' | null {
-  if (!row.deploy_state) return 'inspect'
-  if (row.deploy_state !== 'installed') return 'deploy'
-  const testedAfterDeploy = hasTime(row.last_test_at) && (!hasTime(row.last_deploy_at) || Date.parse(row.last_test_at) >= Date.parse(row.last_deploy_at))
-  if (!testedAfterDeploy || row.last_test_error) return 'test'
-  return null
-}
+const nextStep = (row: PublishTarget) => targetNextStep(row)
 
 const dialog = useDialog()
 function moreOptions(row: PublishTarget): DropdownOption[] {
@@ -374,8 +385,7 @@ function onMore(row: PublishTarget, key: string) {
 function workflowState(row: PublishTarget) {
   if (!row.deploy_state) return { label: '第 1 步：检测部署', type: 'warning' as const, detail: '先确认 SSH、系统和 sudo' }
   if (row.deploy_state !== 'installed') return { label: '第 2 步：部署', type: 'warning' as const, detail: `当前状态：${row.deploy_state}` }
-  const testedAfterDeploy = hasTime(row.last_test_at) && (!hasTime(row.last_deploy_at) || Date.parse(row.last_test_at) >= Date.parse(row.last_deploy_at))
-  if (!testedAfterDeploy || row.last_test_error) return { label: '第 3 步：测试', type: 'warning' as const, detail: '部署完成后验证转发和 Secret' }
+  if (!testedAfterDeploy(row)) return { label: '第 3 步：测试', type: 'warning' as const, detail: '部署完成后验证转发和 Secret' }
   return { label: '第 4 步：配置发布 Secret（已自动完成）', type: 'success' as const, detail: 'SSH 部署已配置 Secret，下一步：第 5 步签发订阅包' }
 }
 
@@ -460,6 +470,7 @@ function hostKeyCommand(algorithm: string) {
 
 <template>
   <NSpace vertical :size="20">
+    <PublishFlowBar v-if="loaded" :input="{ identity: identity?.configured ?? null, targets, bundlePending }" page="settings" :loading="flowBusy" @action="onFlowAction" />
     <NCard title="管理端 SSH 密钥">
       <NSpace v-if="identity?.configured" vertical :size="12">
         <NDescriptions :column="1" label-placement="left" bordered size="small">
@@ -477,13 +488,6 @@ function hostKeyCommand(algorithm: string) {
       </NSpace>
     </NCard>
 
-    <NCard title="订阅端接入流程">
-      <NSpace vertical :size="8">
-        <NText strong>1 检测部署 → 2 部署 → 3 测试 → 4 配置发布 Secret → 5 签发订阅包</NText>
-        <NText depth="3">通过 SSH 安装或更新时，第 4 步会由管理端在部署完成后自动执行；离线安装时，先安装二进制，再从“查看 Secret”弹窗查看并执行命令。</NText>
-        <NText depth="3">只有部署完成且部署后的测试通过，目标才可在“发布订阅包”页面选择并签发。</NText>
-      </NSpace>
-    </NCard>
 
     <NCard title="订阅端目标" class="table-panel">
       <template #header-extra>
@@ -491,6 +495,7 @@ function hostKeyCommand(algorithm: string) {
       </template>
       <NAlert type="info" :bordered="false" style="margin-bottom: 12px">
         管理端按需建立 SSH 正向转发，远端主机固定为 127.0.0.1。每个订阅端使用独立发布 Secret，测试会依次检查 SSH、转发、订阅端健康状态和发布鉴权。
+        每个订阅端依次经过 1 检测部署 → 2 部署 → 3 测试 → 4 配置发布 Secret → 5 签发订阅包。通过 SSH 安装或更新时，第 4 步由管理端在部署完成后自动执行；离线安装时，先安装二进制，再从“查看 Secret”弹窗查看并执行命令。只有部署完成且部署后的测试通过，目标才可在“发布订阅包”页面选择并签发。
       </NAlert>
       <NDataTable :loading="loading" :columns="columns" :data="targets" :scroll-x="1430" size="small" />
     </NCard>

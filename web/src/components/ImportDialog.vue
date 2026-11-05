@@ -2,10 +2,11 @@
 import { computed, h, ref, watch } from 'vue'
 import {
   NAlert, NButton, NDataTable, NForm, NFormItem, NInput, NModal, NRadioButton, NRadioGroup, NSpace, NTabPane,
-  NTabs, NTag, NText, NUpload, NUploadDragger, useDialog, useMessage, type DataTableColumns, type UploadFileInfo,
+  NTabs, NTag, NText, NUpload, NUploadDragger, useMessage, type DataTableColumns, type UploadFileInfo,
 } from 'naive-ui'
 import { api, problemMessage, type Schemas } from '../api/client'
 import CodeEditor from './CodeEditor.vue'
+import DangerConfirm from './DangerConfirm.vue'
 import EntityLink from './EntityLink.vue'
 
 type Entry = Schemas['ImportEntry']
@@ -15,7 +16,6 @@ const props = defineProps<{ scope: 'all' | 'stacks' | 'users'; allowCsv?: boolea
 const emit = defineEmits<{ done: [] }>()
 const show = defineModel<boolean>('show', { required: true })
 const message = useMessage()
-const dialog = useDialog()
 
 const source = ref<'file' | 'paste'>('file')
 const filename = ref('')
@@ -79,34 +79,40 @@ async function runPreview() {
   preview.value = data ?? null
 }
 
+const confirmReplace = ref(false)
+/** 替换全部的影响范围，数量取自预览。 */
+const replaceImpacts = computed(() => {
+  const count = (kind: string) => preview.value?.entries.filter((entry) => entry.kind === kind && entry.action !== 'excluded' && entry.action !== 'skip').length ?? 0
+  return [
+    `现有的全部用户、Stack、手工节点和远端节点源被文件内容整体替换：替换后共 ${count('user')} 个用户、${count('stack')} 个 Stack，文件中没有的会被删除。`,
+    ...(count('settings') ? ['系统设置被文件中的设置覆盖。'] : []),
+    '被删除的用户在应用后不能再使用代理，订阅中的节点在重新发布订阅包后去掉。',
+    '执行前自动备份当前数据库，可以在「备份与还原」中找到。',
+    '导入只生成新的配置修订版本，应用后才影响运行中的代理。',
+  ]
+})
+
 function apply() {
-  const run = async () => {
-    busy.value = true
-    const { data, error: problem } = await api.POST('/api/config/import/apply', { body: body() })
-    busy.value = false
-    if (problem) {
-      error.value = problemMessage(problem, '导入失败')
-      return
-    }
-    if (!data?.valid) {
-      preview.value = data ?? null
-      return
-    }
-    message.success('导入完成，已生成新的配置修订版本')
-    show.value = false
-    emit('done')
+  if (mode.value === 'replace') confirmReplace.value = true
+  else void runApply()
+}
+
+async function runApply() {
+  confirmReplace.value = false
+  busy.value = true
+  const { data, error: problem } = await api.POST('/api/config/import/apply', { body: body() })
+  busy.value = false
+  if (problem) {
+    error.value = problemMessage(problem, '导入失败')
+    return
   }
-  if (mode.value === 'replace') {
-    dialog.warning({
-      title: '替换全部配置？',
-      content: '现有的用户和 stack 会被文件内容整体替换。执行前会自动备份数据库。',
-      positiveText: '替换',
-      negativeText: '取消',
-      onPositiveClick: run,
-    })
-  } else {
-    run()
+  if (!data?.valid) {
+    preview.value = data ?? null
+    return
   }
+  message.success('导入完成，已生成新的配置修订版本')
+  show.value = false
+  emit('done')
 }
 
 const actionLabels: Record<string, [string, 'success' | 'warning' | 'default' | 'info' | 'error']> = {
@@ -187,6 +193,7 @@ const columns: DataTableColumns<Entry> = [
           <NRadioButton value="merge">合并</NRadioButton>
           <NRadioButton value="replace">替换全部</NRadioButton>
         </NRadioGroup>
+        <NText v-if="mode === 'replace'" type="error" style="margin-left: 12px; font-size: 13px">文件中没有的用户和 Stack 会被删除</NText>
       </NFormItem>
       <NFormItem label="同名冲突">
         <NRadioGroup v-model:value="conflict">
@@ -223,8 +230,9 @@ const columns: DataTableColumns<Entry> = [
       <NSpace justify="end">
         <NButton @click="show = false">取消</NButton>
         <NButton :disabled="!text" :loading="busy" @click="runPreview">预览</NButton>
-        <NButton type="primary" :disabled="!preview?.valid" :loading="busy" @click="apply">导入</NButton>
+        <NButton :type="mode === 'replace' ? 'error' : 'primary'" :disabled="!preview?.valid" :loading="busy" @click="apply">{{ mode === 'replace' ? '替换全部' : '导入' }}</NButton>
       </NSpace>
     </template>
   </NModal>
+  <DangerConfirm v-model:show="confirmReplace" title="替换全部配置" :impacts="replaceImpacts" phrase="替换全部" positive-text="替换全部" :loading="busy" @confirm="runApply" />
 </template>

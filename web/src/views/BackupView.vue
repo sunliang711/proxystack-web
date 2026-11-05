@@ -5,6 +5,7 @@ import {
   NSpace, NSwitch, NTag, NText, NTooltip, useMessage, type DataTableColumns,
 } from 'naive-ui'
 import { api, getCSRFToken, handleUnauthorizedResponse, panelBase, problemMessage, type Schemas } from '../api/client'
+import DangerConfirm from '../components/DangerConfirm.vue'
 import ExportDialog from '../components/ExportDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
 import { useBackgroundTask } from '../composables/useBackgroundTask'
@@ -62,7 +63,10 @@ const columns: DataTableColumns<BackupFile> = [
     title: '', key: 'actions', width: 250,
     render: (row) => h(NSpace, { size: 6 }, {
       default: () => [
-        h('a', { href: `${panelBase}api/backup/files/${encodeURIComponent(row.name)}/download` }, [h(NButton, { size: 'tiny' }, { default: () => '下载' })]),
+        h(NPopconfirm, { positiveText: '下载', onPositiveClick: () => download(row.name) }, {
+          trigger: () => h(NButton, { size: 'tiny' }, { default: () => '下载' }),
+          default: () => h('div', { style: 'max-width: 300px' }, '该文件包含全部凭据、订阅 token 和管理员账号，下载会记入审计日志。请保存在可信位置，用完及时删除副本。'),
+        }),
         row.kind === 'snapshot'
           ? h(NTooltip, null, {
               trigger: () => h(NButton, { size: 'tiny', onClick: () => openPacking(row.name) }, { default: () => '转为迁移包' }),
@@ -77,6 +81,11 @@ const columns: DataTableColumns<BackupFile> = [
     }),
   },
 ]
+
+/** 备份文件含全部凭据，下载前在按钮旁确认。 */
+function download(name: string) {
+  window.location.href = `${panelBase}api/backup/files/${encodeURIComponent(name)}/download`
+}
 
 /** 恢复流程：上传 → 预览和选项 → 执行。 */
 const upload = ref<{ file: File | null; passphrase: string }>({ file: null, passphrase: '' })
@@ -110,7 +119,25 @@ async function uploadPackage() {
   options.value.external_host = preview.value.external_host
 }
 
+const confirmRestore = ref(false)
+/** 按预览和所选项列出恢复的影响范围。 */
+const restoreImpacts = computed(() => {
+  const value = preview.value
+  if (!value) return []
+  const opts = options.value
+  return [
+    `当前数据库被整体替换为迁移包内容：恢复后为 ${value.counts.users} 个用户、${value.counts.stacks} 个 Stack、${value.counts.manual_nodes} 个手工节点，本机现有数据不再保留。`,
+    '全部凭据、订阅 token、流量历史和审计日志换成迁移包中的内容，本机现有的订阅链接失效。',
+    opts.keep_admins ? '管理员账号保留本机的。' : `管理员账号换成迁移包中的，之后用源主机 ${value.hostname} 的管理员账号登录。`,
+    opts.keep_panel ? '面板监听地址和端口保留本机设置。' : '面板监听地址和端口换成迁移包中的，可能需要用新的地址打开面板。',
+    `管理服务重启，全部登录会话失效；恢复后${opts.start_proxies ? '启动迁移包中的代理' : '代理保持停止'}。`,
+    ...(value.port_conflicts.length ? [`有 ${value.port_conflicts.length} 处端口冲突，恢复后需要在面板中调整。`] : []),
+    '执行前自动备份当前数据库。',
+  ]
+})
+
 async function execute() {
+  confirmRestore.value = false
   restoring.value = true
   const { error } = await api.POST('/api/backup/restore/execute', { body: options.value })
   restoring.value = false
@@ -151,13 +178,26 @@ function waitForRestart() {
       </NText>
       <NButton type="primary" @click="openPacking()">导出迁移包</NButton>
     </NCard>
-
+    <NCard title="导出全部配置" size="small">
+      <NText depth="3" tag="p">
+        导出系统设置（不含面板监听和管理员）、全部用户和 stack，可在另一台实例导入。流量数据、审计日志和管理员账号不随配置导出。
+      </NText>
+      <NButton @click="showExport = true">导出</NButton>
+    </NCard>
     <NCard title="备份文件" size="small">
-      <NText depth="3" tag="p">这些文件包含全部凭据。下载记入审计日志。</NText>
+      <NAlert type="warning" :bordered="false" style="margin-bottom: 12px">这些文件包含全部凭据、订阅 token 和管理员账号，下载记入审计日志。下载后请保存在可信位置，用完及时删除副本。</NAlert>
       <NDataTable :columns="columns" :data="files" :row-key="(row: BackupFile) => row.name" :scroll-x="760" size="small" :pagination="{ pageSize: 10 }" />
     </NCard>
-
-    <NCard title="恢复迁移包" size="small">
+    <div class="danger-zone-label">以下操作会替换现有数据</div>
+    <NCard title="导入配置" size="small" class="danger-card">
+      <template #header-extra><NTag size="small" type="warning" :bordered="false">可能替换现有配置</NTag></template>
+      <NText depth="3" tag="p">
+        支持合并或替换全部。导入只写入配置并生成修订版本，不会自动应用；替换全部前会自动备份数据库。
+      </NText>
+      <NButton @click="showImport = true">导入</NButton>
+    </NCard>
+    <NCard title="恢复迁移包" size="small" class="danger-card">
+      <template #header-extra><NTag size="small" type="error" :bordered="false">替换整个实例</NTag></template>
       <NAlert v-if="restarting" type="info" :bordered="false">正在重启管理服务，完成后跳转到登录页。如果迁移包改变了面板的监听地址或端口，请用新的地址打开。</NAlert>
       <template v-else>
         <NText depth="3" tag="p">恢复会整体替换当前实例的数据库，执行前自动备份当前数据库，然后重启管理服务。</NText>
@@ -209,31 +249,16 @@ function waitForRestart() {
             </NFormItem>
           </NForm>
           <NSpace>
-            <NPopconfirm @positive-click="execute">
-              <template #trigger><NButton type="error" :loading="restoring">执行恢复</NButton></template>
-              替换当前数据库并重启管理服务，全部会话失效。确定执行？
-            </NPopconfirm>
+            <NButton type="error" :loading="restoring" @click="confirmRestore = true">执行恢复</NButton>
             <NButton @click="preview = null">取消</NButton>
           </NSpace>
         </NSpace>
       </template>
     </NCard>
-
-    <NCard title="导出全部配置" size="small">
-      <NText depth="3" tag="p">
-        导出系统设置（不含面板监听和管理员）、全部用户和 stack，可在另一台实例导入。流量数据、审计日志和管理员账号不随配置导出。
-      </NText>
-      <NButton @click="showExport = true">导出</NButton>
-    </NCard>
-    <NCard title="导入配置" size="small">
-      <NText depth="3" tag="p">
-        支持合并或替换全部。导入只写入配置并生成修订版本，不会自动应用；替换全部前会自动备份数据库。
-      </NText>
-      <NButton @click="showImport = true">导入</NButton>
-    </NCard>
   </NSpace>
   <ExportDialog v-model:show="showExport" scope="all" />
   <ImportDialog v-model:show="showImport" scope="all" />
+  <DangerConfirm v-model:show="confirmRestore" title="恢复迁移包" :impacts="restoreImpacts" phrase="恢复" positive-text="执行恢复" :loading="restoring" @confirm="execute" />
 
   <NModal :show="!!packing" preset="card" title="导出迁移包" style="max-width: 500px" @update:show="(value: boolean) => !value && (packing = null)">
     <NForm v-if="packing" label-placement="left" label-width="100">
@@ -257,3 +282,9 @@ function waitForRestart() {
     </template>
   </NModal>
 </template>
+
+<style scoped>
+.danger-zone-label { margin: 4px 0 -8px; font-size: 13px; font-weight: 600; color: var(--ps-danger); }
+/* 组件库的边框样式在运行时注入，优先级与此相同，需要 !important 覆盖。 */
+.danger-card { border-color: color-mix(in srgb, var(--ps-danger) 45%, var(--ps-border)) !important; }
+</style>
