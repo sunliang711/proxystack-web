@@ -5,7 +5,8 @@ import { api, problemMessage, type Schemas } from '../api/client'
 import CodeEditor from './CodeEditor.vue'
 import { copyText } from '../util/clipboard'
 
-const props = defineProps<{ userId: number; linksOnly?: boolean }>()
+/** linksOnly 只显示链接；bare 去掉卡片的标题、边框和内边距，用于嵌入已有分区。 */
+const props = defineProps<{ userId: number; linksOnly?: boolean; bare?: boolean }>()
 const message = useMessage()
 const links = ref<Schemas['SubscriptionLinks'] | null>(null)
 const qr = ref<string | null>(null)
@@ -78,7 +79,7 @@ watch([format, () => props.userId, expanded], (_, __, onCleanup) => {
 </script>
 
 <template>
-  <NCard :title="linksOnly ? undefined : '订阅'" size="small" :bordered="!linksOnly" :content-style="linksOnly ? 'padding: 0' : undefined" :style="linksOnly ? undefined : 'margin-bottom: 20px'">
+  <NCard :title="linksOnly || bare ? undefined : '订阅'" size="small" :bordered="!linksOnly && !bare" :content-style="linksOnly || bare ? 'padding: 0' : undefined" :style="linksOnly || bare ? undefined : 'margin-bottom: 20px'">
     <NSpace vertical style="width: 100%">
       <NText depth="3">订阅只包含已应用的 stack 节点、该用户的手工节点和远端节点源同步来的节点；改动在下一次发布订阅包并导入订阅端后生效。</NText>
       <NButton v-if="!links" size="small" :loading="linksLoading" @click="showLinks">显示订阅链接</NButton>

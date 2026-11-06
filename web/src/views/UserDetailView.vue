@@ -2,8 +2,8 @@
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
-  NBadge, NButton, NCard, NCollapse, NCollapseItem, NDatePicker, NDropdown, NEmpty, NForm, NFormItem, NGrid, NGridItem, NIcon,
-  NInput, NInputNumber, NList, NListItem, NPopconfirm, NRadioButton, NRadioGroup, NSpace, NSpin, NSwitch, NTabPane, NTabs, NTag, NText,
+  NAlert, NBadge, NButton, NCard, NCollapse, NCollapseItem, NDatePicker, NDropdown, NEmpty, NForm, NFormItem, NIcon,
+  NInput, NInputNumber, NPopconfirm, NRadioButton, NRadioGroup, NSpace, NSpin, NSwitch, NTabPane, NTabs, NTag, NText,
   useDialog, useMessage,
 } from 'naive-ui'
 import { ChevronDownOutline } from '@vicons/ionicons5'
@@ -89,6 +89,13 @@ const quotaText = computed(() => {
   if (!u.quota_bytes) return `${u.reset_mode === 'monthly' ? '本周期' : '累计'} ${formatBytes(period)} · 不限额度`
   return `${formatBytes(period)} / ${formatBytes(u.quota_bytes)}（${Math.min(999, Math.round((period / u.quota_bytes) * 100))}%）`
 })
+const dailyText = computed(() => {
+  const limit = user.value?.daily_limit_bytes ?? 0
+  const today = used(usage.value?.today)
+  return limit ? `${formatBytes(today)} / ${formatBytes(limit)}` : formatBytes(today)
+})
+/** 额度和阈值下方显示的已用量，帮助判断设置是否合适。 */
+const periodUsedText = computed(() => `${new Date(usage.value?.period_start ?? 0).getFullYear() > 1 ? '本周期' : '累计'}已用 ${formatBytes(used(usage.value?.period))}`)
 const expireText = computed(() => {
   const value = saved.value?.expire_at
   if (!value) return '不过期'
@@ -173,6 +180,24 @@ const expireAt = computed({
   },
 })
 
+/** 到期时间快捷延长：从当前到期时间和现在两者中较晚的一个开始计算。 */
+function extendExpire(months: number) {
+  if (!user.value) return
+  const current = user.value.expire_at ? new Date(user.value.expire_at) : null
+  const base = current && current.getTime() > Date.now() ? current : new Date()
+  const next = new Date(base)
+  next.setMonth(next.getMonth() + months)
+  expireAt.value = next.getTime()
+}
+
+/** 「接入」标签页：每个 stack 一行，列出引用该用户的入站和逐 stack 暂停开关。 */
+const accessRows = computed(() => stacks.value.map((stack) => ({
+  stack,
+  refs: references.value.filter((item) => item.stack_id === stack.id),
+  paused: (user.value?.paused_stacks ?? []).includes(stack.name),
+})))
+const joinedStacks = computed(() => accessRows.value.filter((row) => row.refs.length).length)
+
 function addProfile() {
   user.value?.profiles.push({ name: '', uuid: randomUUID(), ss_password: randomString(24), remark: '', display_template: '', tag: '' })
 }
@@ -241,7 +266,7 @@ async function remove() {
         <div class="toolbar">
           <div class="summary">
             <NTag size="small" :type="statusView.type" :bordered="false">{{ statusView.text }}</NTag>
-            <span class="summary-item"><NText depth="3">今日</NText> {{ formatBytes(used(usage?.today)) }}</span>
+            <span class="summary-item"><NText depth="3">今日</NText> {{ dailyText }}</span>
             <span class="summary-item"><NText depth="3">额度</NText> {{ quotaText }}</span>
             <span class="summary-item"><NText depth="3">到期</NText> {{ expireText }}</span>
           </div>
@@ -262,12 +287,22 @@ async function remove() {
       <NTabs v-model:value="tab" type="line" animated class="detail-tabs">
         <NTabPane name="basic" :tab="tabLabel('basic', '基本')">
           <section class="pane-section">
+            <div class="status-row">
+              <NSwitch :value="user.enabled" :loading="pausing" aria-label="启用用户" @update:value="(v) => setPause(v, user!.paused_stacks ?? [])" />
+              <div>
+                <div class="status-title">
+                  <NText strong>{{ user.enabled ? '已启用' : '已停用' }}</NText>
+                  <NTag size="small" type="success" :bordered="false">当场生效</NTag>
+                </div>
+                <NText depth="3" class="status-desc">切换后立即通过 xray API 移除或加回该用户，配置保留，不需要保存和应用。只在部分 stack 上暂停请到「接入」设置。</NText>
+              </div>
+            </div>
+          </section>
+          <section class="pane-section">
+            <h3 class="pane-title">基本信息</h3>
             <div class="grid-2">
               <NFormItem label="名称" required v-bind="f('name', '字母或数字开头，可含 _ . -；改名不影响引用')">
                 <NInput v-model:value="user.name" />
-              </NFormItem>
-              <NFormItem label="启用" :feedback="'切换后当场生效：通过 xray API 移除或加回该用户，配置不删除'">
-                <NSwitch :value="user.enabled" :loading="pausing" @update:value="(v) => setPause(v, user!.paused_stacks ?? [])" />
               </NFormItem>
               <NFormItem label="备注" v-bind="f('remark', '仅用于管理识别，不影响订阅节点名')">
                 <NInput v-model:value="user.remark" />
@@ -279,61 +314,87 @@ async function remove() {
           </section>
           <section class="pane-section">
             <h3 class="pane-title">额度与到期</h3>
+            <NText depth="3" tag="p" class="pane-desc">额度、每日阈值和到期都按全部 stack 的合计判定，超出后按设置自动暂停并发送邮件通知。</NText>
             <div class="grid-2">
               <NFormItem label="流量额度" v-bind="f('quota_bytes', '0 表示不限')">
-                <ByteSizeInput v-model:value="user.quota_bytes" />
-              </NFormItem>
-              <NFormItem label="到期时间" v-bind="f('expire_at', '留空表示不过期')">
-                <NDatePicker v-model:value="expireAt" type="datetime" clearable />
+                <div class="field-stack">
+                  <ByteSizeInput v-model:value="user.quota_bytes" />
+                  <NText depth="3" class="field-meta">{{ periodUsedText }}</NText>
+                </div>
               </NFormItem>
               <NFormItem label="重置周期" v-bind="f('reset_mode')">
-                <NSpace align="center">
-                  <NRadioGroup v-model:value="user.reset_mode">
-                    <NRadioButton value="none">不重置</NRadioButton>
-                    <NRadioButton value="monthly">每月</NRadioButton>
-                  </NRadioGroup>
-                  <template v-if="user.reset_mode === 'monthly'">
-                    <NInputNumber v-model:value="user.reset_day" :min="1" :max="28" style="width: 100px" aria-label="重置日" />
-                    <NText depth="3">日</NText>
-                  </template>
-                </NSpace>
+                <div class="field-stack">
+                  <NSpace align="center" :size="8">
+                    <NRadioGroup v-model:value="user.reset_mode">
+                      <NRadioButton value="none">不重置</NRadioButton>
+                      <NRadioButton value="monthly">每月</NRadioButton>
+                    </NRadioGroup>
+                    <template v-if="user.reset_mode === 'monthly'">
+                      <NInputNumber v-model:value="user.reset_day" :min="1" :max="28" style="width: 96px" aria-label="重置日" />
+                      <NText depth="3">日</NText>
+                    </template>
+                  </NSpace>
+                  <NText depth="3" class="field-meta">{{ user.reset_mode === 'monthly' ? `每月 ${user.reset_day} 日 00:00 清零本周期用量` : '额度按累计用量计算，不清零' }}</NText>
+                </div>
               </NFormItem>
               <NFormItem label="每日用量阈值" v-bind="f('daily_limit_bytes', '0 表示不限；上行与下行合计，按设置时区的自然日统计')">
-                <NSpace vertical style="width: 100%">
+                <div class="field-stack">
                   <ByteSizeInput small :value="user.daily_limit_bytes ?? 0" @update:value="(value: number) => (user!.daily_limit_bytes = value)" />
                   <NRadioGroup v-if="user.daily_limit_bytes" v-model:value="user.daily_limit_action" size="small">
                     <NRadioButton value="pause">达到后暂停并通知</NRadioButton>
                     <NRadioButton value="notify">只通知</NRadioButton>
                   </NRadioGroup>
-                </NSpace>
+                  <NText depth="3" class="field-meta">今日已用 {{ formatBytes(used(usage?.today)) }}</NText>
+                </div>
+              </NFormItem>
+              <NFormItem label="到期时间" v-bind="f('expire_at', '留空表示不过期')">
+                <div class="field-stack">
+                  <NDatePicker v-model:value="expireAt" type="datetime" clearable style="width: 100%" />
+                  <NSpace :size="4">
+                    <NButton size="tiny" secondary @click="extendExpire(1)">+1 个月</NButton>
+                    <NButton size="tiny" secondary @click="extendExpire(3)">+3 个月</NButton>
+                    <NButton size="tiny" secondary @click="extendExpire(12)">+1 年</NButton>
+                    <NButton v-if="user.expire_at" size="tiny" quaternary @click="expireAt = null">设为不过期</NButton>
+                  </NSpace>
+                  <NText depth="3" class="field-meta">延长从当前到期时间和现在两者中较晚的一个开始计算</NText>
+                </div>
               </NFormItem>
             </div>
           </section>
         </NTabPane>
 
         <NTabPane name="subscription" :tab="tabLabel('subscription', '订阅')">
-          <SubscriptionCard :user-id="id" :bordered="false" class="embedded-card" />
-          <NText depth="3" tag="p" class="pane-desc">
-            <template v-if="manualNodes">该用户有 {{ manualNodes }} 个手工节点，随本机 stack 节点一起进入订阅。</template>
-            <template v-else>该用户没有手工节点。</template>
-            <RouterLink :to="{ name: 'extra-nodes', query: { user: savedName } }">{{ manualNodes ? '查看手工节点' : '添加手工节点' }}</RouterLink>
-          </NText>
+          <section class="pane-section">
+            <h3 class="pane-title">订阅链接</h3>
+            <SubscriptionCard :user-id="id" bare />
+          </section>
           <section class="pane-section">
             <h3 class="pane-title">订阅设置</h3>
             <div class="grid-2">
               <NFormItem label="订阅 token" v-bind="f('sub_token', '订阅链接中的身份凭据')">
-                <NSpace vertical style="width: 100%">
+                <div class="field-stack">
                   <SecretInput v-model:value="user.sub_token" :reveal="reveal" />
                   <NPopconfirm @positive-click="resetToken">
-                    <template #trigger><NButton size="small">重置 token</NButton></template>
+                    <template #trigger><NButton size="small" style="align-self: flex-start">重置 token</NButton></template>
                     重置后旧的订阅链接立即失效，客户端需要重新导入。确定重置？
                   </NPopconfirm>
-                </NSpace>
+                </div>
               </NFormItem>
               <NFormItem label="展示名模板" v-bind="f('display_template', '适用于 default 档案，优先级高于入站模板；入站中的用户单独配置仍可覆盖此模板')">
                 <TemplateInput v-model:value="user.display_template" />
               </NFormItem>
             </div>
+          </section>
+          <section class="pane-section">
+            <h3 class="pane-title">节点来源</h3>
+            <ul class="source-list">
+              <li><NText>本机 stack 节点</NText><NText depth="3">：入站引用该用户的 stack 共 {{ joinedStacks }} 个，应用后其节点进入订阅</NText></li>
+              <li>
+                <NText>手工节点</NText><NText depth="3">：{{ manualNodes ? `${manualNodes} 个` : '没有' }}</NText>
+                <RouterLink :to="{ name: 'extra-nodes', query: { user: savedName } }" class="source-link">{{ manualNodes ? '查看' : '添加' }}</RouterLink>
+              </li>
+              <li><NText>远端节点源</NText><NText depth="3">：按用户名分给同名用户</NText><RouterLink :to="{ name: 'extra-nodes', query: { tab: 'remote' } }" class="source-link">查看</RouterLink></li>
+            </ul>
           </section>
         </NTabPane>
 
@@ -346,13 +407,13 @@ async function remove() {
                 <SecretInput v-model:value="user.uuid" :generate="randomUUID" :reveal="reveal" />
               </NFormItem>
               <NFormItem label="SS 密码" required v-bind="f('ss_password', '被 2022 系列 shadowsocks 入站引用时需要对应长度的 base64 密钥')">
-                <NSpace vertical style="width: 100%">
+                <div class="field-stack">
                   <SecretInput v-model:value="user.ss_password" :generate="() => randomString(24)" :reveal="reveal" />
                   <NSpace :size="4">
-                    <NButton size="tiny" quaternary @click="user.ss_password = shadowsocksKey('2022-blake3-aes-128-gcm')">生成 2022 密钥（16 字节）</NButton>
-                    <NButton size="tiny" quaternary @click="user.ss_password = shadowsocksKey('2022-blake3-aes-256-gcm')">生成 2022 密钥（32 字节）</NButton>
+                    <NButton size="tiny" secondary @click="user.ss_password = shadowsocksKey('2022-blake3-aes-128-gcm')">生成 2022 密钥（16 字节）</NButton>
+                    <NButton size="tiny" secondary @click="user.ss_password = shadowsocksKey('2022-blake3-aes-256-gcm')">生成 2022 密钥（32 字节）</NButton>
                   </NSpace>
-                </NSpace>
+                </div>
               </NFormItem>
             </div>
             <NCollapse>
@@ -365,84 +426,83 @@ async function remove() {
           </section>
           <section class="pane-section">
             <div class="pane-head">
-              <h3 class="pane-title">其他凭据档案</h3>
+              <h3 class="pane-title">其他凭据档案 <NTag v-if="user.profiles.length" size="small" :bordered="false">{{ user.profiles.length }}</NTag></h3>
               <NButton size="small" @click="addProfile">添加档案</NButton>
             </div>
-            <NText depth="3" tag="p" class="pane-desc">入站引用用户时可以改选其他档案，使用不同的 UUID 或密码。</NText>
-            <NEmpty v-if="!user.profiles.length" size="small" description="没有额外档案" style="margin: 12px 0" />
-            <div v-for="(profile, index) in user.profiles" :key="profile.id ?? `new-${index}`" class="profile">
-              <NGrid cols="1 m:2" responsive="screen" :x-gap="24">
-                <NGridItem>
+            <NText depth="3" tag="p" class="pane-desc">入站引用用户时可以改选其他档案，使用不同的 UUID 或密码，例如为不同设备分别发放凭据。</NText>
+            <NEmpty v-if="!user.profiles.length" size="small" description="没有额外档案" class="profiles-empty">
+              <template #extra><NButton size="small" @click="addProfile">添加档案</NButton></template>
+            </NEmpty>
+            <div class="profiles">
+              <div v-for="(profile, index) in user.profiles" :key="profile.id ?? `new-${index}`" class="profile-card">
+                <div class="profile-head">
+                  <NText strong>{{ profile.name || '未命名档案' }}</NText>
+                  <NText v-if="profile.remark" depth="3" class="profile-remark">{{ profile.remark }}</NText>
+                  <NTag v-if="!profile.id" size="small" type="warning" :bordered="false">未保存</NTag>
+                  <NPopconfirm @positive-click="user.profiles.splice(index, 1)">
+                    <template #trigger><NButton size="tiny" type="error" quaternary class="profile-delete">删除</NButton></template>
+                    删除档案「{{ profile.name || '未命名档案' }}」？引用它的入站需要改选其他档案，保存后生效。
+                  </NPopconfirm>
+                </div>
+                <div class="grid-2">
                   <NFormItem label="档案名" v-bind="f(`profiles[${index}].name`)">
                     <NInput v-model:value="profile.name" />
                   </NFormItem>
-                </NGridItem>
-                <NGridItem>
                   <NFormItem label="备注">
                     <NInput v-model:value="profile.remark" />
                   </NFormItem>
-                </NGridItem>
-                <NGridItem>
                   <NFormItem label="UUID" v-bind="f(`profiles[${index}].uuid`)">
                     <SecretInput v-model:value="profile.uuid" :generate="randomUUID" :reveal="reveal" />
                   </NFormItem>
-                </NGridItem>
-                <NGridItem>
                   <NFormItem label="SS 密码" v-bind="f(`profiles[${index}].ss_password`)">
                     <SecretInput v-model:value="profile.ss_password" :generate="() => randomString(24)" :reveal="reveal" />
                   </NFormItem>
-                </NGridItem>
-                <NGridItem>
                   <NFormItem label="展示名" v-bind="f(`profiles[${index}].display_template`)">
                     <TemplateInput v-model:value="profile.display_template" />
                   </NFormItem>
-                </NGridItem>
-                <NGridItem>
                   <NFormItem label="tag">
-                    <NSpace style="width: 100%" :wrap="false">
-                      <NInput v-model:value="profile.tag" />
-                      <NButton type="error" quaternary @click="user.profiles.splice(index, 1)">删除档案</NButton>
-                    </NSpace>
+                    <NInput v-model:value="profile.tag" />
                   </NFormItem>
-                </NGridItem>
-              </NGrid>
+                </div>
+              </div>
             </div>
           </section>
         </NTabPane>
 
         <NTabPane name="access" :tab="tabLabel('access', '接入')">
           <section class="pane-section">
-            <h3 class="pane-title">各 stack 暂停 <NTag size="small" type="success" :bordered="false">当场生效</NTag></h3>
+            <h3 class="pane-title">各 stack 接入 <NTag size="small" type="success" :bordered="false">暂停当场生效</NTag></h3>
             <NText depth="3" tag="p" class="pane-desc">
-              只在选中的 stack 上暂停该用户，不需要保存。SOCKS5/HTTP 入站的账号由多个用户共用，暂停只把它们从该用户的订阅中去掉。
+              每个 stack 一行：中间列出引用该用户的入站，右侧开关只在该 stack 上暂停或恢复该用户，不需要保存。SOCKS5/HTTP 入站的账号由多个用户共用，暂停只把它们从该用户的订阅中去掉。
             </NText>
-            <NText v-if="!user.enabled" type="warning" tag="p" class="pane-desc">用户已停用，在「基本」中启用后才能按 stack 调整。</NText>
+            <NAlert v-if="!user.enabled" type="warning" :bordered="false" style="margin-bottom: 12px">用户已停用，在「基本」中启用后才能按 stack 调整。</NAlert>
             <NEmpty v-if="!stacks.length" size="small" description="还没有 stack" />
-            <NList v-else>
-              <NListItem v-for="stack in stacks" :key="stack.id">
-                <NSpace justify="space-between" align="center">
-                  <RouterLink :to="{ name: 'stack', params: { id: stack.id } }">{{ stack.name }}</RouterLink>
-                  <NSwitch
-                    :value="!(user.paused_stacks ?? []).includes(stack.name)"
-                    :disabled="!user.enabled || pausing"
-                    @update:value="(v) => toggleStack(stack.name, !v)"
-                  >
-                    <template #checked>启用</template>
-                    <template #unchecked>已暂停</template>
-                  </NSwitch>
-                </NSpace>
-              </NListItem>
-            </NList>
-          </section>
-          <section class="pane-section">
-            <h3 class="pane-title">被以下入站引用</h3>
-            <NEmpty v-if="!references.length" size="small" description="尚未被任何入站引用" />
-            <NList v-else>
-              <NListItem v-for="ref in references" :key="`${ref.stack}.${ref.inbound}`">
-                <RouterLink :to="{ name: 'stack', params: { id: ref.stack_id }, query: { tab: 'inbounds' } }">{{ ref.stack }} · {{ ref.inbound }}</RouterLink>
-                <NTag v-if="ref.profile" size="small" style="margin-left: 8px">档案 {{ ref.profile }}</NTag>
-              </NListItem>
-            </NList>
+            <div v-else class="access-list">
+              <div class="access-row access-header">
+                <span>Stack</span><span>引用该用户的入站</span><span>在该 stack 上</span>
+              </div>
+              <div v-for="row in accessRows" :key="row.stack.id" class="access-row" :class="{ paused: row.paused }">
+                <div class="access-stack">
+                  <RouterLink :to="{ name: 'stack', params: { id: row.stack.id } }">{{ row.stack.name }}</RouterLink>
+                  <NTag size="tiny" :bordered="false" :type="row.stack.role === 'auto' ? 'info' : 'default'">{{ row.stack.role }}</NTag>
+                </div>
+                <div class="access-refs">
+                  <template v-if="row.refs.length">
+                    <RouterLink v-for="item in row.refs" :key="item.inbound" :to="{ name: 'stack', params: { id: item.stack_id }, query: { tab: 'inbounds' } }">
+                      <NTag size="small" :bordered="false">{{ item.inbound }}<template v-if="item.profile"> · 档案 {{ item.profile }}</template></NTag>
+                    </RouterLink>
+                  </template>
+                  <NText v-else depth="3" class="access-none">未被入站引用</NText>
+                </div>
+                <NSwitch
+                  :value="!row.paused" :disabled="!user.enabled || pausing" :aria-label="`在 ${row.stack.name} 上启用该用户`"
+                  @update:value="(v) => toggleStack(row.stack.name, !v)"
+                >
+                  <template #checked>启用</template>
+                  <template #unchecked>已暂停</template>
+                </NSwitch>
+              </div>
+            </div>
           </section>
         </NTabPane>
 
@@ -474,15 +534,37 @@ async function remove() {
 .pane-head .pane-title { margin: 0; }
 .pane-desc { margin: 0 0 12px; font-size: 13px; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; column-gap: 24px; }
+.field-stack { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.field-meta { font-size: 12px; }
+.status-row { display: flex; align-items: flex-start; gap: 14px; }
+.status-row > .n-switch { margin-top: 2px; }
+.status-title { display: flex; align-items: center; gap: 8px; }
+.status-desc { display: block; margin-top: 4px; font-size: 13px; }
+.source-list { margin: 0; padding-left: 18px; font-size: 14px; line-height: 2; }
+.source-link { margin-left: 8px; font-size: 13px; }
+.profiles { display: grid; gap: 12px; }
+.profiles-empty { margin: 12px 0; }
+.profile-card { border: 1px solid var(--ps-border); border-radius: 10px; padding: 12px 16px 0; background: var(--ps-surface-raised); }
+.profile-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; min-height: 28px; }
+.profile-remark { font-size: 13px; }
+.profile-delete { margin-left: auto; }
+.access-list { border: 1px solid var(--ps-border); border-radius: 10px; overflow: hidden; }
+.access-row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(0, 2fr) auto; align-items: center; gap: 12px; padding: 10px 16px; }
+.access-row + .access-row { border-top: 1px solid var(--ps-border); }
+.access-header { font-size: 12px; font-weight: 600; color: var(--ps-muted); background: var(--ps-surface-raised); padding-top: 8px; padding-bottom: 8px; }
+.access-row.paused .access-stack, .access-row.paused .access-refs { opacity: 0.55; }
+.access-stack { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.access-refs { display: flex; flex-wrap: wrap; gap: 4px 6px; min-width: 0; }
+.access-none { font-size: 13px; }
 @media (max-width: 1023px) {
   .grid-2 { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .access-header { display: none; }
+  .access-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .access-refs { grid-column: 1 / -1; grid-row: 2; }
 }
 .embedded-card :deep(> .n-card-header),
 .embedded-card :deep(> .n-card__content) { padding-left: 0; padding-right: 0; }
 .embedded-card { margin-bottom: 0 !important; }
-.profile {
-  border-top: 1px dashed rgba(128, 128, 128, 0.3);
-  padding-top: 12px;
-  margin-top: 12px;
-}
 </style>

@@ -28,8 +28,8 @@ const fit = (bytes: number) => {
   })
   return (exact ?? largestFirst.find((u) => bytes >= u.value) ?? units.value[0]!).value
 }
-/** 未设置时的默认单位：每日阈值用 MB，流量额度用 GB。 */
-const unit = ref(value.value ? fit(value.value) : props.small ? MB : GB)
+/** 未设置时的默认单位为 GB，流量额度和每日阈值相同。 */
+const unit = ref(value.value ? fit(value.value) : GB)
 const amount = ref(value.value ? round2(value.value / unit.value) : 0)
 
 watch(value, (bytes) => {

@@ -103,9 +103,9 @@ test('无法用两位小数准确还原的旧数据取数值不小于 1 的最�
   assert.equal(state.amount, 117.74)
 })
 
-test('流量额度可选 MB / GB / TB，每日阈值可选 MB / GB', async (t) => {
+test('流量额度可选 MB / GB / TB，每日阈值可选 MB / GB，未设置时都默认 GB', async (t) => {
   assert.deepEqual(setup(t, false).state.units.map((u) => u.label), ['MB', 'GB', 'TB'])
   assert.deepEqual(setup(t, true).state.units.map((u) => u.label), ['MB', 'GB'])
   assert.equal(setup(t, false).state.unit, GB)
-  assert.equal(setup(t, true).state.unit, MB)
+  assert.equal(setup(t, true).state.unit, GB)
 })
