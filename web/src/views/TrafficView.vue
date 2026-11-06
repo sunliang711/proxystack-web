@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NEmpty, NSpace, NTabPane, NTabs } from 'naive-ui'
+import { NEmpty, NSpace, NTab, NTabs } from 'naive-ui'
 import { api } from '../api/client'
 import { loadTimezone } from '../composables/useTrafficTrend'
 import StatsPanel from './traffic/StatsPanel.vue'
@@ -30,9 +30,9 @@ onMounted(async () => {
 <template>
   <NSpace vertical :size="16">
     <NTabs v-model:value="tab" type="line" animated>
-      <NTabPane name="user" tab="按用户" />
-      <NTabPane name="stack" tab="按 Stack" />
-      <NTabPane name="ranking" tab="排行" />
+      <NTab name="user" tab="按用户" />
+      <NTab name="stack" tab="按 Stack" />
+      <NTab name="ranking" tab="排行" />
     </NTabs>
     <template v-if="timezone">
       <StatsPanel v-if="tab !== 'ranking'" :key="tab" :view="tab" :timezone="timezone" :user-options="userOptions" :stack-options="stackOptions" />
