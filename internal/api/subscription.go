@@ -42,6 +42,11 @@ type syncOutput struct {
 }
 
 // TemplatesView 是订阅模板页的数据：当前自定义模板和内置模板。
+type uninstallTargetInput struct {
+	ID   int64 `path:"id"`
+	Body app.SubUninstallRequest
+}
+
 type TemplatesView struct {
 	Current configdoc.Templates `json:"current"`
 	Builtin configdoc.Templates `json:"builtin"`
@@ -357,6 +362,16 @@ func registerSubscription(api huma.API, s *Server) {
 	huma.Register(api, reg(huma.Operation{OperationID: "rollbackSubscriptionTarget", Method: http.MethodPost, Path: "/api/sub-publish/targets/{id}/deploy/rollback", Summary: "通过 SSH 回滚订阅端（后台作业）", DefaultStatus: http.StatusAccepted}),
 		func(ctx context.Context, in *idPath) (*taskIDOutput, error) {
 			id, err := s.svc.RollbackPublishTarget(ctx, actorFrom(ctx), in.ID)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			out := &taskIDOutput{}
+			out.Body.TaskID = id
+			return out, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "uninstallSubscriptionTarget", Method: http.MethodPost, Path: "/api/sub-publish/targets/{id}/deploy/uninstall", Summary: "通过 SSH 卸载订阅端并删除其数据（后台作业）", DefaultStatus: http.StatusAccepted}),
+		func(ctx context.Context, in *uninstallTargetInput) (*taskIDOutput, error) {
+			id, err := s.svc.UninstallPublishTarget(ctx, actorFrom(ctx), in.ID, in.Body)
 			if err != nil {
 				return nil, toHTTPError(err)
 			}

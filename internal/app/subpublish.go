@@ -36,6 +36,7 @@ const (
 	ActionSubDeployInspect   = "subscription.deploy_inspect"
 	ActionSubDeployApply     = "subscription.deploy_apply"
 	ActionSubDeployRollback  = "subscription.deploy_rollback"
+	ActionSubDeployUninstall = "subscription.deploy_uninstall"
 
 	defaultSSHPort       = 22
 	defaultSubRemotePort = 9444
@@ -505,6 +506,11 @@ func (s *Service) DeletePublishTarget(ctx context.Context, actor Actor, id int64
 		return err
 	}
 	defer unlock()
+	return s.removePublishTarget(ctx, actor, id)
+}
+
+// removePublishTarget 删除管理端保存的订阅端配置并记入审计日志，调用方负责互斥。
+func (s *Service) removePublishTarget(ctx context.Context, actor Actor, id int64) error {
 	return s.Store.InTx(ctx, func(q *dbq.Queries) error {
 		targets, err := loadPublishTargets(ctx, q)
 		if err != nil {

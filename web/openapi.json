@@ -4238,6 +4238,19 @@
         ],
         "type": "object"
       },
+      "SubUninstallRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "delete_target": {
+            "description": "卸载成功后删除管理端保存的这个订阅端",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "delete_target"
+        ],
+        "type": "object"
+      },
       "SubscriptionLinks": {
         "additionalProperties": false,
         "properties": {
@@ -9631,6 +9644,63 @@
           }
         ],
         "summary": "通过 SSH 回滚订阅端（后台作业）",
+        "tags": [
+          "subscription"
+        ]
+      }
+    },
+    "/api/sub-publish/targets/{id}/deploy/uninstall": {
+      "post": {
+        "operationId": "uninstallSubscriptionTarget",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubUninstallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskIDOutputBody"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "通过 SSH 卸载订阅端并删除其数据（后台作业）",
         "tags": [
           "subscription"
         ]

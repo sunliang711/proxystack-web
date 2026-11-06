@@ -53,6 +53,7 @@ type Deployer interface {
 	Deploy(ctx context.Context, identity Identity, target Target, request DeployRequest) (*DeployResult, error)
 	ConfigurePublishToken(ctx context.Context, identity Identity, target Target, source, secret string) error
 	RollbackDeploy(ctx context.Context, identity Identity, target Target) (*DeployResult, error)
+	UninstallDeploy(ctx context.Context, identity Identity, target Target, binary []byte) (*DeployResult, error)
 }
 
 // InspectDeploy verifies platform and non-interactive privilege escalation. An uninstalled node is a valid result.
@@ -196,6 +197,45 @@ func (SSHClient) RollbackDeploy(ctx context.Context, identity Identity, target T
 	var result DeployResult
 	if err := json.Unmarshal(output, &result); err != nil {
 		return nil, errors.New("remote subscription rollback returned an invalid response")
+	}
+	return &result, nil
+}
+
+// UninstallDeploy removes the subscription service together with its configuration, imported bundles and service account.
+// With a nil binary the installed program runs the removal; otherwise binary is uploaded to a temporary path first, which
+// covers installations whose program was already removed.
+func (SSHClient) UninstallDeploy(ctx context.Context, identity Identity, target Target, binary []byte) (*DeployResult, error) {
+	stages := []Stage{}
+	connection, err := connect(ctx, identity, target, &stages)
+	if err != nil {
+		return nil, err
+	}
+	defer connection.Close()
+	program := remoteSubDir + "/bin/proxystack-web"
+	if binary != nil {
+		temporary, err := remoteTemporaryPath()
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_, _ = runSSHCommand(cleanupCtx, connection.client, "rm -f "+temporary, nil)
+		}()
+		upload := "umask 077 && cat > " + temporary + " && chmod 0700 " + temporary
+		if _, err := runSSHCommand(ctx, connection.client, upload, bytes.NewReader(binary)); err != nil {
+			return nil, errors.New("upload subscription uninstall binary failed")
+		}
+		program = temporary
+	}
+	command := program + " sub --dir " + remoteSubDir + " deploy uninstall --purge --json"
+	output, err := runSSHCommand(ctx, connection.client, privilegedCommand(target, command), nil)
+	if err != nil {
+		return nil, fmt.Errorf("remote subscription uninstall failed: %w", err)
+	}
+	var result DeployResult
+	if err := json.Unmarshal(output, &result); err != nil {
+		return nil, errors.New("remote subscription uninstall returned an invalid response")
 	}
 	return &result, nil
 }

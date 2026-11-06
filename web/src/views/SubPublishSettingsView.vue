@@ -2,7 +2,7 @@
 import { computed, h, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  NAlert, NButton, NCard, NDataTable, NDescriptions, NDescriptionsItem, NDrawer, NDrawerContent, NDropdown, NForm, NFormItem,
+  NAlert, NButton, NCard, NCheckbox, NDataTable, NDescriptions, NDescriptionsItem, NDrawer, NDrawerContent, NDropdown, NForm, NFormItem,
   NIcon, NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpace, NStep, NSteps, NSwitch, NTag, NText, useDialog, useMessage,
   type DataTableColumns, type DropdownOption,
 } from 'naive-ui'
@@ -198,7 +198,7 @@ async function remove(target: PublishTarget) {
     return
   }
   const filename = `proxystack-web-sub-cleanup-${target.name.replace(/[^A-Za-z0-9._-]+/g, '-') || 'target'}.md`
-  saveBlob(new Blob([cleanupGuide(target, sharedSSHTarget)], { type: 'text/markdown;charset=utf-8' }), filename)
+  saveBlob(new Blob([cleanupGuide(target, sharedSSHTarget, false)], { type: 'text/markdown;charset=utf-8' }), filename)
   message.success('订阅端已删除，清理说明已下载')
   await load()
 }
@@ -218,7 +218,8 @@ function viewSetup(target: PublishTarget) {
   provisioning.value = { target, secret: '' }
 }
 
-function cleanupGuide(target: PublishTarget, sharedSSHTarget: boolean) {
+/** serviceRemoved 表示订阅服务由管理端的卸载任务删除，清理说明只需处理 SSH 相关配置。 */
+function cleanupGuide(target: PublishTarget, sharedSSHTarget: boolean, serviceRemoved: boolean) {
   const publicKeyEntry = authorizedKeys(target)
   const sshCleanup = sharedSSHTarget
     ? `检测到同一 SSH 主机、端口和用户仍被其他订阅端目标使用。请不要删除以下共享 SSH 配置：\n\n- /etc/ssh/sshd_config.d/proxystack-web-sub.conf\n- /etc/sudoers.d/proxystack-web-sub-deploy\n- SSH 用户 ${target.ssh_user} 的其他公钥条目\n\n确认没有其他目标使用该 SSH 用户后，再按下面步骤清理。`
@@ -237,11 +238,9 @@ function cleanupGuide(target: PublishTarget, sharedSSHTarget: boolean) {
 
 ## 一、卸载订阅服务
 
-保留配置和订阅数据：
-
-    sudo /opt/proxystack-web-sub/bin/proxystack-web sub --dir /opt/proxystack-web-sub deploy uninstall
-
-确认同时删除配置、订阅数据和服务账号：
+${serviceRemoved
+    ? '订阅服务、配置、已导入的订阅包和服务账号由管理端的卸载任务删除，请在管理端的任务详情中确认任务成功。任务失败时，在订阅端主机上执行：'
+    : '管理端只删除了这个订阅端的配置，远端的订阅服务仍在运行。卸载订阅服务并删除配置、已导入的订阅包和服务账号：'}
 
     sudo /opt/proxystack-web-sub/bin/proxystack-web sub --dir /opt/proxystack-web-sub deploy uninstall --purge
 
@@ -321,6 +320,52 @@ async function rollbackDeploy(target: PublishTarget) {
   void router.push({ name: 'task-detail', params: { source: 'task', id: data.task_id } })
 }
 
+/** 卸载与删除共用一个确认弹窗：卸载可选成功后删除配置，删除可选同时卸载远端服务。 */
+const removal = ref<{ target: PublishTarget; mode: 'uninstall' | 'delete' } | null>(null)
+const alsoUninstall = ref(false)
+const alsoDelete = ref(false)
+const removalConfirm = ref('')
+const removing = ref(false)
+/** 同一 SSH 主机和端口上的其他订阅端共用同一个安装目录，卸载会同时影响它们。 */
+const sharedHost = (target: PublishTarget) => targets.value.find((candidate) =>
+  candidate.id !== target.id && candidate.ssh_host.toLowerCase() === target.ssh_host.toLowerCase() && candidate.ssh_port === target.ssh_port)
+const removalShared = computed(() => (removal.value ? sharedHost(removal.value.target) : undefined))
+const willUninstall = computed(() => removal.value?.mode === 'uninstall' || alsoUninstall.value)
+const willDelete = computed(() => removal.value?.mode === 'delete' || alsoDelete.value)
+const removalReady = computed(() => !willUninstall.value || (!removalShared.value && removalConfirm.value === removal.value?.target.name))
+function openRemoval(target: PublishTarget, mode: 'uninstall' | 'delete') {
+  alsoUninstall.value = false
+  alsoDelete.value = false
+  removalConfirm.value = ''
+  removal.value = { target, mode }
+}
+async function confirmRemoval() {
+  if (!removal.value || !removalReady.value) return
+  const { target } = removal.value
+  if (!willUninstall.value) {
+    removal.value = null
+    await remove(target)
+    return
+  }
+  removing.value = true
+  const { data, error } = await api.POST('/api/sub-publish/targets/{id}/deploy/uninstall', {
+    params: { path: { id: target.id! } }, body: { delete_target: willDelete.value },
+  })
+  removing.value = false
+  if (error || !data) {
+    message.error(problemMessage(error, '提交卸载任务失败'))
+    return
+  }
+  if (willDelete.value) {
+    const sharedSSHTarget = targets.value.some((candidate) => candidate.id !== target.id && candidate.ssh_host === target.ssh_host && candidate.ssh_port === target.ssh_port && candidate.ssh_user === target.ssh_user)
+    const filename = `proxystack-web-sub-cleanup-${target.name.replace(/[^A-Za-z0-9._-]+/g, '-') || 'target'}.md`
+    saveBlob(new Blob([cleanupGuide(target, sharedSSHTarget, true)], { type: 'text/markdown;charset=utf-8' }), filename)
+  }
+  removal.value = null
+  message.success(`卸载任务 #${data.task_id} 已提交${willDelete.value ? '，成功后自动删除订阅端，SSH 清理说明已下载' : ''}`)
+  void router.push({ name: 'task-detail', params: { source: 'task', id: data.task_id } })
+}
+
 const instructions = ref<PublishTarget | null>(null)
 const authorizedKeys = (target: PublishTarget) =>
   `restrict,port-forwarding,permitopen="127.0.0.1:${target.remote_port}" ${identity.value?.public_key ?? ''} proxystack-web`
@@ -367,6 +412,10 @@ function moreOptions(row: PublishTarget): DropdownOption[] {
     { key: 'setup', label: '完整配置' },
     { key: 'instructions', label: '配置说明' },
     { type: 'divider', key: 'd2' },
+    {
+      key: 'uninstall', label: sharedHost(row) ? '卸载订阅服务（与其他订阅端共用主机）' : '卸载订阅服务',
+      disabled: !!sharedHost(row), props: { style: 'color: var(--ps-danger)' },
+    },
     { key: 'delete', label: '删除订阅端', props: { style: 'color: var(--ps-danger)' } },
   ]
 }
@@ -379,7 +428,8 @@ function onMore(row: PublishTarget, key: string) {
   else if (key === 'rotate-secret') confirmThen('轮换发布 Secret', '管理端将立即改用新 Secret；订阅端更新前在线发布会失败，更新后旧 Secret 才会失效。继续？', () => rotateSecret(row))
   else if (key === 'setup') viewSetup(row)
   else if (key === 'instructions') instructions.value = row
-  else if (key === 'delete') confirmThen(`删除订阅端 ${row.name}？`, '只删除管理端保存的这个订阅端配置，不会卸载远端已部署的订阅端；删除后会下载一份远端清理说明。', () => remove(row), true)
+  else if (key === 'uninstall') openRemoval(row, 'uninstall')
+  else if (key === 'delete') openRemoval(row, 'delete')
 }
 
 function workflowState(row: PublishTarget) {
@@ -550,6 +600,40 @@ function hostKeyCommand(algorithm: string) {
     </NDrawerContent>
   </NDrawer>
 
+  <NModal
+    :show="!!removal" preset="card" :title="removal ? `${removal.mode === 'uninstall' ? '卸载订阅服务' : '删除订阅端'}：${removal.target.name}` : ''"
+    style="width: 560px; max-width: calc(100vw - 32px)" @update:show="(value) => !value && (removal = null)"
+  >
+    <NSpace v-if="removal" vertical :size="12">
+      <NText depth="3">
+        {{ removal.target.ssh_user }}@{{ removal.target.ssh_host }}:{{ removal.target.ssh_port }} ·
+        {{ removal.target.deploy_state ? `${removal.target.deploy_state}${removal.target.current_version ? ` · ${removal.target.current_version}` : ''}` : '部署状态尚未检测' }}
+      </NText>
+      <template v-if="removal.mode === 'delete'">
+        <NText>删除管理端保存的这个订阅端配置，删除后会下载一份远端清理说明。</NText>
+        <NCheckbox v-model:checked="alsoUninstall" :disabled="!!removalShared">同时卸载远端订阅服务</NCheckbox>
+      </template>
+      <NAlert v-if="removalShared" type="warning" :bordered="false">
+        订阅端 {{ removalShared.name }} 位于同一台主机，共用同一个安装目录，不能在面板中卸载。请先删除其中一个订阅端，或在主机上手动卸载。
+      </NAlert>
+      <NAlert v-else-if="willUninstall" type="error" :bordered="false" title="卸载将通过 SSH 删除">
+        订阅服务和程序、配置、已导入的订阅包以及服务账号 proxystack-web-sub，数据不保留；重新部署后再发布一次订阅包即可恢复。
+        SSH 公钥、sudoers 规则和 sshd 限制配置留在主机上，需要手动清理。卸载在后台任务中执行，失败时保留订阅端配置，可以重试。
+      </NAlert>
+      <NCheckbox v-if="removal.mode === 'uninstall' && !removalShared" v-model:checked="alsoDelete">卸载成功后删除此订阅端配置，并下载 SSH 清理说明</NCheckbox>
+      <NFormItem v-if="willUninstall && !removalShared" :label="`输入订阅端名称「${removal.target.name}」确认卸载`" :show-feedback="false">
+        <NInput v-model:value="removalConfirm" :placeholder="removal.target.name" @keyup.enter="confirmRemoval" />
+      </NFormItem>
+    </NSpace>
+    <template #footer>
+      <NSpace justify="end">
+        <NButton @click="removal = null">取消</NButton>
+        <NButton type="error" :disabled="!removalReady" :loading="removing" @click="confirmRemoval">
+          {{ willUninstall ? (willDelete ? '卸载并删除' : '卸载') : '删除' }}
+        </NButton>
+      </NSpace>
+    </template>
+  </NModal>
   <NModal :show="!!provisioning" preset="card" title="订阅端完整配置（不含 Secret）" style="width: 820px; max-width: calc(100vw - 32px)" @update:show="(value) => !value && (provisioning = null)">
     <NSpace v-if="provisioning" vertical :size="16">
       <NAlert type="info" :bordered="false">

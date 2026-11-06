@@ -148,30 +148,10 @@ func (s *Service) DeployPublishTarget(ctx context.Context, actor Actor, id int64
 			logf("Subscription server unchanged: %s", status.Version)
 			return nil
 		}
-		asset, digest, err := deps.SelectAsset(deps.Self, release, "linux", status.Arch, "")
+		binary, expected, err := downloadSubBinary(ctx, logf, fetcher, release, status.Arch)
 		if err != nil {
 			return err
 		}
-		if digest == nil {
-			return fmt.Errorf("release %s has no SHA-256 file for %s", release.Tag, asset.Name)
-		}
-		logf("Downloading %s for linux/%s", release.Tag, status.Arch)
-		binary, err := fetcher.Download(ctx, asset.URL, nil)
-		if err != nil {
-			return err
-		}
-		digestData, err := fetcher.Get(ctx, digest.URL)
-		if err != nil {
-			return err
-		}
-		expected, err := deps.ParseDigest(string(digestData))
-		if err != nil {
-			return err
-		}
-		if err := deps.Verify(binary, expected); err != nil {
-			return err
-		}
-		logf("SHA-256 verification succeeded")
 		_, publicKey, err := s.SubscriptionIdentity(ctx)
 		if err != nil {
 			return err
@@ -238,6 +218,164 @@ func (s *Service) RollbackPublishTarget(ctx context.Context, actor Actor, id int
 			return audit.Write(ctx, q, s.Now(), audit.Entry{Actor: actor.Name, SourceIP: actor.IP, Action: ActionSubDeployRollback, Object: fmt.Sprint(id), Summary: "回滚订阅端 " + target.Name})
 		})
 		logf("Subscription server rolled back to %s", result.Version)
+		return nil
+	})
+	if err != nil {
+		s.releaseSubDeploy(id)
+		return 0, err
+	}
+	return taskID, nil
+}
+
+// downloadSubBinary downloads the Linux program of release for arch and verifies it against the published SHA-256.
+func downloadSubBinary(ctx context.Context, logf Logf, fetcher *deps.HTTPFetcher, release deps.Release, arch string) ([]byte, string, error) {
+	asset, digest, err := deps.SelectAsset(deps.Self, release, "linux", arch, "")
+	if err != nil {
+		return nil, "", err
+	}
+	if digest == nil {
+		return nil, "", fmt.Errorf("release %s has no SHA-256 file for %s", release.Tag, asset.Name)
+	}
+	logf("Downloading %s for linux/%s", release.Tag, arch)
+	binary, err := fetcher.Download(ctx, asset.URL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	digestData, err := fetcher.Get(ctx, digest.URL)
+	if err != nil {
+		return nil, "", err
+	}
+	expected, err := deps.ParseDigest(string(digestData))
+	if err != nil {
+		return nil, "", err
+	}
+	if err := deps.Verify(binary, expected); err != nil {
+		return nil, "", err
+	}
+	logf("SHA-256 verification succeeded")
+	return binary, expected, nil
+}
+
+// SubUninstallRequest controls whether the target configuration is deleted after a successful uninstall.
+type SubUninstallRequest struct {
+	DeleteTarget bool `json:"delete_target" doc:"卸载成功后删除管理端保存的这个订阅端"`
+}
+
+// sharedSubHost returns another target on the same SSH host and port. Targets on one host share one installation
+// directory, so uninstalling for one of them removes the service for all.
+func sharedSubHost(targets []publishTargetState, target publishTargetState) string {
+	for _, other := range targets {
+		if other.ID != target.ID && strings.EqualFold(other.SSHHost, target.SSHHost) && other.SSHPort == target.SSHPort {
+			return other.Name
+		}
+	}
+	return ""
+}
+
+// UninstallPublishTarget removes the subscription service, its configuration, imported bundles and service account
+// through SSH in a background task. Subscription data is not kept because it can be published again after reinstalling.
+// When the program was already removed, a verified release is uploaded to run the removal. The SSH key, sudoers rule
+// and sshd restriction stay on the host and are cleaned up by hand.
+func (s *Service) UninstallPublishTarget(ctx context.Context, actor Actor, id int64, request SubUninstallRequest) (int64, error) {
+	var targets []publishTargetState
+	if err := s.Store.InTx(ctx, func(q *dbq.Queries) (err error) {
+		targets, err = loadPublishTargets(ctx, q)
+		return err
+	}); err != nil {
+		return 0, err
+	}
+	if err := s.reserveSubDeploy(id); err != nil {
+		return 0, err
+	}
+	identity, target, err := s.publishTargetState(ctx, id)
+	if err != nil {
+		s.releaseSubDeploy(id)
+		return 0, err
+	}
+	if other := sharedSubHost(targets, target); other != "" {
+		s.releaseSubDeploy(id)
+		return 0, &FieldError{Field: "id", Message: fmt.Sprintf("订阅端 %s 与 %s 位于同一台主机，共用同一个安装目录，卸载会同时影响它；请先删除其中一个订阅端，或在主机上手动卸载", target.Name, other)}
+	}
+	taskID, err := s.startTask("subscription-deploy", "卸载订阅端 "+target.Name, actor.Name, func(ctx context.Context, logf Logf) (runErr error) {
+		released := false
+		release := func() {
+			if !released {
+				released = true
+				s.releaseSubDeploy(id)
+			}
+		}
+		defer release()
+		ctx, cancel := context.WithTimeout(ctx, subDeployTimeout)
+		defer cancel()
+		defer func() {
+			if runErr != nil {
+				_ = s.updateDeployTargetState(context.Background(), target, nil, runErr.Error())
+			}
+		}()
+		logf("Inspecting remote platform and sudo access")
+		sshIdentity := subpublish.Identity{Seed: identity.Seed}
+		status, err := s.SubDeployer.InspectDeploy(ctx, sshIdentity, clientTarget(target))
+		if err != nil {
+			return err
+		}
+		logf("Remote platform: %s/%s; deployment state: %s", status.OS, status.Arch, status.State)
+		action := "nothing to remove"
+		switch status.State {
+		case "uninstalled":
+			logf("The subscription server is not installed; nothing to remove")
+		case "installed":
+			logf("Removing the subscription service, configuration, imported bundles and service account")
+			result, err := s.SubDeployer.UninstallDeploy(ctx, sshIdentity, clientTarget(target), nil)
+			if err != nil {
+				return err
+			}
+			action = result.Action
+		default:
+			logf("The program was already removed but data remains; downloading a release to remove it")
+			doc, err := s.LoadConfig(ctx)
+			if err != nil {
+				return err
+			}
+			fetcher, proxy, err := s.fetcher(ctx, doc, doc.Settings.DownloadProxy)
+			if err != nil {
+				return err
+			}
+			defer fetcher.CloseIdleConnections()
+			logf("Download proxy: %s", proxy.Redacted())
+			found, err := deps.FindRelease(ctx, fetcher, deps.Self, "")
+			if err != nil {
+				return err
+			}
+			binary, _, err := downloadSubBinary(ctx, logf, fetcher, found, status.Arch)
+			if err != nil {
+				return err
+			}
+			logf("Removing the remaining configuration, imported bundles and service account")
+			result, err := s.SubDeployer.UninstallDeploy(ctx, sshIdentity, clientTarget(target), binary)
+			if err != nil {
+				return err
+			}
+			action = result.Action
+		}
+		removed := &subpublish.DeployStatus{OS: status.OS, Arch: status.Arch, Sudo: status.Sudo, State: "uninstalled"}
+		if err := s.updateDeployTargetState(ctx, target, removed, ""); err != nil {
+			return err
+		}
+		_ = s.Store.InTx(ctx, func(q *dbq.Queries) error {
+			return audit.Write(ctx, q, s.Now(), audit.Entry{
+				Actor: actor.Name, SourceIP: actor.IP, Action: ActionSubDeployUninstall, Object: fmt.Sprint(id),
+				Summary: fmt.Sprintf("卸载订阅端 %s：%s", target.Name, action),
+			})
+		})
+		logf("Subscription server removed (%s)", action)
+		if request.DeleteTarget {
+			release()
+			if err := s.DeletePublishTarget(ctx, actor, id); err != nil {
+				return fmt.Errorf("the subscription server was removed, but deleting the target failed: %w", err)
+			}
+			logf("Deleted the subscription target %s from the panel", target.Name)
+		}
+		logf("The SSH key, sudoers rule and sshd restriction remain on the host; remove them by hand when no other target uses them")
 		return nil
 	})
 	if err != nil {

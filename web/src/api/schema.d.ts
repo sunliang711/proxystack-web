@@ -1254,6 +1254,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sub-publish/targets/{id}/deploy/uninstall": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 通过 SSH 卸载订阅端并删除其数据（后台作业） */
+        post: operations["uninstallSubscriptionTarget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sub-publish/targets/{id}/rotate-secret": {
         parameters: {
             query?: never;
@@ -2888,6 +2905,10 @@ export interface components {
         };
         SubDeployRequest: {
             version: string;
+        };
+        SubUninstallRequest: {
+            /** @description 卸载成功后删除管理端保存的这个订阅端 */
+            delete_target: boolean;
         };
         SubscriptionLinks: {
             base_url: string;
@@ -5911,6 +5932,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskIDOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    uninstallSubscriptionTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubUninstallRequest"];
+            };
+        };
         responses: {
             /** @description Accepted */
             202: {

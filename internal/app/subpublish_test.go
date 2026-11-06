@@ -42,6 +42,7 @@ type publishClientFake struct {
 type deployClientFake struct {
 	inspect       *subpublish.DeployStatus
 	rollback      *subpublish.DeployResult
+	uninstalls    []bool
 	err           error
 	rollbackStart chan struct{}
 	rollbackDone  chan struct{}
@@ -68,6 +69,12 @@ func (f *deployClientFake) RollbackDeploy(context.Context, subpublish.Identity, 
 		<-f.rollbackDone
 	}
 	return f.rollback, f.err
+}
+
+// UninstallDeploy 记录每次卸载是否上传了临时程序。
+func (f *deployClientFake) UninstallDeploy(_ context.Context, _ subpublish.Identity, _ subpublish.Target, binary []byte) (*subpublish.DeployResult, error) {
+	f.uninstalls = append(f.uninstalls, binary != nil)
+	return &subpublish.DeployResult{Action: "purged"}, f.err
 }
 
 func (f *publishClientFake) Probe(ctx context.Context, _ subpublish.Identity, _ subpublish.Target) (*subpublish.ProbeResult, error) {
@@ -207,6 +214,66 @@ func TestSubscriptionDeploymentInspectAndRollbackUpdateTargetState(t *testing.T)
 	require.NoError(t, err)
 	require.Equal(t, "v0.1.0", targets[0].CurrentVersion)
 	require.Equal(t, "v0.2.0", targets[0].PreviousVersion)
+}
+
+// 卸载删除远端服务及其数据，成功后可选删除管理端配置；同一主机上还有其他订阅端时拒绝卸载。
+func TestSubscriptionUninstallRemovesServiceAndOptionallyTarget(t *testing.T) {
+	ctx := context.Background()
+	h := newRuntimeHarness(t)
+	_, err := h.svc.GenerateSSHPublishIdentity(ctx, h.actor)
+	require.NoError(t, err)
+	primary, err := h.svc.CreatePublishTarget(ctx, h.actor, publishTargetInput("primary", "sub-a.example.com"))
+	require.NoError(t, err)
+	secondary, err := h.svc.CreatePublishTarget(ctx, h.actor, publishTargetInput("secondary", "sub-b.example.com"))
+	require.NoError(t, err)
+
+	fake := &deployClientFake{inspect: &subpublish.DeployStatus{OS: "linux", Arch: "amd64", Sudo: true, State: "installed", Version: "v0.2.0", ServiceActive: true}}
+	h.svc.SubDeployer = fake
+	taskID, err := h.svc.UninstallPublishTarget(ctx, h.actor, primary.Target.ID, app.SubUninstallRequest{})
+	require.NoError(t, err)
+	require.Equal(t, app.TaskSucceeded, h.waitTask(t, taskID).Status)
+	require.Equal(t, []bool{false}, fake.uninstalls, "已安装时用远端程序卸载，不上传临时程序")
+	targets, err := h.svc.ListPublishTargets(ctx)
+	require.NoError(t, err)
+	require.Len(t, targets, 2)
+	for _, target := range targets {
+		if target.ID == primary.Target.ID {
+			require.Equal(t, "uninstalled", target.DeployState)
+			require.Empty(t, target.CurrentVersion)
+		}
+	}
+	auditPage, err := h.svc.ListAudit(ctx, app.ActionSubDeployUninstall, h.actor.Name, 10, 0)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), auditPage.Total)
+
+	fake.inspect = &subpublish.DeployStatus{OS: "linux", Arch: "amd64", Sudo: true, State: "uninstalled"}
+	taskID, err = h.svc.UninstallPublishTarget(ctx, h.actor, secondary.Target.ID, app.SubUninstallRequest{DeleteTarget: true})
+	require.NoError(t, err)
+	require.Equal(t, app.TaskSucceeded, h.waitTask(t, taskID).Status)
+	require.Len(t, fake.uninstalls, 1, "未安装时不执行远端卸载")
+	targets, err = h.svc.ListPublishTargets(ctx)
+	require.NoError(t, err)
+	require.Len(t, targets, 1)
+	require.Equal(t, primary.Target.ID, targets[0].ID)
+
+	fake.err = errors.New("remote subscription uninstall failed: refusing")
+	fake.inspect = &subpublish.DeployStatus{OS: "linux", Arch: "amd64", Sudo: true, State: "installed"}
+	taskID, err = h.svc.UninstallPublishTarget(ctx, h.actor, primary.Target.ID, app.SubUninstallRequest{DeleteTarget: true})
+	require.NoError(t, err)
+	require.Equal(t, app.TaskFailed, h.waitTask(t, taskID).Status)
+	targets, err = h.svc.ListPublishTargets(ctx)
+	require.NoError(t, err)
+	require.Len(t, targets, 1, "卸载失败时保留订阅端配置")
+	require.NotEmpty(t, targets[0].LastDeployError)
+
+	shared := publishTargetInput("shared", "SUB-A.example.com")
+	shared.RemotePort = 9445
+	_, err = h.svc.CreatePublishTarget(ctx, h.actor, shared)
+	require.NoError(t, err)
+	_, err = h.svc.UninstallPublishTarget(ctx, h.actor, primary.Target.ID, app.SubUninstallRequest{})
+	var field *app.FieldError
+	require.True(t, errors.As(err, &field))
+	require.Contains(t, field.Message, "同一台主机")
 }
 
 func TestSubscriptionDeploymentSkipsInstalledLatestRelease(t *testing.T) {

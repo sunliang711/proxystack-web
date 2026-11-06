@@ -57,6 +57,10 @@ func (apiDeployFake) RollbackDeploy(context.Context, subpublish.Identity, subpub
 	panic("unexpected rollback call")
 }
 
+func (apiDeployFake) UninstallDeploy(context.Context, subpublish.Identity, subpublish.Target, []byte) (*subpublish.DeployResult, error) {
+	panic("unexpected uninstall call")
+}
+
 func TestSSHPublishSecretsStayMaskedAndSetupCanBeViewed(t *testing.T) {
 	h, password := newHarness(t)
 	h.login("admin", password)

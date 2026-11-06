@@ -115,6 +115,8 @@ curl -fsSL https://raw.githubusercontent.com/sunliang711/proxystack-web/refs/hea
 
 卸载停止并删除服务、unit 文件、polkit 规则和命令链接，保留管理端的数据与备份目录，以及订阅端的配置和已导入的订阅包。附加 `--purge` 时删除整个安装目录和服务账号。
 
+经 SSH 部署的订阅端也可以在管理端「SSH 发布与部署」页面卸载：卸载在后台任务中删除订阅服务、程序、配置、已导入的订阅包和服务账号，不保留数据，可以选择成功后删除管理端的订阅端配置。同一 SSH 主机和端口上有多个订阅端时，面板拒绝卸载。SSH 公钥、sudoers 规则和 sshd 限制配置需要手动清理。
+
 ## 开发
 
 开发环境需要 Go 1.26 和 Node.js 24，生成接口代码还需要 sqlc。
