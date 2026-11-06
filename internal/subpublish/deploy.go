@@ -29,6 +29,15 @@ type DeployStatus struct {
 	ServiceEnabled  bool   `json:"service_enabled"`
 }
 
+// Logf receives progress lines of long remote operations. A nil Logf discards them.
+type Logf func(format string, args ...any)
+
+func (l Logf) log(format string, args ...any) {
+	if l != nil {
+		l(format, args...)
+	}
+}
+
 // DeployRequest contains the verified release artifact and first-install settings.
 type DeployRequest struct {
 	Binary    []byte
@@ -37,6 +46,7 @@ type DeployRequest struct {
 	PublicKey string
 	Port      int
 	Secret    string
+	Logf      Logf
 }
 
 // DeployResult is returned by the remote sub deploy command.
@@ -53,7 +63,7 @@ type Deployer interface {
 	Deploy(ctx context.Context, identity Identity, target Target, request DeployRequest) (*DeployResult, error)
 	ConfigurePublishToken(ctx context.Context, identity Identity, target Target, source, secret string) error
 	RollbackDeploy(ctx context.Context, identity Identity, target Target) (*DeployResult, error)
-	UninstallDeploy(ctx context.Context, identity Identity, target Target, binary []byte) (*DeployResult, error)
+	UninstallDeploy(ctx context.Context, identity Identity, target Target, binary []byte, logf Logf) (*DeployResult, error)
 }
 
 // InspectDeploy verifies platform and non-interactive privilege escalation. An uninstalled node is a valid result.
@@ -125,8 +135,8 @@ func (SSHClient) InspectDeploy(ctx context.Context, identity Identity, target Ta
 
 // Deploy uploads a verified binary and invokes the same sub deploy apply command used for offline deployment.
 func (SSHClient) Deploy(ctx context.Context, identity Identity, target Target, request DeployRequest) (*DeployResult, error) {
-	stages := []Stage{}
-	connection, err := connect(ctx, identity, target, &stages)
+	logf := request.Logf
+	connection, err := connectLogged(ctx, identity, target, logf)
 	if err != nil {
 		return nil, err
 	}
@@ -140,24 +150,110 @@ func (SSHClient) Deploy(ctx context.Context, identity Identity, target Target, r
 		defer cancel()
 		_, _ = runSSHCommand(cleanupCtx, connection.client, "rm -f "+temporary, nil)
 	}()
-	upload := "umask 077 && cat > " + temporary + " && chmod 0700 " + temporary
-	if _, err := runSSHCommand(ctx, connection.client, upload, bytes.NewReader(request.Binary)); err != nil {
+	if err := uploadBinary(ctx, connection.client, temporary, request.Binary, logf); err != nil {
 		return nil, errors.New("upload subscription deployment binary failed")
 	}
 	command := fmt.Sprintf("%s sub --dir %s deploy apply --json --sha256 %s --source %s --public-key %s --listen 127.0.0.1 --port %d",
 		temporary, remoteSubDir, request.SHA256, shellQuote(request.Source), shellQuote(request.PublicKey), request.Port)
+	logf.log("Running the remote installer: verify, install, start the service and wait for its health check")
+	started := time.Now()
 	output, err := runSSHCommand(ctx, connection.client, privilegedCommand(target, command), nil)
 	if err != nil {
-		return nil, fmt.Errorf("remote subscription deployment failed: %w", err)
+		return nil, fmt.Errorf("remote subscription deployment failed after %s: %w", roundDuration(time.Since(started)), err)
 	}
 	var result DeployResult
 	if err := json.Unmarshal(output, &result); err != nil {
 		return nil, errors.New("remote subscription deployment returned an invalid response")
 	}
+	logf.log("Remote installer finished in %s: %s %s", roundDuration(time.Since(started)), result.Action, result.Version)
+	started = time.Now()
 	if err := setPublishToken(ctx, connection.client, target, request.Source, request.Secret); err != nil {
 		return nil, err
 	}
+	logf.log("Publish token configured in %s", roundDuration(time.Since(started)))
 	return &result, nil
+}
+
+// connectLogged opens the SSH connection and reports how long the TCP connection and handshake took.
+func connectLogged(ctx context.Context, identity Identity, target Target, logf Logf) (*sshConnection, error) {
+	logf.log("Connecting to %s@%s over SSH", target.SSHUser, sshAddress(target))
+	started := time.Now()
+	stages := []Stage{}
+	connection, err := connect(ctx, identity, target, &stages)
+	if err != nil {
+		return nil, err
+	}
+	logf.log("SSH connected in %s", roundDuration(time.Since(started)))
+	return connection, nil
+}
+
+// uploadBinary streams binary to path on the remote host and reports progress about every five seconds.
+func uploadBinary(ctx context.Context, client *ssh.Client, path string, binary []byte, logf Logf) error {
+	total := int64(len(binary))
+	logf.log("Uploading %s to the subscription host", formatSize(total))
+	started := time.Now()
+	reader := &progressReader{reader: bytes.NewReader(binary), total: total, started: started, last: started, logf: logf}
+	upload := "umask 077 && cat > " + path + " && chmod 0700 " + path
+	if _, err := runSSHCommand(ctx, client, upload, reader); err != nil {
+		return err
+	}
+	elapsed := time.Since(started)
+	logf.log("Upload finished: %s in %s (%s/s)", formatSize(total), roundDuration(elapsed), formatSize(rate(total, elapsed)))
+	return nil
+}
+
+// progressInterval is how often the upload reports its progress.
+const progressInterval = 5 * time.Second
+
+type progressReader struct {
+	reader        io.Reader
+	total, read   int64
+	started, last time.Time
+	logf          Logf
+}
+
+func (p *progressReader) Read(buffer []byte) (int, error) {
+	n, err := p.reader.Read(buffer)
+	p.read += int64(n)
+	if now := time.Now(); p.read < p.total && now.Sub(p.last) >= progressInterval {
+		p.last = now
+		elapsed := now.Sub(p.started)
+		speed := rate(p.read, elapsed)
+		remaining := "unknown"
+		if speed > 0 {
+			remaining = roundDuration(time.Duration(float64(p.total-p.read) / float64(speed) * float64(time.Second))).String()
+		}
+		p.logf.log("Uploaded %s / %s (%d%%) at %s/s, about %s remaining",
+			formatSize(p.read), formatSize(p.total), p.read*100/p.total, formatSize(speed), remaining)
+	}
+	return n, err
+}
+
+// rate returns bytes per second.
+func rate(bytes int64, elapsed time.Duration) int64 {
+	if elapsed <= 0 {
+		return 0
+	}
+	return int64(float64(bytes) / elapsed.Seconds())
+}
+
+func roundDuration(value time.Duration) time.Duration {
+	if value < 10*time.Second {
+		return value.Round(100 * time.Millisecond)
+	}
+	return value.Round(time.Second)
+}
+
+// formatSize prints a byte count in KB or MB with one decimal.
+func formatSize(bytes int64) string {
+	switch {
+	case bytes >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(bytes)/(1<<20))
+	case bytes >= 1<<10:
+		return fmt.Sprintf("%.1f KB", float64(bytes)/(1<<10))
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
 }
 
 // ConfigurePublishToken writes the publish Secret to an installed subscription server without replacing its binary.
@@ -204,9 +300,8 @@ func (SSHClient) RollbackDeploy(ctx context.Context, identity Identity, target T
 // UninstallDeploy removes the subscription service together with its configuration, imported bundles and service account.
 // With a nil binary the installed program runs the removal; otherwise binary is uploaded to a temporary path first, which
 // covers installations whose program was already removed.
-func (SSHClient) UninstallDeploy(ctx context.Context, identity Identity, target Target, binary []byte) (*DeployResult, error) {
-	stages := []Stage{}
-	connection, err := connect(ctx, identity, target, &stages)
+func (SSHClient) UninstallDeploy(ctx context.Context, identity Identity, target Target, binary []byte, logf Logf) (*DeployResult, error) {
+	connection, err := connectLogged(ctx, identity, target, logf)
 	if err != nil {
 		return nil, err
 	}
@@ -222,13 +317,14 @@ func (SSHClient) UninstallDeploy(ctx context.Context, identity Identity, target 
 			defer cancel()
 			_, _ = runSSHCommand(cleanupCtx, connection.client, "rm -f "+temporary, nil)
 		}()
-		upload := "umask 077 && cat > " + temporary + " && chmod 0700 " + temporary
-		if _, err := runSSHCommand(ctx, connection.client, upload, bytes.NewReader(binary)); err != nil {
+		if err := uploadBinary(ctx, connection.client, temporary, binary, logf); err != nil {
 			return nil, errors.New("upload subscription uninstall binary failed")
 		}
 		program = temporary
 	}
 	command := program + " sub --dir " + remoteSubDir + " deploy uninstall --purge --json"
+	logf.log("Running the remote uninstaller")
+	started := time.Now()
 	output, err := runSSHCommand(ctx, connection.client, privilegedCommand(target, command), nil)
 	if err != nil {
 		return nil, fmt.Errorf("remote subscription uninstall failed: %w", err)
@@ -237,6 +333,7 @@ func (SSHClient) UninstallDeploy(ctx context.Context, identity Identity, target 
 	if err := json.Unmarshal(output, &result); err != nil {
 		return nil, errors.New("remote subscription uninstall returned an invalid response")
 	}
+	logf.log("Remote uninstaller finished in %s", roundDuration(time.Since(started)))
 	return &result, nil
 }
 

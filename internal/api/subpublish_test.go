@@ -57,7 +57,7 @@ func (apiDeployFake) RollbackDeploy(context.Context, subpublish.Identity, subpub
 	panic("unexpected rollback call")
 }
 
-func (apiDeployFake) UninstallDeploy(context.Context, subpublish.Identity, subpublish.Target, []byte) (*subpublish.DeployResult, error) {
+func (apiDeployFake) UninstallDeploy(context.Context, subpublish.Identity, subpublish.Target, []byte, subpublish.Logf) (*subpublish.DeployResult, error) {
 	panic("unexpected uninstall call")
 }
 

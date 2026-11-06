@@ -72,7 +72,7 @@ func (f *deployClientFake) RollbackDeploy(context.Context, subpublish.Identity, 
 }
 
 // UninstallDeploy 记录每次卸载是否上传了临时程序。
-func (f *deployClientFake) UninstallDeploy(_ context.Context, _ subpublish.Identity, _ subpublish.Target, binary []byte) (*subpublish.DeployResult, error) {
+func (f *deployClientFake) UninstallDeploy(_ context.Context, _ subpublish.Identity, _ subpublish.Target, binary []byte, _ subpublish.Logf) (*subpublish.DeployResult, error) {
 	f.uninstalls = append(f.uninstalls, binary != nil)
 	return &subpublish.DeployResult{Action: "purged"}, f.err
 }

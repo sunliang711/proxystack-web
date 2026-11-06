@@ -156,9 +156,9 @@ func (s *Service) DeployPublishTarget(ctx context.Context, actor Actor, id int64
 		if err != nil {
 			return err
 		}
-		logf("Uploading and applying the subscription server binary")
 		result, err := s.SubDeployer.Deploy(ctx, subpublish.Identity{Seed: identity.Seed}, clientTarget(target), subpublish.DeployRequest{
 			Binary: binary, SHA256: expected, Source: target.Source, PublicKey: publicKey, Port: target.RemotePort, Secret: target.Secret,
+			Logf: subpublish.Logf(logf),
 		})
 		if err != nil {
 			return err
@@ -237,10 +237,13 @@ func downloadSubBinary(ctx context.Context, logf Logf, fetcher *deps.HTTPFetcher
 		return nil, "", fmt.Errorf("release %s has no SHA-256 file for %s", release.Tag, asset.Name)
 	}
 	logf("Downloading %s for linux/%s", release.Tag, arch)
+	started := time.Now()
 	binary, err := fetcher.Download(ctx, asset.URL, nil)
 	if err != nil {
 		return nil, "", err
 	}
+	elapsed := time.Since(started).Round(100 * time.Millisecond)
+	logf("Downloaded %.1f MB in %s", float64(len(binary))/(1<<20), elapsed)
 	digestData, err := fetcher.Get(ctx, digest.URL)
 	if err != nil {
 		return nil, "", err
@@ -325,7 +328,7 @@ func (s *Service) UninstallPublishTarget(ctx context.Context, actor Actor, id in
 			logf("The subscription server is not installed; nothing to remove")
 		case "installed":
 			logf("Removing the subscription service, configuration, imported bundles and service account")
-			result, err := s.SubDeployer.UninstallDeploy(ctx, sshIdentity, clientTarget(target), nil)
+			result, err := s.SubDeployer.UninstallDeploy(ctx, sshIdentity, clientTarget(target), nil, subpublish.Logf(logf))
 			if err != nil {
 				return err
 			}
@@ -351,7 +354,7 @@ func (s *Service) UninstallPublishTarget(ctx context.Context, actor Actor, id in
 				return err
 			}
 			logf("Removing the remaining configuration, imported bundles and service account")
-			result, err := s.SubDeployer.UninstallDeploy(ctx, sshIdentity, clientTarget(target), binary)
+			result, err := s.SubDeployer.UninstallDeploy(ctx, sshIdentity, clientTarget(target), binary, subpublish.Logf(logf))
 			if err != nil {
 				return err
 			}
