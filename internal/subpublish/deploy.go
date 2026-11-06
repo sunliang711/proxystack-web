@@ -2,6 +2,7 @@ package subpublish
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -27,6 +28,8 @@ type DeployStatus struct {
 	PreviousVersion string `json:"previous_version,omitempty"`
 	ServiceActive   bool   `json:"service_active"`
 	ServiceEnabled  bool   `json:"service_enabled"`
+	// Gzip 表示远端有 gzip 命令，部署时压缩上传程序。
+	Gzip bool `json:"gzip"`
 }
 
 // Logf receives progress lines of long remote operations. A nil Logf discards them.
@@ -93,6 +96,9 @@ func (SSHClient) InspectDeploy(ctx context.Context, identity Identity, target Ta
 		return nil, errors.New("SSH user does not support non-interactive sudo")
 	}
 	status := &DeployStatus{OS: "linux", Arch: arch, Sudo: true, State: "uninstalled"}
+	if status.Gzip, err = remoteHasGzip(ctx, connection.client); err != nil {
+		return nil, fmt.Errorf("detect remote gzip: %w", err)
+	}
 	binary := remoteSubDir + "/bin/proxystack-web"
 	installed, err := runSSHTest(ctx, connection.client, privilegedCommand(target, "/usr/bin/test -x "+binary))
 	if err != nil {
@@ -187,14 +193,60 @@ func connectLogged(ctx context.Context, identity Identity, target Target, logf L
 	return connection, nil
 }
 
-// uploadBinary streams binary to path on the remote host and reports progress about every five seconds.
+// gzipInstallHint is logged when the remote host lacks gzip.
+const gzipInstallHint = "gzip is not available on the subscription host, so the program is uploaded uncompressed. " +
+	"Installing gzip shortens later uploads to about half: apt install gzip (Debian/Ubuntu) or dnf install gzip (RHEL family)"
+
+// remoteHasGzip reports whether the SSH user can run gzip on the remote host.
+func remoteHasGzip(ctx context.Context, client *ssh.Client) (bool, error) {
+	return runSSHTest(ctx, client, "command -v gzip >/dev/null 2>&1")
+}
+
+// uploadPayload returns the bytes to send and the remote command that writes them to path. With gzip the program is
+// compressed locally and decompressed on the remote host; the remote installer still verifies the SHA-256 of the result.
+func uploadPayload(path string, binary []byte, compress bool) ([]byte, string, error) {
+	write := "cat > " + path
+	payload := binary
+	if compress {
+		var buffer bytes.Buffer
+		writer, err := gzip.NewWriterLevel(&buffer, gzip.DefaultCompression)
+		if err != nil {
+			return nil, "", err
+		}
+		if _, err := writer.Write(binary); err != nil {
+			return nil, "", err
+		}
+		if err := writer.Close(); err != nil {
+			return nil, "", err
+		}
+		payload, write = buffer.Bytes(), "gzip -dc > "+path
+	}
+	return payload, "umask 077 && " + write + " && chmod 0700 " + path, nil
+}
+
+// uploadBinary writes binary to path on the remote host, compressed when the host has gzip, and reports progress
+// about every five seconds.
 func uploadBinary(ctx context.Context, client *ssh.Client, path string, binary []byte, logf Logf) error {
-	total := int64(len(binary))
-	logf.log("Uploading %s to the subscription host", formatSize(total))
+	compress, err := remoteHasGzip(ctx, client)
+	if err != nil {
+		return err
+	}
 	started := time.Now()
-	reader := &progressReader{reader: bytes.NewReader(binary), total: total, started: started, last: started, logf: logf}
-	upload := "umask 077 && cat > " + path + " && chmod 0700 " + path
-	if _, err := runSSHCommand(ctx, client, upload, reader); err != nil {
+	payload, command, err := uploadPayload(path, binary, compress)
+	if err != nil {
+		return err
+	}
+	total := int64(len(payload))
+	if compress {
+		logf.log("Compressed the program with gzip: %s -> %s (%d%%) in %s",
+			formatSize(int64(len(binary))), formatSize(total), total*100/max(int64(len(binary)), 1), roundDuration(time.Since(started)))
+	} else {
+		logf.log("%s", gzipInstallHint)
+	}
+	logf.log("Uploading %s to the subscription host", formatSize(total))
+	started = time.Now()
+	reader := &progressReader{reader: bytes.NewReader(payload), total: total, started: started, last: started, logf: logf}
+	if _, err := runSSHCommand(ctx, client, command, reader); err != nil {
 		return err
 	}
 	elapsed := time.Since(started)

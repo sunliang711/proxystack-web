@@ -291,6 +291,9 @@ async function inspectDeploy(target: PublishTarget) {
     return
   }
   message.success(`部署环境正常：${data.os}/${data.arch}，状态 ${data.state}`)
+  if (!data.gzip) {
+    message.warning('订阅端没有 gzip 命令，部署时将不压缩上传程序。安装 gzip 可把上传量减少约六成：apt install gzip（Debian/Ubuntu）或 dnf install gzip（RHEL 系）', { duration: 12000, closable: true })
+  }
   await load()
 }
 

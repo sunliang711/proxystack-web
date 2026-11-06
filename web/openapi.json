@@ -719,6 +719,9 @@
           "arch": {
             "type": "string"
           },
+          "gzip": {
+            "type": "boolean"
+          },
           "os": {
             "type": "string"
           },
@@ -752,7 +755,8 @@
           "sudo",
           "state",
           "service_active",
-          "service_enabled"
+          "service_enabled",
+          "gzip"
         ],
         "type": "object"
       },

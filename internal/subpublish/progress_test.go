@@ -2,6 +2,7 @@ package subpublish
 
 import (
 	"bytes"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"testing"
@@ -39,4 +40,24 @@ func TestProgressReaderReportsPeriodically(t *testing.T) {
 	require.Equal(t, 2*time.Minute+13*time.Second, roundDuration(2*time.Minute+13*time.Second+400*time.Millisecond))
 	var nilLogf Logf
 	nilLogf.log("discarded %d", 1)
+}
+
+// 远端有 gzip 时压缩上传并在远端解压，没有时原样上传；两种方式写出的文件内容相同。
+func TestUploadPayloadCompressesWhenGzipAvailable(t *testing.T) {
+	binary := bytes.Repeat([]byte("proxystack-web binary "), 50000)
+	payload, command, err := uploadPayload("/tmp/proxystack-web-deploy-x", binary, true)
+	require.NoError(t, err)
+	require.Equal(t, "umask 077 && gzip -dc > /tmp/proxystack-web-deploy-x && chmod 0700 /tmp/proxystack-web-deploy-x", command)
+	require.Less(t, len(payload), len(binary)/10)
+	reader, err := gzip.NewReader(bytes.NewReader(payload))
+	require.NoError(t, err)
+	restored, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	require.Equal(t, binary, restored)
+
+	payload, command, err = uploadPayload("/tmp/proxystack-web-deploy-x", binary, false)
+	require.NoError(t, err)
+	require.Equal(t, "umask 077 && cat > /tmp/proxystack-web-deploy-x && chmod 0700 /tmp/proxystack-web-deploy-x", command)
+	require.Equal(t, binary, payload)
+	require.Contains(t, gzipInstallHint, "apt install gzip")
 }

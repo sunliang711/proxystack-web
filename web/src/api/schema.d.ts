@@ -1951,6 +1951,7 @@ export interface components {
         };
         DeployStatus: {
             arch: string;
+            gzip: boolean;
             os: string;
             previous_version?: string;
             service_active: boolean;
