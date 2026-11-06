@@ -11,7 +11,10 @@ import EntityLink from '../../components/EntityLink.vue'
 import GapNotice from './GapNotice.vue'
 import { bucketLabels, statsSeries } from '../../composables/useTrafficTrend'
 import { formatBytes, formatRate, formatTime } from '../../util/format'
-import { coarserLevel, defaultTrafficRange, trafficBounds, trafficRangeLabel, type TrafficLevel, type TrafficRange } from '../../util/traffic-range'
+import {
+  bucketCount, coarserLevel, convertRange, defaultTrafficRange, matchPreset, presetRange, rangeInFuture, shiftRange, trafficBounds, trafficPresets, trafficRangeLabel,
+  type TrafficLevel, type TrafficPreset, type TrafficRange,
+} from '../../util/traffic-range'
 import { chartAreas, compareChange, totalOf } from '../../util/traffic-stats'
 
 type Row = Schemas['TrafficStatsRow']
@@ -41,20 +44,37 @@ const pickerType = computed(() => ({ hour: 'datetimerange', day: 'daterange', mo
 const bounds = computed(() => trafficBounds(level.value, range.value, props.timezone))
 const rangeLabel = computed(() => trafficRangeLabel(bounds.value, props.timezone))
 
-/** 切换到更粗的粒度查看同一时间段时保留所选范围，其他情况切换粒度后回到该粒度的默认范围。 */
-let keepRange = false
-watch(level, (next) => {
-  if (keepRange) {
-    keepRange = false
+/** 服务端单次查询的时间桶上限。 */
+const MAX_BUCKETS = 13000
+const unitName: Record<TrafficLevel, string> = { hour: '小时', day: '天', month: '个月', year: '年' }
+const activePreset = computed(() => matchPreset(level.value, range.value, props.timezone))
+const spanLabel = computed(() => `共 ${bucketCount(level.value, range.value)} ${unitName[level.value]}`)
+const canShiftForward = computed(() => !rangeInFuture(level.value, shiftRange(level.value, range.value, 1), props.timezone))
+
+/** 快捷时间段同时设定粒度和范围，此时不再按粒度换算范围。 */
+let applyingPreset = false
+function applyPreset(preset: TrafficPreset) {
+  const next = presetRange(preset, props.timezone)
+  applyingPreset = next.level !== level.value
+  level.value = next.level
+  range.value = next.range
+}
+function shift(direction: 1 | -1) {
+  range.value = shiftRange(level.value, range.value, direction)
+}
+/** 切换粒度时保留所选时间段并换算到新粒度；换算后时间桶过多，或按年只剩一年时，改用新粒度的默认范围。 */
+watch(level, (next, previous) => {
+  if (applyingPreset) {
+    applyingPreset = false
     return
   }
-  range.value = defaultTrafficRange(next, props.timezone)
+  const converted = convertRange(previous, next, range.value, props.timezone)
+  const count = bucketCount(next, converted)
+  range.value = count > MAX_BUCKETS || (next === 'year' && count < 2) ? defaultTrafficRange(next, props.timezone) : converted
 })
 function switchCoarser() {
   const next = coarserLevel(level.value)
-  if (!next) return
-  keepRange = true
-  level.value = next
+  if (next) level.value = next
 }
 
 watch([level, range, users, stacks, compare, showZero], () => {
@@ -208,15 +228,41 @@ const summary = (): Record<string, { value: VNodeChild }> => {
   <NSpace vertical :size="20">
     <NCard size="small">
       <div class="stats-filters">
-        <NRadioGroup v-model:value="level" size="small" aria-label="统计粒度">
-          <NRadioButton value="hour">小时</NRadioButton>
-          <NRadioButton value="day">日</NRadioButton>
-          <NRadioButton value="month">月</NRadioButton>
-          <NRadioButton value="year">年</NRadioButton>
-        </NRadioGroup>
-        <NDatePicker v-model:formatted-value="range" :type="pickerType" value-format="yyyy-MM-dd HH:mm:ss" size="small" :clearable="false" :class="{ 'wide-picker': level === 'hour' }" />
-        <NSelect v-model:value="users" :options="userOptions" multiple clearable filterable max-tag-count="responsive" size="small" placeholder="全部用户" />
-        <NSelect v-model:value="stacks" :options="stackOptions" multiple clearable filterable max-tag-count="responsive" size="small" placeholder="全部 Stack" />
+        <span class="filter-label">时间</span>
+        <div class="preset-list" role="group" aria-label="快捷时间段">
+          <NButton
+            v-for="preset in trafficPresets" :key="preset.value" size="small"
+            :type="activePreset === preset.value ? 'primary' : 'default'" :secondary="activePreset === preset.value" :quaternary="activePreset !== preset.value"
+            :aria-pressed="activePreset === preset.value" @click="applyPreset(preset.value)"
+          >{{ preset.label }}</NButton>
+        </div>
+        <span class="filter-label">范围</span>
+        <div class="range-row">
+          <div class="range-picker">
+            <NButton size="small" secondary aria-label="前一段" title="前一段" @click="shift(-1)">‹</NButton>
+            <NDatePicker
+              v-model:formatted-value="range" :type="pickerType" value-format="yyyy-MM-dd HH:mm:ss"
+              :format="level === 'hour' ? 'yyyy-MM-dd HH:00' : undefined" size="small" :clearable="false" :class="{ 'wide-picker': level === 'hour' }"
+            />
+            <NButton size="small" secondary aria-label="后一段" title="后一段" :disabled="!canShiftForward" @click="shift(1)">›</NButton>
+          </div>
+          <NText depth="3" class="span-label">{{ spanLabel }}<template v-if="!activePreset"> · 自定义</template></NText>
+        </div>
+        <span class="filter-label">粒度</span>
+        <div class="range-row">
+          <NRadioGroup v-model:value="level" size="small" aria-label="统计粒度">
+            <NRadioButton value="hour">小时</NRadioButton>
+            <NRadioButton value="day">日</NRadioButton>
+            <NRadioButton value="month">月</NRadioButton>
+            <NRadioButton value="year">年</NRadioButton>
+          </NRadioGroup>
+          <NText depth="3" class="span-label">切换粒度时保留所选时间段</NText>
+        </div>
+        <span class="filter-label">筛选</span>
+        <div class="object-row">
+          <NSelect v-model:value="users" :options="userOptions" multiple clearable filterable max-tag-count="responsive" size="small" placeholder="全部用户" />
+          <NSelect v-model:value="stacks" :options="stackOptions" multiple clearable filterable max-tag-count="responsive" size="small" placeholder="全部 Stack" />
+        </div>
         <div class="stats-switches">
           <label><NSwitch v-model:value="compare" size="small" /> 对比上一期</label>
           <label><NSwitch v-model:value="showZero" size="small" /> 显示零用量</label>
@@ -271,11 +317,17 @@ const summary = (): Record<string, { value: VNodeChild }> => {
 </template>
 
 <style scoped>
-.stats-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
-.stats-filters > .n-date-picker { width: 300px; }
-.stats-filters > .n-date-picker.wide-picker { width: 380px; }
-.stats-filters > .n-select { width: 200px; }
-.stats-switches { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
+.stats-filters { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px 16px; }
+.filter-label { font-size: 13px; font-weight: 600; color: var(--ps-muted); white-space: nowrap; }
+.preset-list { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.range-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.range-picker { display: flex; align-items: center; gap: 6px; }
+.range-picker > .n-date-picker { width: 280px; }
+.range-picker > .n-date-picker.wide-picker { width: 340px; }
+.span-label { font-size: 12px; white-space: nowrap; }
+.object-row { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.object-row > .n-select { width: 240px; }
+.stats-switches { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding-top: 4px; border-top: 1px solid var(--ps-border); }
 .stats-switches label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
 .stats-switches > :last-child { margin-left: auto; }
 .stats-note { display: block; font-size: 12px; margin-top: -8px; }
@@ -289,8 +341,12 @@ const summary = (): Record<string, { value: VNodeChild }> => {
 :deep(.breakdown-total) { width: 40%; }
 :deep(.bar-cell) { display: flex; align-items: center; gap: 8px; }
 :deep(.bar) { height: 8px; min-width: 2px; border-radius: 4px; background: var(--ps-accent); }
-@media (max-width: 600px) {
-  .stats-filters > .n-date-picker, .stats-filters > .n-select { width: 100%; }
+@media (max-width: 700px) {
+  .stats-filters { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .filter-label { margin-top: 6px; }
+  .range-picker { width: 100%; }
+  .range-picker > .n-date-picker, .range-picker > .n-date-picker.wide-picker { flex: 1; width: auto; min-width: 0; }
+  .object-row > .n-select { width: 100%; }
   .stats-switches > :last-child { margin-left: 0; }
 }
 </style>

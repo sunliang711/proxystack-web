@@ -99,3 +99,97 @@ export function presetBounds(preset: RankingPreset, timezone: string, now = Date
 export function coarserLevel(level: TrafficLevel): TrafficLevel | null {
   return ({ hour: 'day', day: 'month', month: 'year', year: null } as const)[level]
 }
+
+/** 流量明细的快捷时间段，每个时间段带有适合它的粒度。 */
+export type TrafficPreset = 'today' | 'yesterday' | '7d' | '30d' | 'month' | 'last_month' | '12m' | 'year'
+
+export const trafficPresets: { value: TrafficPreset; label: string }[] = [
+  { value: 'today', label: '今日' },
+  { value: 'yesterday', label: '昨日' },
+  { value: '7d', label: '近 7 天' },
+  { value: '30d', label: '近 30 天' },
+  { value: 'month', label: '本月' },
+  { value: 'last_month', label: '上月' },
+  { value: '12m', label: '近 12 个月' },
+  { value: 'year', label: '今年' },
+]
+
+/** 快捷时间段对应的粒度和范围（首尾都是时间桶的开始时刻，含末尾桶）。 */
+export function presetRange(preset: TrafficPreset, timezone: string, now = Date.now()): { level: TrafficLevel; range: TrafficRange } {
+  const local = localTime(now, timezone)
+  const day = floor(local, 'day')
+  const month = floor(local, 'month')
+  switch (preset) {
+    case 'today': return { level: 'hour', range: [text(day), text(floor(local, 'hour'))] }
+    case 'yesterday': {
+      const start = step(day, 'day', -1)
+      return { level: 'hour', range: [text(start), text(step(start, 'hour', 23))] }
+    }
+    case '7d': return { level: 'day', range: [text(step(day, 'day', -6)), text(day)] }
+    case '30d': return { level: 'day', range: [text(step(day, 'day', -29)), text(day)] }
+    case 'month': return { level: 'day', range: [text(month), text(day)] }
+    case 'last_month': {
+      const start = step(month, 'month', -1)
+      return { level: 'day', range: [text(start), text(step(month, 'day', -1))] }
+    }
+    case '12m': return { level: 'month', range: [text(step(month, 'month', -11)), text(month)] }
+    case 'year': return { level: 'month', range: [text(floor(local, 'year')), text(month)] }
+  }
+}
+
+/** 当前粒度和范围恰好等于某个快捷时间段时返回它。 */
+export function matchPreset(level: TrafficLevel, range: TrafficRange, timezone: string, now = Date.now()): TrafficPreset | null {
+  const normalized = range.map((value) => text(floor(civil(value), level))).join()
+  for (const { value } of trafficPresets) {
+    const preset = presetRange(value, timezone, now)
+    if (preset.level === level && preset.range.join() === normalized) return value
+  }
+  return null
+}
+
+/** 范围内的时间桶数量（含首尾）。 */
+export function bucketCount(level: TrafficLevel, range: TrafficRange): number {
+  const end = floor(civil(range[1]), level).getTime()
+  let count = 0
+  for (let at = floor(civil(range[0]), level); at.getTime() <= end && count < 100_000; at = step(at, level, 1)) count++
+  return count
+}
+
+/** 切换粒度时换算范围：起点取新粒度的周期开始，终点取原末尾周期内的最后一个新粒度时间桶，且不超过当前时间。 */
+export function convertRange(from: TrafficLevel, to: TrafficLevel, range: TrafficRange, timezone: string, now = Date.now()): TrafficRange {
+  const start = floor(civil(range[0]), to)
+  const lastMoment = new Date(step(floor(civil(range[1]), from), from, 1).getTime() - 1)
+  const current = floor(localTime(now, timezone), to)
+  let end = floor(lastMoment, to)
+  if (end > current) end = current < start ? start : current
+  return [text(start), text(end)]
+}
+
+/**
+ * 把范围整体前移或后移一段。从自然日、自然月、自然年开头起算的范围按完整的自然日、月、年移动
+ * （例如今日的小时范围移到昨日全天，本月的日范围移到上月全月），其余按时间桶数量移动。
+ */
+export function shiftRange(level: TrafficLevel, range: TrafficRange, direction: 1 | -1): TrafficRange {
+  const start = floor(civil(range[0]), level)
+  const end = floor(civil(range[1]), level)
+  const whole = (unit: TrafficLevel, units: number): TrafficRange => {
+    const next = step(start, unit, direction * units)
+    return [text(next), text(step(step(next, unit, units), level, -1))]
+  }
+  if (level === 'hour' && start.getUTCHours() === 0) {
+    return whole('day', Math.max(1, Math.ceil((end.getTime() - start.getTime() + 3_600_000) / 86_400_000)))
+  }
+  if (level === 'day' && start.getUTCDate() === 1) {
+    return whole('month', (end.getUTCFullYear() - start.getUTCFullYear()) * 12 + end.getUTCMonth() - start.getUTCMonth() + 1)
+  }
+  if (level === 'month' && start.getUTCMonth() === 0) {
+    return whole('year', end.getUTCFullYear() - start.getUTCFullYear() + 1)
+  }
+  const count = bucketCount(level, range)
+  return [text(step(start, level, direction * count)), text(step(end, level, direction * count))]
+}
+
+/** 范围的起点是否晚于当前时间所在的时间桶，用于禁用「后一段」。 */
+export function rangeInFuture(level: TrafficLevel, range: TrafficRange, timezone: string, now = Date.now()): boolean {
+  return floor(civil(range[0]), level) > floor(localTime(now, timezone), level)
+}

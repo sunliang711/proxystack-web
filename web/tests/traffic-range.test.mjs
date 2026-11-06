@@ -91,3 +91,42 @@ test('排行快捷时间段覆盖统计时区的今日、昨日、本月和上�
   assert.equal(coarserLevel('hour'), 'day')
   assert.equal(coarserLevel('year'), null)
 })
+
+test('快捷时间段带有合适的粒度，并能从粒度和范围反查', async () => {
+  const mod = await server.ssrLoadModule('/src/util/traffic-range.ts')
+  const now = Date.parse('2026-11-06T03:20:00Z')
+  assert.deepEqual(mod.presetRange('today', 'Asia/Shanghai', now), { level: 'hour', range: ['2026-11-06 00:00:00', '2026-11-06 11:00:00'] })
+  assert.deepEqual(mod.presetRange('yesterday', 'Asia/Shanghai', now).range, ['2026-11-05 00:00:00', '2026-11-05 23:00:00'])
+  assert.deepEqual(mod.presetRange('last_month', 'Asia/Shanghai', now), { level: 'day', range: ['2026-10-01 00:00:00', '2026-10-31 00:00:00'] })
+  assert.deepEqual(mod.presetRange('year', 'Asia/Shanghai', now), { level: 'month', range: ['2026-01-01 00:00:00', '2026-11-01 00:00:00'] })
+  assert.deepEqual(mod.presetRange('30d', 'Asia/Shanghai', now).range, mod.defaultTrafficRange('day', 'Asia/Shanghai', now))
+  assert.equal(mod.matchPreset('day', ['2026-10-01 00:00:00', '2026-10-31 00:00:00'], 'Asia/Shanghai', now), 'last_month')
+  assert.equal(mod.matchPreset('hour', ['2026-10-01 00:00:00', '2026-10-31 00:00:00'], 'Asia/Shanghai', now), null)
+})
+
+test('切换粒度时换算范围，不丢末尾周期也不超过当前时间', async () => {
+  const mod = await server.ssrLoadModule('/src/util/traffic-range.ts')
+  const now = Date.parse('2026-11-06T03:20:00Z')
+  const tz = 'Asia/Shanghai'
+  assert.deepEqual(mod.convertRange('day', 'hour', ['2026-11-01 00:00:00', '2026-11-03 00:00:00'], tz, now), ['2026-11-01 00:00:00', '2026-11-03 23:00:00'])
+  assert.deepEqual(mod.convertRange('day', 'hour', ['2026-11-05 00:00:00', '2026-11-06 00:00:00'], tz, now), ['2026-11-05 00:00:00', '2026-11-06 11:00:00'])
+  assert.deepEqual(mod.convertRange('day', 'month', ['2026-10-08 00:00:00', '2026-11-06 00:00:00'], tz, now), ['2026-10-01 00:00:00', '2026-11-01 00:00:00'])
+  assert.deepEqual(mod.convertRange('month', 'day', ['2026-09-01 00:00:00', '2026-10-01 00:00:00'], tz, now), ['2026-09-01 00:00:00', '2026-10-31 00:00:00'])
+  assert.equal(mod.bucketCount('day', ['2026-10-08 00:00:00', '2026-11-06 00:00:00']), 30)
+})
+
+test('前后移动范围：整月按自然月，整天按自然日，其余按时间桶数量', async () => {
+  const mod = await server.ssrLoadModule('/src/util/traffic-range.ts')
+  assert.deepEqual(mod.shiftRange('day', ['2026-10-01 00:00:00', '2026-10-31 00:00:00'], -1), ['2026-09-01 00:00:00', '2026-09-30 00:00:00'])
+  assert.deepEqual(mod.shiftRange('day', ['2026-01-01 00:00:00', '2026-02-28 00:00:00'], 1), ['2026-03-01 00:00:00', '2026-04-30 00:00:00'])
+  assert.deepEqual(mod.shiftRange('hour', ['2026-11-05 00:00:00', '2026-11-05 23:00:00'], 1), ['2026-11-06 00:00:00', '2026-11-06 23:00:00'])
+  assert.deepEqual(mod.shiftRange('day', ['2026-10-08 00:00:00', '2026-11-06 00:00:00'], -1), ['2026-09-08 00:00:00', '2026-10-07 00:00:00'])
+  assert.deepEqual(mod.shiftRange('month', ['2025-12-01 00:00:00', '2026-11-01 00:00:00'], -1), ['2024-12-01 00:00:00', '2025-11-01 00:00:00'])
+  const now = Date.parse('2026-11-06T03:20:00Z')
+  const tz = 'Asia/Shanghai'
+  assert.deepEqual(mod.shiftRange('hour', mod.presetRange('today', tz, now).range, -1), mod.presetRange('yesterday', tz, now).range)
+  assert.deepEqual(mod.shiftRange('day', mod.presetRange('month', tz, now).range, -1), mod.presetRange('last_month', tz, now).range)
+  assert.deepEqual(mod.shiftRange('month', mod.presetRange('year', tz, now).range, -1), ['2025-01-01 00:00:00', '2025-12-01 00:00:00'])
+  assert.equal(mod.rangeInFuture('day', ['2026-11-07 00:00:00', '2026-12-06 00:00:00'], 'Asia/Shanghai', now), true)
+  assert.equal(mod.rangeInFuture('day', ['2026-11-06 00:00:00', '2026-12-05 00:00:00'], 'Asia/Shanghai', now), false)
+})
