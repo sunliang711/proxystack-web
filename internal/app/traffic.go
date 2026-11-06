@@ -4,10 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"log/slog"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -52,7 +50,7 @@ type collectTarget struct {
 	stackID int64
 	name    string
 	server  string
-	// aggregator 表示只经其他 stack 的 relay 出网，实时总速率不重复相加它。
+	// aggregator 表示 auto stack：它的流量经 edge stack 的 relay 出网，实时总速率不重复相加它。
 	aggregator bool
 	// problem 非空时该 stack 无法采集（未开启统计接口）。
 	problem string
@@ -72,6 +70,11 @@ type trafficState struct {
 	targets   []collectTarget
 
 	lastMinute time.Time
+
+	// lastCollected 是各 stack 最近一次成功采集的时间，用于判断 xray 是否在两次采集之间重启或停止。
+	lastCollected map[int64]time.Time
+	// gapsReady 表示本进程已检查过停机期间的缺口。
+	gapsReady bool
 }
 
 // location 返回设置的时区；无效时使用 UTC。
@@ -137,7 +140,7 @@ func (s *Service) collectTargets(ctx context.Context) ([]collectTarget, error) {
 		if stack == nil || !stack.Enabled || !stack.Xray.Enabled {
 			continue
 		}
-		target := collectTarget{stackID: snapshot.Stacks[index].ID, name: row.StackName, aggregator: configdoc.RelaysOnly(&snapshot.Stacks[index])}
+		target := collectTarget{stackID: snapshot.Stacks[index].ID, name: row.StackName, aggregator: snapshot.Stacks[index].Role == "auto"}
 		api := domain.ResolveXrayAPIConfig(set.Config.Defaults.Xray, stack.Xray)
 		stats := domain.ResolveXrayStatsConfig(set.Config.Defaults.Xray, stack.Xray)
 		if !api.Enabled || !api.HasService("StatsService") || !stats.Enabled {
@@ -196,19 +199,26 @@ func (s *Service) collectTraffic(ctx context.Context) {
 	var total traffic.Bytes
 	statuses := map[int64]CollectStatus{}
 	deltas := []traffic.Delta{}
+	checks := make([]gapCheck, 0, len(targets))
 	for _, target := range targets {
 		status := CollectStatus{StackID: target.stackID, Stack: target.name, LastAt: now}
+		state := states[units.Name(units.Xray, target.name)]
+		check := gapCheck{stackID: target.stackID, since: state.Since}
 		switch {
 		case target.problem != "":
 			status.Error = target.problem
-		case !states[units.Name(units.Xray, target.name)].Running():
+			check.result = gapUncounted
+		case !state.Running():
 			status.Error = "xray 未运行"
+			check.result = gapStopped
 		default:
 			stats, err := s.XrayAPI.QueryStats(ctx, target.server)
 			if err != nil {
 				status.Error = err.Error()
+				check.result = gapFailed
 				break
 			}
+			check.result = gapCollected
 			delta := traffic.Parse(target.stackID, stats, func(id int64) bool { return known[id] })
 			deltas = append(deltas, delta)
 			point.Stacks[target.name] = delta.Stack
@@ -225,8 +235,11 @@ func (s *Service) collectTraffic(ctx context.Context) {
 				total.Add(delta.Stack)
 			}
 		}
+		check.reason = status.Error
+		checks = append(checks, check)
 		statuses[target.stackID] = status
 	}
+	s.recordTrafficGaps(ctx, settings, now, checks)
 
 	s.traffic.mu.Lock()
 	defer s.traffic.mu.Unlock()
@@ -300,6 +313,9 @@ func (s *Service) flushTraffic(ctx context.Context, settings configdoc.Settings)
 					return err
 				}
 			}
+		}
+		if err := q.PutTrafficHeartbeat(ctx, now.Unix()); err != nil {
+			return err
 		}
 		for key, bytes := range pending {
 			if err := q.AddTrafficMinute(ctx, dbq.AddTrafficMinuteParams{
@@ -395,6 +411,13 @@ func (s *Service) pruneTraffic(ctx context.Context, settings configdoc.Settings,
 		if err := q.DeleteUserDailyBefore(ctx, cutoff); err != nil {
 			return err
 		}
+		// 缺口记录与保留最久的明细一起清理；月明细永久保留时缺口也永久保留。
+		if retention.RetentionMonthDays > 0 {
+			keep := max(retention.RetentionHourDays, retention.RetentionDayDays, retention.RetentionMonthDays)
+			if err := q.DeleteTrafficGapsBefore(ctx, now.AddDate(0, 0, -keep).Unix()); err != nil {
+				return err
+			}
+		}
 		return q.DeleteNotificationsBefore(ctx, now.AddDate(-1, 0, 0).Unix())
 	}); err != nil {
 		slog.Warn("traffic prune", "err", err)
@@ -425,37 +448,6 @@ func (s *Service) runTraffic(ctx context.Context) {
 	}
 }
 
-// TrafficOverview 是总览页的数据。
-type TrafficOverview struct {
-	Enabled bool          `json:"enabled"`
-	Today   traffic.Bytes `json:"today"`
-	Month   traffic.Bytes `json:"month"`
-	// UserToday 和 UserMonth 是能归属到具体用户及其档案的用量。
-	UserToday traffic.Bytes   `json:"user_today"`
-	UserMonth traffic.Bytes   `json:"user_month"`
-	TopUsers  []UserTraffic   `json:"top_users"`
-	Live      []LivePoint     `json:"live"`
-	Stacks    []CollectStatus `json:"stacks"`
-	ByStack   []StackTraffic  `json:"by_stack"`
-	// FailedNotifications 是发送失败的通知数。
-	FailedNotifications int64 `json:"failed_notifications"`
-
-	// TopUsersToday 是今日用量排行；TopUsers 保留本月排行。
-	TopUsersToday []UserTraffic `json:"top_users_today"`
-}
-
-// UserTraffic 是一个用户的用量。
-type UserTraffic struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
-	traffic.Bytes
-}
-
-// TrafficOverviewData 汇总今日、本月合计和用量排行，并合并内存中尚未落库的部分。
-func (s *Service) TrafficOverviewData(ctx context.Context, userID int64) (*TrafficOverview, error) {
-	return s.trafficOverview(ctx, userID)
-}
-
 func userNames(ctx context.Context, q *dbq.Queries) (map[int64]string, error) {
 	rows, err := q.ListUsers(ctx)
 	names := make(map[int64]string, len(rows))
@@ -471,216 +463,6 @@ func subjectName(names map[int64]string, id int64) string {
 		return name
 	}
 	return "#" + strconv.FormatInt(id, 10)
-}
-
-// TrafficQuery 是明细查询条件。
-type TrafficQuery struct {
-	Level    string // hour / day / month / year
-	Scope    string // user / inbound / outbound
-	From     time.Time
-	To       time.Time
-	Stacks   []int64
-	Subjects []string
-	GroupBy  string // subject / stack
-}
-
-// TrafficSeries 是一个对象的按时间序列，Up/Down 与 Buckets 一一对应。
-type TrafficSeries struct {
-	Subject string  `json:"subject"`
-	Label   string  `json:"label"`
-	Up      []int64 `json:"up"`
-	Down    []int64 `json:"down"`
-	traffic.Bytes
-}
-
-// TrafficResult 是明细查询结果。
-type TrafficResult struct {
-	// Timezone 是统计周期使用的时区，前端按它显示时间桶。
-	Timezone string          `json:"timezone"`
-	Buckets  []time.Time     `json:"buckets"`
-	Series   []TrafficSeries `json:"series"`
-	Total    traffic.Bytes   `json:"total"`
-	ByStack  []StackSeries   `json:"by_stack"`
-}
-
-// QueryTraffic 查询流量明细。用户维度把档案合并到所属用户；年粒度由月明细聚合。
-func (s *Service) QueryTraffic(ctx context.Context, query TrafficQuery) (*TrafficResult, error) {
-	settings, err := s.loadSettings(ctx)
-	if err != nil {
-		return nil, err
-	}
-	loc := location(settings)
-	level := query.Level
-	if level == "year" {
-		level = store.LevelMonth
-	}
-	rows, err := s.Store.QueryTraffic(ctx, level, query.Scope, query.From.Unix(), query.To.Unix(), query.Stacks)
-	if err != nil {
-		return nil, err
-	}
-	var names, stacks map[int64]string
-	err = s.Store.InTx(ctx, func(q *dbq.Queries) (err error) {
-		if names, err = userNames(ctx, q); err != nil {
-			return err
-		}
-		stacks, err = stackNames(ctx, q)
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-	wanted := map[string]bool{}
-	for _, subject := range query.Subjects {
-		wanted[subject] = true
-	}
-	type cell struct{ bucket, subject string }
-	cells := map[cell]traffic.Bytes{}
-	buckets := map[int64]bool{}
-	subjects := map[string]bool{}
-	stackCells := map[int64]map[int64]traffic.Bytes{}
-	for _, row := range rows {
-		subject := row.Subject
-		if query.Scope == traffic.ScopeUser {
-			if id, ok := traffic.SubjectUser(subject); ok {
-				subject = strconv.FormatInt(id, 10)
-			}
-		}
-		if len(wanted) > 0 && !wanted[subject] {
-			continue
-		}
-		bucket := row.Bucket
-		if query.Level == "year" {
-			local := time.Unix(bucket, 0).In(loc)
-			bucket = time.Date(local.Year(), 1, 1, 0, 0, 0, 0, loc).Unix()
-		}
-		if stackCells[row.StackID] == nil {
-			stackCells[row.StackID] = map[int64]traffic.Bytes{}
-		}
-		stackValue := stackCells[row.StackID][bucket]
-		stackValue.Add(traffic.Bytes{Up: row.Up, Down: row.Down})
-		stackCells[row.StackID][bucket] = stackValue
-		key := cell{strconv.FormatInt(bucket, 10), subject}
-		value := cells[key]
-		value.Add(traffic.Bytes{Up: row.Up, Down: row.Down})
-		cells[key] = value
-		buckets[bucket], subjects[subject] = true, true
-	}
-	ordered := make([]int64, 0, len(buckets))
-	for bucket := range buckets {
-		ordered = append(ordered, bucket)
-	}
-	slices.Sort(ordered)
-	result := &TrafficResult{Timezone: loc.String(), Buckets: make([]time.Time, 0, len(ordered)), Series: []TrafficSeries{}, ByStack: []StackSeries{}}
-	for _, bucket := range ordered {
-		result.Buckets = append(result.Buckets, time.Unix(bucket, 0))
-	}
-	for subject := range subjects {
-		series := TrafficSeries{Subject: subject, Label: subjectLabel(query.Scope, subject, names), Up: make([]int64, len(ordered)), Down: make([]int64, len(ordered))}
-		for index, bucket := range ordered {
-			value := cells[cell{strconv.FormatInt(bucket, 10), subject}]
-			series.Up[index], series.Down[index] = value.Up, value.Down
-			series.Bytes.Add(value)
-		}
-		result.Series = append(result.Series, series)
-	}
-	aggregators, err := s.aggregatorStacks(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for id, cells := range stackCells {
-		series := TrafficSeries{Subject: strconv.FormatInt(id, 10), Label: stackName(stacks, id), Up: make([]int64, len(ordered)), Down: make([]int64, len(ordered))}
-		for index, bucket := range ordered {
-			value := cells[bucket]
-			series.Up[index], series.Down[index] = value.Up, value.Down
-			series.Bytes.Add(value)
-		}
-		// 入站和出站维度下，聚合 stack 的流量已在被引用 stack 计入，合计不重复相加；用户维度没有重复。
-		if query.Scope == traffic.ScopeUser || !aggregators[id] {
-			result.Total.Add(series.Bytes)
-		}
-		result.ByStack = append(result.ByStack, StackSeries{StackID: id, Aggregator: aggregators[id], TrafficSeries: series})
-	}
-	sort.Slice(result.ByStack, func(i, j int) bool {
-		a, b := result.ByStack[i], result.ByStack[j]
-		if a.Total() != b.Total() {
-			return a.Total() > b.Total()
-		}
-		return a.StackID < b.StackID
-	})
-	if query.GroupBy == "stack" {
-		result.Series = make([]TrafficSeries, 0, len(result.ByStack))
-		for _, stack := range result.ByStack {
-			result.Series = append(result.Series, stack.TrafficSeries)
-		}
-	}
-	sort.Slice(result.Series, func(i, j int) bool {
-		a, b := result.Series[i], result.Series[j]
-		if a.Total() != b.Total() {
-			return a.Total() > b.Total()
-		}
-		return a.Subject < b.Subject
-	})
-	return result, nil
-}
-
-func subjectLabel(scope, subject string, names map[int64]string) string {
-	if subject == traffic.SubjectUnknown {
-		return "未知"
-	}
-	if scope == traffic.ScopeUser {
-		if id, ok := traffic.SubjectUser(subject); ok {
-			return subjectName(names, id)
-		}
-	}
-	return subject
-}
-
-// TrafficSubject 是明细筛选项。
-type TrafficSubject struct {
-	Subject string `json:"subject"`
-	Label   string `json:"label"`
-}
-
-// TrafficSubjects 返回某个维度出现过的对象，用户维度合并档案。
-func (s *Service) TrafficSubjects(ctx context.Context, scope string) ([]TrafficSubject, error) {
-	subjects, err := s.Store.TrafficSubjects(ctx, scope)
-	if err != nil {
-		return nil, err
-	}
-	var names map[int64]string
-	err = s.Store.InTx(ctx, func(q *dbq.Queries) (err error) {
-		names, err = userNames(ctx, q)
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-	// 无历史流量的用户也可筛选，用零用量明确反馈，而不是让用户在选项中消失。
-	if scope == traffic.ScopeUser {
-		for id := range names {
-			subjects = append(subjects, strconv.FormatInt(id, 10))
-		}
-	}
-	out := []TrafficSubject{}
-	seen := map[string]bool{}
-	for _, subject := range subjects {
-		if scope == traffic.ScopeUser {
-			if id, ok := traffic.SubjectUser(subject); ok {
-				subject = strconv.FormatInt(id, 10)
-			}
-		}
-		if !seen[subject] {
-			seen[subject] = true
-			out = append(out, TrafficSubject{Subject: subject, Label: subjectLabel(scope, subject, names)})
-		}
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Label != out[j].Label {
-			return out[i].Label < out[j].Label
-		}
-		return out[i].Subject < out[j].Subject
-	})
-	return out, nil
 }
 
 // DayUsage 是一天的用量。
@@ -822,26 +604,6 @@ func (s *Service) UserUsageDetail(ctx context.Context, id int64) (*UserUsage, er
 		return nil, err
 	}
 	return &item, nil
-}
-
-// TrafficCSV 把查询结果转成 CSV：时间、对象、上行、下行，时间按设置时区显示。
-func (s *Service) TrafficCSV(ctx context.Context, result *TrafficResult) ([]byte, error) {
-	settings, err := s.loadSettings(ctx)
-	if err != nil {
-		return nil, err
-	}
-	loc := location(settings)
-	var out strings.Builder
-	out.WriteString("\xef\xbb\xbf时间,对象,上行字节,下行字节\r\n")
-	for index, bucket := range result.Buckets {
-		for _, series := range result.Series {
-			if series.Up[index] == 0 && series.Down[index] == 0 {
-				continue
-			}
-			fmt.Fprintf(&out, "%s,%s,%d,%d\r\n", bucket.In(loc).Format(time.DateTime), csvField(series.Label), series.Up[index], series.Down[index])
-		}
-	}
-	return []byte(out.String()), nil
 }
 
 // csvField 按 CSV 规则转义，并在可能被表格软件当公式执行的内容前加单引号。

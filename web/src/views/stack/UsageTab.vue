@@ -24,40 +24,39 @@ const totals = computed(() => usage.value ? [
   { label: '近 30 天用量', bytes: usage.value.recent },
 ] : [])
 
-/** 入站总量减去各用户之和：共享账号、被聚合 stack 经 relay 转发等无法归属到用户的流量。 */
-const UNATTRIBUTED = 0
+/** 未归属到用户的流量排在各用户之后：经 relay 入站（主要是 auto stack 转发）和共享账号等，ID 用负数区分。 */
+const UNATTRIBUTED: Record<string, { id: number; note: string }> = {
+  relay: { id: -1, note: '未归属到用户、经 relay 入站进入的流量，主要是 auto stack 转发过来的用户流量' },
+  shared: { id: -2, note: 'SOCKS5 / HTTP 共享账号等无法归属到用户的流量' },
+}
+const notes = new Map(Object.values(UNATTRIBUTED).map((item) => [item.id, item.note]))
 const userRows = computed<Schemas['StackUserUsage'][]>(() => {
   const data = usage.value
   if (!data) return []
-  const gap = (period: 'today' | 'month' | 'recent') => {
-    const users = data.by_user.reduce((sum, row) => ({ up: sum.up + row[period].up, down: sum.down + row[period].down }), { up: 0, down: 0 })
-    return { up: Math.max(0, data[period].up - users.up), down: Math.max(0, data[period].down - users.down) }
-  }
-  const rest = { user_id: UNATTRIBUTED, user: '未归属到用户', today: gap('today'), month: gap('month'), recent: gap('recent') }
-  return total(rest.today) + total(rest.month) + total(rest.recent) > 0 ? [...data.by_user, rest] : data.by_user
+  return [...data.by_user, ...data.unattributed.map((part) => ({ user_id: UNATTRIBUTED[part.kind]!.id, user: part.name, today: part.today, month: part.month, recent: part.recent }))]
 })
 
-/** 趋势：近 30 天按天或最近若干小时按小时；全部用户时按用户或按入站拆分，指定用户时只显示该用户。 */
+/** 趋势：近 30 天按天或最近若干小时按小时，按用户拆分；指定用户时只显示该用户。 */
 const level = ref<'day' | 'hour'>('day')
 const hours = ref(24)
 const hourOptions = [{ label: '24 小时', value: 24 }, { label: '48 小时', value: 48 }, { label: '7 天', value: 168 }]
-const groupBy = ref<'user' | 'inbound'>('user')
-const trendScope = computed(() => (userId.value || groupBy.value === 'user' ? 'user' : 'inbound'))
 const { trend, error: trendError, load: loadTrend } = useTrafficTrend(() => ({
-  level: level.value, span: level.value === 'hour' ? hours.value : 30, scope: trendScope.value, groupBy: 'subject',
-  stacks: [props.stackId], subjects: userId.value ? [String(userId.value)] : [], entity: trendScope.value === 'user' ? 'user' : undefined,
+  level: level.value, span: level.value === 'hour' ? hours.value : 30, view: 'user',
+  stacks: [props.stackId], users: userId.value ? [userId.value] : [],
 }))
 watch(usage, () => void loadTrend())
 const trafficLink = computed(() => ({
   name: 'traffic',
-  query: { level: level.value, scope: trendScope.value, group_by: 'subject', stacks: String(props.stackId), ...(userId.value ? { subjects: String(userId.value) } : {}) },
+  query: userId.value
+    ? { level: level.value, users: String(userId.value), stacks: String(props.stackId) }
+    : { tab: 'stack', level: level.value, stacks: String(props.stackId) },
 }))
 
 const userColumns: DataTableColumns<Schemas['StackUserUsage']> = [
   {
     title: '用户', key: 'user', minWidth: 160,
-    render: (row) => row.user_id === UNATTRIBUTED
-      ? h('div', [h(NText, { depth: 2 }, () => row.user), h('div', [h(NText, { depth: 3, style: 'font-size: 12px' }, () => '共享账号、relay 转发等')])])
+    render: (row) => notes.has(row.user_id)
+      ? h('div', [h(NText, { depth: 2 }, () => row.user), h('div', [h(NText, { depth: 3, style: 'font-size: 12px' }, () => notes.get(row.user_id))])])
       : row.user_id > 0 ? h(EntityLink, { kind: 'user', id: row.user_id, name: row.user }) : row.user,
   },
   ...(['today', 'month', 'recent'] as const).map((period, index) => ({
@@ -102,7 +101,7 @@ const userColumns: DataTableColumns<Schemas['StackUserUsage']> = [
         </NGridItem>
       </NGrid>
       <NCard v-if="!userId" title="各用户用量明细" size="small">
-        <NText depth="3" style="display: block; margin-bottom: 12px">仅显示本 Stack 在这些时间段内有统计记录的用户，合并同一用户的全部凭据档案；历史已删除用户保留记录。「未归属到用户」是入站总量减去各用户之和，来自共享账号的 SOCKS5 / HTTP 入站，或聚合 Stack 经本 Stack relay 入站转发的流量。</NText>
+        <NText depth="3" style="display: block; margin-bottom: 12px">仅显示本 Stack 在这些时间段内有统计记录的用户，合并同一用户的全部凭据档案；历史已删除用户保留记录。入站总量中未归属到用户的部分列在最后，分为「经 relay 入站」（主要是 auto stack 转发过来的用户流量，这些用户已在 auto stack 计入）和「共享账号等」。</NText>
         <NDataTable :columns="userColumns" :data="userRows" :row-key="(row: Schemas['StackUserUsage']) => row.user_id" :pagination="{ pageSize: 10 }" :scroll-x="760" size="small" />
       </NCard>
       <NCard title="用量趋势" size="small">
@@ -117,17 +116,13 @@ const userColumns: DataTableColumns<Schemas['StackUserUsage']> = [
           <NRadioGroup v-if="level === 'hour'" v-model:value="hours" size="small">
             <NRadioButton v-for="option in hourOptions" :key="option.value" :value="option.value">{{ option.label }}</NRadioButton>
           </NRadioGroup>
-          <NRadioGroup v-if="!userId" v-model:value="groupBy" size="small">
-            <NRadioButton value="user">按用户</NRadioButton>
-            <NRadioButton value="inbound">按入站</NRadioButton>
-          </NRadioGroup>
         </div>
         <NAlert v-if="trendError" type="warning" :bordered="false" style="margin-bottom: 8px">{{ trendError }}</NAlert>
         <TrafficChart v-if="trend && !trend.empty" kind="bar" :labels="trend.labels" :series="trend.series" :format="formatBytes" height="280px" />
         <NEmpty v-else-if="trend" :description="level === 'day' ? '最近 30 天没有用量' : '这段时间没有用量'" />
         <NEmpty v-else-if="!trendError" description="正在加载趋势" />
         <NText depth="3" style="display: block; margin-top: 8px">
-          按系统设置时区的{{ level === 'day' ? '自然日' : '整点' }}汇总，当前周期统计至最近一次写入；历史明细受流量保留策略影响。<template v-if="!userId && groupBy === 'user'">按用户拆分时不含未归属到用户的流量。</template>
+          按系统设置时区的{{ level === 'day' ? '自然日' : '整点' }}汇总，当前周期统计至最近一次写入；历史明细受流量保留策略影响。<template v-if="!userId">按用户拆分，不含未归属到用户的流量。</template>
         </NText>
       </NCard>
     </template>

@@ -1,18 +1,15 @@
 import { ref, watch } from 'vue'
-import { api, problemMessage } from '../api/client'
+import { api, problemMessage, type Schemas } from '../api/client'
 import type { ChartSeries } from '../util/chart'
-import { alignBuckets, dayBuckets, hourBuckets, recentDayRange, recentHourRange, trafficBounds } from '../util/traffic-range'
+import { recentDayRange, recentHourRange, trafficBounds } from '../util/traffic-range'
 
-/** 趋势查询：最近 span 个小时或自然日，按 groupBy 拆成多条序列。 */
+/** 趋势查询：最近 span 个小时或自然日；view 为 user 时每个用户一条序列，为 stack 时每个 stack 一条序列。 */
 export interface TrendQuery {
   level: 'hour' | 'day'
   span: number
-  scope: 'user' | 'inbound'
-  groupBy: 'stack' | 'subject'
+  view: 'user' | 'stack'
   stacks?: number[]
-  subjects?: string[]
-  /** 序列对应的实体，图例和柱子可点击打开。 */
-  entity?: 'stack' | 'user'
+  users?: number[]
 }
 
 export interface Trend {
@@ -26,7 +23,7 @@ const MAX_SERIES = 7
 
 let timezone: Promise<string> | null = null
 /** 统计时区只读取一次；读取失败时下次重试。 */
-function loadTimezone(): Promise<string> {
+export function loadTimezone(): Promise<string> {
   timezone ??= api.GET('/api/config/settings').then(({ data }) => {
     if (!data) {
       timezone = null
@@ -37,8 +34,40 @@ function loadTimezone(): Promise<string> {
   return timezone
 }
 
+/** 把统计结果的各行转成图表序列：零用量的行不画，超出数量的并入「其他」。 */
+export function statsSeries(rows: Schemas['TrafficStatsRow'][], limit = MAX_SERIES): ChartSeries[] {
+  const drawn = rows.filter((row) => row.up + row.down > 0 && row.series_up && row.series_down)
+  const values = (row: Schemas['TrafficStatsRow']) => row.series_up!.map((up, index) => up + row.series_down![index]!)
+  const series: ChartSeries[] = drawn.slice(0, limit).map((row, index) => ({
+    name: row.deleted ? `${row.name}（已删除）` : row.name,
+    data: values(row),
+    slot: index,
+    excludeFromTotal: row.excluded,
+    entity: (row.kind === 'user' || row.kind === 'stack') && !row.deleted ? { kind: row.kind, id: row.id } : undefined,
+  }))
+  const rest = drawn.slice(limit)
+  if (rest.length) {
+    const sums = values(rest[0]!).map(() => 0)
+    for (const row of rest) values(row).forEach((value, index) => { sums[index]! += row.excluded ? 0 : value })
+    series.push({ name: `其他 ${rest.length} 项`, data: sums })
+  }
+  return series
+}
+
+/** 按统计粒度格式化时间桶。 */
+export function bucketLabels(buckets: string[], level: string, zone: string, long = false): string[] {
+  const parts: Intl.DateTimeFormatOptions = {
+    hour: long ? { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' } : { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' },
+    day: { month: '2-digit', day: '2-digit' },
+    month: { year: 'numeric', month: '2-digit' },
+    year: { year: 'numeric' },
+  }[level] as Intl.DateTimeFormatOptions
+  const formatter = new Intl.DateTimeFormat('zh-CN', { ...parts, timeZone: zone })
+  return buckets.map((bucket) => formatter.format(new Date(bucket)))
+}
+
 /**
- * 从流量明细查询最近若干小时或自然日的趋势，补齐没有流量的时间桶。
+ * 查询最近若干小时或自然日的趋势，服务端已补齐没有流量的时间桶。
  * query 返回 null 时不查询；条件变化时清空并重新查询，load 用于跟随页面轮询刷新。
  */
 export function useTrafficTrend(query: () => TrendQuery | null) {
@@ -53,11 +82,11 @@ export function useTrafficTrend(query: () => TrendQuery | null) {
     const zone = await loadTimezone()
     const range = current.level === 'hour' ? recentHourRange(current.span, zone) : recentDayRange(current.span, zone)
     const bounds = trafficBounds(current.level, range, zone)
-    const { data, error: problem } = await api.GET('/api/traffic/query', {
+    const { data, error: problem } = await api.GET('/api/traffic/stats', {
       params: {
         query: {
-          level: current.level, scope: current.scope, group_by: current.groupBy, ...bounds,
-          stacks: (current.stacks ?? []).join(','), subjects: (current.subjects ?? []).join(','),
+          view: current.view, level: current.level, ...bounds,
+          stacks: (current.stacks ?? []).join(','), users: (current.users ?? []).join(','),
         },
       },
     })
@@ -67,21 +96,9 @@ export function useTrafficTrend(query: () => TrendQuery | null) {
       return
     }
     error.value = ''
-    const buckets = current.level === 'hour' ? hourBuckets(bounds) : dayBuckets(range, zone)
-    const aligned = data.series.map((item) => ({ item, values: alignBuckets(buckets, data.buckets, item.up.map((up, index) => up + item.down[index]!)) }))
-    const series: ChartSeries[] = aligned.slice(0, MAX_SERIES).map(({ item, values }, index) => ({
-      name: item.label, data: values, slot: index,
-      entity: current.entity ? { kind: current.entity, id: item.subject } : undefined,
-    }))
-    const rest = aligned.slice(MAX_SERIES)
-    if (rest.length) series.push({ name: `其他 ${rest.length} 项`, data: buckets.map((_, index) => rest.reduce((sum, { values }) => sum + values[index]!, 0)) })
-    const parts: Intl.DateTimeFormatOptions =
-      current.level === 'day' ? { month: '2-digit', day: '2-digit' }
-        : current.span > 24 ? { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
-          : { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
-    const formatter = new Intl.DateTimeFormat('zh-CN', { ...parts, timeZone: data.timezone })
+    const series = statsSeries(data.rows)
     trend.value = {
-      labels: buckets.map((at) => formatter.format(at * 1000)),
+      labels: bucketLabels(data.buckets, current.level, data.timezone, current.span > 24),
       series,
       empty: !series.some((item) => item.data.some((value) => value > 0)),
     }

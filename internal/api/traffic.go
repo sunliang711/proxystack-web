@@ -14,51 +14,58 @@ import (
 	"proxystack-web/internal/configdoc"
 )
 
-type trafficOverviewInput struct {
-	UserID int64 `query:"user_id" minimum:"0" doc:"用户 ID，0 表示全部流量"`
-}
-
 type trafficOverviewOutput struct {
 	Body app.TrafficOverview
 }
 
-type trafficQueryInput struct {
-	GroupBy  string `query:"group_by" enum:"subject,stack" default:"subject"`
-	Level    string `query:"level" enum:"hour,day,month,year" default:"day"`
-	Scope    string `query:"scope" enum:"user,inbound,outbound" default:"user"`
-	From     int64  `query:"from" doc:"开始时间（Unix 秒）"`
-	To       int64  `query:"to" doc:"结束时间（Unix 秒），不含"`
-	Stacks   string `query:"stacks" doc:"stack ID，逗号分隔，空表示全部"`
-	Subjects string `query:"subjects" doc:"对象，逗号分隔，空表示全部"`
+type trafficStatsInput struct {
+	View    string `query:"view" enum:"user,stack" default:"user" doc:"统计视角"`
+	Level   string `query:"level" enum:"hour,day,month,year" default:"day"`
+	From    int64  `query:"from" doc:"开始时间（Unix 秒）"`
+	To      int64  `query:"to" doc:"结束时间（Unix 秒），不含"`
+	Users   string `query:"users" doc:"用户 ID，逗号分隔，空表示全部"`
+	Stacks  string `query:"stacks" doc:"stack ID，逗号分隔，空表示全部"`
+	Compare bool   `query:"compare" doc:"同时返回上一期同等时长的用量"`
 }
 
-func (in *trafficQueryInput) query() (app.TrafficQuery, error) {
-	query := app.TrafficQuery{Level: in.Level, Scope: in.Scope, From: time.Unix(in.From, 0), To: time.Unix(in.To, 0), GroupBy: in.GroupBy}
-	if in.Stacks != "" {
-		for _, item := range strings.Split(in.Stacks, ",") {
-			id, err := strconv.ParseInt(item, 10, 64)
-			if err != nil {
-				return query, huma.Error422UnprocessableEntity("invalid stack id: " + item)
-			}
-			query.Stacks = append(query.Stacks, id)
+func parseIDs(field, value string) ([]int64, error) {
+	if value == "" {
+		return nil, nil
+	}
+	out := []int64{}
+	for _, item := range strings.Split(value, ",") {
+		id, err := strconv.ParseInt(item, 10, 64)
+		if err != nil || id <= 0 {
+			return nil, huma.Error422UnprocessableEntity("invalid " + field + ": " + item)
 		}
+		out = append(out, id)
 	}
-	if in.Subjects != "" {
-		query.Subjects = strings.Split(in.Subjects, ",")
+	return out, nil
+}
+
+func (in *trafficStatsInput) query() (app.TrafficStatsQuery, error) {
+	query := app.TrafficStatsQuery{View: in.View, Level: in.Level, From: time.Unix(in.From, 0), To: time.Unix(in.To, 0), Compare: in.Compare}
+	var err error
+	if query.Users, err = parseIDs("user id", in.Users); err != nil {
+		return query, err
 	}
-	return query, nil
+	query.Stacks, err = parseIDs("stack id", in.Stacks)
+	return query, err
 }
 
-type trafficQueryOutput struct {
-	Body app.TrafficResult
+type trafficStatsOutput struct {
+	Body app.TrafficStats
 }
 
-type trafficSubjectsInput struct {
-	Scope string `query:"scope" enum:"user,inbound,outbound" default:"user"`
+type trafficRankingInput struct {
+	From    int64 `query:"from" doc:"开始时间（Unix 秒）"`
+	To      int64 `query:"to" doc:"结束时间（Unix 秒），不含"`
+	Stack   int64 `query:"stack" minimum:"0" doc:"stack ID，0 表示全部 stack"`
+	Compare bool  `query:"compare" doc:"同时返回上一期同等时长的用量"`
 }
 
-type trafficSubjectsOutput struct {
-	Body []app.TrafficSubject
+type trafficRankingOutput struct {
+	Body app.TrafficRanking
 }
 
 type usersUsageOutput struct {
@@ -108,52 +115,48 @@ func registerTraffic(api huma.API, s *Server) {
 	}
 
 	huma.Register(api, reg(huma.Operation{OperationID: "getTrafficOverview", Method: http.MethodGet, Path: "/api/traffic/overview", Summary: "流量总览"}),
-		func(ctx context.Context, in *trafficOverviewInput) (*trafficOverviewOutput, error) {
-			overview, err := s.svc.TrafficOverviewData(ctx, in.UserID)
+		func(ctx context.Context, _ *struct{}) (*trafficOverviewOutput, error) {
+			overview, err := s.svc.TrafficOverviewData(ctx)
 			if err != nil {
 				return nil, toHTTPError(err)
 			}
 			return &trafficOverviewOutput{Body: *overview}, nil
 		})
-	huma.Register(api, reg(huma.Operation{OperationID: "queryTraffic", Method: http.MethodGet, Path: "/api/traffic/query", Summary: "流量明细"}),
-		func(ctx context.Context, in *trafficQueryInput) (*trafficQueryOutput, error) {
+	huma.Register(api, reg(huma.Operation{OperationID: "getTrafficStats", Method: http.MethodGet, Path: "/api/traffic/stats", Summary: "按用户或按 Stack 统计流量"}),
+		func(ctx context.Context, in *trafficStatsInput) (*trafficStatsOutput, error) {
 			query, err := in.query()
 			if err != nil {
 				return nil, err
 			}
-			result, err := s.svc.QueryTraffic(ctx, query)
+			result, err := s.svc.TrafficStats(ctx, query)
 			if err != nil {
 				return nil, toHTTPError(err)
 			}
-			return &trafficQueryOutput{Body: *result}, nil
+			return &trafficStatsOutput{Body: *result}, nil
 		})
-	huma.Register(api, reg(huma.Operation{OperationID: "exportTraffic", Method: http.MethodGet, Path: "/api/traffic/export", Summary: "导出流量明细（CSV）"}),
-		func(ctx context.Context, in *trafficQueryInput) (*exportOutput, error) {
+	huma.Register(api, reg(huma.Operation{OperationID: "exportTrafficStats", Method: http.MethodGet, Path: "/api/traffic/stats/export", Summary: "导出流量统计（CSV）"}),
+		func(ctx context.Context, in *trafficStatsInput) (*exportOutput, error) {
 			query, err := in.query()
 			if err != nil {
 				return nil, err
 			}
-			result, err := s.svc.QueryTraffic(ctx, query)
-			if err != nil {
-				return nil, toHTTPError(err)
-			}
-			data, err := s.svc.TrafficCSV(ctx, result)
+			result, err := s.svc.TrafficStats(ctx, query)
 			if err != nil {
 				return nil, toHTTPError(err)
 			}
 			return &exportOutput{
 				ContentType:        "text/csv; charset=utf-8",
-				ContentDisposition: fmt.Sprintf(`attachment; filename="traffic-%s-%s.csv"`, in.Scope, in.Level),
-				Body:               data,
+				ContentDisposition: fmt.Sprintf(`attachment; filename="traffic-%s-%s.csv"`, in.View, in.Level),
+				Body:               s.svc.TrafficStatsCSV(result),
 			}, nil
 		})
-	huma.Register(api, reg(huma.Operation{OperationID: "listTrafficSubjects", Method: http.MethodGet, Path: "/api/traffic/subjects", Summary: "流量明细的筛选对象"}),
-		func(ctx context.Context, in *trafficSubjectsInput) (*trafficSubjectsOutput, error) {
-			subjects, err := s.svc.TrafficSubjects(ctx, in.Scope)
+	huma.Register(api, reg(huma.Operation{OperationID: "getTrafficRanking", Method: http.MethodGet, Path: "/api/traffic/ranking", Summary: "用户用量排行"}),
+		func(ctx context.Context, in *trafficRankingInput) (*trafficRankingOutput, error) {
+			result, err := s.svc.TrafficRanking(ctx, app.TrafficRankingQuery{From: time.Unix(in.From, 0), To: time.Unix(in.To, 0), Stack: in.Stack, Compare: in.Compare})
 			if err != nil {
 				return nil, toHTTPError(err)
 			}
-			return &trafficSubjectsOutput{Body: subjects}, nil
+			return &trafficRankingOutput{Body: *result}, nil
 		})
 	huma.Register(api, reg(huma.Operation{OperationID: "listUsersUsage", Method: http.MethodGet, Path: "/api/traffic/users", Summary: "全部用户的用量和自动暂停"}),
 		func(ctx context.Context, _ *struct{}) (*usersUsageOutput, error) {

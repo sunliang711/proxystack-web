@@ -104,7 +104,7 @@ func (s *Store) QueryTraffic(ctx context.Context, level, scope string, from, to 
 	query := "SELECT bucket_start, stack_id, subject, up, down FROM " + table + " WHERE scope = ? AND bucket_start >= ? AND bucket_start < ?"
 	args := []any{scope, from, to}
 	if len(stacks) > 0 {
-		query += " AND stack_id IN (" + strings.TrimSuffix(strings.Repeat("?,", len(stacks)), ",") + ")"
+		query += " AND stack_id IN (" + placeholders(len(stacks)) + ")"
 		for _, id := range stacks {
 			args = append(args, id)
 		}
@@ -125,20 +125,54 @@ func (s *Store) QueryTraffic(ctx context.Context, level, scope string, from, to 
 	return out, rows.Err()
 }
 
-// TrafficSubjects 返回某个维度出现过的对象。
-func (s *Store) TrafficSubjects(ctx context.Context, scope string) ([]string, error) {
-	rows, err := s.DB.QueryContext(ctx, "SELECT DISTINCT subject FROM traffic_day WHERE scope = ? ORDER BY subject", scope)
+// 峰值的分组方式。
+const (
+	PeakByUser  = "user"
+	PeakByStack = "stack"
+	PeakTotal   = "total"
+)
+
+// MinutePeaks 返回 [from, to) 内单分钟流量（上下行合计）的最大值。group 为 PeakByUser 时按用户分组
+// （档案并入所属用户，非用户对象归入 0），PeakByStack 时按 stack 分组，PeakTotal 时全部相加后取最大值（键为 0）。
+// stacks、users 为空时不过滤；users 只对用户维度生效。
+func (s *Store) MinutePeaks(ctx context.Context, scope, group string, from, to int64, stacks, users []int64) (map[int64]int64, error) {
+	key := "0"
+	switch group {
+	case PeakByUser:
+		key = "CAST(subject AS INTEGER)"
+	case PeakByStack:
+		key = "stack_id"
+	}
+	inner := "SELECT bucket_start, " + key + " AS k, SUM(up + down) AS t FROM traffic_minute WHERE scope = ? AND bucket_start >= ? AND bucket_start < ?"
+	args := []any{scope, from, to}
+	if len(stacks) > 0 {
+		inner += " AND stack_id IN (" + placeholders(len(stacks)) + ")"
+		for _, id := range stacks {
+			args = append(args, id)
+		}
+	}
+	if len(users) > 0 {
+		inner += " AND CAST(subject AS INTEGER) IN (" + placeholders(len(users)) + ")"
+		for _, id := range users {
+			args = append(args, id)
+		}
+	}
+	rows, err := s.DB.QueryContext(ctx, "SELECT k, MAX(t) FROM ("+inner+" GROUP BY bucket_start, k) GROUP BY k", args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := []string{}
+	out := map[int64]int64{}
 	for rows.Next() {
-		var subject string
-		if err := rows.Scan(&subject); err != nil {
+		var k, peak int64
+		if err := rows.Scan(&k, &peak); err != nil {
 			return nil, err
 		}
-		out = append(out, subject)
+		out[k] = peak
 	}
 	return out, rows.Err()
+}
+
+func placeholders(n int) string {
+	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
 }

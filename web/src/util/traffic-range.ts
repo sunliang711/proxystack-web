@@ -76,18 +76,7 @@ export function recentHourRange(hours: number, timezone: string, now = Date.now(
   return [text(step(end, 'hour', 1 - hours)), text(end)]
 }
 
-/** 查询范围内的全部小时桶起点（Unix 秒）。明细查询只返回有流量的桶，图表需要按它补齐。 */
-export function hourBuckets(bounds: { from: number; to: number }): number[] {
-  const out: number[] = []
-  for (let at = bounds.from; at < bounds.to; at += 3600) out.push(at)
-  return out
-}
 
-/** 把只含有流量桶的序列对齐到完整的桶列表，缺失的桶记为 0。 */
-export function alignBuckets(expected: number[], buckets: string[], values: number[]): number[] {
-  const byBucket = new Map(buckets.map((bucket, index) => [Date.parse(bucket) / 1000, values[index] ?? 0]))
-  return expected.map((at) => byBucket.get(at) ?? 0)
-}
 
 /** 截至今天（含）的最近 days 个自然日，按统计时区计算。 */
 export function recentDayRange(days: number, timezone: string, now = Date.now()): TrafficRange {
@@ -95,10 +84,18 @@ export function recentDayRange(days: number, timezone: string, now = Date.now())
   return [text(step(end, 'day', 1 - days)), text(end)]
 }
 
-/** 日期范围内每个自然日的起点（Unix 秒），按统计时区计算，夏令时日长不固定。 */
-export function dayBuckets(range: TrafficRange, timezone: string): number[] {
-  const out: number[] = []
-  const end = floor(civil(range[1]), 'day')
-  for (let at = floor(civil(range[0]), 'day'); at <= end; at = step(at, 'day', 1)) out.push(instant(at, timezone) / 1000)
-  return out
+/** 排行的快捷时间段。 */
+export type RankingPreset = 'today' | 'yesterday' | 'month' | 'last_month'
+
+/** 快捷时间段的查询边界（Unix 秒），按统计时区的自然日和自然月计算。 */
+export function presetBounds(preset: RankingPreset, timezone: string, now = Date.now()) {
+  const local = localTime(now, timezone)
+  const level: TrafficLevel = preset === 'today' || preset === 'yesterday' ? 'day' : 'month'
+  const start = step(floor(local, level), level, preset === 'yesterday' || preset === 'last_month' ? -1 : 0)
+  return trafficBounds(level, [text(start), text(start)], timezone)
+}
+
+/** 更粗一级的粒度，用于明细超出保留期时建议切换。 */
+export function coarserLevel(level: TrafficLevel): TrafficLevel | null {
+  return ({ hour: 'day', day: 'month', month: 'year', year: null } as const)[level]
 }

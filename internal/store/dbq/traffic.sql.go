@@ -7,6 +7,7 @@ package dbq
 
 import (
 	"context"
+	"strings"
 )
 
 const addTrafficMinute = `-- name: AddTrafficMinute :exec
@@ -74,6 +75,39 @@ func (q *Queries) AddUserUsage(ctx context.Context, arg AddUserUsageParams) erro
 	return err
 }
 
+const closeOpenTrafficGapsExcept = `-- name: CloseOpenTrafficGapsExcept :exec
+UPDATE traffic_gaps SET open = 0 WHERE open = 1 AND stack_id NOT IN (/*SLICE:stack_ids*/?)
+`
+
+func (q *Queries) CloseOpenTrafficGapsExcept(ctx context.Context, stackIds []int64) error {
+	query := closeOpenTrafficGapsExcept
+	var queryParams []interface{}
+	if len(stackIds) > 0 {
+		for _, v := range stackIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:stack_ids*/?", strings.Repeat(",?", len(stackIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:stack_ids*/?", "NULL", 1)
+	}
+	_, err := q.db.ExecContext(ctx, query, queryParams...)
+	return err
+}
+
+const closeTrafficGap = `-- name: CloseTrafficGap :exec
+UPDATE traffic_gaps SET end_at = ?, open = 0 WHERE id = ?
+`
+
+type CloseTrafficGapParams struct {
+	EndAt int64 `json:"end_at"`
+	ID    int64 `json:"id"`
+}
+
+func (q *Queries) CloseTrafficGap(ctx context.Context, arg CloseTrafficGapParams) error {
+	_, err := q.db.ExecContext(ctx, closeTrafficGap, arg.EndAt, arg.ID)
+	return err
+}
+
 const countFailedNotifications = `-- name: CountFailedNotifications :one
 SELECT count(*) FROM notifications WHERE status = 'failed'
 `
@@ -108,6 +142,15 @@ func (q *Queries) DeleteNotificationsBefore(ctx context.Context, at int64) error
 	return err
 }
 
+const deleteTrafficGapsBefore = `-- name: DeleteTrafficGapsBefore :exec
+DELETE FROM traffic_gaps WHERE end_at < ? AND open = 0
+`
+
+func (q *Queries) DeleteTrafficGapsBefore(ctx context.Context, endAt int64) error {
+	_, err := q.db.ExecContext(ctx, deleteTrafficGapsBefore, endAt)
+	return err
+}
+
 const deleteUserDailyBefore = `-- name: DeleteUserDailyBefore :exec
 DELETE FROM user_daily_usage WHERE day < ?
 `
@@ -129,6 +172,21 @@ type ExemptUserDailyParams struct {
 
 func (q *Queries) ExemptUserDaily(ctx context.Context, arg ExemptUserDailyParams) error {
 	_, err := q.db.ExecContext(ctx, exemptUserDaily, arg.UserID, arg.Day)
+	return err
+}
+
+const extendTrafficGap = `-- name: ExtendTrafficGap :exec
+UPDATE traffic_gaps SET end_at = ?, reason = ? WHERE id = ?
+`
+
+type ExtendTrafficGapParams struct {
+	EndAt  int64  `json:"end_at"`
+	Reason string `json:"reason"`
+	ID     int64  `json:"id"`
+}
+
+func (q *Queries) ExtendTrafficGap(ctx context.Context, arg ExtendTrafficGapParams) error {
+	_, err := q.db.ExecContext(ctx, extendTrafficGap, arg.EndAt, arg.Reason, arg.ID)
 	return err
 }
 
@@ -157,6 +215,36 @@ func (q *Queries) GetNotification(ctx context.Context, id int64) (Notification, 
 		&i.Incident,
 	)
 	return i, err
+}
+
+const getOpenTrafficGap = `-- name: GetOpenTrafficGap :one
+SELECT id, stack_id, kind, reason, start_at, end_at, open FROM traffic_gaps WHERE stack_id = ? AND open = 1 ORDER BY id DESC LIMIT 1
+`
+
+func (q *Queries) GetOpenTrafficGap(ctx context.Context, stackID int64) (TrafficGap, error) {
+	row := q.db.QueryRowContext(ctx, getOpenTrafficGap, stackID)
+	var i TrafficGap
+	err := row.Scan(
+		&i.ID,
+		&i.StackID,
+		&i.Kind,
+		&i.Reason,
+		&i.StartAt,
+		&i.EndAt,
+		&i.Open,
+	)
+	return i, err
+}
+
+const getTrafficHeartbeat = `-- name: GetTrafficHeartbeat :one
+SELECT at FROM traffic_heartbeat WHERE id = 1
+`
+
+func (q *Queries) GetTrafficHeartbeat(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getTrafficHeartbeat)
+	var at int64
+	err := row.Scan(&at)
+	return at, err
 }
 
 const getUserUsage = `-- name: GetUserUsage :one
@@ -229,6 +317,31 @@ func (q *Queries) InsertNotification(ctx context.Context, arg InsertNotification
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const insertTrafficGap = `-- name: InsertTrafficGap :exec
+INSERT INTO traffic_gaps (stack_id, kind, reason, start_at, end_at, open) VALUES (?, ?, ?, ?, ?, ?)
+`
+
+type InsertTrafficGapParams struct {
+	StackID int64  `json:"stack_id"`
+	Kind    string `json:"kind"`
+	Reason  string `json:"reason"`
+	StartAt int64  `json:"start_at"`
+	EndAt   int64  `json:"end_at"`
+	Open    int64  `json:"open"`
+}
+
+func (q *Queries) InsertTrafficGap(ctx context.Context, arg InsertTrafficGapParams) error {
+	_, err := q.db.ExecContext(ctx, insertTrafficGap,
+		arg.StackID,
+		arg.Kind,
+		arg.Reason,
+		arg.StartAt,
+		arg.EndAt,
+		arg.Open,
+	)
+	return err
 }
 
 const listAutoPauses = `-- name: ListAutoPauses :many
@@ -379,6 +492,78 @@ func (q *Queries) ListStackDailyUsage(ctx context.Context, bucketStart int64) ([
 	return items, nil
 }
 
+const listTrafficGaps = `-- name: ListTrafficGaps :many
+SELECT id, stack_id, kind, reason, start_at, end_at, open FROM traffic_gaps WHERE end_at >= ? AND start_at < ? ORDER BY start_at, stack_id
+`
+
+type ListTrafficGapsParams struct {
+	EndAt   int64 `json:"end_at"`
+	StartAt int64 `json:"start_at"`
+}
+
+func (q *Queries) ListTrafficGaps(ctx context.Context, arg ListTrafficGapsParams) ([]TrafficGap, error) {
+	rows, err := q.db.QueryContext(ctx, listTrafficGaps, arg.EndAt, arg.StartAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TrafficGap
+	for rows.Next() {
+		var i TrafficGap
+		if err := rows.Scan(
+			&i.ID,
+			&i.StackID,
+			&i.Kind,
+			&i.Reason,
+			&i.StartAt,
+			&i.EndAt,
+			&i.Open,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTrafficNames = `-- name: ListTrafficNames :many
+SELECT kind, id, name, role FROM traffic_names
+`
+
+func (q *Queries) ListTrafficNames(ctx context.Context) ([]TrafficName, error) {
+	rows, err := q.db.QueryContext(ctx, listTrafficNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TrafficName
+	for rows.Next() {
+		var i TrafficName
+		if err := rows.Scan(
+			&i.Kind,
+			&i.ID,
+			&i.Name,
+			&i.Role,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUserDailySeries = `-- name: ListUserDailySeries :many
 SELECT user_id, day, up, down, exempt FROM user_daily_usage WHERE user_id = ? AND day >= ? ORDER BY day
 `
@@ -482,6 +667,15 @@ func (q *Queries) ListUserUsage(ctx context.Context) ([]UserUsage, error) {
 	return items, nil
 }
 
+const putTrafficHeartbeat = `-- name: PutTrafficHeartbeat :exec
+INSERT INTO traffic_heartbeat (id, at) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET at = excluded.at
+`
+
+func (q *Queries) PutTrafficHeartbeat(ctx context.Context, at int64) error {
+	_, err := q.db.ExecContext(ctx, putTrafficHeartbeat, at)
+	return err
+}
+
 const resetUserUsage = `-- name: ResetUserUsage :exec
 INSERT INTO user_usage (user_id, period_start, up, down) VALUES (?, ?, 0, 0)
 ON CONFLICT (user_id) DO UPDATE SET period_start = excluded.period_start, up = 0, down = 0
@@ -516,6 +710,28 @@ func (q *Queries) UpdateNotification(ctx context.Context, arg UpdateNotification
 		arg.Attempts,
 		arg.NextAttemptAt,
 		arg.ID,
+	)
+	return err
+}
+
+const upsertTrafficName = `-- name: UpsertTrafficName :exec
+INSERT INTO traffic_names (kind, id, name, role) VALUES (?, ?, ?, ?)
+ON CONFLICT (kind, id) DO UPDATE SET name = excluded.name, role = excluded.role
+`
+
+type UpsertTrafficNameParams struct {
+	Kind string `json:"kind"`
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	Role string `json:"role"`
+}
+
+func (q *Queries) UpsertTrafficName(ctx context.Context, arg UpsertTrafficNameParams) error {
+	_, err := q.db.ExecContext(ctx, upsertTrafficName,
+		arg.Kind,
+		arg.ID,
+		arg.Name,
+		arg.Role,
 	)
 	return err
 }

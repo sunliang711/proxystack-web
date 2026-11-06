@@ -22,3 +22,11 @@ export interface ChartSeries {
   /** 提示框里的「合计」不计入这一项，例如流量已在其他 stack 计入的聚合 stack。 */
   excludeFromTotal?: boolean
 }
+
+/** 图表上标出的一段时间，from、to 是时间桶下标（含）。missing 表示没有明细，gap 表示采集中断。 */
+export interface ChartArea {
+  from: number
+  to: number
+  kind: 'missing' | 'gap'
+  label: string
+}

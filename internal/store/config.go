@@ -589,6 +589,21 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 			upstream.ID = upstreamID
 		}
 	}
+	return saveTrafficNames(ctx, q, doc)
+}
+
+// saveTrafficNames 记下用户和 stack 的当前名字与角色。删除后记录保留，历史流量仍能显示名字。
+func saveTrafficNames(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) error {
+	for _, user := range doc.Users {
+		if err := q.UpsertTrafficName(ctx, dbq.UpsertTrafficNameParams{Kind: "user", ID: user.ID, Name: user.Name}); err != nil {
+			return err
+		}
+	}
+	for _, stack := range doc.Stacks {
+		if err := q.UpsertTrafficName(ctx, dbq.UpsertTrafficNameParams{Kind: "stack", ID: stack.ID, Name: stack.Name, Role: stack.Role}); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

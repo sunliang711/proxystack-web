@@ -11,19 +11,31 @@ import (
 )
 
 // TestTrafficStackQuery 验证 stack 分组参数、空结果结构与用户筛选校验。
-func TestTrafficStackQuery(t *testing.T) {
+func TestTrafficStatsAPI(t *testing.T) {
 	h := newAdminHarness(t)
-	body := h.mustDo(http.MethodGet, "/api/traffic/query?group_by=stack&scope=user&from=0&to=2000000000", nil, http.StatusOK)
-	require.Equal(t, map[string]any{"up": float64(0), "down": float64(0)}, body["total"])
-	require.Empty(t, body["by_stack"])
-	require.Empty(t, body["series"])
-	h.mustDo(http.MethodGet, "/api/traffic/query?group_by=invalid", nil, http.StatusUnprocessableEntity)
-	h.mustDo(http.MethodGet, "/api/traffic/overview?user_id=-1", nil, http.StatusUnprocessableEntity)
-	h.mustDo(http.MethodGet, "/api/traffic/overview?user_id=9999", nil, http.StatusNotFound)
+	for _, view := range []string{"user", "stack"} {
+		body := h.mustDo(http.MethodGet, "/api/traffic/stats?view="+view+"&level=month&from=1767196800&to=1798732800&compare=true", nil, http.StatusOK)
+		require.Len(t, body["buckets"], 12)
+		total := body["total"].(map[string]any)
+		require.Equal(t, float64(0), total["up"])
+		require.Len(t, total["series_up"], 12)
+		require.NotNil(t, body["rows"])
+		require.NotNil(t, body["gaps"])
+	}
+	h.mustDo(http.MethodGet, "/api/traffic/stats?view=invalid", nil, http.StatusUnprocessableEntity)
+	h.mustDo(http.MethodGet, "/api/traffic/stats?users=oops", nil, http.StatusUnprocessableEntity)
+	h.mustDo(http.MethodGet, "/api/traffic/stats?level=day&from=0&to=2000000000", nil, http.StatusUnprocessableEntity)
+	h.mustDo(http.MethodGet, "/api/traffic/stats/export?view=stack&level=day&from=1767225600&to=1767312000", nil, http.StatusOK)
+	body := h.mustDo(http.MethodGet, "/api/traffic/ranking?from=1767225600&to=1767312000&compare=true", nil, http.StatusOK)
+	require.NotNil(t, body["rows"])
+	h.mustDo(http.MethodGet, "/api/traffic/ranking?from=1767225600&to=1767225600", nil, http.StatusUnprocessableEntity)
+	h.mustDo(http.MethodGet, "/api/traffic/query", nil, http.StatusNotFound)
 	body = h.mustDo(http.MethodGet, "/api/traffic/overview", nil, http.StatusOK)
 	require.Empty(t, body["by_stack"])
-	for _, key := range []string{"today", "month", "user_today", "user_month"} {
-		require.Equal(t, map[string]any{"up": float64(0), "down": float64(0)}, body[key])
+	for _, key := range []string{"today", "month"} {
+		period := body[key].(map[string]any)
+		require.Equal(t, map[string]any{"up": float64(0), "down": float64(0)}, period["total"])
+		require.Equal(t, map[string]any{"up": float64(0), "down": float64(0)}, period["users"])
 	}
 }
 
@@ -43,6 +55,7 @@ func TestStackUsageAPI(t *testing.T) {
 		for _, key := range []string{"today", "month", "recent"} {
 			require.Equal(t, map[string]any{"up": float64(0), "down": float64(0)}, body[key])
 		}
+		require.Empty(t, body["unattributed"])
 	}
 	h.mustDo(http.MethodGet, path+"?user_id=-1", nil, http.StatusUnprocessableEntity)
 	h.mustDo(http.MethodGet, path+"?user_id=oops", nil, http.StatusUnprocessableEntity)

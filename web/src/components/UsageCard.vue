@@ -61,13 +61,13 @@ const view = ref<'daily' | 'hourly'>('daily')
 const hours = ref(24)
 const hourOptions = [{ label: '24 小时', value: 24 }, { label: '48 小时', value: 48 }, { label: '7 天', value: 168 }]
 const { trend: hourly, error: hourlyError, load: loadHourly } = useTrafficTrend(() => view.value === 'hourly'
-  ? { level: 'hour', span: hours.value, scope: 'user', groupBy: 'stack', stacks: stackId.value ? [stackId.value] : [], subjects: [String(props.userId)], entity: 'stack' }
+  ? { level: 'hour', span: hours.value, view: 'stack', stacks: stackId.value ? [stackId.value] : [], users: [props.userId] }
   : null)
 watch(usage, () => void loadHourly())
 /** 在流量明细页查看同一用户、同一 Stack 的更长范围或导出。 */
 const trafficLink = computed(() => ({
   name: 'traffic',
-  query: { level: view.value === 'hourly' ? 'hour' : 'day', scope: 'user', subjects: String(props.userId), ...(stackId.value ? { stacks: String(stackId.value) } : {}) },
+  query: { level: view.value === 'hourly' ? 'hour' : 'day', users: String(props.userId), ...(stackId.value ? { stacks: String(stackId.value) } : {}) },
 }))
 </script>
 

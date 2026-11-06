@@ -1479,23 +1479,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/traffic/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 导出流量明细（CSV） */
-        get: operations["exportTraffic"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/traffic/overview": {
         parameters: {
             query?: never;
@@ -1513,15 +1496,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/traffic/query": {
+    "/api/traffic/ranking": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** 流量明细 */
-        get: operations["queryTraffic"];
+        /** 用户用量排行 */
+        get: operations["getTrafficRanking"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1530,15 +1513,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/traffic/subjects": {
+    "/api/traffic/stats": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** 流量明细的筛选对象 */
-        get: operations["listTrafficSubjects"];
+        /** 按用户或按 Stack 统计流量 */
+        get: operations["getTrafficStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/traffic/stats/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 导出流量统计（CSV） */
+        get: operations["exportTrafficStats"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2424,6 +2424,33 @@ export interface components {
             /** @enum {string} */
             type: "mihomo" | "socks5" | "http" | "direct";
         };
+        OverviewPeriod: {
+            /** Format: date-time */
+            from: string;
+            previous: components["schemas"]["Bytes"];
+            /** Format: date-time */
+            previous_from: string;
+            /** Format: date-time */
+            previous_to: string;
+            total: components["schemas"]["Bytes"];
+            users: components["schemas"]["Bytes"];
+        };
+        OverviewStack: {
+            deleted: boolean;
+            excluded: boolean;
+            month: components["schemas"]["OverviewStackPeriod"];
+            role: string;
+            stack: string;
+            /** Format: int64 */
+            stack_id: number;
+            today: components["schemas"]["OverviewStackPeriod"];
+        };
+        OverviewStackPeriod: {
+            relay: components["schemas"]["Bytes"];
+            shared: components["schemas"]["Bytes"];
+            total: components["schemas"]["Bytes"];
+            users: components["schemas"]["Bytes"];
+        };
         PanelListen: {
             listen: string;
             /** Format: int64 */
@@ -2802,15 +2829,6 @@ export interface components {
             name: string;
             units: components["schemas"]["UnitView"][];
         };
-        StackSeries: {
-            aggregator: boolean;
-            down: number[];
-            label: string;
-            /** Format: int64 */
-            stack_id: number;
-            subject: string;
-            up: number[];
-        };
         StackSummary: {
             desired_running: boolean;
             enabled: boolean;
@@ -2831,15 +2849,13 @@ export interface components {
             upstreams: components["schemas"]["UpstreamSummary"][];
             xray_enabled: boolean;
         };
-        StackTraffic: {
-            aggregator: boolean;
+        StackUnattributed: {
+            /** @enum {string} */
+            kind: "relay" | "shared";
             month: components["schemas"]["Bytes"];
-            stack: string;
-            /** Format: int64 */
-            stack_id: number;
+            name: string;
+            recent: components["schemas"]["Bytes"];
             today: components["schemas"]["Bytes"];
-            user_month: components["schemas"]["Bytes"];
-            user_today: components["schemas"]["Bytes"];
         };
         StackUsage: {
             by_user: components["schemas"]["StackUserUsage"][];
@@ -2852,6 +2868,7 @@ export interface components {
             /** Format: int64 */
             stack_id: number;
             today: components["schemas"]["Bytes"];
+            unattributed: components["schemas"]["StackUnattributed"][];
         };
         StackUserUsage: {
             month: components["schemas"]["Bytes"];
@@ -3000,32 +3017,58 @@ export interface components {
         TotpEnableInputBody: {
             totp_code: string;
         };
+        TrafficGap: {
+            /** Format: date-time */
+            from: string;
+            /** @enum {string} */
+            kind: "lost" | "delayed";
+            open: boolean;
+            reason: string;
+            stack: string;
+            /** Format: int64 */
+            stack_id: number;
+            /** Format: date-time */
+            to: string;
+        };
         TrafficOverview: {
-            by_stack: components["schemas"]["StackTraffic"][];
+            by_stack: components["schemas"]["OverviewStack"][];
             enabled: boolean;
             /** Format: int64 */
             failed_notifications: number;
+            gaps: components["schemas"]["TrafficGap"][];
             live: components["schemas"]["LivePoint"][];
-            month: components["schemas"]["Bytes"];
+            month: components["schemas"]["OverviewPeriod"];
             stacks: components["schemas"]["CollectStatus"][];
-            today: components["schemas"]["Bytes"];
-            top_users: components["schemas"]["UserTraffic"][];
-            top_users_today: components["schemas"]["UserTraffic"][];
-            user_month: components["schemas"]["Bytes"];
-            user_today: components["schemas"]["Bytes"];
-        };
-        TrafficResult: {
-            buckets: string[];
-            by_stack: components["schemas"]["StackSeries"][];
-            series: components["schemas"]["TrafficSeries"][];
             timezone: string;
-            total: components["schemas"]["Bytes"];
+            today: components["schemas"]["OverviewPeriod"];
+            top_month: components["schemas"]["TrafficRankRow"][];
+            top_today: components["schemas"]["TrafficRankRow"][];
         };
-        TrafficSeries: {
-            down: number[];
-            label: string;
-            subject: string;
-            up: number[];
+        TrafficRankRow: {
+            deleted: boolean;
+            /** Format: int64 */
+            down: number;
+            name: string;
+            previous?: components["schemas"]["Bytes"];
+            /** Format: int64 */
+            up: number;
+            /** Format: int64 */
+            user_id: number;
+        };
+        TrafficRanking: {
+            /** Format: date-time */
+            from: string;
+            gaps: components["schemas"]["TrafficGap"][];
+            previous?: components["schemas"]["Bytes"];
+            /** Format: date-time */
+            previous_from: string;
+            /** Format: date-time */
+            previous_to: string;
+            rows: components["schemas"]["TrafficRankRow"][];
+            timezone: string;
+            /** Format: date-time */
+            to: string;
+            total: components["schemas"]["Bytes"];
         };
         TrafficSettings: {
             disconnect_on_pause: boolean;
@@ -3044,9 +3087,49 @@ export interface components {
             /** Format: int64 */
             retention_month_days: number;
         };
-        TrafficSubject: {
-            label: string;
-            subject: string;
+        TrafficStats: {
+            /** Format: date-time */
+            available_from: string;
+            buckets: string[];
+            /** Format: date-time */
+            from: string;
+            gaps: components["schemas"]["TrafficGap"][];
+            level: string;
+            peak_available: boolean;
+            /** Format: date-time */
+            previous_from: string;
+            /** Format: date-time */
+            previous_to: string;
+            /** Format: int64 */
+            retention_days: number;
+            rows: components["schemas"]["TrafficStatsRow"][];
+            series_detail: boolean;
+            timezone: string;
+            /** Format: date-time */
+            to: string;
+            total: components["schemas"]["TrafficStatsRow"];
+            view: string;
+        };
+        TrafficStatsRow: {
+            children: components["schemas"]["TrafficStatsRow"][];
+            deleted: boolean;
+            /** Format: int64 */
+            down: number;
+            excluded: boolean;
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            kind: "total" | "user" | "stack" | "profile" | "unknown" | "relay" | "shared";
+            name: string;
+            /** Format: int64 */
+            peak?: number;
+            previous?: components["schemas"]["Bytes"];
+            profiles: components["schemas"]["TrafficStatsRow"][];
+            role: string;
+            series_down?: number[];
+            series_up?: number[];
+            /** Format: int64 */
+            up: number;
         };
         UnitActionInputBody: {
             /** @enum {string} */
@@ -3148,15 +3231,6 @@ export interface components {
             stack: string;
             /** Format: int64 */
             stack_id: number;
-        };
-        UserTraffic: {
-            /** Format: int64 */
-            down: number;
-            /** Format: int64 */
-            id: number;
-            name: string;
-            /** Format: int64 */
-            up: number;
         };
         UserUsage: {
             auto_pauses: components["schemas"]["AutoPause"][];
@@ -6388,55 +6462,9 @@ export interface operations {
             };
         };
     };
-    exportTraffic: {
-        parameters: {
-            query?: {
-                group_by?: "subject" | "stack";
-                level?: "hour" | "day" | "month" | "year";
-                scope?: "user" | "inbound" | "outbound";
-                /** @description 开始时间（Unix 秒） */
-                from?: number;
-                /** @description 结束时间（Unix 秒），不含 */
-                to?: number;
-                /** @description stack ID，逗号分隔，空表示全部 */
-                stacks?: string;
-                /** @description 对象，逗号分隔，空表示全部 */
-                subjects?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    "Content-Disposition"?: string;
-                    "Content-Type"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": string;
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
     getTrafficOverview: {
         parameters: {
-            query?: {
-                /** @description 用户 ID，0 表示全部流量 */
-                user_id?: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -6463,20 +6491,17 @@ export interface operations {
             };
         };
     };
-    queryTraffic: {
+    getTrafficRanking: {
         parameters: {
             query?: {
-                group_by?: "subject" | "stack";
-                level?: "hour" | "day" | "month" | "year";
-                scope?: "user" | "inbound" | "outbound";
                 /** @description 开始时间（Unix 秒） */
                 from?: number;
                 /** @description 结束时间（Unix 秒），不含 */
                 to?: number;
-                /** @description stack ID，逗号分隔，空表示全部 */
-                stacks?: string;
-                /** @description 对象，逗号分隔，空表示全部 */
-                subjects?: string;
+                /** @description stack ID，0 表示全部 stack */
+                stack?: number;
+                /** @description 同时返回上一期同等时长的用量 */
+                compare?: boolean;
             };
             header?: never;
             path?: never;
@@ -6490,7 +6515,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TrafficResult"];
+                    "application/json": components["schemas"]["TrafficRanking"];
                 };
             };
             /** @description Error */
@@ -6504,10 +6529,22 @@ export interface operations {
             };
         };
     };
-    listTrafficSubjects: {
+    getTrafficStats: {
         parameters: {
             query?: {
-                scope?: "user" | "inbound" | "outbound";
+                /** @description 统计视角 */
+                view?: "user" | "stack";
+                level?: "hour" | "day" | "month" | "year";
+                /** @description 开始时间（Unix 秒） */
+                from?: number;
+                /** @description 结束时间（Unix 秒），不含 */
+                to?: number;
+                /** @description 用户 ID，逗号分隔，空表示全部 */
+                users?: string;
+                /** @description stack ID，逗号分隔，空表示全部 */
+                stacks?: string;
+                /** @description 同时返回上一期同等时长的用量 */
+                compare?: boolean;
             };
             header?: never;
             path?: never;
@@ -6521,7 +6558,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TrafficSubject"][];
+                    "application/json": components["schemas"]["TrafficStats"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    exportTrafficStats: {
+        parameters: {
+            query?: {
+                /** @description 统计视角 */
+                view?: "user" | "stack";
+                level?: "hour" | "day" | "month" | "year";
+                /** @description 开始时间（Unix 秒） */
+                from?: number;
+                /** @description 结束时间（Unix 秒），不含 */
+                to?: number;
+                /** @description 用户 ID，逗号分隔，空表示全部 */
+                users?: string;
+                /** @description stack ID，逗号分隔，空表示全部 */
+                stacks?: string;
+                /** @description 同时返回上一期同等时长的用量 */
+                compare?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
                 };
             };
             /** @description Error */

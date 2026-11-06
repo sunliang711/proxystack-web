@@ -28,6 +28,15 @@ func (f *Fake) set(unit, active, message string) {
 	f.logs = append(f.logs, LogEntry{Time: time.Now(), Unit: unit, Priority: 6, Message: message})
 }
 
+// SetSince 修改 unit 进入当前状态的时间，用于模拟进程在两次检查之间重启或停止。
+func (f *Fake) SetSince(unit string, since time.Time) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	state := f.states[unit]
+	state.Since = since
+	f.states[unit] = state
+}
+
 func (f *Fake) Start(_ context.Context, unit string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

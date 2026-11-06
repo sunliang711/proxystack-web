@@ -2484,6 +2484,102 @@
         ],
         "type": "object"
       },
+      "OverviewPeriod": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "previous": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "previous_from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "previous_to": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "total": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "users": {
+            "$ref": "#/components/schemas/Bytes"
+          }
+        },
+        "required": [
+          "from",
+          "previous_from",
+          "previous_to",
+          "total",
+          "users",
+          "previous"
+        ],
+        "type": "object"
+      },
+      "OverviewStack": {
+        "additionalProperties": false,
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "excluded": {
+            "type": "boolean"
+          },
+          "month": {
+            "$ref": "#/components/schemas/OverviewStackPeriod"
+          },
+          "role": {
+            "type": "string"
+          },
+          "stack": {
+            "type": "string"
+          },
+          "stack_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "today": {
+            "$ref": "#/components/schemas/OverviewStackPeriod"
+          }
+        },
+        "required": [
+          "stack_id",
+          "stack",
+          "role",
+          "excluded",
+          "deleted",
+          "today",
+          "month"
+        ],
+        "type": "object"
+      },
+      "OverviewStackPeriod": {
+        "additionalProperties": false,
+        "properties": {
+          "relay": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "shared": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "total": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "users": {
+            "$ref": "#/components/schemas/Bytes"
+          }
+        },
+        "required": [
+          "total",
+          "users",
+          "relay",
+          "shared"
+        ],
+        "type": "object"
+      },
       "PanelListen": {
         "additionalProperties": false,
         "properties": {
@@ -3895,47 +3991,6 @@
         ],
         "type": "object"
       },
-      "StackSeries": {
-        "additionalProperties": false,
-        "properties": {
-          "aggregator": {
-            "type": "boolean"
-          },
-          "down": {
-            "items": {
-              "format": "int64",
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "label": {
-            "type": "string"
-          },
-          "stack_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "subject": {
-            "type": "string"
-          },
-          "up": {
-            "items": {
-              "format": "int64",
-              "type": "integer"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "stack_id",
-          "aggregator",
-          "subject",
-          "label",
-          "up",
-          "down"
-        ],
-        "type": "object"
-      },
       "StackSummary": {
         "additionalProperties": false,
         "properties": {
@@ -4022,40 +4077,35 @@
         ],
         "type": "object"
       },
-      "StackTraffic": {
+      "StackUnattributed": {
         "additionalProperties": false,
         "properties": {
-          "aggregator": {
-            "type": "boolean"
+          "kind": {
+            "enum": [
+              "relay",
+              "shared"
+            ],
+            "type": "string"
           },
           "month": {
             "$ref": "#/components/schemas/Bytes"
           },
-          "stack": {
+          "name": {
             "type": "string"
           },
-          "stack_id": {
-            "format": "int64",
-            "type": "integer"
+          "recent": {
+            "$ref": "#/components/schemas/Bytes"
           },
           "today": {
-            "$ref": "#/components/schemas/Bytes"
-          },
-          "user_month": {
-            "$ref": "#/components/schemas/Bytes"
-          },
-          "user_today": {
             "$ref": "#/components/schemas/Bytes"
           }
         },
         "required": [
-          "stack_id",
-          "stack",
-          "aggregator",
+          "kind",
+          "name",
           "today",
           "month",
-          "user_today",
-          "user_month"
+          "recent"
         ],
         "type": "object"
       },
@@ -4095,6 +4145,12 @@
           },
           "today": {
             "$ref": "#/components/schemas/Bytes"
+          },
+          "unattributed": {
+            "items": {
+              "$ref": "#/components/schemas/StackUnattributed"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -4106,7 +4162,8 @@
           "recent",
           "daily",
           "collection",
-          "by_user"
+          "by_user",
+          "unattributed"
         ],
         "type": "object"
       },
@@ -4615,12 +4672,55 @@
         ],
         "type": "object"
       },
+      "TrafficGap": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "lost",
+              "delayed"
+            ],
+            "type": "string"
+          },
+          "open": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "stack": {
+            "type": "string"
+          },
+          "stack_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "to": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stack_id",
+          "stack",
+          "kind",
+          "reason",
+          "from",
+          "to",
+          "open"
+        ],
+        "type": "object"
+      },
       "TrafficOverview": {
         "additionalProperties": false,
         "properties": {
           "by_stack": {
             "items": {
-              "$ref": "#/components/schemas/StackTraffic"
+              "$ref": "#/components/schemas/OverviewStack"
             },
             "type": "array"
           },
@@ -4631,6 +4731,12 @@
             "format": "int64",
             "type": "integer"
           },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/TrafficGap"
+            },
+            "type": "array"
+          },
           "live": {
             "items": {
               "$ref": "#/components/schemas/LivePoint"
@@ -4638,7 +4744,7 @@
             "type": "array"
           },
           "month": {
-            "$ref": "#/components/schemas/Bytes"
+            "$ref": "#/components/schemas/OverviewPeriod"
           },
           "stacks": {
             "items": {
@@ -4646,66 +4752,109 @@
             },
             "type": "array"
           },
+          "timezone": {
+            "type": "string"
+          },
           "today": {
-            "$ref": "#/components/schemas/Bytes"
+            "$ref": "#/components/schemas/OverviewPeriod"
           },
-          "top_users": {
+          "top_month": {
             "items": {
-              "$ref": "#/components/schemas/UserTraffic"
+              "$ref": "#/components/schemas/TrafficRankRow"
             },
             "type": "array"
           },
-          "top_users_today": {
+          "top_today": {
             "items": {
-              "$ref": "#/components/schemas/UserTraffic"
+              "$ref": "#/components/schemas/TrafficRankRow"
             },
             "type": "array"
-          },
-          "user_month": {
-            "$ref": "#/components/schemas/Bytes"
-          },
-          "user_today": {
-            "$ref": "#/components/schemas/Bytes"
           }
         },
         "required": [
           "enabled",
+          "failed_notifications",
+          "timezone",
           "today",
           "month",
-          "user_today",
-          "user_month",
-          "top_users",
           "live",
-          "stacks",
+          "top_today",
+          "top_month",
           "by_stack",
-          "failed_notifications",
-          "top_users_today"
+          "stacks",
+          "gaps"
         ],
         "type": "object"
       },
-      "TrafficResult": {
+      "TrafficRankRow": {
         "additionalProperties": false,
         "properties": {
-          "buckets": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "down": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "previous": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "up": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "user_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "name",
+          "deleted",
+          "up",
+          "down"
+        ],
+        "type": "object"
+      },
+      "TrafficRanking": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "gaps": {
             "items": {
-              "format": "date-time",
-              "type": "string"
+              "$ref": "#/components/schemas/TrafficGap"
             },
             "type": "array"
           },
-          "by_stack": {
-            "items": {
-              "$ref": "#/components/schemas/StackSeries"
-            },
-            "type": "array"
+          "previous": {
+            "$ref": "#/components/schemas/Bytes"
           },
-          "series": {
+          "previous_from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "previous_to": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "rows": {
             "items": {
-              "$ref": "#/components/schemas/TrafficSeries"
+              "$ref": "#/components/schemas/TrafficRankRow"
             },
             "type": "array"
           },
           "timezone": {
+            "type": "string"
+          },
+          "to": {
+            "format": "date-time",
             "type": "string"
           },
           "total": {
@@ -4714,42 +4863,13 @@
         },
         "required": [
           "timezone",
-          "buckets",
-          "series",
+          "from",
+          "to",
+          "previous_from",
+          "previous_to",
           "total",
-          "by_stack"
-        ],
-        "type": "object"
-      },
-      "TrafficSeries": {
-        "additionalProperties": false,
-        "properties": {
-          "down": {
-            "items": {
-              "format": "int64",
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "label": {
-            "type": "string"
-          },
-          "subject": {
-            "type": "string"
-          },
-          "up": {
-            "items": {
-              "format": "int64",
-              "type": "integer"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "subject",
-          "label",
-          "up",
-          "down"
+          "rows",
+          "gaps"
         ],
         "type": "object"
       },
@@ -4803,19 +4923,174 @@
         ],
         "type": "object"
       },
-      "TrafficSubject": {
+      "TrafficStats": {
         "additionalProperties": false,
         "properties": {
-          "label": {
+          "available_from": {
+            "format": "date-time",
             "type": "string"
           },
-          "subject": {
+          "buckets": {
+            "items": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/TrafficGap"
+            },
+            "type": "array"
+          },
+          "level": {
+            "type": "string"
+          },
+          "peak_available": {
+            "type": "boolean"
+          },
+          "previous_from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "previous_to": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "retention_days": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/TrafficStatsRow"
+            },
+            "type": "array"
+          },
+          "series_detail": {
+            "type": "boolean"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "to": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "total": {
+            "$ref": "#/components/schemas/TrafficStatsRow"
+          },
+          "view": {
             "type": "string"
           }
         },
         "required": [
-          "subject",
-          "label"
+          "view",
+          "level",
+          "timezone",
+          "from",
+          "to",
+          "buckets",
+          "available_from",
+          "retention_days",
+          "previous_from",
+          "previous_to",
+          "peak_available",
+          "series_detail",
+          "total",
+          "rows",
+          "gaps"
+        ],
+        "type": "object"
+      },
+      "TrafficStatsRow": {
+        "additionalProperties": false,
+        "properties": {
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/TrafficStatsRow"
+            },
+            "type": "array"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "down": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "excluded": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "total",
+              "user",
+              "stack",
+              "profile",
+              "unknown",
+              "relay",
+              "shared"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "peak": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "previous": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/TrafficStatsRow"
+            },
+            "type": "array"
+          },
+          "role": {
+            "type": "string"
+          },
+          "series_down": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "series_up": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "up": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "name",
+          "deleted",
+          "role",
+          "excluded",
+          "children",
+          "profiles",
+          "up",
+          "down"
         ],
         "type": "object"
       },
@@ -5168,33 +5443,6 @@
           "stack",
           "inbound",
           "profile"
-        ],
-        "type": "object"
-      },
-      "UserTraffic": {
-        "additionalProperties": false,
-        "properties": {
-          "down": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "name": {
-            "type": "string"
-          },
-          "up": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "up",
-          "down"
         ],
         "type": "object"
       },
@@ -10207,18 +10455,138 @@
         ]
       }
     },
-    "/api/traffic/export": {
+    "/api/traffic/overview": {
       "get": {
-        "operationId": "exportTraffic",
+        "operationId": "getTrafficOverview",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrafficOverview"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "流量总览",
+        "tags": [
+          "traffic"
+        ]
+      }
+    },
+    "/api/traffic/ranking": {
+      "get": {
+        "operationId": "getTrafficRanking",
         "parameters": [
           {
+            "description": "开始时间（Unix 秒）",
             "explode": false,
             "in": "query",
-            "name": "group_by",
+            "name": "from",
             "schema": {
-              "default": "subject",
+              "description": "开始时间（Unix 秒）",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "结束时间（Unix 秒），不含",
+            "explode": false,
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "description": "结束时间（Unix 秒），不含",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "stack ID，0 表示全部 stack",
+            "explode": false,
+            "in": "query",
+            "name": "stack",
+            "schema": {
+              "description": "stack ID，0 表示全部 stack",
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "同时返回上一期同等时长的用量",
+            "explode": false,
+            "in": "query",
+            "name": "compare",
+            "schema": {
+              "description": "同时返回上一期同等时长的用量",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrafficRanking"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "用户用量排行",
+        "tags": [
+          "traffic"
+        ]
+      }
+    },
+    "/api/traffic/stats": {
+      "get": {
+        "operationId": "getTrafficStats",
+        "parameters": [
+          {
+            "description": "统计视角",
+            "explode": false,
+            "in": "query",
+            "name": "view",
+            "schema": {
+              "default": "user",
+              "description": "统计视角",
               "enum": [
-                "subject",
+                "user",
                 "stack"
               ],
               "type": "string"
@@ -10235,20 +10603,6 @@
                 "day",
                 "month",
                 "year"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "explode": false,
-            "in": "query",
-            "name": "scope",
-            "schema": {
-              "default": "user",
-              "enum": [
-                "user",
-                "inbound",
-                "outbound"
               ],
               "type": "string"
             }
@@ -10276,6 +10630,16 @@
             }
           },
           {
+            "description": "用户 ID，逗号分隔，空表示全部",
+            "explode": false,
+            "in": "query",
+            "name": "users",
+            "schema": {
+              "description": "用户 ID，逗号分隔，空表示全部",
+              "type": "string"
+            }
+          },
+          {
             "description": "stack ID，逗号分隔，空表示全部",
             "explode": false,
             "in": "query",
@@ -10286,13 +10650,133 @@
             }
           },
           {
-            "description": "对象，逗号分隔，空表示全部",
+            "description": "同时返回上一期同等时长的用量",
             "explode": false,
             "in": "query",
-            "name": "subjects",
+            "name": "compare",
             "schema": {
-              "description": "对象，逗号分隔，空表示全部",
+              "description": "同时返回上一期同等时长的用量",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrafficStats"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "按用户或按 Stack 统计流量",
+        "tags": [
+          "traffic"
+        ]
+      }
+    },
+    "/api/traffic/stats/export": {
+      "get": {
+        "operationId": "exportTrafficStats",
+        "parameters": [
+          {
+            "description": "统计视角",
+            "explode": false,
+            "in": "query",
+            "name": "view",
+            "schema": {
+              "default": "user",
+              "description": "统计视角",
+              "enum": [
+                "user",
+                "stack"
+              ],
               "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "level",
+            "schema": {
+              "default": "day",
+              "enum": [
+                "hour",
+                "day",
+                "month",
+                "year"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "开始时间（Unix 秒）",
+            "explode": false,
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "description": "开始时间（Unix 秒）",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "结束时间（Unix 秒），不含",
+            "explode": false,
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "description": "结束时间（Unix 秒），不含",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "用户 ID，逗号分隔，空表示全部",
+            "explode": false,
+            "in": "query",
+            "name": "users",
+            "schema": {
+              "description": "用户 ID，逗号分隔，空表示全部",
+              "type": "string"
+            }
+          },
+          {
+            "description": "stack ID，逗号分隔，空表示全部",
+            "explode": false,
+            "in": "query",
+            "name": "stacks",
+            "schema": {
+              "description": "stack ID，逗号分隔，空表示全部",
+              "type": "string"
+            }
+          },
+          {
+            "description": "同时返回上一期同等时长的用量",
+            "explode": false,
+            "in": "query",
+            "name": "compare",
+            "schema": {
+              "description": "同时返回上一期同等时长的用量",
+              "type": "boolean"
             }
           }
         ],
@@ -10336,234 +10820,7 @@
             "session": []
           }
         ],
-        "summary": "导出流量明细（CSV）",
-        "tags": [
-          "traffic"
-        ]
-      }
-    },
-    "/api/traffic/overview": {
-      "get": {
-        "operationId": "getTrafficOverview",
-        "parameters": [
-          {
-            "description": "用户 ID，0 表示全部流量",
-            "explode": false,
-            "in": "query",
-            "name": "user_id",
-            "schema": {
-              "description": "用户 ID，0 表示全部流量",
-              "format": "int64",
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TrafficOverview"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "security": [
-          {
-            "session": []
-          }
-        ],
-        "summary": "流量总览",
-        "tags": [
-          "traffic"
-        ]
-      }
-    },
-    "/api/traffic/query": {
-      "get": {
-        "operationId": "queryTraffic",
-        "parameters": [
-          {
-            "explode": false,
-            "in": "query",
-            "name": "group_by",
-            "schema": {
-              "default": "subject",
-              "enum": [
-                "subject",
-                "stack"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "explode": false,
-            "in": "query",
-            "name": "level",
-            "schema": {
-              "default": "day",
-              "enum": [
-                "hour",
-                "day",
-                "month",
-                "year"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "explode": false,
-            "in": "query",
-            "name": "scope",
-            "schema": {
-              "default": "user",
-              "enum": [
-                "user",
-                "inbound",
-                "outbound"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "description": "开始时间（Unix 秒）",
-            "explode": false,
-            "in": "query",
-            "name": "from",
-            "schema": {
-              "description": "开始时间（Unix 秒）",
-              "format": "int64",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "结束时间（Unix 秒），不含",
-            "explode": false,
-            "in": "query",
-            "name": "to",
-            "schema": {
-              "description": "结束时间（Unix 秒），不含",
-              "format": "int64",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "stack ID，逗号分隔，空表示全部",
-            "explode": false,
-            "in": "query",
-            "name": "stacks",
-            "schema": {
-              "description": "stack ID，逗号分隔，空表示全部",
-              "type": "string"
-            }
-          },
-          {
-            "description": "对象，逗号分隔，空表示全部",
-            "explode": false,
-            "in": "query",
-            "name": "subjects",
-            "schema": {
-              "description": "对象，逗号分隔，空表示全部",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TrafficResult"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "security": [
-          {
-            "session": []
-          }
-        ],
-        "summary": "流量明细",
-        "tags": [
-          "traffic"
-        ]
-      }
-    },
-    "/api/traffic/subjects": {
-      "get": {
-        "operationId": "listTrafficSubjects",
-        "parameters": [
-          {
-            "explode": false,
-            "in": "query",
-            "name": "scope",
-            "schema": {
-              "default": "user",
-              "enum": [
-                "user",
-                "inbound",
-                "outbound"
-              ],
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/TrafficSubject"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "security": [
-          {
-            "session": []
-          }
-        ],
-        "summary": "流量明细的筛选对象",
+        "summary": "导出流量统计（CSV）",
         "tags": [
           "traffic"
         ]

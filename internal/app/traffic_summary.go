@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"time"
 
-	"proxystack-web/internal/configdoc"
 	"proxystack-web/internal/store"
 	"proxystack-web/internal/store/dbq"
 	"proxystack-web/internal/traffic"
@@ -16,26 +15,6 @@ import (
 type UserLivePoint struct {
 	traffic.Bytes
 	Stacks map[string]traffic.Bytes `json:"stacks"`
-}
-
-// StackTraffic 是总览中一个 stack 的入站用量和用户可归属用量。
-type StackTraffic struct {
-	StackID int64  `json:"stack_id"`
-	Stack   string `json:"stack"`
-	// Aggregator 表示只经其他 stack 的 relay 出网的聚合 stack，它的入站流量已在被引用 stack 计入，不进合计。
-	Aggregator bool          `json:"aggregator"`
-	Today      traffic.Bytes `json:"today"`
-	Month      traffic.Bytes `json:"month"`
-	UserToday  traffic.Bytes `json:"user_today"`
-	UserMonth  traffic.Bytes `json:"user_month"`
-}
-
-// StackSeries 保留明细的 stack 归属，同名入站或用户不会跨 stack 混淆。
-type StackSeries struct {
-	StackID int64 `json:"stack_id"`
-	// Aggregator 同 StackTraffic.Aggregator；入站和出站维度的合计不含它。
-	Aggregator bool `json:"aggregator"`
-	TrafficSeries
 }
 
 // StackDailyUsage 是用户在一个 stack 上的今日用量和最近 30 天趋势。
@@ -68,171 +47,9 @@ func matchesTrafficUser(subject string, userID int64) bool {
 	return userID == 0 || ok && id == userID
 }
 
-func (s *Service) trafficOverview(ctx context.Context, userID int64) (*TrafficOverview, error) {
-	settings, err := s.loadSettings(ctx)
-	if err != nil {
-		return nil, err
-	}
-	now, loc := s.Now(), location(settings)
-	out := &TrafficOverview{Enabled: settings.Traffic.Enabled, TopUsers: []UserTraffic{}, TopUsersToday: []UserTraffic{}, Live: []LivePoint{}, Stacks: []CollectStatus{}, ByStack: []StackTraffic{}}
-	var names, stacks map[int64]string
-	err = s.Store.InTx(ctx, func(q *dbq.Queries) error {
-		if names, err = userNames(ctx, q); err != nil {
-			return err
-		}
-		if stacks, err = stackNames(ctx, q); err != nil {
-			return err
-		}
-		out.FailedNotifications, err = q.CountFailedNotifications(ctx)
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-	if _, ok := names[userID]; userID != 0 && !ok {
-		return nil, ErrNotFound
-	}
-	aggregators, err := s.aggregatorStacks(ctx)
-	if err != nil {
-		return nil, err
-	}
-	byStack := map[int64]*StackTraffic{}
-	getStack := func(id int64) *StackTraffic {
-		if byStack[id] == nil {
-			byStack[id] = &StackTraffic{StackID: id, Stack: stackName(stacks, id), Aggregator: aggregators[id]}
-		}
-		return byStack[id]
-	}
-	for id := range stacks {
-		getStack(id)
-	}
-	// 全部流量以入站计数为准；指定用户时仅累计该用户及其档案，避免重复相加入站和用户计数。
-	scope := traffic.ScopeInbound
-	if userID != 0 {
-		scope = traffic.ScopeUser
-	}
-	for _, period := range []struct {
-		level string
-		from  time.Time
-	}{
-		{store.LevelDay, traffic.DayStart(now, loc)},
-		{store.LevelMonth, traffic.MonthStart(now, loc)},
-	} {
-		rows, err := s.Store.QueryTraffic(ctx, period.level, scope, period.from.Unix(), now.Add(time.Hour).Unix(), nil)
-		if err != nil {
-			return nil, err
-		}
-		for _, row := range rows {
-			if !matchesTrafficUser(row.Subject, userID) {
-				continue
-			}
-			bytes := traffic.Bytes{Up: row.Up, Down: row.Down}
-			stack := getStack(row.StackID)
-			if period.level == store.LevelDay {
-				stack.Today.Add(bytes)
-			} else {
-				stack.Month.Add(bytes)
-			}
-		}
-	}
-	totals := map[int64]traffic.Bytes{}
-	todayTotals := map[int64]traffic.Bytes{}
-	for _, period := range []struct {
-		level  string
-		from   time.Time
-		to     time.Time
-		totals map[int64]traffic.Bytes
-	}{
-		{store.LevelDay, traffic.DayStart(now, loc), traffic.DayStart(now, loc).AddDate(0, 0, 1), todayTotals},
-		{store.LevelMonth, traffic.MonthStart(now, loc), traffic.MonthStart(now, loc).AddDate(0, 1, 0), totals},
-	} {
-		rows, err := s.Store.QueryTraffic(ctx, period.level, traffic.ScopeUser, period.from.Unix(), period.to.Unix(), nil)
-		if err != nil {
-			return nil, err
-		}
-		for _, row := range rows {
-			if id, ok := traffic.SubjectUser(row.Subject); ok && matchesTrafficUser(row.Subject, userID) {
-				bytes := traffic.Bytes{Up: row.Up, Down: row.Down}
-				value := period.totals[id]
-				value.Add(bytes)
-				period.totals[id] = value
-				stack := getStack(row.StackID)
-				if period.level == store.LevelDay {
-					stack.UserToday.Add(bytes)
-				} else {
-					stack.UserMonth.Add(bytes)
-				}
-			}
-		}
-	}
-	s.traffic.mu.Lock()
-	for key, bytes := range s.traffic.pending {
-		if key.Scope == scope && matchesTrafficUser(key.Subject, userID) {
-			stack := getStack(key.StackID)
-			stack.Today.Add(bytes)
-			stack.Month.Add(bytes)
-		}
-		if key.Scope == traffic.ScopeUser && matchesTrafficUser(key.Subject, userID) {
-			stack := getStack(key.StackID)
-			stack.UserToday.Add(bytes)
-			stack.UserMonth.Add(bytes)
-		}
-	}
-	for id, bytes := range s.traffic.users {
-		if userID != 0 && userID != id {
-			continue
-		}
-		value := totals[id]
-		value.Add(bytes)
-		totals[id] = value
-		value = todayTotals[id]
-		value.Add(bytes)
-		todayTotals[id] = value
-	}
-	out.Live = append(out.Live, s.traffic.live...)
-	for _, status := range s.traffic.statuses {
-		out.Stacks = append(out.Stacks, status)
-	}
-	s.traffic.mu.Unlock()
-	for _, stack := range byStack {
-		// 全部流量按入站计数时，聚合 stack 的流量会在成员 stack 的 relay 入站再计一次，合计里跳过；
-		// 指定用户时按用户计数，不存在重复。
-		if userID != 0 || !stack.Aggregator {
-			out.Today.Add(stack.Today)
-			out.Month.Add(stack.Month)
-		}
-		out.UserToday.Add(stack.UserToday)
-		out.UserMonth.Add(stack.UserMonth)
-		out.ByStack = append(out.ByStack, *stack)
-	}
-	sort.Slice(out.ByStack, func(i, j int) bool { return out.ByStack[i].Stack < out.ByStack[j].Stack })
-	sort.Slice(out.Stacks, func(i, j int) bool { return out.Stacks[i].Stack < out.Stacks[j].Stack })
-	// 两个周期分别排序和取前十，避免按月截断后遗漏今日活跃用户。
-	rankUsers := func(totals map[int64]traffic.Bytes) []UserTraffic {
-		ranked := []UserTraffic{}
-		for id, bytes := range totals {
-			ranked = append(ranked, UserTraffic{ID: id, Name: subjectName(names, id), Bytes: bytes})
-		}
-		sort.Slice(ranked, func(i, j int) bool {
-			a, b := ranked[i], ranked[j]
-			if a.Total() != b.Total() {
-				return a.Total() > b.Total()
-			}
-			return a.ID < b.ID
-		})
-		if len(ranked) > topUsers {
-			ranked = ranked[:topUsers]
-		}
-		return ranked
-	}
-	out.TopUsers = rankUsers(totals)
-	out.TopUsersToday = rankUsers(todayTotals)
-	return out, nil
-}
-
 func (s *Service) userStackDaily(ctx context.Context, id int64, now time.Time, loc *time.Location) ([]StackDailyUsage, error) {
 	from := traffic.DayStart(now, loc).AddDate(0, 0, -(dailySeriesDays - 1))
-	result, err := s.QueryTraffic(ctx, TrafficQuery{Level: store.LevelDay, Scope: traffic.ScopeUser, From: from, To: now.Add(time.Hour), Subjects: []string{strconv.FormatInt(id, 10)}})
+	rows, err := s.Store.QueryTraffic(ctx, store.LevelDay, traffic.ScopeUser, from.Unix(), now.Add(time.Hour).Unix(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -245,25 +62,25 @@ func (s *Service) userStackDaily(ctx context.Context, id int64, now time.Time, l
 		return nil, err
 	}
 	byStack := map[int64]map[string]traffic.Bytes{}
-	for _, series := range result.ByStack {
-		days := map[string]traffic.Bytes{}
-		for index, bucket := range result.Buckets {
-			days[traffic.Day(bucket, loc)] = traffic.Bytes{Up: series.Up[index], Down: series.Down[index]}
+	add := func(stackID int64, day string, bytes traffic.Bytes) {
+		if byStack[stackID] == nil {
+			byStack[stackID] = map[string]traffic.Bytes{}
 		}
-		byStack[series.StackID] = days
+		value := byStack[stackID][day]
+		value.Add(bytes)
+		byStack[stackID][day] = value
+	}
+	for _, row := range rows {
+		if matchesTrafficUser(row.Subject, id) {
+			add(row.StackID, traffic.Day(time.Unix(row.Bucket, 0), loc), traffic.Bytes{Up: row.Up, Down: row.Down})
+		}
 	}
 	today := traffic.Day(now, loc)
 	s.traffic.mu.Lock()
 	for key, bytes := range s.traffic.pending {
-		if key.Scope != traffic.ScopeUser || !matchesTrafficUser(key.Subject, id) {
-			continue
+		if key.Scope == traffic.ScopeUser && matchesTrafficUser(key.Subject, id) {
+			add(key.StackID, today, bytes)
 		}
-		if byStack[key.StackID] == nil {
-			byStack[key.StackID] = map[string]traffic.Bytes{}
-		}
-		value := byStack[key.StackID][today]
-		value.Add(bytes)
-		byStack[key.StackID][today] = value
 	}
 	s.traffic.mu.Unlock()
 	out := make([]StackDailyUsage, 0, len(byStack))
@@ -280,17 +97,179 @@ func (s *Service) userStackDaily(ctx context.Context, id int64, now time.Time, l
 	return out, nil
 }
 
-// aggregatorStacks 按当前配置返回只经其他 stack 的 relay 出网的 stack，多个 stack 加总入站流量时排除它们。
-func (s *Service) aggregatorStacks(ctx context.Context) (map[int64]bool, error) {
-	doc, err := s.LoadConfig(ctx)
+// TrafficOverview 是总览页的数据。
+type TrafficOverview struct {
+	Enabled             bool             `json:"enabled"`
+	FailedNotifications int64            `json:"failed_notifications"`
+	Timezone            string           `json:"timezone"`
+	Today               OverviewPeriod   `json:"today"`
+	Month               OverviewPeriod   `json:"month"`
+	Live                []LivePoint      `json:"live"`
+	TopToday            []TrafficRankRow `json:"top_today"`
+	TopMonth            []TrafficRankRow `json:"top_month"`
+	ByStack             []OverviewStack  `json:"by_stack"`
+	Stacks              []CollectStatus  `json:"stacks"`
+	// Gaps 是最近 24 小时内的数据缺口。
+	Gaps []TrafficGap `json:"gaps"`
+}
+
+// OverviewPeriod 是今日或本月的合计，以及上一期同时段（昨日、上月的同等已过时长）的合计。
+type OverviewPeriod struct {
+	From         time.Time `json:"from"`
+	PreviousFrom time.Time `json:"previous_from"`
+	PreviousTo   time.Time `json:"previous_to"`
+	// Total 是全部流量：各 stack 入站之和，不含 auto stack。
+	Total traffic.Bytes `json:"total"`
+	// Users 是归属到用户的流量。
+	Users    traffic.Bytes `json:"users"`
+	Previous traffic.Bytes `json:"previous"`
+}
+
+// OverviewStack 是总览中一个 stack 的今日和本月用量。
+type OverviewStack struct {
+	StackID int64  `json:"stack_id"`
+	Stack   string `json:"stack"`
+	Role    string `json:"role"`
+	// Excluded 表示 auto stack，合计不含它。
+	Excluded bool                `json:"excluded"`
+	Deleted  bool                `json:"deleted"`
+	Today    OverviewStackPeriod `json:"today"`
+	Month    OverviewStackPeriod `json:"month"`
+}
+
+// OverviewStackPeriod 是一个 stack 在一个周期内的入站用量，以及归属到用户、经 relay 入站和共享账号等的部分。
+type OverviewStackPeriod struct {
+	Total  traffic.Bytes `json:"total"`
+	Users  traffic.Bytes `json:"users"`
+	Relay  traffic.Bytes `json:"relay"`
+	Shared traffic.Bytes `json:"shared"`
+}
+
+// overviewTop 是总览排行的人数。
+const overviewTop = 5
+
+// TrafficOverviewData 汇总今日、本月的流量和上一期同时段对比、实时速率、排行、各 stack 用量和最近的数据缺口，
+// 并计入尚未落库的采集增量。
+func (s *Service) TrafficOverviewData(ctx context.Context) (*TrafficOverview, error) {
+	settings, err := s.loadSettings(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := map[int64]bool{}
-	for index := range doc.Stacks {
-		if configdoc.RelaysOnly(&doc.Stacks[index]) {
-			out[doc.Stacks[index].ID] = true
+	now, loc := s.Now(), location(settings)
+	out := &TrafficOverview{Enabled: settings.Traffic.Enabled, Timezone: loc.String(), Live: []LivePoint{}, TopToday: []TrafficRankRow{}, TopMonth: []TrafficRankRow{}, ByStack: []OverviewStack{}, Stacks: []CollectStatus{}}
+	err = s.Store.InTx(ctx, func(q *dbq.Queries) (err error) {
+		out.FailedNotifications, err = q.CountFailedNotifications(ctx)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	dir, err := s.trafficDirectory(ctx)
+	if err != nil {
+		return nil, err
+	}
+	stacks := map[int64]*OverviewStack{}
+	get := func(id int64) *OverviewStack {
+		if stacks[id] == nil {
+			name, deleted := dir.stack(id)
+			stacks[id] = &OverviewStack{StackID: id, Stack: name, Role: dir.roles[id], Excluded: dir.auto(id), Deleted: deleted}
 		}
+		return stacks[id]
+	}
+	for _, id := range dir.stackIDs {
+		get(id)
+	}
+	dayStart, monthStart := traffic.DayStart(now, loc), traffic.MonthStart(now, loc)
+	for _, period := range []struct {
+		target *OverviewPeriod
+		from   time.Time
+		to     time.Time
+		pick   func(*OverviewStack) *OverviewStackPeriod
+		top    *[]TrafficRankRow
+	}{
+		{&out.Today, dayStart, dayStart.AddDate(0, 0, 1), func(item *OverviewStack) *OverviewStackPeriod { return &item.Today }, &out.TopToday},
+		{&out.Month, monthStart, monthStart.AddDate(0, 1, 0), func(item *OverviewStack) *OverviewStackPeriod { return &item.Month }, &out.TopMonth},
+	} {
+		period.target.From = period.from
+		period.target.PreviousFrom, period.target.PreviousTo = previousRange(period.from, period.to, now, loc)
+		inbound, err := s.sumTraffic(ctx, settings, traffic.ScopeInbound, period.from, period.to, nil)
+		if err != nil {
+			return nil, err
+		}
+		users, err := s.sumTraffic(ctx, settings, traffic.ScopeUser, period.from, period.to, nil)
+		if err != nil {
+			return nil, err
+		}
+		relays := map[int64]traffic.Bytes{}
+		for key, bytes := range inbound {
+			item := period.pick(get(key.StackID))
+			item.Total.Add(bytes)
+			if isRelayInbound(key.Subject) {
+				value := relays[key.StackID]
+				value.Add(bytes)
+				relays[key.StackID] = value
+			}
+		}
+		ranking := map[int64]traffic.Bytes{}
+		for key, bytes := range users {
+			period.pick(get(key.StackID)).Users.Add(bytes)
+			period.target.Users.Add(bytes)
+			if id, _ := subjectUserID(key.Subject); id > 0 {
+				value := ranking[id]
+				value.Add(bytes)
+				ranking[id] = value
+			}
+		}
+		for id, item := range stacks {
+			usage := period.pick(item)
+			usage.Relay, usage.Shared = splitBytes(usage.Total, usage.Users, relays[id], item.Excluded)
+			if !item.Excluded {
+				period.target.Total.Add(usage.Total)
+			}
+		}
+		previous, err := s.sumTraffic(ctx, settings, traffic.ScopeInbound, period.target.PreviousFrom, period.target.PreviousTo, nil)
+		if err != nil {
+			return nil, err
+		}
+		for key, bytes := range previous {
+			if !dir.auto(key.StackID) {
+				period.target.Previous.Add(bytes)
+			}
+		}
+		rows := []TrafficRankRow{}
+		for id, bytes := range ranking {
+			if bytes.Total() == 0 {
+				continue
+			}
+			name, deleted := dir.user(id)
+			rows = append(rows, TrafficRankRow{UserID: id, Name: name, Deleted: deleted, Bytes: bytes})
+		}
+		sortRankRows(rows)
+		*period.top = rows[:min(len(rows), overviewTop)]
+	}
+	for _, item := range stacks {
+		if item.Deleted && item.Month.Total.Total() == 0 && item.Month.Users.Total() == 0 {
+			continue
+		}
+		out.ByStack = append(out.ByStack, *item)
+	}
+	sort.Slice(out.ByStack, func(i, j int) bool { return out.ByStack[i].Stack < out.ByStack[j].Stack })
+	s.traffic.mu.Lock()
+	out.Live = append(out.Live, s.traffic.live...)
+	for _, status := range s.traffic.statuses {
+		out.Stacks = append(out.Stacks, status)
+	}
+	s.traffic.mu.Unlock()
+	sort.Slice(out.Stacks, func(i, j int) bool { return out.Stacks[i].Stack < out.Stacks[j].Stack })
+	if out.Gaps, err = s.trafficGaps(ctx, dir, now.Add(-24*time.Hour), now.Add(time.Minute)); err != nil {
+		return nil, err
 	}
 	return out, nil
+}
+
+// splitBytes 是 splitUnattributed 的合计版本，用于没有时间桶的总览。
+func splitBytes(inbound, users, relayIn traffic.Bytes, auto bool) (traffic.Bytes, traffic.Bytes) {
+	one := func(values ...int64) *statsSeries { return &statsSeries{up: values[:1], down: values[1:]} }
+	relay, shared := splitUnattributed(one(inbound.Up, inbound.Down), one(users.Up, users.Down), one(relayIn.Up, relayIn.Down), auto)
+	return relay.total(), shared.total()
 }

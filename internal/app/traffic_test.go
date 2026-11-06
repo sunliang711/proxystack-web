@@ -129,36 +129,35 @@ func TestTrafficCollectsAndAggregates(t *testing.T) {
 	require.EqualValues(t, 330, usage.Daily[29].Total())
 
 	h.update(t, func(u *configdoc.User) { u.Name = "alicia" })
-	result, err := h.svc.QueryTraffic(ctx, app.TrafficQuery{
-		Level: "hour", Scope: "user", From: h.now.Add(-2 * time.Hour), To: h.now.Add(time.Hour),
+	result, err := h.svc.TrafficStats(ctx, app.TrafficStatsQuery{
+		View: app.StatsViewUser, Level: "hour", From: h.now.Add(-2 * time.Hour), To: h.now.Add(time.Hour),
 	})
 	require.NoError(t, err)
-	require.Len(t, result.Series, 1)
-	require.Equal(t, "alicia", result.Series[0].Label)
-	require.EqualValues(t, 330, result.Series[0].Total())
+	require.Len(t, result.Rows, 1)
+	require.Equal(t, "alicia", result.Rows[0].Name)
+	require.EqualValues(t, 330, result.Rows[0].Total())
 
 	for _, level := range []string{"day", "month", "year"} {
-		result, err = h.svc.QueryTraffic(ctx, app.TrafficQuery{
-			Level: level, Scope: "inbound", From: h.now.AddDate(-1, 0, 0), To: h.now.AddDate(0, 1, 0),
+		result, err = h.svc.TrafficStats(ctx, app.TrafficStatsQuery{
+			View: app.StatsViewStack, Level: level, From: h.now.AddDate(-1, 0, 0), To: h.now.AddDate(0, 1, 0),
 		})
 		require.NoError(t, err)
-		require.Len(t, result.Series, 1, level)
-		require.EqualValues(t, 330, result.Series[0].Total(), level)
+		require.EqualValues(t, 330, result.Total.Total(), level)
 	}
 
 	// 只采集未落库：总览合并内存中的部分。
 	h.api.AddStats(usa1API, xrayapi.Stat{Name: "inbound>>>vmess:24101:vmess>>>traffic>>>downlink", Value: 5},
 		xrayapi.Stat{Name: "user>>>u1>>>traffic>>>downlink", Value: 5})
 	h.svc.TrafficTick(ctx)
-	overview, err := h.svc.TrafficOverviewData(ctx, 0)
+	overview, err := h.svc.TrafficOverviewData(ctx)
 	require.NoError(t, err)
-	require.EqualValues(t, 335, overview.Today.Total())
-	require.EqualValues(t, 335, overview.Month.Total())
-	require.Len(t, overview.TopUsers, 1)
-	require.Equal(t, "alicia", overview.TopUsers[0].Name)
-	require.EqualValues(t, 335, overview.TopUsers[0].Total())
-	require.Len(t, overview.TopUsersToday, 1)
-	require.EqualValues(t, 335, overview.TopUsersToday[0].Total())
+	require.EqualValues(t, 335, overview.Today.Total.Total())
+	require.EqualValues(t, 335, overview.Month.Users.Total())
+	require.Len(t, overview.TopMonth, 1)
+	require.Equal(t, "alicia", overview.TopMonth[0].Name)
+	require.EqualValues(t, 335, overview.TopMonth[0].Total())
+	require.Len(t, overview.TopToday, 1)
+	require.EqualValues(t, 335, overview.TopToday[0].Total())
 }
 
 // TestTrafficCollectBeforeRestart 验证重启 xray 前补采，两次采集之间的流量不丢。
@@ -361,7 +360,7 @@ func TestNotificationDeliveryRetries(t *testing.T) {
 			require.Equal(t, app.NotifyFailed, items[0].Status)
 		}
 	}
-	overview, err := h.svc.TrafficOverviewData(ctx, 0)
+	overview, err := h.svc.TrafficOverviewData(ctx)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, overview.FailedNotifications)
 

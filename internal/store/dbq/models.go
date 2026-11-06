@@ -304,6 +304,21 @@ type TrafficDay struct {
 	Down        int64  `json:"down"`
 }
 
+type TrafficGap struct {
+	ID      int64  `json:"id"`
+	StackID int64  `json:"stack_id"`
+	Kind    string `json:"kind"`
+	Reason  string `json:"reason"`
+	StartAt int64  `json:"start_at"`
+	EndAt   int64  `json:"end_at"`
+	Open    int64  `json:"open"`
+}
+
+type TrafficHeartbeat struct {
+	ID int64 `json:"id"`
+	At int64 `json:"at"`
+}
+
 type TrafficHour struct {
 	BucketStart int64  `json:"bucket_start"`
 	StackID     int64  `json:"stack_id"`
@@ -329,6 +344,13 @@ type TrafficMonth struct {
 	Subject     string `json:"subject"`
 	Up          int64  `json:"up"`
 	Down        int64  `json:"down"`
+}
+
+type TrafficName struct {
+	Kind string `json:"kind"`
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	Role string `json:"role"`
 }
 
 type User struct {

@@ -3,15 +3,15 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { use } from 'echarts/core'
 import { BarChart, LineChart } from 'echarts/charts'
-import { GridComponent, LegendComponent, MarkLineComponent, TooltipComponent } from 'echarts/components'
+import { GridComponent, LegendComponent, MarkAreaComponent, MarkLineComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { CallbackDataParams } from 'echarts/types/dist/shared'
 import VChart from 'vue-echarts'
 import { isDark } from '../theme'
-import { chartTokens, seriesColors, type ChartSeries } from '../util/chart'
+import { chartTokens, seriesColors, type ChartArea, type ChartSeries } from '../util/chart'
 import { useEntityDirectory } from '../composables/useEntityReference'
 
-use([BarChart, LineChart, GridComponent, LegendComponent, MarkLineComponent, TooltipComponent, CanvasRenderer])
+use([BarChart, LineChart, GridComponent, LegendComponent, MarkAreaComponent, MarkLineComponent, TooltipComponent, CanvasRenderer])
 
 const props = defineProps<{
   kind: 'bar' | 'line'
@@ -23,6 +23,8 @@ const props = defineProps<{
   height?: string
   /** 柱状图提示框是否显示各项合计；各项之间有重复计数时关闭。 */
   hideTotal?: boolean
+  /** 需要标出的时间段，例如没有明细的时间桶和采集中断。 */
+  areas?: ChartArea[]
 }>()
 
 const mode = computed(() => (isDark.value ? 'dark' : 'light'))
@@ -95,14 +97,33 @@ const option = computed(() => {
             },
           }
         : {}
+      const areas = index === 0 && props.areas?.length
+        ? {
+            markArea: {
+              silent: true,
+              label: { color: tokens.muted, fontSize: 11, position: 'insideTop' },
+              data: props.areas.map((area) => [
+                {
+                  name: area.label, xAxis: area.from,
+                  itemStyle: { color: area.kind === 'missing' ? tokens.grid : palette[3], opacity: area.kind === 'missing' ? 0.7 : 0.18 },
+                },
+                { xAxis: area.to },
+              ]),
+            },
+          }
+        : {}
       if (props.kind === 'bar') {
         return {
-          ...reference, name: series.name, type: 'bar', stack: 'total', data: series.data, barMaxWidth: 24, cursor,
-          itemStyle: { color, borderColor: tokens.surface, borderWidth: 1, borderRadius: index === last ? [4, 4, 0, 0] : 0 },
+          // 不计入合计的序列（auto stack）单独成柱，不叠加在合计上。
+          ...reference, ...areas, name: series.name, type: 'bar', stack: series.excludeFromTotal ? 'excluded' : 'total', data: series.data, barMaxWidth: 24, cursor,
+          itemStyle: {
+            color, opacity: series.excludeFromTotal ? 0.5 : 1, borderColor: tokens.surface, borderWidth: 1,
+            borderRadius: index === last || series.excludeFromTotal ? [4, 4, 0, 0] : 0,
+          },
         }
       }
       return {
-        ...reference, name: series.name, type: 'line', data: series.data, showSymbol: false, symbolSize: 8, cursor,
+        ...reference, ...areas, name: series.name, type: 'line', data: series.data, showSymbol: false, symbolSize: 8, cursor,
         lineStyle: { width: 2, color }, itemStyle: { color },
       }
     }),

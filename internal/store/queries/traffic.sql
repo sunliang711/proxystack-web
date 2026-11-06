@@ -69,3 +69,37 @@ SELECT * FROM notifications ORDER BY id DESC LIMIT ?;
 
 -- name: DeleteNotificationsBefore :exec
 DELETE FROM notifications WHERE at < ?;
+
+-- name: UpsertTrafficName :exec
+INSERT INTO traffic_names (kind, id, name, role) VALUES (?, ?, ?, ?)
+ON CONFLICT (kind, id) DO UPDATE SET name = excluded.name, role = excluded.role;
+
+-- name: ListTrafficNames :many
+SELECT * FROM traffic_names;
+
+-- name: GetOpenTrafficGap :one
+SELECT * FROM traffic_gaps WHERE stack_id = ? AND open = 1 ORDER BY id DESC LIMIT 1;
+
+-- name: InsertTrafficGap :exec
+INSERT INTO traffic_gaps (stack_id, kind, reason, start_at, end_at, open) VALUES (?, ?, ?, ?, ?, ?);
+
+-- name: ExtendTrafficGap :exec
+UPDATE traffic_gaps SET end_at = ?, reason = ? WHERE id = ?;
+
+-- name: CloseTrafficGap :exec
+UPDATE traffic_gaps SET end_at = ?, open = 0 WHERE id = ?;
+
+-- name: CloseOpenTrafficGapsExcept :exec
+UPDATE traffic_gaps SET open = 0 WHERE open = 1 AND stack_id NOT IN (sqlc.slice('stack_ids'));
+
+-- name: ListTrafficGaps :many
+SELECT * FROM traffic_gaps WHERE end_at >= ? AND start_at < ? ORDER BY start_at, stack_id;
+
+-- name: DeleteTrafficGapsBefore :exec
+DELETE FROM traffic_gaps WHERE end_at < ? AND open = 0;
+
+-- name: GetTrafficHeartbeat :one
+SELECT at FROM traffic_heartbeat WHERE id = 1;
+
+-- name: PutTrafficHeartbeat :exec
+INSERT INTO traffic_heartbeat (id, at) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET at = excluded.at;

@@ -21,6 +21,17 @@ type StackUsage struct {
 	Daily      []DayUsage       `json:"daily"`
 	Collection CollectStatus    `json:"collection"`
 	ByUser     []StackUserUsage `json:"by_user"`
+	// Unattributed 是查看全部用户时入站总量中未归属到用户的部分，分为经 relay 入站和共享账号等，零用量的部分不列出。
+	Unattributed []StackUnattributed `json:"unattributed"`
+}
+
+// StackUnattributed 是本 Stack 未归属到用户的一部分流量。
+type StackUnattributed struct {
+	Kind   string        `json:"kind" enum:"relay,shared"`
+	Name   string        `json:"name"`
+	Today  traffic.Bytes `json:"today"`
+	Month  traffic.Bytes `json:"month"`
+	Recent traffic.Bytes `json:"recent"`
 }
 
 // StackUserUsage 是本 Stack 内一个用户的用量，合并该用户的全部凭据档案。
@@ -38,7 +49,7 @@ func (s *Service) StackUsageDetail(ctx context.Context, stackID, userID int64) (
 	if err != nil {
 		return nil, err
 	}
-	out := &StackUsage{StackID: stackID, Enabled: settings.Traffic.Enabled, Daily: []DayUsage{}, ByUser: []StackUserUsage{}}
+	out := &StackUsage{StackID: stackID, Enabled: settings.Traffic.Enabled, Daily: []DayUsage{}, ByUser: []StackUserUsage{}, Unattributed: []StackUnattributed{}}
 	var users map[int64]string
 	err = s.Store.InTx(ctx, func(q *dbq.Queries) error {
 		stacks, err := stackNames(ctx, q)
@@ -67,6 +78,25 @@ func (s *Service) StackUsageDetail(ctx context.Context, stackID, userID int64) (
 	from := traffic.DayStart(now, loc).AddDate(0, 0, -(dailySeriesDays - 1))
 	today := traffic.Day(now, loc)
 	days := map[string]traffic.Bytes{}
+	// relay 是经 relay 入站的流量，按周期累计：today / month / recent。
+	relay := map[string]traffic.Bytes{}
+	addRelay := func(subject string, bytes traffic.Bytes, level, day string) {
+		if !isRelayInbound(subject) {
+			return
+		}
+		periods := []string{"month"}
+		if level != store.LevelMonth {
+			periods = []string{"recent"}
+			if day == today {
+				periods = append(periods, "today")
+			}
+		}
+		for _, period := range periods {
+			value := relay[period]
+			value.Add(bytes)
+			relay[period] = value
+		}
+	}
 	byUser := map[int64]*StackUserUsage{}
 	addUser := func(subject string, bytes traffic.Bytes, level, day string) {
 		id, ok := traffic.SubjectUser(subject)
@@ -118,6 +148,9 @@ func (s *Service) StackUsageDetail(ctx context.Context, stackID, userID int64) (
 					addUser(row.Subject, bytes, period.level, traffic.Day(time.Unix(row.Bucket, 0), loc))
 					continue
 				}
+				if userID == 0 {
+					addRelay(row.Subject, bytes, period.level, traffic.Day(time.Unix(row.Bucket, 0), loc))
+				}
 				if period.level == store.LevelMonth {
 					out.Month.Add(bytes)
 				} else {
@@ -142,6 +175,10 @@ func (s *Service) StackUsageDetail(ctx context.Context, stackID, userID int64) (
 		if key.Scope != scope || !matchesTrafficUser(key.Subject, userID) {
 			continue
 		}
+		if userID == 0 {
+			addRelay(key.Subject, bytes, store.LevelDay, today)
+			addRelay(key.Subject, bytes, store.LevelMonth, today)
+		}
 		value := days[today]
 		value.Add(bytes)
 		days[today] = value
@@ -157,8 +194,28 @@ func (s *Service) StackUsageDetail(ctx context.Context, stackID, userID int64) (
 		out.Daily = append(out.Daily, DayUsage{Day: day, Bytes: days[day]})
 		out.Recent.Add(days[day])
 	}
+	var attributed StackUserUsage
 	for _, item := range byUser {
 		out.ByUser = append(out.ByUser, *item)
+		attributed.Today.Add(item.Today)
+		attributed.Month.Add(item.Month)
+		attributed.Recent.Add(item.Recent)
+	}
+	if userID == 0 {
+		dir, err := s.trafficDirectory(ctx)
+		if err != nil {
+			return nil, err
+		}
+		auto := dir.auto(stackID)
+		relayPart, sharedPart := StackUnattributed{Kind: StatsRowRelay, Name: "经 relay 入站（含 auto 转入）"}, StackUnattributed{Kind: StatsRowShared, Name: "共享账号等"}
+		relayPart.Today, sharedPart.Today = splitBytes(out.Today, attributed.Today, relay["today"], auto)
+		relayPart.Month, sharedPart.Month = splitBytes(out.Month, attributed.Month, relay["month"], auto)
+		relayPart.Recent, sharedPart.Recent = splitBytes(out.Recent, attributed.Recent, relay["recent"], auto)
+		for _, part := range []StackUnattributed{relayPart, sharedPart} {
+			if part.Today.Total()+part.Month.Total()+part.Recent.Total() > 0 {
+				out.Unattributed = append(out.Unattributed, part)
+			}
+		}
 	}
 	sort.Slice(out.ByUser, func(i, j int) bool {
 		a, b := out.ByUser[i], out.ByUser[j]
