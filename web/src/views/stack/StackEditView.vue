@@ -31,7 +31,7 @@ import FlowTab from './FlowTab.vue'
 import UsageTab from './UsageTab.vue'
 import { useBackgroundTask } from '../../composables/useBackgroundTask'
 import UnitStatus from '../../components/UnitStatus.vue'
-import { notifySaved, refreshPending } from '../../runtime'
+import { notifySaved, refreshPending, runtime } from '../../runtime'
 import { stackPorts } from './ports'
 
 type Stack = Schemas['Stack']
@@ -53,6 +53,8 @@ const { dirty, markClean } = useDirty(stack)
 /** 已保存的名称，用作页面标题，编辑名称输入框时不跟着变。 */
 const savedName = ref('')
 usePageTitle(() => savedName.value)
+/** 本 stack 已保存的配置是否有待应用的变更；与未保存的修改一起决定「应用」按钮是否高亮。 */
+const hasPending = computed(() => runtime.pendingStacks.includes(savedName.value))
 
 const f = (path: string, hint?: string) => fieldState(errors.value, path, hint)
 
@@ -291,7 +293,7 @@ async function saveMembers() {
               </NButton>
             </NDropdown>
             <NButton :disabled="!dirty" :loading="saving" @click="save">保存</NButton>
-            <NButton type="primary" :loading="saving" @click="saveAndApply">{{ dirty ? '保存并应用' : '应用' }}</NButton>
+            <NButton :type="dirty || hasPending ? 'primary' : 'default'" :loading="saving" @click="saveAndApply">{{ dirty ? '保存并应用' : '应用' }}</NButton>
           </NSpace>
         </NSpace>
       </NCard>

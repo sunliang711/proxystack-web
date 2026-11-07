@@ -9,8 +9,8 @@ type TaskEvent = Schemas['TaskEvent']
 export const runtime = reactive({
   stacks: {} as Record<string, StackRuntime>,
   pendingCount: 0,
-  /** 有待应用变更的 stack 数。 */
-  pendingStacks: 0,
+  /** 有待应用变更的 stack 名称。 */
+  pendingStacks: [] as string[],
   pendingError: '',
   /** 待应用变更抽屉是否打开，保存提示里的入口也用它打开抽屉。 */
   pendingDrawer: false,
@@ -86,7 +86,7 @@ export function refreshPending(): Promise<void> {
       pendingAgain = false
       const { data } = await api.GET('/api/runtime/pending')
       runtime.pendingCount = data?.changes.length ?? 0
-      runtime.pendingStacks = new Set(data?.changes.map((change) => change.stack)).size
+      runtime.pendingStacks = [...new Set(data?.changes.map((change) => change.stack))]
       runtime.pendingError = data?.error ?? ''
     } while (pendingAgain)
   })().finally(() => (pendingRequest = null))
@@ -100,7 +100,7 @@ setMutationHandler(() => void refreshPending())
 export function pendingSummary(): string {
   if (runtime.pendingError) return '当前配置无法生成，打开查看原因'
   if (!runtime.pendingCount) return '没有待应用的变更'
-  return `${runtime.pendingStacks} 个 Stack 共 ${runtime.pendingCount} 项待应用`
+  return `${runtime.pendingStacks.length} 个 Stack 共 ${runtime.pendingCount} 项待应用`
 }
 
 /**
