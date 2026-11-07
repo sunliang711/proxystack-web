@@ -15,7 +15,7 @@ import (
 // 会话与登录保护参数。
 const (
 	// SessionIdleTimeout 是闲置超时：只有管理员实际操作的请求才把到期时间往后推，页面后台的定时刷新不算。
-	SessionIdleTimeout = 12 * time.Hour
+	SessionIdleTimeout = 24 * time.Hour
 	// SessionMaxLifetime 是会话的绝对有效期：持续使用的会话到期后也要重新登录。
 	SessionMaxLifetime = 7 * 24 * time.Hour
 	ResetLinkTTL       = 15 * time.Minute

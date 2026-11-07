@@ -23,7 +23,7 @@ const minutes = computed(() => {
   return value <= 1 ? '不到 1 分钟' : `${value} 分钟`
 })
 const label = computed(() => (absolute.value ? `会话 ${minutes.value}后到期` : `${minutes.value}后因闲置退出`))
-const reason = computed(() => (absolute.value ? '登录满 7 天后必须重新登录，未保存的修改不受影响。' : '12 小时没有操作会自动退出。'))
+const reason = computed(() => (absolute.value ? '登录满 7 天后必须重新登录，未保存的修改不受影响。' : '24 小时没有操作会自动退出。'))
 const hint = computed(() => `${reason.value}${absolute.value ? '点击现在重新登录。' : '点击继续使用。'}`)
 
 function act() {

@@ -65,7 +65,7 @@ function switchAccount() {
   >
     <NAlert :type="expired ? 'warning' : 'info'" :bordered="false" style="margin-bottom: 16px">
       <template v-if="expired">会话已失效，需要重新登录。登录后留在当前页面，未保存的修改不会丢失。</template>
-      <template v-else>重新登录后，会话有效期从现在起重新计算：12 小时无操作或登录满 7 天后失效。</template>
+      <template v-else>重新登录后，会话有效期从现在起重新计算：24 小时无操作或登录满 7 天后失效。</template>
     </NAlert>
     <NForm :model="form" @submit.prevent="submit">
       <NFormItem label="用户名" path="username">

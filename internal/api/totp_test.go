@@ -192,7 +192,7 @@ func TestSessionIdleRenewal(t *testing.T) {
 
 	// 之后只有后台读取，距最后一次操作超过闲置超时即失效。
 	h.activity = false
-	at(21 * time.Hour)
+	at(10*time.Hour + app.SessionIdleTimeout - time.Hour)
 	h.mustDo(http.MethodGet, "/api/auth/session", nil, http.StatusOK)
 	at(10*time.Hour + app.SessionIdleTimeout + time.Minute)
 	h.mustDo(http.MethodGet, "/api/auth/session", nil, http.StatusUnauthorized)
@@ -204,8 +204,8 @@ func TestSessionRenewedByWrites(t *testing.T) {
 	start := time.Now()
 	h.svc.Now = func() time.Time { return start }
 	h.login("admin", password)
-	h.svc.Now = func() time.Time { return start.Add(10 * time.Hour) }
+	h.svc.Now = func() time.Time { return start.Add(app.SessionIdleTimeout - time.Hour) }
 	h.mustDo(http.MethodPost, "/api/auth/password", map[string]string{"old_password": password, "new_password": "a-new-password"}, http.StatusNoContent)
-	h.svc.Now = func() time.Time { return start.Add(20 * time.Hour) }
+	h.svc.Now = func() time.Time { return start.Add(app.SessionIdleTimeout + time.Hour) }
 	h.mustDo(http.MethodGet, "/api/auth/session", nil, http.StatusOK)
 }
