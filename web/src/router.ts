@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { panelBase, setUnauthorizedHandler } from './api/client'
-import { clearSession, loadSession, session } from './session'
+import { clearSession, loadSession, session, sessionExpired } from './session'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -58,6 +58,11 @@ setUnauthorizedHandler((schemaPath) => {
   if (schemaPath === '/api/auth/session' && !session.loaded) return
   const current = router.currentRoute.value
   if (current.meta.public || current.name === 'login') return
+  // 已登录的页面上会话失效时原地弹出重新登录对话框，保留当前页面和未保存的修改。
+  if (session.admin) {
+    sessionExpired()
+    return
+  }
   const redirect = current.fullPath
   clearSession()
   void router.replace({

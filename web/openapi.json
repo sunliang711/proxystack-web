@@ -3705,11 +3705,23 @@
           "csrf_token": {
             "description": "修改类请求需在 X-CSRF-Token 头中携带",
             "type": "string"
+          },
+          "expires_at": {
+            "description": "闲置到期时间；带 X-Session-Activity: 1 的请求和修改类请求把它往后推",
+            "format": "date-time",
+            "type": "string"
+          },
+          "max_expires_at": {
+            "description": "绝对到期时间，到期后必须重新登录",
+            "format": "date-time",
+            "type": "string"
           }
         },
         "required": [
           "admin",
-          "csrf_token"
+          "csrf_token",
+          "expires_at",
+          "max_expires_at"
         ],
         "type": "object"
       },

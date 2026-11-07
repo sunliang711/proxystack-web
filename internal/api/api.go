@@ -25,6 +25,10 @@ const SessionCookie = "psw_session"
 // CSRFHeader 是修改类请求必须携带的 CSRF 头。
 const CSRFHeader = "X-CSRF-Token"
 
+// ActivityHeader 取值为 1 时表示请求由管理员的实际操作发出。只有这类请求和修改类请求续期会话，
+// 页面后台的定时刷新和事件流不带这个头，不会让无人操作的页面一直保持登录。
+const ActivityHeader = "X-Session-Activity"
+
 const (
 	securityScheme = "session"
 	// metaAllowPending 标记在「首次登录强制改密」期间仍允许调用的操作。
@@ -130,7 +134,13 @@ func (s *Server) authMiddleware(ctx huma.Context, next func(huma.Context)) {
 		_ = huma.WriteErr(s.api, ctx, http.StatusUnauthorized, app.ErrUnauthenticated.Error())
 		return
 	}
-	sess, err := s.svc.Authenticate(ctx.Context(), cookie.Value)
+	activity := ctx.Header(ActivityHeader) == "1"
+	switch ctx.Method() {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+	default:
+		activity = true
+	}
+	sess, err := s.svc.Authenticate(ctx.Context(), cookie.Value, activity)
 	if err != nil {
 		if !errors.Is(err, app.ErrUnauthenticated) {
 			slog.Error("authenticate session", "err", err)

@@ -151,6 +151,7 @@ func TestLoginRateLimitPerAddress(t *testing.T) {
 func TestSessionMaxLifetime(t *testing.T) {
 	h, password := newHarness(t)
 	h.login("admin", password)
+	h.activity = true
 	start := time.Now()
 	// 每次请求都在闲置超时内，会话仍在绝对有效期到达后失效。
 	for offset := 10 * time.Hour; offset < app.SessionMaxLifetime; offset += 10 * time.Hour {
@@ -161,4 +162,50 @@ func TestSessionMaxLifetime(t *testing.T) {
 	h.svc.Now = func() time.Time { return start.Add(app.SessionMaxLifetime + time.Minute) }
 	resp, _ := h.do(http.MethodGet, "/api/auth/session", nil)
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}
+
+// TestSessionIdleRenewal 确认只有管理员操作发出的请求续期闲置超时，后台定时读取不续期。
+func TestSessionIdleRenewal(t *testing.T) {
+	h, password := newHarness(t)
+	start := time.Now()
+	h.svc.Now = func() time.Time { return start }
+	h.login("admin", password)
+	at := func(offset time.Duration) { h.svc.Now = func() time.Time { return start.Add(offset) } }
+	expiry := func(body map[string]any, key string) time.Time {
+		value, err := time.Parse(time.RFC3339, body[key].(string))
+		require.NoError(t, err)
+		return value
+	}
+
+	// 不带操作标记的读取不续期，到期时间保持登录时的值。
+	at(6 * time.Hour)
+	body := h.mustDo(http.MethodGet, "/api/auth/session", nil, http.StatusOK)
+	require.WithinDuration(t, start.Add(app.SessionIdleTimeout), expiry(body, "expires_at"), time.Second)
+	require.WithinDuration(t, start.Add(app.SessionMaxLifetime), expiry(body, "max_expires_at"), time.Second)
+
+	// 带操作标记的读取把闲置到期时间往后推，绝对到期时间不变。
+	at(10 * time.Hour)
+	h.activity = true
+	body = h.mustDo(http.MethodGet, "/api/auth/session", nil, http.StatusOK)
+	require.WithinDuration(t, start.Add(10*time.Hour+app.SessionIdleTimeout), expiry(body, "expires_at"), time.Second)
+	require.WithinDuration(t, start.Add(app.SessionMaxLifetime), expiry(body, "max_expires_at"), time.Second)
+
+	// 之后只有后台读取，距最后一次操作超过闲置超时即失效。
+	h.activity = false
+	at(21 * time.Hour)
+	h.mustDo(http.MethodGet, "/api/auth/session", nil, http.StatusOK)
+	at(10*time.Hour + app.SessionIdleTimeout + time.Minute)
+	h.mustDo(http.MethodGet, "/api/auth/session", nil, http.StatusUnauthorized)
+}
+
+// TestSessionRenewedByWrites 确认修改类请求即使不带操作标记也续期。
+func TestSessionRenewedByWrites(t *testing.T) {
+	h, password := newHarness(t)
+	start := time.Now()
+	h.svc.Now = func() time.Time { return start }
+	h.login("admin", password)
+	h.svc.Now = func() time.Time { return start.Add(10 * time.Hour) }
+	h.mustDo(http.MethodPost, "/api/auth/password", map[string]string{"old_password": password, "new_password": "a-new-password"}, http.StatusNoContent)
+	h.svc.Now = func() time.Time { return start.Add(20 * time.Hour) }
+	h.mustDo(http.MethodGet, "/api/auth/session", nil, http.StatusOK)
 }

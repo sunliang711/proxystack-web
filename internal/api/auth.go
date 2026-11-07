@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"net/http"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -12,8 +13,14 @@ import (
 
 // SessionBody 是登录和查询会话的响应。
 type SessionBody struct {
-	Admin     app.AdminView `json:"admin"`
-	CSRFToken string        `json:"csrf_token" doc:"修改类请求需在 X-CSRF-Token 头中携带"`
+	Admin        app.AdminView `json:"admin"`
+	CSRFToken    string        `json:"csrf_token" doc:"修改类请求需在 X-CSRF-Token 头中携带"`
+	ExpiresAt    time.Time     `json:"expires_at" doc:"闲置到期时间；带 X-Session-Activity: 1 的请求和修改类请求把它往后推"`
+	MaxExpiresAt time.Time     `json:"max_expires_at" doc:"绝对到期时间，到期后必须重新登录"`
+}
+
+func sessionBody(sess *app.SessionInfo) SessionBody {
+	return SessionBody{Admin: sess.Admin, CSRFToken: sess.CSRFToken, ExpiresAt: sess.ExpiresAt, MaxExpiresAt: sess.MaxExpiresAt}
 }
 
 type sessionOutput struct {
@@ -101,7 +108,7 @@ func registerAuth(api huma.API, s *Server) {
 		}
 		return &sessionOutput{
 			SetCookie: s.sessionCookie(sess.Token, 0, in.ForwardedProto),
-			Body:      SessionBody{Admin: sess.Admin, CSRFToken: sess.CSRFToken},
+			Body:      sessionBody(sess),
 		}, nil
 	})
 
@@ -113,8 +120,7 @@ func registerAuth(api huma.API, s *Server) {
 		Tags:        []string{"auth"},
 		Metadata:    map[string]any{metaAllowPending: true},
 	}), func(ctx context.Context, _ *struct{}) (*currentSessionOutput, error) {
-		sess := sessionFrom(ctx)
-		return &currentSessionOutput{Body: SessionBody{Admin: sess.Admin, CSRFToken: sess.CSRFToken}}, nil
+		return &currentSessionOutput{Body: sessionBody(sessionFrom(ctx))}, nil
 	})
 
 	huma.Register(api, secured(huma.Operation{

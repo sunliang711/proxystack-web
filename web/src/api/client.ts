@@ -30,11 +30,37 @@ export function handleUnauthorizedResponse(response: Response, schemaPath = ''):
   return true
 }
 
+/** 最近一次键盘或鼠标操作的时间。 */
+let lastActivity = 0
+const activityListeners = new Set<() => void>()
+/** 距最近一次操作不超过这个时长的请求算作管理员实际操作，用于续期会话。 */
+const ACTIVITY_WINDOW = 60_000
+
+// 单元测试在没有 window 的环境里加载本模块。
+for (const type of typeof window === 'undefined' ? [] : ['pointerdown', 'keydown', 'wheel', 'touchstart']) {
+  window.addEventListener(type, () => {
+    lastActivity = Date.now()
+    for (const listener of activityListeners) listener()
+  }, { capture: true, passive: true })
+}
+
+/** 订阅键盘或鼠标操作，返回取消函数。 */
+export function onUserActivity(listener: () => void): () => void {
+  activityListeners.add(listener)
+  return () => activityListeners.delete(listener)
+}
+
+/** 管理员最近是否在操作页面。后台定时刷新在无人操作时不续期会话。 */
+export function userActive(): boolean {
+  return Date.now() - lastActivity <= ACTIVITY_WINDOW
+}
+
 const csrf: Middleware = {
   onRequest({ request }) {
     if (csrfToken && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
       request.headers.set('X-CSRF-Token', csrfToken)
     }
+    if (userActive()) request.headers.set('X-Session-Activity', '1')
     return request
   },
 }

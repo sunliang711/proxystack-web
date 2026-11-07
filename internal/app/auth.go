@@ -14,6 +14,7 @@ import (
 
 // 会话与登录保护参数。
 const (
+	// SessionIdleTimeout 是闲置超时：只有管理员实际操作的请求才把到期时间往后推，页面后台的定时刷新不算。
 	SessionIdleTimeout = 12 * time.Hour
 	// SessionMaxLifetime 是会话的绝对有效期：持续使用的会话到期后也要重新登录。
 	SessionMaxLifetime = 7 * 24 * time.Hour
@@ -41,6 +42,9 @@ type SessionInfo struct {
 	Token     string
 	CSRFToken string
 	Admin     AdminView
+	// ExpiresAt 是闲置到期时间，MaxExpiresAt 是绝对到期时间，会话在两者中较早的一个失效。
+	ExpiresAt    time.Time
+	MaxExpiresAt time.Time
 }
 
 func adminView(a dbq.Admin) AdminView {
@@ -94,7 +98,10 @@ func (s *Service) Login(ctx context.Context, username, password, totpCode string
 		}
 	}
 	s.guard.succeed(meta.IP)
-	info := &SessionInfo{Token: auth.RandomToken(), CSRFToken: auth.RandomToken(), Admin: adminView(admin)}
+	info := &SessionInfo{
+		Token: auth.RandomToken(), CSRFToken: auth.RandomToken(), Admin: adminView(admin),
+		ExpiresAt: now.Add(SessionIdleTimeout), MaxExpiresAt: now.Add(SessionMaxLifetime),
+	}
 	err = s.Store.InTx(ctx, func(q *dbq.Queries) error {
 		if err := q.ResetLoginFailures(ctx, admin.ID); err != nil {
 			return err
@@ -108,7 +115,7 @@ func (s *Service) Login(ctx context.Context, username, password, totpCode string
 			CsrfToken:  info.CSRFToken,
 			CreatedAt:  now.Unix(),
 			LastSeenAt: now.Unix(),
-			ExpiresAt:  now.Add(SessionIdleTimeout).Unix(),
+			ExpiresAt:  info.ExpiresAt.Unix(),
 			Ip:         meta.IP,
 			UserAgent:  meta.UserAgent,
 		}); err != nil {
@@ -162,7 +169,8 @@ func (s *Service) auditLoginFailure(ctx context.Context, username string, meta R
 }
 
 // Authenticate 校验会话令牌并滑动续期。
-func (s *Service) Authenticate(ctx context.Context, token string) (*SessionInfo, error) {
+// Authenticate 校验会话。activity 表示这是管理员实际操作发出的请求，只有这类请求续期闲置超时。
+func (s *Service) Authenticate(ctx context.Context, token string, activity bool) (*SessionInfo, error) {
 	if token == "" {
 		return nil, ErrUnauthenticated
 	}
@@ -183,16 +191,21 @@ func (s *Service) Authenticate(ctx context.Context, token string) (*SessionInfo,
 	if err != nil {
 		return nil, ErrUnauthenticated
 	}
-	if now.Unix()-sess.LastSeenAt >= 60 {
+	expiresAt := sess.ExpiresAt
+	if activity && now.Unix()-sess.LastSeenAt >= 60 {
+		expiresAt = now.Add(SessionIdleTimeout).Unix()
 		if err := s.Store.Q.TouchSession(ctx, dbq.TouchSessionParams{
 			LastSeenAt: now.Unix(),
-			ExpiresAt:  now.Add(SessionIdleTimeout).Unix(),
+			ExpiresAt:  expiresAt,
 			IDHash:     idHash,
 		}); err != nil {
 			return nil, err
 		}
 	}
-	return &SessionInfo{Token: token, CSRFToken: sess.CsrfToken, Admin: adminView(admin)}, nil
+	return &SessionInfo{
+		Token: token, CSRFToken: sess.CsrfToken, Admin: adminView(admin),
+		ExpiresAt: time.Unix(expiresAt, 0), MaxExpiresAt: time.Unix(sess.CreatedAt, 0).Add(SessionMaxLifetime),
+	}, nil
 }
 
 // Logout 删除会话。

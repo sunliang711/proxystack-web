@@ -1,43 +1,18 @@
 <script setup lang="ts">
-import { nextTick, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NAlert, NButton, NForm, NFormItem, NInput } from 'naive-ui'
-import { api, fieldErrors, problemMessage } from '../api/client'
 import { applySession } from '../session'
+import { useLogin } from '../composables/useLogin'
 import AuthCard from '../components/AuthCard.vue'
 
 const router = useRouter()
 const route = useRoute()
-const form = reactive({ username: 'admin', password: '', totp_code: '' })
-// 密码正确而账号开启了两步验证时，后端要求补充验证码。
-const needCode = ref(false)
-const codeInput = ref<InstanceType<typeof NInput> | null>(null)
-const loading = ref(false)
-const error = ref(route.query.expired === '1' ? '登录已过期，请重新登录' : '')
+const { form, needCode, loading, error, submit: login, back, canSubmit } = useLogin()
+if (route.query.expired === '1') error.value = '登录已过期，请重新登录'
 
 async function submit() {
-  loading.value = true
-  error.value = ''
-  const body = { username: form.username, password: form.password, ...(needCode.value ? { totp_code: form.totp_code } : {}) }
-  const { data, error: problem, response } = await api.POST('/api/auth/login', { body })
-  loading.value = false
-  if (!data) {
-    if (response.status === 429) {
-      const seconds = Number(response.headers.get('Retry-After') ?? 0)
-      error.value = `失败次数过多，请 ${Math.ceil(seconds / 60) || 1} 分钟后再试`
-    } else if (response.status === 423) {
-      error.value = '连续登录失败，账号已临时锁定，请 15 分钟后再试'
-    } else if (fieldErrors(problem).totp_code) {
-      error.value = needCode.value ? '验证码错误或已使用，请等待下一个验证码' : ''
-      needCode.value = true
-      form.totp_code = ''
-      await nextTick()
-      codeInput.value?.focus()
-    } else {
-      error.value = problemMessage(problem, '登录失败')
-    }
-    return
-  }
+  const data = await login()
+  if (!data) return
   applySession(data)
   const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
   router.replace(data.admin.must_change_password ? { name: 'change-password' } : redirect)
@@ -69,11 +44,11 @@ async function submit() {
         block
         attr-type="submit"
         :loading="loading"
-        :disabled="!form.username || !form.password || (needCode && form.totp_code.length !== 6)"
+        :disabled="!canSubmit()"
       >
         登录
       </NButton>
-      <NButton v-if="needCode" quaternary block style="margin-top: 8px" @click="(needCode = false), (form.totp_code = ''), (error = '')">返回</NButton>
+      <NButton v-if="needCode" quaternary block style="margin-top: 8px" @click="back">返回</NButton>
     </NForm>
   </AuthCard>
 </template>

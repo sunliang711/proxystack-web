@@ -46,6 +46,8 @@ import {
 import { logout, session } from '../session'
 import { themePreference, type ThemePreference } from '../theme'
 import PendingDrawer from '../components/PendingDrawer.vue'
+import ReloginDialog from '../components/ReloginDialog.vue'
+import SessionExpiry from '../components/SessionExpiry.vue'
 import { connectEvents, disconnectEvents, pendingSummary, refreshPending, runtime } from '../runtime'
 import { api, type Schemas } from '../api/client'
 import brandLogo from '/favicon.svg?url'
@@ -297,6 +299,7 @@ async function onAccount(key: string) {
           </NBreadcrumbItem>
         </NBreadcrumb>
         <div class="header-actions">
+          <SessionExpiry />
           <NDropdown :options="themeOptions" trigger="click" placement="bottom-end" @select="(key: ThemePreference) => (themePreference = key)">
             <NButton quaternary circle size="small" :title="`主题：${themeLabels[themePreference]}`" :aria-label="`切换主题，当前：${themeLabels[themePreference]}`">
               <template #icon><NIcon><component :is="themeIcons[themePreference]" /></NIcon></template>
@@ -337,6 +340,7 @@ async function onAccount(key: string) {
     </NLayout>
   </NLayout>
   <PendingDrawer v-model:show="runtime.pendingDrawer" />
+  <ReloginDialog />
   <TaskCenterDrawer />
 </template>
 

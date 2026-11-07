@@ -28,6 +28,8 @@ type harness struct {
 	base   string
 	client *http.Client
 	csrf   string
+	// activity 为 true 时请求带 X-Session-Activity: 1，模拟管理员实际操作。
+	activity bool
 }
 
 func newHarness(t *testing.T) (*harness, string) {
@@ -73,6 +75,9 @@ func (h *harness) do(method, path string, body any) (*http.Response, map[string]
 	}
 	if h.csrf != "" {
 		req.Header.Set(api.CSRFHeader, h.csrf)
+	}
+	if h.activity {
+		req.Header.Set(api.ActivityHeader, "1")
 	}
 	resp, err := h.client.Do(req)
 	require.NoError(h.t, err)

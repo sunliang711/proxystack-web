@@ -2774,6 +2774,16 @@ export interface components {
             admin: components["schemas"]["AdminView"];
             /** @description 修改类请求需在 X-CSRF-Token 头中携带 */
             csrf_token: string;
+            /**
+             * Format: date-time
+             * @description 闲置到期时间；带 X-Session-Activity: 1 的请求和修改类请求把它往后推
+             */
+            expires_at: string;
+            /**
+             * Format: date-time
+             * @description 绝对到期时间，到期后必须重新登录
+             */
+            max_expires_at: string;
         };
         Settings: {
             basic: components["schemas"]["BasicSettings"];
