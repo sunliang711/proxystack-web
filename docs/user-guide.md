@@ -345,3 +345,4 @@ curl -fsSL https://raw.githubusercontent.com/sunliang711/proxystack-web/refs/hea
 | 依赖下载失败 | 在「系统设置 → 下载代理」中配置并测试代理 |
 | stack 未运行或配置异常 | 查看「健康检查」页面和 stack 编辑页的「诊断」「日志」标签页 |
 | 订阅端返回 404 或旧内容 | 执行 `proxystack-web sub --dir /opt/proxystack-web-sub status` 查看已导入的订阅包，重新发布并导入 |
+| 页面文字重复显示，或切换页面后标题已变但正文仍是上一页 | 网页翻译类浏览器插件改写了页面内容。面板已声明无需翻译，正文在下一次切换页面时整体重建；仍然出现时，在该插件中把面板地址加入不翻译列表，然后刷新页面 |

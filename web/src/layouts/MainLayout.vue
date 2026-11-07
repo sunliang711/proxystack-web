@@ -281,13 +281,16 @@ async function onAccount(key: string) {
         </div>
       </NLayoutHeader>
       <NLayoutContent :native-scrollbar="false" class="workspace-content">
-        <main class="page" :data-page="route.name">
+        <!--
+          换页面（路径变化）时整块重建正文：不沿用上一个对象的表单状态（例如从一个用户跳到另一个用户），
+          正文 DOM 被浏览器插件等外部因素改乱时，下一次导航也能整体丢弃并恢复。只改查询参数（切换标签页）不重建。
+        -->
+        <main :key="route.path" class="page" :data-page="route.name">
           <div class="page-head">
             <h1 class="page-title">{{ title }}</h1>
             <p v-if="description" class="page-desc">{{ description }}</p>
           </div>
-          <!-- 同一路由换了参数（例如从一个用户跳到另一个用户）时重新创建页面，不沿用上一个对象的表单状态。 -->
-          <div class="page-body"><RouterView v-slot="{ Component, route: current }"><component :is="Component" :key="current.path" /></RouterView></div>
+          <div class="page-body"><RouterView /></div>
         </main>
       </NLayoutContent>
     </NLayout>
