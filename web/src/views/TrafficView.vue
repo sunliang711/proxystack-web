@@ -12,6 +12,8 @@ const route = useRoute()
 const router = useRouter()
 const tabs: Tab[] = ['user', 'stack', 'ranking']
 const tab = ref<Tab>(tabs.includes(route.query.tab as Tab) ? (route.query.tab as Tab) : 'user')
+// 已在本页时从全局搜索打开另一个标签页。
+watch(() => route.query.tab, (value) => { if (route.name === 'traffic') tab.value = tabs.includes(value as Tab) ? (value as Tab) : 'user' })
 watch(tab, (next) => {
   void router.replace({ query: { ...route.query, tab: next === 'user' ? undefined : next } })
 })

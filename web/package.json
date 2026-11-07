@@ -13,7 +13,8 @@
     "test:inbounds": "node --test tests/inbounds.test.mjs",
     "test:settings": "node --test tests/settings-sections.test.mjs",
     "test:subscription-publish": "node --test tests/subscription-publish.test.mjs",
-    "test:publish-flow": "node --test tests/publish-flow.test.mjs"
+    "test:publish-flow": "node --test tests/publish-flow.test.mjs",
+    "test:command-search": "node --test tests/command-search.test.mjs"
   },
   "dependencies": {
     "@codemirror/lang-json": "^6.0.2",

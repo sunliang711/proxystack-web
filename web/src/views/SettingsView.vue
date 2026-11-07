@@ -236,6 +236,16 @@ onMounted(async () => {
   }
 })
 
+// 已在本页时从全局搜索选中另一个分组：切到它所在的标签页并滚动过去，随后从地址栏去掉 section，再次选中同一分组仍然生效。
+watch(() => route.query.section, async (section) => {
+  const name = String(section ?? '')
+  if (route.name !== 'settings' || !knownSection(name) || !settings.value) return
+  tab.value = tabOfSection(name)
+  await nextTick()
+  document.getElementById(`settings-${name}`)?.scrollIntoView({ block: 'start' })
+  if (route.query.section) void router.replace({ query: { ...route.query, section: undefined } })
+})
+
 function toggleNoAuth(value: boolean) {
   if (!settings.value) return
   if (!value) {

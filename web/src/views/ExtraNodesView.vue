@@ -11,6 +11,8 @@ const route = useRoute()
 const router = useRouter()
 type Tab = 'manual' | 'remote'
 const tab = ref<Tab>(route.query.tab === 'remote' ? 'remote' : 'manual')
+// 已在本页时从全局搜索打开另一个标签页。
+watch(() => route.query.tab, (value) => { if (route.name === 'extra-nodes') tab.value = value === 'remote' ? 'remote' : 'manual' })
 watch(tab, (name) => {
   if (route.query.tab !== name) void router.replace({ query: { ...route.query, tab: name === 'manual' ? undefined : name } })
 })

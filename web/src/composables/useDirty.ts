@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, onMounted, ref, type Ref } from 'vue'
-import { onBeforeRouteLeave } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 
 /** 跟踪表单是否有未保存的改动：离开页面或关闭标签页时要求确认。 */
 export function useDirty<T>(state: Ref<T | null>) {
@@ -10,12 +10,10 @@ export function useDirty<T>(state: Ref<T | null>) {
     baseline.value = JSON.stringify(state.value)
   }
 
-  onBeforeRouteLeave(() => {
-    if (dirty.value && !window.confirm('有未保存的修改，确定离开吗？')) {
-      return false
-    }
-    return true
-  })
+  const confirmLeave = () => !dirty.value || window.confirm('有未保存的修改，确定离开吗？')
+  onBeforeRouteLeave(confirmLeave)
+  // 同一路由换了参数（例如从一个用户跳到另一个用户）也会丢弃当前表单；只改查询参数（切换标签页）不算离开。
+  onBeforeRouteUpdate((to, from) => to.path === from.path || confirmLeave())
 
   const beforeUnload = (event: BeforeUnloadEvent) => {
     if (dirty.value) {

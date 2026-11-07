@@ -44,3 +44,17 @@ export const sectionEffects: Record<SettingsSectionName, SectionEffect> = {
   deps: { label: '立即生效', type: 'success', tip: '保存后之后的安装、升级和自动升级按新设置执行。' },
   download_proxy: { label: '立即生效', type: 'success', tip: '保存后依赖管理和面板自更新的对外请求立即使用新设置。' },
 }
+
+/** 各分组在页面上的标题，以及全局搜索按其匹配的字段名和常用说法。 */
+export const sectionSearch: Record<SettingsSectionName, { title: string; keywords: string[] }> = {
+  basic: { title: '基本', keywords: ['对外地址', '面板地址', '时区', 'external host', 'panel url', 'timezone'] },
+  security: { title: '安全', keywords: ['公开入站必须认证', '无认证入站', '认证'] },
+  subscription: { title: '订阅', keywords: ['来源名', '订阅端对外地址', '展示名模板', 'surge managed', '更新间隔', 'strict', '停用或到期用户'] },
+  traffic: { title: '流量', keywords: ['流量监控', '采集间隔', '明细保留', '保留天数', '断开连接'] },
+  notify: { title: '通知', keywords: ['邮件通知', 'smtp', '发件人', '收件人', '通知事件', '用量预警', '到期提醒', 'email'] },
+  download_proxy: { title: '下载代理', keywords: ['代理', 'http', 'socks5', '测试连接', 'proxy'] },
+  deps: { title: '依赖源', keywords: ['xray 版本', 'mihomo 版本', 'geo', 'sha256', '下载地址', '构建变体', '自动升级', '维护时间窗'] },
+  defaults: { title: '默认值', keywords: ['mihomo 模式', '日志级别', '访问日志', 'access log', 'xray api', 'stats', 'policy'] },
+  port_pools: { title: '端口池', keywords: ['端口', '入站端口', 'socks 监听', 'http 监听', 'controller', 'port'] },
+  node_export: { title: '节点导出', keywords: ['只读导出', 'token', '导出地址', '远端节点源'] },
+}

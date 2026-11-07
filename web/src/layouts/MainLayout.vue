@@ -18,30 +18,16 @@ import {
   type MenuOption,
 } from 'naive-ui'
 import {
-  ArchiveOutline,
   CheckmarkOutline,
   ChevronDownOutline,
-  CubeOutline,
   DesktopOutline,
-  DocumentTextOutline,
-  GitNetworkOutline,
   GitPullRequestOutline,
-  GridOutline,
-  InformationCircleOutline,
-  LayersOutline,
   ListOutline,
   MoonOutline,
   MenuOutline,
-  PaperPlaneOutline,
-  PeopleOutline,
   PersonCircleOutline,
-  PulseOutline,
-  ReceiptOutline,
-  ServerOutline,
-  SettingsOutline,
-  StatsChartOutline,
+  SearchOutline,
   SunnyOutline,
-  TimerOutline,
 } from '@vicons/ionicons5'
 import { logout, session } from '../session'
 import { themePreference, type ThemePreference } from '../theme'
@@ -54,6 +40,8 @@ import brandLogo from '/favicon.svg?url'
 import TaskCenterDrawer from '../components/TaskCenterDrawer.vue'
 import { taskCenter } from '../tasks'
 import { pageTitleOverride } from '../composables/usePageTitle'
+import CommandPalette from '../components/CommandPalette.vue'
+import { navGroups as groups } from '../navigation'
 
 const route = useRoute()
 const router = useRouter()
@@ -100,61 +88,6 @@ function buildValue(value: string | undefined) {
   return value && value !== 'unknown' ? value : '未知'
 }
 
-interface NavItem {
-  name: string
-  label: string
-  icon: Component
-}
-
-const groups: { key: string; label: string; items: NavItem[] }[] = [
-  {
-    key: 'overview',
-    label: '概览',
-    items: [
-      { name: 'dashboard', label: '总览', icon: GridOutline },
-      { name: 'traffic', label: '流量明细', icon: StatsChartOutline },
-    ],
-  },
-  {
-    key: 'proxy',
-    label: '代理',
-    items: [
-      { name: 'stacks', label: 'Stack', icon: LayersOutline },
-      { name: 'users', label: '用户', icon: PeopleOutline },
-    ],
-  },
-  {
-    key: 'subscription',
-    label: '订阅',
-    items: [
-      { name: 'extra-nodes', label: '额外节点', icon: ServerOutline },
-      { name: 'templates', label: '订阅模板', icon: DocumentTextOutline },
-      { name: 'sub-publish', label: '发布订阅包', icon: PaperPlaneOutline },
-      { name: 'sub-publish-settings', label: 'SSH 发布与部署', icon: GitNetworkOutline },
-    ],
-  },
-  {
-    key: 'ops',
-    label: '运维',
-    items: [
-      { name: 'deps', label: '依赖', icon: CubeOutline },
-      { name: 'tasks', label: '后台任务', icon: ListOutline },
-      { name: 'jobs', label: '定时任务', icon: TimerOutline },
-      { name: 'health', label: '健康检查', icon: PulseOutline },
-      { name: 'records', label: '日志与历史', icon: ReceiptOutline },
-      { name: 'backup', label: '备份与还原', icon: ArchiveOutline },
-    ],
-  },
-  {
-    key: 'system',
-    label: '系统',
-    items: [
-      { name: 'settings', label: '系统设置', icon: SettingsOutline },
-      { name: 'system', label: '系统', icon: InformationCircleOutline },
-    ],
-  },
-]
-
 const icon = (component: Component) => () => h(NIcon, null, { default: () => h(component) })
 
 const menu: MenuOption[] = groups.map((group) => ({
@@ -193,6 +126,19 @@ const crumbs = computed(() => {
   return items
 })
 
+// 全局搜索：macOS 上是 ⌘K，其他系统是 Ctrl+K；会话失效等待重新登录时不响应。
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
+const searchShortcut = isMac ? '⌘K' : 'Ctrl K'
+const searching = ref(false)
+function onShortcut(event: KeyboardEvent) {
+  const modifier = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+  if (!modifier || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'k' || event.isComposing) return
+  if (session.reauth === 'expired') return
+  event.preventDefault()
+  searching.value = !searching.value
+}
+window.addEventListener('keydown', onShortcut)
+
 watch(() => taskState.drawer, (show) => { if (show) runtime.pendingDrawer = false })
 watch(() => runtime.pendingDrawer, (show) => { if (show) taskState.drawer = false })
 onMounted(() => {
@@ -206,6 +152,7 @@ onBeforeUnmount(() => {
   taskCenter.stop()
   disconnectEvents()
   mobileQuery.removeEventListener('change', resizeNavigation)
+  window.removeEventListener('keydown', onShortcut)
   document.title = 'proxystack-web'
 })
 watch(() => runtime.connected, (connected) => { if (connected) void taskCenter.refresh() })
@@ -299,6 +246,11 @@ async function onAccount(key: string) {
           </NBreadcrumbItem>
         </NBreadcrumb>
         <div class="header-actions">
+          <NButton secondary size="small" class="search-button" :aria-label="`全局搜索（${searchShortcut}）`" :title="`搜索用户、Stack、页面或设置项（${searchShortcut}）`" @click="searching = true">
+            <template #icon><NIcon><SearchOutline /></NIcon></template>
+            <span class="search-label">搜索</span>
+            <kbd class="search-kbd">{{ searchShortcut }}</kbd>
+          </NButton>
           <SessionExpiry />
           <NDropdown :options="themeOptions" trigger="click" placement="bottom-end" @select="(key: ThemePreference) => (themePreference = key)">
             <NButton quaternary circle size="small" :title="`主题：${themeLabels[themePreference]}`" :aria-label="`切换主题，当前：${themeLabels[themePreference]}`">
@@ -334,7 +286,8 @@ async function onAccount(key: string) {
             <h1 class="page-title">{{ title }}</h1>
             <p v-if="description" class="page-desc">{{ description }}</p>
           </div>
-          <div class="page-body"><RouterView /></div>
+          <!-- 同一路由换了参数（例如从一个用户跳到另一个用户）时重新创建页面，不沿用上一个对象的表单状态。 -->
+          <div class="page-body"><RouterView v-slot="{ Component, route: current }"><component :is="Component" :key="current.path" /></RouterView></div>
         </main>
       </NLayoutContent>
     </NLayout>
@@ -342,6 +295,7 @@ async function onAccount(key: string) {
   <PendingDrawer v-model:show="runtime.pendingDrawer" />
   <ReloginDialog />
   <TaskCenterDrawer />
+  <CommandPalette v-model:show="searching" />
 </template>
 
 <style scoped>
@@ -420,6 +374,16 @@ async function onAccount(key: string) {
   align-items: center;
   gap: 12px;
 }
+.search-label { margin-right: 10px; }
+.search-kbd {
+  padding: 0 5px;
+  border: 1px solid var(--ps-border);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--ps-muted);
+}
 .account {
   display: inline-flex;
   align-items: center;
@@ -464,8 +428,8 @@ async function onAccount(key: string) {
     padding: 0 12px;
   }
   .header-actions { gap: 4px; }
-  .pending-label, .task-label { display: none; }
-  .pending-button :deep(.n-button__icon), .task-button :deep(.n-button__icon) { margin: 0; }
+  .pending-label, .task-label, .search-label, .search-kbd { display: none; }
+  .pending-button :deep(.n-button__icon), .task-button :deep(.n-button__icon), .search-button :deep(.n-button__icon) { margin: 0; }
   .page-title { font-size: 23px; }
 }
 

@@ -1,5 +1,5 @@
 import { computed, shallowReactive, watch } from 'vue'
-import { api } from '../api/client'
+import { api, type Schemas } from '../api/client'
 import { session } from '../session'
 
 export type EntityKind = 'stack' | 'user'
@@ -46,6 +46,14 @@ async function refresh(kind: EntityKind) {
   pending[kind] = request
   await request
   if (pending[kind] === request) delete pending[kind]
+}
+
+/** 列表接口返回的完整对象，供全局搜索按名称以外的字段匹配。 */
+export const entityRecords = records as unknown as Readonly<{ stack: readonly Schemas['StackSummary'][]; user: readonly Schemas['User'][] }>
+
+/** 重新读取目录；同一时刻的多次调用共用一个请求。 */
+export function refreshEntities(kind: EntityKind) {
+  return refresh(kind)
 }
 
 export function useEntityDirectory(kinds: () => EntityKind[]) {
