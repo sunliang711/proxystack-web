@@ -302,6 +302,8 @@ const customMinutes = ref(10)
 const scheduleInterval = ref(20)
 const versionPattern = /^v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/
 const versionValid = computed(() => scheduleMode.value === 'latest' || versionPattern.test(scheduleVersion.value.trim()))
+// 目标版本的示例取当前版本号；开发构建的版本号不是语义化版本时退回固定示例。
+const versionExample = computed(() => (info.value?.version && versionPattern.test(info.value.version) ? info.value.version : 'v0.6.1'))
 const timeoutSeconds = computed(() => (scheduleDuration.value || Math.round((customMinutes.value || 1) * 60)))
 const scheduleSummary = computed(() => {
   const deadline = new Date(Date.now() + timeoutSeconds.value * 1000).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' })
@@ -474,13 +476,13 @@ onBeforeUnmount(() => {
 
   <NModal v-model:show="scheduleModalVisible" preset="card" title="预约升级" style="width: 560px; max-width: calc(100vw - 32px)">
     <NForm label-placement="left" label-width="90">
-      <NFormItem label="目标版本" :feedback="scheduleMode === 'version' && !versionValid ? '格式如 v0.6.1' : ''" :validation-status="scheduleMode === 'version' && !versionValid ? 'error' : undefined">
+      <NFormItem label="目标版本" :feedback="scheduleMode === 'version' && !versionValid ? `格式如 ${versionExample}` : ''" :validation-status="scheduleMode === 'version' && !versionValid ? 'error' : undefined">
         <NSpace vertical style="width: 100%">
           <NRadioGroup v-model:value="scheduleMode">
             <NRadioButton value="latest">最新正式版</NRadioButton>
             <NRadioButton value="version">指定版本</NRadioButton>
           </NRadioGroup>
-          <NInput v-if="scheduleMode === 'version'" v-model:value="scheduleVersion" placeholder="例如 v0.6.1" />
+          <NInput v-if="scheduleMode === 'version'" v-model:value="scheduleVersion" :placeholder="`例如 ${versionExample}`" />
         </NSpace>
       </NFormItem>
       <NFormItem label="等待时长">
