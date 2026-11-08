@@ -1081,6 +1081,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stacks/{id}/speedtest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 经 stack 的 mihomo 监听下载测速 */
+        get: operations["streamStackSpeedTest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stacks/{id}/usage": {
         parameters: {
             query?: never;
@@ -2802,6 +2819,56 @@ export interface components {
             name: string;
             /** Format: int64 */
             sequence: number;
+        };
+        SpeedTestProgress: {
+            /** Format: int64 */
+            bytes: number;
+            /**
+             * Format: int64
+             * @description 自收到首字节起的毫秒数
+             */
+            elapsed_ms: number;
+            /**
+             * Format: double
+             * @description 最近一个采样间隔的速度
+             */
+            mbps: number;
+        };
+        SpeedTestResult: {
+            /** Format: double */
+            avg_mbps: number;
+            /** Format: int64 */
+            bytes: number;
+            /** @description 实际走的代理链，从外层代理组到出口节点；无法查询时为空 */
+            chain: string[];
+            /**
+             * Format: int64
+             * @description 自收到首字节起的下载用时
+             */
+            elapsed_ms: number;
+            error: string;
+            /**
+             * Format: int64
+             * @description 从发起请求到收到首字节的毫秒数
+             */
+            first_byte_ms: number;
+            listener: string;
+            mode: string;
+            /**
+             * Format: double
+             * @description 一秒窗口内的最高速度
+             */
+            peak_mbps: number;
+            rule: string;
+            rule_payload: string;
+            /**
+             * Format: double
+             * @description 排除首字节后第一秒的平均速度
+             */
+            stable_mbps: number;
+            /** @enum {string} */
+            stop_reason: "duration" | "size" | "byte_cap" | "timeout" | "cancelled" | "error" | "";
+            url: string;
         };
         Stack: {
             /** Format: int64 */
@@ -5542,6 +5609,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Stack"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    streamStackSpeedTest: {
+        parameters: {
+            query?: {
+                /** @description socks 或 http */
+                listener?: string;
+                /** @description duration 按时长，size 按大小 */
+                mode?: string;
+                /** @description 时长模式的下载秒数，5 到 60 */
+                seconds?: number;
+                /** @description 大小模式的下载量（MB），10 到 1000 */
+                mb?: number;
+                /** @description 测速地址，{bytes} 替换为单次请求的字节数；为空时使用默认地址 */
+                url?: string;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": ({
+                        data: components["schemas"]["SpeedTestProgress"];
+                        /**
+                         * @description The event name.
+                         * @constant
+                         */
+                        event: "progress";
+                        /** @description The event ID. */
+                        id?: number | string;
+                        /** @description The retry time in milliseconds. */
+                        retry?: number;
+                    } | {
+                        data: components["schemas"]["SpeedTestResult"];
+                        /**
+                         * @description The event name.
+                         * @constant
+                         */
+                        event: "result";
+                        /** @description The event ID. */
+                        id?: number | string;
+                        /** @description The retry time in milliseconds. */
+                        retry?: number;
+                    })[];
                 };
             };
             /** @description Error */

@@ -61,6 +61,8 @@ type Service struct {
 	// notificationMu 串行化邮件发送与出口事件替换，避免恢复后发送滞后的故障邮件。
 	notificationMu sync.Mutex
 	egressMu       sync.Mutex
+	// speedTestMu 保证同一时间只有一个下载测速。
+	speedTestMu sync.Mutex
 	// background 跟踪退出前要收尾的后台循环。
 	background sync.WaitGroup
 

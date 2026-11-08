@@ -127,15 +127,7 @@ func (s *Service) StackEgress(ctx context.Context, id int64, family string, time
 	if timeout <= 0 {
 		timeout = defaultEgressTimeout
 	}
-	listener := stack.Mihomo.Socks
-	host := listener.Listen
-	if host == "0.0.0.0" || host == "::" || host == "" {
-		host = "127.0.0.1"
-	}
-	proxy := deps.ProxyConfig{Kind: deps.ProxySOCKS5, Address: net.JoinHostPort(host, fmt.Sprint(listener.Port)), RemoteDNS: true}
-	if listener.Auth == configdoc.ListenerAuthAccounts && len(listener.Accounts) > 0 {
-		proxy.Username, proxy.Password = listener.Accounts[0].Username, listener.Accounts[0].Password
-	}
+	proxy := listenerProxy(*stack, "socks")
 	fetcher, err := deps.NewHTTPFetcher(proxy)
 	if err != nil {
 		return nil, err

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"slices"
 	"strings"
@@ -56,16 +55,7 @@ type egressTarget struct {
 }
 
 func egressProxy(stack configdoc.Stack) deps.ProxyConfig {
-	listener := stack.Mihomo.Socks
-	host := listener.Listen
-	if host == "0.0.0.0" || host == "::" || host == "" {
-		host = "127.0.0.1"
-	}
-	proxy := deps.ProxyConfig{Kind: deps.ProxySOCKS5, Address: net.JoinHostPort(host, fmt.Sprint(listener.Port)), RemoteDNS: true}
-	if listener.Auth == configdoc.ListenerAuthAccounts && len(listener.Accounts) > 0 {
-		proxy.Username, proxy.Password = listener.Accounts[0].Username, listener.Accounts[0].Password
-	}
-	return proxy
+	return listenerProxy(stack, "socks")
 }
 
 // egressTargets 必须在 runtimeMu 内调用，捕获已应用版本和实际 unit 的同一时点信息。

@@ -3793,6 +3793,118 @@
         ],
         "type": "object"
       },
+      "SpeedTestProgress": {
+        "additionalProperties": false,
+        "properties": {
+          "bytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "elapsed_ms": {
+            "description": "自收到首字节起的毫秒数",
+            "format": "int64",
+            "type": "integer"
+          },
+          "mbps": {
+            "description": "最近一个采样间隔的速度",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "elapsed_ms",
+          "bytes",
+          "mbps"
+        ],
+        "type": "object"
+      },
+      "SpeedTestResult": {
+        "additionalProperties": false,
+        "properties": {
+          "avg_mbps": {
+            "format": "double",
+            "type": "number"
+          },
+          "bytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "chain": {
+            "description": "实际走的代理链，从外层代理组到出口节点；无法查询时为空",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "elapsed_ms": {
+            "description": "自收到首字节起的下载用时",
+            "format": "int64",
+            "type": "integer"
+          },
+          "error": {
+            "type": "string"
+          },
+          "first_byte_ms": {
+            "description": "从发起请求到收到首字节的毫秒数",
+            "format": "int64",
+            "type": "integer"
+          },
+          "listener": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "peak_mbps": {
+            "description": "一秒窗口内的最高速度",
+            "format": "double",
+            "type": "number"
+          },
+          "rule": {
+            "type": "string"
+          },
+          "rule_payload": {
+            "type": "string"
+          },
+          "stable_mbps": {
+            "description": "排除首字节后第一秒的平均速度",
+            "format": "double",
+            "type": "number"
+          },
+          "stop_reason": {
+            "enum": [
+              "duration",
+              "size",
+              "byte_cap",
+              "timeout",
+              "cancelled",
+              "error",
+              ""
+            ],
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "listener",
+          "mode",
+          "url",
+          "bytes",
+          "elapsed_ms",
+          "first_byte_ms",
+          "avg_mbps",
+          "stable_mbps",
+          "peak_mbps",
+          "chain",
+          "rule",
+          "rule_payload",
+          "stop_reason",
+          "error"
+        ],
+        "type": "object"
+      },
       "Stack": {
         "additionalProperties": false,
         "properties": {
@@ -9065,6 +9177,181 @@
         "summary": "查看 stack 明文凭据（记入审计日志）",
         "tags": [
           "config"
+        ]
+      }
+    },
+    "/api/stacks/{id}/speedtest": {
+      "get": {
+        "operationId": "streamStackSpeedTest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "socks 或 http",
+            "explode": false,
+            "in": "query",
+            "name": "listener",
+            "schema": {
+              "default": "socks",
+              "description": "socks 或 http",
+              "type": "string"
+            }
+          },
+          {
+            "description": "duration 按时长，size 按大小",
+            "explode": false,
+            "in": "query",
+            "name": "mode",
+            "schema": {
+              "default": "duration",
+              "description": "duration 按时长，size 按大小",
+              "type": "string"
+            }
+          },
+          {
+            "description": "时长模式的下载秒数，5 到 60",
+            "explode": false,
+            "in": "query",
+            "name": "seconds",
+            "schema": {
+              "default": 10,
+              "description": "时长模式的下载秒数，5 到 60",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "大小模式的下载量（MB），10 到 1000",
+            "explode": false,
+            "in": "query",
+            "name": "mb",
+            "schema": {
+              "default": 50,
+              "description": "大小模式的下载量（MB），10 到 1000",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "测速地址，{bytes} 替换为单次请求的字节数；为空时使用默认地址",
+            "explode": false,
+            "in": "query",
+            "name": "url",
+            "schema": {
+              "description": "测速地址，{bytes} 替换为单次请求的字节数；为空时使用默认地址",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "description": "Each oneOf object in the array represents one possible Server Sent Events (SSE) message, serialized as UTF-8 text according to the SSE specification.",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "properties": {
+                          "data": {
+                            "$ref": "#/components/schemas/SpeedTestProgress"
+                          },
+                          "event": {
+                            "const": "progress",
+                            "description": "The event name.",
+                            "type": "string"
+                          },
+                          "id": {
+                            "description": "The event ID.",
+                            "oneOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "retry": {
+                            "description": "The retry time in milliseconds.",
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "data",
+                          "event"
+                        ],
+                        "title": "Event progress",
+                        "type": "object"
+                      },
+                      {
+                        "properties": {
+                          "data": {
+                            "$ref": "#/components/schemas/SpeedTestResult"
+                          },
+                          "event": {
+                            "const": "result",
+                            "description": "The event name.",
+                            "type": "string"
+                          },
+                          "id": {
+                            "description": "The event ID.",
+                            "oneOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "retry": {
+                            "description": "The retry time in milliseconds.",
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "data",
+                          "event"
+                        ],
+                        "title": "Event result",
+                        "type": "object"
+                      }
+                    ]
+                  },
+                  "title": "Server Sent Events",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "经 stack 的 mihomo 监听下载测速",
+        "tags": [
+          "ops"
         ]
       }
     },

@@ -467,7 +467,7 @@ async function saveMembers() {
               <UsageTab :key="id" :stack-id="id" :users="users" />
             </NTabPane>
             <NTabPane name="diagnostics" tab="诊断" display-directive="if">
-              <DiagnosticsTab :stack-id="id" />
+              <DiagnosticsTab :stack-id="id" :mihomo-enabled="stack.mihomo.enabled" :http-listener="stack.mihomo.http.enabled" />
             </NTabPane>
             <NTabPane name="logs" tab="日志" display-directive="if">
               <LogsTab :stack="stack.name" />

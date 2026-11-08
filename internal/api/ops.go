@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/sse"
 
 	"proxystack-web/internal/app"
 	"proxystack-web/internal/mihomoapi"
@@ -107,6 +109,15 @@ type delayInput struct {
 
 type delayOutput struct {
 	Body []app.DelayResult
+}
+
+type speedTestInput struct {
+	ID       int64  `path:"id"`
+	Listener string `query:"listener" default:"socks" doc:"socks 或 http"`
+	Mode     string `query:"mode" default:"duration" doc:"duration 按时长，size 按大小"`
+	Seconds  int    `query:"seconds" default:"10" doc:"时长模式的下载秒数，5 到 60"`
+	MB       int    `query:"mb" default:"50" doc:"大小模式的下载量（MB），10 到 1000"`
+	URL      string `query:"url" doc:"测速地址，{bytes} 替换为单次请求的字节数；为空时使用默认地址"`
 }
 
 type auditInput struct {
@@ -278,6 +289,20 @@ func registerOps(api huma.API, s *Server) {
 			return &delayOutput{Body: results}, nil
 		})
 
+	// 测速经 SSE 推送进度，最后一个 result 事件携带结果；参数或状态不满足时 result 只包含 error。
+	sse.Register(api, reg(huma.Operation{OperationID: "streamStackSpeedTest", Method: http.MethodGet, Path: "/api/stacks/{id}/speedtest", Summary: "经 stack 的 mihomo 监听下载测速"}),
+		map[string]any{"progress": app.SpeedTestProgress{}, "result": app.SpeedTestResult{}},
+		func(ctx context.Context, in *speedTestInput, send sse.Sender) {
+			options := app.SpeedTestOptions{Listener: in.Listener, Mode: in.Mode, Seconds: in.Seconds, MB: in.MB, URL: in.URL}
+			result, err := s.svc.StackSpeedTest(ctx, in.ID, options, func(progress app.SpeedTestProgress) {
+				_ = send.Data(progress)
+			})
+			if err != nil {
+				result = &app.SpeedTestResult{Listener: in.Listener, Mode: in.Mode, Chain: []string{}, StopReason: app.SpeedStopError, Error: speedTestError(err)}
+			}
+			_ = send.Data(*result)
+		})
+
 	huma.Register(api, reg(huma.Operation{OperationID: "listAudit", Method: http.MethodGet, Path: "/api/audit", Summary: "审计日志"}),
 		func(ctx context.Context, in *auditInput) (*auditOutput, error) {
 			page, err := s.svc.ListAudit(ctx, in.Action, in.Actor, in.Limit, in.Offset)
@@ -286,4 +311,16 @@ func registerOps(api huma.API, s *Server) {
 			}
 			return &auditOutput{Body: *page}, nil
 		})
+}
+
+// speedTestError 取出测速前置检查失败的说明。
+func speedTestError(err error) string {
+	var fe *app.FieldError
+	if errors.As(err, &fe) {
+		return fe.Message
+	}
+	if errors.Is(err, app.ErrNotFound) {
+		return "stack 不存在"
+	}
+	return err.Error()
 }

@@ -294,7 +294,7 @@ async function create() {
       <NSpace justify="end">
         <NButton :loading="egress.refreshing.value" :disabled="!egressTargets.length" @click="egress.refresh(egressTargets)">
           <template #icon><NIcon><RefreshOutline /></NIcon></template>
-          重新检测出口 IP
+          出口 IP
         </NButton>
         <NButton @click="showImport = true">导入</NButton>
         <NButton :disabled="!checked.length" @click="showExport = true">导出所选</NButton>

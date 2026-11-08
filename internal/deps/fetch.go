@@ -58,11 +58,27 @@ type HTTPFetcher struct {
 // NewHTTPFetcher 按代理设置创建下载器：HTTP 代理用 CONNECT 隧道并发送 Basic 认证，
 // SOCKS5 代理用用户名/密码认证；RemoteDNS 为 true 时目标域名交给代理解析。
 func NewHTTPFetcher(cfg ProxyConfig) (*HTTPFetcher, error) {
+	transport, err := NewTransport(cfg, &net.Dialer{Timeout: 15 * time.Second})
+	if err != nil {
+		return nil, err
+	}
+	return &HTTPFetcher{client: &http.Client{Transport: transport}, proxy: cfg}, nil
+}
+
+// ForwardDialer 建立到代理服务器（或直连时到目标）的 TCP 连接。
+type ForwardDialer interface {
+	proxy.Dialer
+	proxy.ContextDialer
+}
+
+// NewTransport 按代理设置创建 HTTP transport，到代理服务器的连接由 forward 建立。
+func NewTransport(cfg ProxyConfig, forward ForwardDialer) (*http.Transport, error) {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = nil
 	switch cfg.Kind {
 	case "", ProxyDirect:
 	case ProxyHTTP:
+		transport.DialContext = forward.DialContext
 		proxyURL := &url.URL{Scheme: "http", Host: cfg.Address}
 		if cfg.Username != "" {
 			proxyURL.User = url.UserPassword(cfg.Username, cfg.Password)
@@ -73,7 +89,7 @@ func NewHTTPFetcher(cfg ProxyConfig) (*HTTPFetcher, error) {
 		if cfg.Username != "" {
 			auth = &proxy.Auth{User: cfg.Username, Password: cfg.Password}
 		}
-		dialer, err := proxy.SOCKS5("tcp", cfg.Address, auth, &net.Dialer{Timeout: 15 * time.Second})
+		dialer, err := proxy.SOCKS5("tcp", cfg.Address, auth, forward)
 		if err != nil {
 			return nil, err
 		}
@@ -95,7 +111,7 @@ func NewHTTPFetcher(cfg ProxyConfig) (*HTTPFetcher, error) {
 	default:
 		return nil, fmt.Errorf("unknown proxy kind: %s", cfg.Kind)
 	}
-	return &HTTPFetcher{client: &http.Client{Transport: transport}, proxy: cfg}, nil
+	return transport, nil
 }
 
 // CloseIdleConnections 关闭本轮探测结束后不再使用的空闲连接。

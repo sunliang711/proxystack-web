@@ -99,3 +99,29 @@ func (c Client) Delay(ctx context.Context, name, testURL string, timeout time.Du
 	err := c.get(ctx, "/proxies/"+url.PathEscape(name)+"/delay", query, &response)
 	return response.Delay, err
 }
+
+// Connection 是 mihomo 当前活动的一条连接。
+type Connection struct {
+	ID       string `json:"id"`
+	Metadata struct {
+		Type       string `json:"type"`
+		SourceIP   string `json:"sourceIP"`
+		SourcePort string `json:"sourcePort"`
+		Host       string `json:"host"`
+	} `json:"metadata"`
+	// Chains 从实际出口节点开始，依次到外层代理组。
+	Chains      []string `json:"chains"`
+	Rule        string   `json:"rule"`
+	RulePayload string   `json:"rulePayload"`
+}
+
+// Connections 返回当前活动的连接。
+func (c Client) Connections(ctx context.Context) ([]Connection, error) {
+	var response struct {
+		Connections []Connection `json:"connections"`
+	}
+	if err := c.get(ctx, "/connections", nil, &response); err != nil {
+		return nil, err
+	}
+	return response.Connections, nil
+}
