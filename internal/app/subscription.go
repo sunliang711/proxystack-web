@@ -283,12 +283,16 @@ type UserSubscriptionStatus struct {
 	UnappliedStacks []string `json:"unapplied_stacks"`
 	// NoNodesReason 在没有节点时说明原因。
 	NoNodesReason string `json:"no_nodes_reason,omitempty"`
+	// AutoPublish 为 true 时订阅内容变化后会自动发布到在线订阅端，不需要手动发布订阅包。
+	AutoPublish bool `json:"auto_publish"`
 }
 
 // UserSubscriptionIssue 是发布订阅包前需要注意的用户：启用中但没有节点，或有 stack 尚未应用。
 type UserSubscriptionIssue struct {
-	User string `json:"user"`
-	UserSubscriptionStatus
+	User            string   `json:"user"`
+	Nodes           int      `json:"nodes"`
+	UnappliedStacks []string `json:"unapplied_stacks"`
+	NoNodesReason   string   `json:"no_nodes_reason,omitempty"`
 }
 
 // userStatus 汇总某个用户的节点数、未应用的 stack 和没有节点的原因。
@@ -316,7 +320,9 @@ func (snapshot *subSnapshot) userIssues(now time.Time) []UserSubscriptionIssue {
 		}
 		status := snapshot.userStatus(snapshot.doc.Users[index])
 		if status.Nodes == 0 || len(status.UnappliedStacks) > 0 {
-			issues = append(issues, UserSubscriptionIssue{User: user.Name, UserSubscriptionStatus: status})
+			issues = append(issues, UserSubscriptionIssue{
+				User: user.Name, Nodes: status.Nodes, UnappliedStacks: status.UnappliedStacks, NoNodesReason: status.NoNodesReason,
+			})
 		}
 	}
 	return issues
@@ -333,6 +339,7 @@ func (s *Service) UserSubscriptionStatus(ctx context.Context, id int64) (*UserSu
 		return nil, ErrNotFound
 	}
 	status := snapshot.userStatus(snapshot.doc.Users[index])
+	status.AutoPublish = s.autoPublishTargetCount(ctx) > 0 && snapshot.autoPublishBlocked() == ""
 	return &status, nil
 }
 

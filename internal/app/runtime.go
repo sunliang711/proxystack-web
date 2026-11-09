@@ -131,7 +131,12 @@ func (s *Service) Apply(ctx context.Context, actor Actor, only []string) (int64,
 	return s.startTask("apply", title, actor.Name, func(ctx context.Context, logf Logf) error {
 		s.runtimeMu.Lock()
 		defer s.runtimeMu.Unlock()
-		return s.apply(ctx, actor, only, logf)
+		if err := s.apply(ctx, actor, only, logf); err != nil {
+			return err
+		}
+		// 应用后各 stack 的已应用版本变了，订阅节点随之变化。
+		s.kickAutoPublish()
+		return nil
 	})
 }
 

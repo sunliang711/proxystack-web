@@ -51,6 +51,7 @@ type Service struct {
 	runtimeMu     sync.Mutex
 	tasks         taskRegistry
 	subs          subCache
+	autoPublish   autoPublishState
 	traffic       trafficState
 	autoPause     autoPauseState
 	scheduler     schedulerState

@@ -166,6 +166,48 @@ function toggleStack(stack: string, paused: boolean) {
   setPause(user.value!.enabled, paused ? [...current, stack] : current.filter((name) => name !== stack))
 }
 
+/** 加入或移出 stack：修改该 stack 的入站，需要应用后生效。 */
+const joining = ref(false)
+async function setMember(stack: Schemas['StackSummary'], member: boolean) {
+  if (!user.value) return
+  joining.value = true
+  const { data, error } = await api.PUT('/api/users/{id}/stacks/{stack_id}', {
+    params: { path: { id: id.value, stack_id: stack.id! } }, body: { member },
+  })
+  joining.value = false
+  if (error) {
+    const problem = splitProblem(error, '操作失败')
+    message.error([...problem.global, ...Object.values(problem.fields)].join('；'))
+    return
+  }
+  user.value.paused_stacks = data!.paused_stacks
+  patchBaseline((base) => { base.paused_stacks = data!.paused_stacks })
+  await refreshSubscription()
+  void notifySaved(message)
+}
+
+type AccessState = 'out' | 'on' | 'paused'
+const rowState = (row: { refs: Reference[]; paused: boolean }): AccessState => (!row.refs.length ? 'out' : row.paused ? 'paused' : 'on')
+function changeAccess(row: { stack: Schemas['StackSummary']; refs: Reference[]; paused: boolean }, next: AccessState) {
+  const current = rowState(row)
+  if (next === current) return
+  if (next === 'out') {
+    dialog.warning({
+      title: `把 ${savedName.value} 移出 ${row.stack.name}？`,
+      content: `将从该 stack 的 ${new Set(row.refs.map((item) => item.inbound)).size} 个入站中移除该用户，应用后生效。`,
+      positiveText: '移出',
+      negativeText: '取消',
+      onPositiveClick: () => setMember(row.stack, false),
+    })
+    return
+  }
+  if (current === 'out') {
+    void setMember(row.stack, true)
+    return
+  }
+  toggleStack(row.stack.name, next === 'paused')
+}
+
 /** 取回明文凭据，只替换仍是占位的字段，不覆盖已修改的内容。 */
 async function reveal() {
   const { data } = await api.GET('/api/users/{id}/secrets', { params: { path: { id: id.value } } })
@@ -488,16 +530,16 @@ async function remove() {
 
         <NTabPane name="access" :tab="tabLabel('access', '接入')">
           <section class="pane-section">
-            <h3 class="pane-title">各 stack 接入 <NTag size="small" type="success" :bordered="false">暂停当场生效</NTag></h3>
+            <h3 class="pane-title">各 stack 接入</h3>
             <NText depth="3" tag="p" class="pane-desc">
-              每个 stack 一行：中间列出引用该用户的入站，右侧开关只在该 stack 上暂停或恢复该用户，不需要保存。SOCKS5/HTTP 入站的账号由多个用户共用，暂停只把它们从该用户的订阅中去掉。
+              每个 stack 一行，右侧选择该用户在这个 stack 上的状态。「加入」把该用户（default 档案）加进这个 stack 全部进入订阅的入站，「未加入」从这个 stack 的全部入站中移除该用户，两者都需要应用后生效；「启用」和「暂停」当场生效，不需要保存和应用。需要使用其他档案或只加入部分入站时，到 stack 的「入站」中编辑。SOCKS5/HTTP 入站的账号由多个用户共用，暂停只把它们从该用户的订阅中去掉。
             </NText>
             <SubscriptionGapAlert :status="subscription" />
-            <NAlert v-if="!user.enabled" type="warning" :bordered="false" style="margin-bottom: 12px">用户已停用，在「基本」中启用后才能按 stack 调整。</NAlert>
+            <NAlert v-if="!user.enabled" type="warning" :bordered="false" style="margin-bottom: 12px">用户已停用，在「基本」中启用后才能按 stack 启用或暂停；加入和移出不受影响。</NAlert>
             <NEmpty v-if="!stacks.length" size="small" description="还没有 stack" />
             <div v-else class="access-list">
               <div class="access-row access-header">
-                <span>Stack</span><span>引用该用户的入站</span><span>在该 stack 上</span>
+                <span>Stack</span><span>引用该用户的入站</span><span>状态</span>
               </div>
               <div v-for="row in accessRows" :key="row.stack.id" class="access-row" :class="{ paused: row.paused }">
                 <div class="access-stack">
@@ -510,16 +552,17 @@ async function remove() {
                       <NTag size="small" :bordered="false">{{ item.inbound }}<template v-if="item.profile"> · 档案 {{ item.profile }}</template></NTag>
                     </RouterLink>
                   </template>
-                  <NText v-else depth="3" class="access-none">未被入站引用</NText>
+                  <NText v-else depth="3" class="access-none">未加入</NText>
                   <NTag v-if="unapplied.has(row.stack.name)" size="small" type="warning" :bordered="false" title="入站已引用该用户，但这个 stack 还没有重新应用，节点暂时不在订阅中">未应用</NTag>
                 </div>
-                <NSwitch
-                  :value="!row.paused" :disabled="!user.enabled || pausing" :aria-label="`在 ${row.stack.name} 上启用该用户`"
-                  @update:value="(v) => toggleStack(row.stack.name, !v)"
+                <NRadioGroup
+                  size="small" :value="rowState(row)" :disabled="pausing || joining" :aria-label="`该用户在 ${row.stack.name} 上的状态`"
+                  @update:value="(v: AccessState) => changeAccess(row, v)"
                 >
-                  <template #checked>启用</template>
-                  <template #unchecked>已暂停</template>
-                </NSwitch>
+                  <NRadioButton value="out">未加入</NRadioButton>
+                  <NRadioButton value="on" :disabled="!!row.refs.length && !user.enabled">{{ row.refs.length ? '启用' : '加入' }}</NRadioButton>
+                  <NRadioButton value="paused" :disabled="!row.refs.length || !user.enabled">暂停</NRadioButton>
+                </NRadioGroup>
               </div>
             </div>
           </section>

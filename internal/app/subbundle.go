@@ -48,6 +48,11 @@ type BundleStatus struct {
 	BuildWarnings []string  `json:"build_warnings"`
 	// UserIssues 是启用中但没有节点、或有 stack 尚未应用的用户；没有节点的用户打开订阅会得到 not_found。
 	UserIssues []UserSubscriptionIssue `json:"user_issues"`
+	// ManualPublish 为 true 表示已关闭自动发布；AutoPublishTargets 是自动发布的目标数，为 0 时不会自动发布。
+	ManualPublish      bool `json:"manual_publish"`
+	AutoPublishTargets int  `json:"auto_publish_targets"`
+	// AutoPublishBlocked 非空时说明自动发布为什么暂停，需要修复后自动恢复，或在本页手动签发。
+	AutoPublishBlocked string `json:"auto_publish_blocked"`
 }
 
 // signingKey 读取订阅包签名私钥，不存在时生成并保存。
@@ -130,6 +135,9 @@ func (s *Service) SubscriptionBundleStatus(ctx context.Context) (*BundleStatus, 
 	if state.PublishedAt != 0 {
 		status.PublishedAt = time.Unix(state.PublishedAt, 0)
 	}
+	status.ManualPublish = snapshot.doc.Settings.Subscription.ManualPublish
+	status.AutoPublishTargets = s.autoPublishTargetCount(ctx)
+	status.AutoPublishBlocked = snapshot.autoPublishBlocked()
 	return status, nil
 }
 

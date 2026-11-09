@@ -15,7 +15,7 @@ defineProps<{ status: Schemas['UserSubscriptionStatus'] | null | undefined }>()
       入站已引用该用户，但 stack {{ status.unapplied_stacks.join('、') }} 还没有重新应用，这些 stack 的节点暂时不在订阅中。
     </template>
     <template v-if="status.unapplied_stacks.length">
-      应用后再发布订阅包即可生效。
+      {{ status.auto_publish ? '应用后会自动发布到订阅端。' : '应用后再发布订阅包即可生效。' }}
       <NButton text type="primary" style="margin-left: 8px" @click="runtime.pendingDrawer = true">查看待应用变更</NButton>
     </template>
   </NAlert>

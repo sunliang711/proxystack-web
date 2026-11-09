@@ -10,6 +10,7 @@ import ErrorList from '../components/ErrorList.vue'
 import ExportDialog from '../components/ExportDialog.vue'
 import ImportDialog from '../components/ImportDialog.vue'
 import SubscriptionCard from '../components/SubscriptionCard.vue'
+import { notifySaved } from '../runtime'
 import { useMobile } from '../composables/useMobile'
 import { formatBytes } from '../util/format'
 import { tipTitle } from '../util/table'
@@ -29,7 +30,11 @@ const filter = ref<'all' | 'paused' | 'auto'>('all')
 const loading = ref(true)
 const checked = ref<string[]>([])
 const creating = ref(false)
-const draft = ref({ name: '', remark: '' })
+/** 创建和加入 stack 的请求进行中，防止重复提交。 */
+const submitting = ref(false)
+const draft = ref({ name: '', remark: '', stacks: [] as number[] })
+/** 新建时可选加入的 stack。 */
+const stackOptions = ref<{ label: string; value: number }[]>([])
 const errors = ref<FormErrors>(emptyErrors())
 const showImport = ref(false)
 const showExport = ref(false)
@@ -52,9 +57,12 @@ onMounted(() => {
 })
 
 function openCreate() {
-  draft.value = { name: '', remark: '' }
+  draft.value = { name: '', remark: '', stacks: [] }
   errors.value = emptyErrors()
   creating.value = true
+  void api.GET('/api/stacks').then(({ data }) => {
+    stackOptions.value = (data?.stacks ?? []).map((stack) => ({ label: stack.name, value: stack.id! }))
+  })
 }
 
 const autoPauses = (user: User) => usage.value[user.id ?? 0]?.auto_pauses ?? []
@@ -159,14 +167,37 @@ async function create() {
     name: draft.value.name, remark: draft.value.remark, enabled: true, uuid: '', ss_password: '', display_template: '',
     tag: '', sub_token: '', quota_bytes: 0, reset_mode: 'none', reset_day: 0, expire_at: '', note: '', profiles: [],
   }
+  if (submitting.value) return
+  submitting.value = true
+  try {
+    await submitCreate(body)
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function submitCreate(body: User) {
   const { data, error } = await api.POST('/api/users', { body })
   if (error) {
     errors.value = splitProblem(error)
     return
   }
+  // 逐个加入所选 stack；某个失败不影响用户本身和其余 stack，失败原因逐条提示。
+  const failed: string[] = []
+  for (const stackId of draft.value.stacks) {
+    const { error: joinError } = await api.PUT('/api/users/{id}/stacks/{stack_id}', {
+      params: { path: { id: data!.id!, stack_id: stackId } }, body: { member: true },
+    })
+    if (joinError) {
+      const name = stackOptions.value.find((option) => option.value === stackId)?.label ?? `#${stackId}`
+      failed.push(`${name}：${problemMessage(joinError)}`)
+    }
+  }
   creating.value = false
   message.success('已创建，UUID、密码和订阅 token 已随机生成')
-  router.push({ name: 'user', params: { id: data!.id } })
+  for (const reason of failed) message.error(`加入 stack 失败，${reason}`, { duration: 8000 })
+  if (draft.value.stacks.length > failed.length) void notifySaved(message)
+  router.push({ name: 'user', params: { id: data!.id }, query: draft.value.stacks.length ? { tab: 'access' } : undefined })
 }
 </script>
 
@@ -219,12 +250,15 @@ async function create() {
         <NFormItem label="备注" feedback="仅用于管理识别，不影响订阅节点名">
           <NInput v-model:value="draft.remark" />
         </NFormItem>
+        <NFormItem label="加入 stack" feedback="可选。把用户（default 档案）加进所选 stack 全部进入订阅的入站，应用后生效；之后可在用户详情的「接入」中调整">
+          <NSelect v-model:value="draft.stacks" :options="stackOptions" multiple filterable clearable placeholder="暂不加入" />
+        </NFormItem>
       </NForm>
       <NText depth="3" tag="p" style="font-size: 12px; margin: 0">
         UUID、密码和订阅 token 会随机生成。创建后自动进入用户详情页，可以在那里设置流量额度、每日阈值和到期时间。
       </NText>
       <template #footer>
-        <NButton type="primary" :disabled="!draft.name" @click="create">创建</NButton>
+        <NButton type="primary" :disabled="!draft.name" :loading="submitting" @click="create">创建</NButton>
       </template>
     </NDrawerContent>
   </NDrawer>

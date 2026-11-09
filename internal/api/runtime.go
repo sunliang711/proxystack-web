@@ -90,6 +90,14 @@ type pauseInput struct {
 	}
 }
 
+type stackMemberInput struct {
+	ID      int64 `path:"id"`
+	StackID int64 `path:"stack_id"`
+	Body    struct {
+		Member bool `json:"member" doc:"true 加入该 stack 全部进入订阅的入站，false 从该 stack 的全部入站中移除"`
+	}
+}
+
 type pauseOutput struct {
 	Body struct {
 		User  configdoc.User `json:"user"`
@@ -200,6 +208,17 @@ func registerRuntime(api huma.API, s *Server) {
 			out.Body.User = *result.User
 			configdoc.MaskUser(&out.Body.User)
 			out.Body.Notes = append([]string{}, result.Notes...)
+			return out, nil
+		})
+
+	huma.Register(api, reg(huma.Operation{OperationID: "setUserStackMember", Method: http.MethodPut, Path: "/api/users/{id}/stacks/{stack_id}", Summary: "把用户加入或移出 stack（需要应用）"}),
+		func(ctx context.Context, in *stackMemberInput) (*userOutput, error) {
+			user, err := s.svc.SetUserStackMember(ctx, actorFrom(ctx), in.ID, in.StackID, in.Body.Member)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			out := &userOutput{Body: *user}
+			configdoc.MaskUser(&out.Body)
 			return out, nil
 		})
 

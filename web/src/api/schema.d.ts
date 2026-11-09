@@ -1703,6 +1703,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/users/{id}/stacks/{stack_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 把用户加入或移出 stack（需要应用） */
+        put: operations["setUserStackMember"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users/{id}/subscription": {
         parameters: {
             query?: never;
@@ -1821,8 +1838,12 @@ export interface components {
             timezone: string;
         };
         BundleStatus: {
+            auto_publish_blocked: string;
+            /** Format: int64 */
+            auto_publish_targets: number;
             build_warnings: string[];
             fingerprint: string;
+            manual_publish: boolean;
             /** Format: int64 */
             nodes: number;
             /** @description 当前订阅内容与最近一次发布的不同 */
@@ -2909,6 +2930,10 @@ export interface components {
         StackListOutputBody: {
             stacks: components["schemas"]["StackSummary"][];
         };
+        StackMemberInputBody: {
+            /** @description true 加入该 stack 全部进入订阅的入站，false 从该 stack 的全部入站中移除 */
+            member: boolean;
+        };
         StackMembersInputBody: {
             members: string[];
         };
@@ -3008,6 +3033,8 @@ export interface components {
              * @description Surge managed config 的更新间隔（秒）
              */
             interval: number;
+            /** @description 为 true 时关闭自动发布，订阅包只在「发布订阅包」页面手动签发 */
+            manual_publish: boolean;
             /** @description 订阅端的对外地址，用于订阅链接和 Surge managed 首行；为空时订阅端用请求地址 */
             public_base_url: string;
             /** @description 本机在订阅端的来源名，订阅端按它找到验签用的公钥 */
@@ -3342,6 +3369,7 @@ export interface components {
             user: string;
         };
         UserSubscriptionStatus: {
+            auto_publish: boolean;
             no_nodes_reason?: string;
             /** Format: int64 */
             nodes: number;
@@ -7123,6 +7151,42 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setUserStackMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                stack_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StackMemberInputBody"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {

@@ -129,6 +129,8 @@ type SubscriptionSettings struct {
 	Interval         int    `json:"interval" yaml:"interval" minimum:"0" doc:"Surge managed config 的更新间隔（秒）"`
 	Strict           bool   `json:"strict" yaml:"strict"`
 	DisabledResponse string `json:"disabled_response" yaml:"disabled_response" enum:"not_found,empty"`
+	// ManualPublish 为 false（默认）时，订阅内容变化后自动签发并发布到已部署且测试通过的在线订阅端。
+	ManualPublish bool `json:"manual_publish" yaml:"manual_publish,omitempty" doc:"为 true 时关闭自动发布，订阅包只在「发布订阅包」页面手动签发"`
 }
 
 // 达到每日阈值后的动作。

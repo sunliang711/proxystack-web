@@ -122,6 +122,8 @@ const addSourceCommand = computed(() =>
 )
 /** 构建时跳过的节点数；跳过的节点不进入订阅包，其余内容照常签发。 */
 const skipped = computed(() => status.value?.build_warnings.length ?? 0)
+/** 自动发布正在生效：已开启、有就绪订阅端且没有被构建问题暂停。 */
+const autoPublishing = computed(() => !!status.value && !status.value.manual_publish && !status.value.auto_publish_blocked && status.value.auto_publish_targets > 0)
 const actionLabel = computed(() => mode.value === 'online' ? '签发并在线发布' : '签发并下载')
 /** 签发按钮不可用的原因；可以签发时为空。 */
 const blockedReason = computed(() => {
@@ -188,9 +190,17 @@ function openSSHSettings() {
 
     <NCard title="订阅包状态">
       <NSpace v-if="status" vertical>
+        <NAlert v-if="status.manual_publish" type="default" :bordered="false">自动发布已关闭（系统设置 → 订阅），订阅内容变化后需要在本页签发。</NAlert>
+        <NAlert v-else-if="status.auto_publish_blocked" type="warning" :bordered="false" title="自动发布已暂停">
+          {{ status.auto_publish_blocked }}。修复后自动恢复；确认缺少这些节点也要发布时，在本页手动签发。
+        </NAlert>
+        <NAlert v-else-if="status.auto_publish_targets" type="info" :bordered="false">
+          已开启自动发布：订阅内容变化后（包括应用 stack、暂停或恢复用户）自动签发并发布到 {{ status.auto_publish_targets }} 个已就绪的订阅端，进度见后台任务。本页用于查看状态、离线签发或手动重发。
+        </NAlert>
+        <NAlert v-else type="default" :bordered="false">已开启自动发布，但还没有部署并测试通过的订阅端，暂不会自动发布。</NAlert>
         <NAlert v-if="status.sequence === 0" type="info" :bordered="false">还没有发布过订阅包。</NAlert>
         <NAlert v-else-if="status.pending" type="warning" :bordered="false">
-          订阅内容在上次签发（#{{ status.sequence }}）之后有变化。暂停用户已经在代理端生效，订阅中的节点需要重新发布后才会去掉。
+          订阅内容在上次签发（#{{ status.sequence }}）之后有变化。{{ autoPublishing ? '自动发布会在几秒内签发并推送，进度见后台任务。' : '暂停用户已经在代理端生效，订阅中的节点需要重新发布后才会去掉。' }}
         </NAlert>
         <NAlert v-else type="success" :bordered="false">当前内容已签发为 #{{ status.sequence }}；各订阅端是否已导入以目标状态或发布任务结果为准。</NAlert>
         <NAlert v-if="skipped" type="warning" :bordered="false" title="部分内容被跳过">
@@ -199,7 +209,7 @@ function openSSHSettings() {
         <NAlert v-for="warning in status.build_warnings" :key="warning" type="warning" :bordered="false">{{ warning }}</NAlert>
         <NAlert v-if="status.user_issues.length" type="warning" :bordered="false" title="部分用户缺少节点">
           <NSpace vertical :size="4">
-            <span>没有节点的用户打开订阅会得到 not_found；stack 改动应用后再签发，这些节点才会进入订阅包。</span>
+            <span>没有节点的用户打开订阅会得到 not_found；stack 改动应用后{{ autoPublishing ? '会自动发布' : '再签发' }}，这些节点才会进入订阅包。</span>
             <span v-for="issue in status.user_issues" :key="issue.user">
               <EntityLink kind="user" :name="issue.user" tab="access" />：
               <template v-if="issue.nodes === 0">{{ issue.no_nodes_reason }}</template>

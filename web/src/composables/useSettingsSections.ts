@@ -49,7 +49,7 @@ export const sectionEffects: Record<SettingsSectionName, SectionEffect> = {
 export const sectionSearch: Record<SettingsSectionName, { title: string; keywords: string[] }> = {
   basic: { title: '基本', keywords: ['对外地址', '面板地址', '时区', 'external host', 'panel url', 'timezone'] },
   security: { title: '安全', keywords: ['公开入站必须认证', '无认证入站', '认证'] },
-  subscription: { title: '订阅', keywords: ['来源名', '订阅端对外地址', '展示名模板', 'surge managed', '更新间隔', 'strict', '停用或到期用户'] },
+  subscription: { title: '订阅', keywords: ['来源名', '订阅端对外地址', '展示名模板', 'surge managed', '更新间隔', 'strict', '停用或到期用户', '自动发布'] },
   traffic: { title: '流量', keywords: ['流量监控', '采集间隔', '明细保留', '保留天数', '断开连接'] },
   notify: { title: '通知', keywords: ['邮件通知', 'smtp', '发件人', '收件人', '通知事件', '用量预警', '到期提醒', 'email'] },
   download_proxy: { title: '下载代理', keywords: ['代理', 'http', 'socks5', '测试连接', 'proxy'] },

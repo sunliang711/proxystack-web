@@ -220,6 +220,13 @@
       "BundleStatus": {
         "additionalProperties": false,
         "properties": {
+          "auto_publish_blocked": {
+            "type": "string"
+          },
+          "auto_publish_targets": {
+            "format": "int64",
+            "type": "integer"
+          },
           "build_warnings": {
             "items": {
               "type": "string"
@@ -228,6 +235,9 @@
           },
           "fingerprint": {
             "type": "string"
+          },
+          "manual_publish": {
+            "type": "boolean"
           },
           "nodes": {
             "format": "int64",
@@ -281,7 +291,10 @@
           "nodes",
           "public_base_url",
           "build_warnings",
-          "user_issues"
+          "user_issues",
+          "manual_publish",
+          "auto_publish_targets",
+          "auto_publish_blocked"
         ],
         "type": "object"
       },
@@ -4068,6 +4081,19 @@
         ],
         "type": "object"
       },
+      "StackMemberInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "member": {
+            "description": "true 加入该 stack 全部进入订阅的入站，false 从该 stack 的全部入站中移除",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "member"
+        ],
+        "type": "object"
+      },
       "StackMembersInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -4433,6 +4459,10 @@
             "minimum": 0,
             "type": "integer"
           },
+          "manual_publish": {
+            "description": "为 true 时关闭自动发布，订阅包只在「发布订阅包」页面手动签发",
+            "type": "boolean"
+          },
           "public_base_url": {
             "description": "订阅端的对外地址，用于订阅链接和 Surge managed 首行；为空时订阅端用请求地址",
             "type": "string"
@@ -4455,7 +4485,8 @@
           "surge_managed",
           "interval",
           "strict",
-          "disabled_response"
+          "disabled_response",
+          "manual_publish"
         ],
         "type": "object"
       },
@@ -5630,6 +5661,9 @@
       "UserSubscriptionStatus": {
         "additionalProperties": false,
         "properties": {
+          "auto_publish": {
+            "type": "boolean"
+          },
           "no_nodes_reason": {
             "type": "string"
           },
@@ -5646,7 +5680,8 @@
         },
         "required": [
           "nodes",
-          "unapplied_stacks"
+          "unapplied_stacks",
+          "auto_publish"
         ],
         "type": "object"
       },
@@ -11722,6 +11757,72 @@
         "summary": "查看用户明文凭据（记入审计日志）",
         "tags": [
           "config"
+        ]
+      }
+    },
+    "/api/users/{id}/stacks/{stack_id}": {
+      "put": {
+        "operationId": "setUserStackMember",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "stack_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StackMemberInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "把用户加入或移出 stack（需要应用）",
+        "tags": [
+          "runtime"
         ]
       }
     },

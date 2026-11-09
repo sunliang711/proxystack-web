@@ -160,6 +160,8 @@ func (s *Service) mutateConfig(ctx context.Context, actor Actor, change *ConfigC
 	change.Notes = s.syncPauses(ctx, before, result)
 	// 阈值、额度或到期时间可能改了：立刻重新判定，不等下一轮采集。
 	s.evaluateAutoPause(ctx)
+	// 用户、手工节点、模板和订阅设置的改动直接改变订阅内容；stack 的改动要等应用后才进入订阅，届时再次检查。
+	s.kickAutoPublish()
 	return result, nil
 }
 

@@ -346,6 +346,9 @@ async function save() {
             <NFormItem label="strict" v-bind="f('subscription.strict')">
               <NSwitch v-model:value="form.subscription.strict" />
             </NFormItem>
+            <NFormItem label="自动发布订阅包" v-bind="f('subscription.manual_publish', '订阅内容变化后（包括应用 stack、暂停或恢复用户、修改用户和模板），自动签发并发布到已部署且测试通过的在线订阅端；关闭后只能在「发布订阅包」页面手动签发')">
+              <NSwitch :value="!form.subscription.manual_publish" @update:value="(on: boolean) => (form.subscription.manual_publish = !on)" />
+            </NFormItem>
             <NFormItem label="停用或到期用户" v-bind="f('subscription.disabled_response')">
               <NRadioGroup v-model:value="form.subscription.disabled_response">
                 <NRadioButton value="not_found">返回 404</NRadioButton>
