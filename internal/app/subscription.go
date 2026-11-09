@@ -272,6 +272,68 @@ type SubscriptionLinks struct {
 	BaseURL string            `json:"base_url"`
 	Links   map[string]string `json:"links"`
 	Nodes   int               `json:"nodes"`
+	// NoNodesReason 在没有节点时说明原因，订阅端此时对该用户返回 not_found。
+	NoNodesReason string `json:"no_nodes_reason,omitempty"`
+}
+
+// UserSubscriptionStatus 是用户当前订阅的节点情况，不含 token。
+type UserSubscriptionStatus struct {
+	Nodes int `json:"nodes"`
+	// UnappliedStacks 是入站已引用该用户、但已应用的版本里还没有该用户节点的 stack，应用后节点才进入订阅。
+	UnappliedStacks []string `json:"unapplied_stacks"`
+	// NoNodesReason 在没有节点时说明原因。
+	NoNodesReason string `json:"no_nodes_reason,omitempty"`
+}
+
+// UserSubscriptionIssue 是发布订阅包前需要注意的用户：启用中但没有节点，或有 stack 尚未应用。
+type UserSubscriptionIssue struct {
+	User string `json:"user"`
+	UserSubscriptionStatus
+}
+
+// userStatus 汇总某个用户的节点数、未应用的 stack 和没有节点的原因。
+func (snapshot *subSnapshot) userStatus(user configdoc.User) UserSubscriptionStatus {
+	status := UserSubscriptionStatus{
+		Nodes:           len(sub.NodesForUser(snapshot.view.Index, user.Name)),
+		UnappliedStacks: snapshot.unappliedStacks(user),
+	}
+	if status.Nodes == 0 {
+		status.NoNodesReason = snapshot.explainNoNodes(user)
+	}
+	return status
+}
+
+// userIssues 列出启用且未到期、但没有节点或有 stack 尚未应用的用户。
+func (snapshot *subSnapshot) userIssues(now time.Time) []UserSubscriptionIssue {
+	issues := []UserSubscriptionIssue{}
+	for _, user := range snapshot.data.Users {
+		if !user.Enabled || user.Expired(now) {
+			continue
+		}
+		index := snapshot.doc.UserByName(user.Name)
+		if index < 0 {
+			continue
+		}
+		status := snapshot.userStatus(snapshot.doc.Users[index])
+		if status.Nodes == 0 || len(status.UnappliedStacks) > 0 {
+			issues = append(issues, UserSubscriptionIssue{User: user.Name, UserSubscriptionStatus: status})
+		}
+	}
+	return issues
+}
+
+// UserSubscriptionStatus 返回用户当前订阅的节点情况，供用户页提示需要应用的 stack。
+func (s *Service) UserSubscriptionStatus(ctx context.Context, id int64) (*UserSubscriptionStatus, error) {
+	snapshot, err := s.subscription(ctx)
+	if err != nil {
+		return nil, err
+	}
+	index := snapshot.doc.UserByID(id)
+	if index < 0 {
+		return nil, ErrNotFound
+	}
+	status := snapshot.userStatus(snapshot.doc.Users[index])
+	return &status, nil
 }
 
 // UserSubscriptionLinks 返回用户的订阅链接（含 token），调用方负责记入审计。
@@ -290,7 +352,11 @@ func (s *Service) UserSubscriptionLinks(ctx context.Context, id int64) (*Subscri
 	for _, format := range []string{sub.FormatClash, sub.FormatPremium, sub.FormatSurge} {
 		links[format] = base + subscription.Path(user.Name, user.SubToken, format)
 	}
-	return &SubscriptionLinks{BaseURL: base, Links: links, Nodes: len(sub.NodesForUser(snapshot.view.Index, user.Name))}, nil
+	out := &SubscriptionLinks{BaseURL: base, Links: links, Nodes: len(sub.NodesForUser(snapshot.view.Index, user.Name))}
+	if out.Nodes == 0 {
+		out.NoNodesReason = snapshot.explainNoNodes(user)
+	}
+	return out, nil
 }
 
 // PreviewSubscription 用给定模板（为空时使用当前模板）渲染某个用户的订阅，供模板页和用户页预览。
@@ -369,8 +435,40 @@ func (snapshot *subSnapshot) explainNoNodes(user configdoc.User) string {
 // servesUser 判断 stack 是否有进入订阅且引用该用户的入站。
 func servesUser(stack configdoc.Stack, user string) bool {
 	return slices.ContainsFunc(stack.Xray.Inbounds, func(inbound configdoc.Inbound) bool {
-		return inbound.Sub && slices.ContainsFunc(inbound.Users, func(ref configdoc.UserRef) bool { return ref.User == user })
+		return servesUserIn(inbound, user)
 	})
+}
+
+func servesUserIn(inbound configdoc.Inbound, user string) bool {
+	return inbound.Sub && slices.ContainsFunc(inbound.Users, func(ref configdoc.UserRef) bool { return ref.User == user })
+}
+
+// unappliedStacks 返回入站已引用该用户、但已应用的版本里还没有该用户节点的 stack：
+// 从未应用过，或者用户是在最近一次应用之后才加入入站的。停用、暂停和构建时被跳过的 stack 另有原因，不在其中。
+func (snapshot *subSnapshot) unappliedStacks(user configdoc.User) []string {
+	out := []string{}
+	for _, stack := range snapshot.doc.Stacks {
+		if !stack.Enabled || !stack.Xray.Enabled || slices.Contains(user.PausedStacks, stack.Name) {
+			continue
+		}
+		revision, applied := snapshot.applied[stack.Name]
+		if applied && snapshot.skipped[revision] != "" {
+			continue
+		}
+		missing := slices.ContainsFunc(stack.Xray.Inbounds, func(inbound configdoc.Inbound) bool {
+			if !servesUserIn(inbound, user.Name) {
+				return false
+			}
+			prefix := stack.Name + ":" + inbound.Name + ":"
+			return !applied || !slices.ContainsFunc(snapshot.local, func(node sub.Node) bool {
+				return node.User == user.Name && strings.HasPrefix(node.ID, prefix)
+			})
+		})
+		if missing {
+			out = append(out, stack.Name)
+		}
+	}
+	return out
 }
 
 // ExportNodes 返回本机 stack 节点，供其他实例的远端节点源拉取。token 不匹配或未开启时返回 false。

@@ -258,6 +258,12 @@
           "source": {
             "type": "string"
           },
+          "user_issues": {
+            "items": {
+              "$ref": "#/components/schemas/UserSubscriptionIssue"
+            },
+            "type": "array"
+          },
           "users": {
             "format": "int64",
             "type": "integer"
@@ -274,7 +280,8 @@
           "users",
           "nodes",
           "public_base_url",
-          "build_warnings"
+          "build_warnings",
+          "user_issues"
         ],
         "type": "object"
       },
@@ -4391,6 +4398,9 @@
             },
             "type": "object"
           },
+          "no_nodes_reason": {
+            "type": "string"
+          },
           "nodes": {
             "format": "int64",
             "type": "integer"
@@ -5483,6 +5493,9 @@
             },
             "type": "array"
           },
+          "subscription": {
+            "$ref": "#/components/schemas/UserSubscriptionStatus"
+          },
           "user": {
             "$ref": "#/components/schemas/User"
           }
@@ -5584,6 +5597,56 @@
           "stack",
           "inbound",
           "profile"
+        ],
+        "type": "object"
+      },
+      "UserSubscriptionIssue": {
+        "additionalProperties": false,
+        "properties": {
+          "no_nodes_reason": {
+            "type": "string"
+          },
+          "nodes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unapplied_stacks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "user": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "user",
+          "nodes",
+          "unapplied_stacks"
+        ],
+        "type": "object"
+      },
+      "UserSubscriptionStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "no_nodes_reason": {
+            "type": "string"
+          },
+          "nodes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unapplied_stacks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "nodes",
+          "unapplied_stacks"
         ],
         "type": "object"
       },

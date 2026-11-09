@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
@@ -36,10 +37,12 @@ type UserReference struct {
 	Profile string `json:"profile"`
 }
 
-// UserDetail 是用户详情：用户本身和引用它的入站。
+// UserDetail 是用户详情：用户本身、引用它的入站和当前订阅的节点情况。
 type UserDetail struct {
 	User       configdoc.User  `json:"user"`
 	References []UserReference `json:"references"`
+	// Subscription 在订阅数据无法构建时为空，不影响查看和编辑用户。
+	Subscription *app.UserSubscriptionStatus `json:"subscription,omitempty"`
 }
 
 type userDetailOutput struct {
@@ -340,6 +343,11 @@ func registerConfig(api huma.API, s *Server) {
 						}
 					}
 				}
+			}
+			if status, err := s.svc.UserSubscriptionStatus(ctx, in.ID); err == nil {
+				out.Body.Subscription = status
+			} else {
+				slog.Warn("user subscription status", "user", out.Body.User.Name, "err", err)
 			}
 			return out, nil
 		})

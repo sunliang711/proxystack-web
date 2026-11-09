@@ -12,11 +12,12 @@ import ByteSizeInput from '../components/ByteSizeInput.vue'
 import ErrorList from '../components/ErrorList.vue'
 import SecretInput from '../components/SecretInput.vue'
 import SubscriptionCard from '../components/SubscriptionCard.vue'
+import SubscriptionGapAlert from '../components/SubscriptionGapAlert.vue'
 import TemplateInput from '../components/TemplateInput.vue'
 import UsageCard from '../components/UsageCard.vue'
 import { useDirty } from '../composables/useDirty'
 import { usePageTitle } from '../composables/usePageTitle'
-import { notifySaved } from '../runtime'
+import { notifySaved, runtime } from '../runtime'
 import { formatBytes } from '../util/format'
 import { randomString, randomUUID, shadowsocksKey } from '../util/generate'
 import { userTabFor, userTabs, type UserTab } from '../util/user-tabs'
@@ -31,6 +32,8 @@ const dialog = useDialog()
 const id = computed(() => Number(route.params.id))
 const user = ref<User | null>(null)
 const references = ref<Reference[]>([])
+/** 订阅节点情况：没有节点的原因和尚未应用的 stack，用于「接入」「订阅」两页的提示。 */
+const subscription = ref<Schemas['UserSubscriptionStatus'] | null>(null)
 const stacks = ref<Schemas['StackSummary'][]>([])
 /** 归属该用户的手工节点数，显示在「订阅」标签页。 */
 const manualNodes = ref(0)
@@ -113,6 +116,7 @@ async function load() {
   user.value = data.user
   savedName.value = data.user.name
   references.value = data.references
+  subscription.value = data.subscription ?? null
   const [stackResult, nodeResult] = await Promise.all([api.GET('/api/stacks'), api.GET('/api/manual-nodes')])
   stacks.value = stackResult.data?.stacks ?? []
   manualNodes.value = (nodeResult.data ?? []).filter((node) => node.user === data.user.name).length
@@ -120,6 +124,17 @@ async function load() {
   void loadUsage()
 }
 onMounted(load)
+
+/** 只刷新入站引用和订阅节点情况，不动表单；应用完成或保存后调用。 */
+async function refreshSubscription() {
+  const { data } = await api.GET('/api/users/{id}', { params: { path: { id: id.value } } })
+  if (!data || data.user.id !== id.value) return
+  references.value = data.references
+  subscription.value = data.subscription ?? null
+}
+// 待应用变更随应用任务完成而变化，这时已应用的版本也变了，重新读取提示。
+watch(() => [runtime.pendingCount, runtime.pendingStacks.join(',')], () => { if (user.value) void refreshSubscription() })
+const unapplied = computed(() => new Set(subscription.value?.unapplied_stacks ?? []))
 
 /** 启用开关和逐 stack 暂停当场生效并写入配置，不需要点「保存」，也不需要应用。 */
 async function setPause(enabled: boolean, pausedStacks: string[]) {
@@ -218,6 +233,7 @@ async function save() {
   user.value = data!
   savedName.value = data!.name
   markClean()
+  void refreshSubscription()
   void notifySaved(message)
 }
 
@@ -366,6 +382,7 @@ async function remove() {
         <NTabPane name="subscription" :tab="tabLabel('subscription', '订阅')">
           <section class="pane-section">
             <h3 class="pane-title">订阅链接</h3>
+            <SubscriptionGapAlert :status="subscription" />
             <SubscriptionCard :user-id="id" bare />
           </section>
           <section class="pane-section">
@@ -388,7 +405,7 @@ async function remove() {
           <section class="pane-section">
             <h3 class="pane-title">节点来源</h3>
             <ul class="source-list">
-              <li><NText>本机 stack 节点</NText><NText depth="3">：入站引用该用户的 stack 共 {{ joinedStacks }} 个，应用后其节点进入订阅</NText></li>
+              <li><NText>本机 stack 节点</NText><NText depth="3">：入站引用该用户的 stack 共 {{ joinedStacks }} 个，应用后其节点进入订阅<template v-if="unapplied.size">，其中 {{ unapplied.size }} 个尚未应用</template></NText></li>
               <li>
                 <NText>手工节点</NText><NText depth="3">：{{ manualNodes ? `${manualNodes} 个` : '没有' }}</NText>
                 <RouterLink :to="{ name: 'extra-nodes', query: { user: savedName } }" class="source-link">{{ manualNodes ? '查看' : '添加' }}</RouterLink>
@@ -475,6 +492,7 @@ async function remove() {
             <NText depth="3" tag="p" class="pane-desc">
               每个 stack 一行：中间列出引用该用户的入站，右侧开关只在该 stack 上暂停或恢复该用户，不需要保存。SOCKS5/HTTP 入站的账号由多个用户共用，暂停只把它们从该用户的订阅中去掉。
             </NText>
+            <SubscriptionGapAlert :status="subscription" />
             <NAlert v-if="!user.enabled" type="warning" :bordered="false" style="margin-bottom: 12px">用户已停用，在「基本」中启用后才能按 stack 调整。</NAlert>
             <NEmpty v-if="!stacks.length" size="small" description="还没有 stack" />
             <div v-else class="access-list">
@@ -493,6 +511,7 @@ async function remove() {
                     </RouterLink>
                   </template>
                   <NText v-else depth="3" class="access-none">未被入站引用</NText>
+                  <NTag v-if="unapplied.has(row.stack.name)" size="small" type="warning" :bordered="false" title="入站已引用该用户，但这个 stack 还没有重新应用，节点暂时不在订阅中">未应用</NTag>
                 </div>
                 <NSwitch
                   :value="!row.paused" :disabled="!user.enabled || pausing" :aria-label="`在 ${row.stack.name} 上启用该用户`"

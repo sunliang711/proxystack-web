@@ -46,6 +46,8 @@ type BundleStatus struct {
 	Nodes         int       `json:"nodes"`
 	PublicBaseURL string    `json:"public_base_url"`
 	BuildWarnings []string  `json:"build_warnings"`
+	// UserIssues 是启用中但没有节点、或有 stack 尚未应用的用户；没有节点的用户打开订阅会得到 not_found。
+	UserIssues []UserSubscriptionIssue `json:"user_issues"`
 }
 
 // signingKey 读取订阅包签名私钥，不存在时生成并保存。
@@ -123,6 +125,7 @@ func (s *Service) SubscriptionBundleStatus(ctx context.Context) (*BundleStatus, 
 		Sequence: state.Sequence, PublishedBy: state.PublishedBy, Pending: state.ContentHash != hash,
 		Users: len(data.Users), Nodes: len(data.Nodes), PublicBaseURL: data.Settings.PublicBaseURL,
 		BuildWarnings: append([]string{}, snapshot.warnings...),
+		UserIssues:    snapshot.userIssues(s.Now()),
 	}
 	if state.PublishedAt != 0 {
 		status.PublishedAt = time.Unix(state.PublishedAt, 0)

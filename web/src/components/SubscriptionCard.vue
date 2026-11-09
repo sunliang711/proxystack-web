@@ -85,6 +85,7 @@ watch([format, () => props.userId, expanded], (_, __, onCleanup) => {
       <NButton v-if="!links" size="small" :loading="linksLoading" @click="showLinks">显示订阅链接</NButton>
       <template v-else>
         <NText>当前 {{ links.nodes }} 个节点</NText>
+        <NAlert v-if="links.no_nodes_reason" type="warning" :bordered="false" title="订阅端会对该用户返回 not_found">{{ links.no_nodes_reason }}</NAlert>
         <NAlert v-if="!links.base_url" type="warning" :bordered="false">未设置订阅端对外地址（系统设置 → 订阅），下面只显示链接路径，使用时在前面加上订阅端地址。</NAlert>
         <NFormItem v-for="(label, key) in labels" :key="key" :label="label" label-placement="left" label-width="110" :show-feedback="false">
           <NInputGroup>

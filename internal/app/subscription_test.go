@@ -357,3 +357,59 @@ func TestPreviewExplainsMissingNodes(t *testing.T) {
 	require.NoError(t, err)
 	require.Regexp(t, `stack usa2 已应用的版本 #\d+ 里还没有该用户`, reason("bob"))
 }
+
+// TestUnappliedUserIsReported 验证新用户加入入站但 stack 未重新应用时，用户状态和订阅包状态都指出需要应用的 stack，
+// 订阅端对该用户返回 not_found；应用后提示消失，订阅正常提供。
+func TestUnappliedUserIsReported(t *testing.T) {
+	ctx := context.Background()
+	h := newRuntimeHarness(t)
+	id, err := h.svc.Apply(ctx, h.actor, nil)
+	require.NoError(t, err)
+	require.Equal(t, app.TaskSucceeded, h.waitTask(t, id).Status)
+	subs := newSubServer(t, sourceOf(t, h, true))
+
+	bob, err := h.svc.CreateUser(ctx, h.actor, configdoc.User{Name: "bob", Enabled: true, ResetMode: "none", SubToken: "bob-token"})
+	require.NoError(t, err)
+	doc, err := h.svc.LoadConfig(ctx)
+	require.NoError(t, err)
+	stack := doc.Stacks[doc.StackByName("usa2")]
+	stack.Xray.Inbounds[0].Users = append(stack.Xray.Inbounds[0].Users, configdoc.UserRef{User: "bob"})
+	_, err = h.svc.UpdateStack(ctx, h.actor, stack.ID, stack)
+	require.NoError(t, err)
+
+	status, err := h.svc.UserSubscriptionStatus(ctx, bob.ID)
+	require.NoError(t, err)
+	require.Zero(t, status.Nodes)
+	require.Equal(t, []string{"usa2"}, status.UnappliedStacks)
+	require.Contains(t, status.NoNodesReason, "需要重新应用")
+	links, err := h.svc.UserSubscriptionLinks(ctx, bob.ID)
+	require.NoError(t, err)
+	require.Equal(t, status.NoNodesReason, links.NoNodesReason)
+	bundleStatus, err := h.svc.SubscriptionBundleStatus(ctx)
+	require.NoError(t, err)
+	require.Len(t, bundleStatus.UserIssues, 1)
+	require.Equal(t, "bob", bundleStatus.UserIssues[0].User)
+	require.Equal(t, []string{"usa2"}, bundleStatus.UserIssues[0].UnappliedStacks)
+	alice, err := h.svc.UserSubscriptionStatus(ctx, doc.Users[doc.UserByName("alice")].ID)
+	require.NoError(t, err)
+	require.Empty(t, alice.UnappliedStacks)
+
+	subs.deliver(t, publish(t, h))
+	code, body, _ := get(t, subs.http, "/s/bob-token/clash")
+	require.Equal(t, http.StatusNotFound, code, body)
+
+	id, err = h.svc.Apply(ctx, h.actor, nil)
+	require.NoError(t, err)
+	require.Equal(t, app.TaskSucceeded, h.waitTask(t, id).Status)
+	status, err = h.svc.UserSubscriptionStatus(ctx, bob.ID)
+	require.NoError(t, err)
+	require.Positive(t, status.Nodes)
+	require.Empty(t, status.UnappliedStacks)
+	require.Empty(t, status.NoNodesReason)
+	bundleStatus, err = h.svc.SubscriptionBundleStatus(ctx)
+	require.NoError(t, err)
+	require.Empty(t, bundleStatus.UserIssues)
+	subs.deliver(t, publish(t, h))
+	code, body, _ = get(t, subs.http, "/s/bob-token/clash")
+	require.Equal(t, http.StatusOK, code, body)
+}

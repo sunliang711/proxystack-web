@@ -1838,6 +1838,7 @@ export interface components {
              */
             sequence: number;
             source: string;
+            user_issues: components["schemas"]["UserSubscriptionIssue"][];
             /** Format: int64 */
             users: number;
         };
@@ -2993,6 +2994,7 @@ export interface components {
             links: {
                 [key: string]: string;
             };
+            no_nodes_reason?: string;
             /** Format: int64 */
             nodes: number;
         };
@@ -3302,6 +3304,7 @@ export interface components {
         };
         UserDetail: {
             references: components["schemas"]["UserReference"][];
+            subscription?: components["schemas"]["UserSubscriptionStatus"];
             user: components["schemas"]["User"];
         };
         UserListOutputBody: {
@@ -3330,6 +3333,19 @@ export interface components {
             stack: string;
             /** Format: int64 */
             stack_id: number;
+        };
+        UserSubscriptionIssue: {
+            no_nodes_reason?: string;
+            /** Format: int64 */
+            nodes: number;
+            unapplied_stacks: string[];
+            user: string;
+        };
+        UserSubscriptionStatus: {
+            no_nodes_reason?: string;
+            /** Format: int64 */
+            nodes: number;
+            unapplied_stacks: string[];
         };
         UserUsage: {
             auto_pauses: components["schemas"]["AutoPause"][];

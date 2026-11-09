@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   NAlert, NButton, NCard, NCheckbox, NDescriptions, NDescriptionsItem, NPopconfirm, NRadioButton,
@@ -7,8 +7,10 @@ import {
 } from 'naive-ui'
 import { api, problemMessage, saveBlob, type Schemas } from '../api/client'
 import CopyableCode from '../components/CopyableCode.vue'
+import EntityLink from '../components/EntityLink.vue'
 import PublishFlowBar from '../components/PublishFlowBar.vue'
 import { formatTime } from '../util/format'
+import { runtime } from '../runtime'
 import { hasTime, targetNextStep as nextStepOf, targetReady as readyOf } from '../util/subPublish'
 
 interface PublishTarget {
@@ -60,6 +62,8 @@ async function load() {
   selected.value = selected.value.filter((id) => targets.value.some((target) => target.id === id && targetReady(target)))
 }
 onMounted(load)
+// 应用完成后待应用变更随之变化，重新读取订阅包状态里的用户提示。
+watch(() => [runtime.pendingCount, runtime.pendingStacks.join(',')], () => { if (loaded.value) void load() })
 
 async function publishOffline() {
   const { data, error, response } = await api.POST('/api/sub-bundle/publish', { parseAs: 'blob' })
@@ -193,6 +197,17 @@ function openSSHSettings() {
           下面 {{ skipped }} 项在构建订阅时被跳过，不会进入签发的订阅包，其余节点照常签发。修复对应的配置后重新加载本页即可恢复。
         </NAlert>
         <NAlert v-for="warning in status.build_warnings" :key="warning" type="warning" :bordered="false">{{ warning }}</NAlert>
+        <NAlert v-if="status.user_issues.length" type="warning" :bordered="false" title="部分用户缺少节点">
+          <NSpace vertical :size="4">
+            <span>没有节点的用户打开订阅会得到 not_found；stack 改动应用后再签发，这些节点才会进入订阅包。</span>
+            <span v-for="issue in status.user_issues" :key="issue.user">
+              <EntityLink kind="user" :name="issue.user" tab="access" />：
+              <template v-if="issue.nodes === 0">{{ issue.no_nodes_reason }}</template>
+              <template v-else>stack {{ issue.unapplied_stacks.join('、') }} 尚未应用，当前 {{ issue.nodes }} 个节点</template>
+            </span>
+            <NButton v-if="status.user_issues.some((issue) => issue.unapplied_stacks.length)" size="small" style="align-self: flex-start" @click="runtime.pendingDrawer = true">查看待应用变更</NButton>
+          </NSpace>
+        </NAlert>
         <NDescriptions :column="1" label-placement="left" bordered size="small">
           <NDescriptionsItem label="来源名">{{ status.source }}</NDescriptionsItem>
           <NDescriptionsItem label="最近一次签发">
