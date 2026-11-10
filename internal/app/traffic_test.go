@@ -36,7 +36,7 @@ func newTrafficHarness(t *testing.T) *trafficHarness {
 	require.NoError(t, err)
 	h.now = time.Date(2026, 11, 10, 12, 0, 30, 0, loc)
 	h.svc.Now = func() time.Time { return h.now }
-	h.svc.SendMail = func(_ context.Context, _ notify.Config, subject, _ string) error {
+	h.svc.SendMail = func(_ context.Context, _ notify.Config, subject, _ string, _ ...notify.Attachment) error {
 		h.mu.Lock()
 		defer h.mu.Unlock()
 		if h.fail != nil {

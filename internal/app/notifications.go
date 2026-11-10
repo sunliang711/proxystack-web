@@ -213,11 +213,11 @@ func (s *Service) deliverNotification(ctx context.Context, settings configdoc.Se
 	}
 }
 
-func (s *Service) sendMail(ctx context.Context, config notify.Config, subject, body string) error {
+func (s *Service) sendMail(ctx context.Context, config notify.Config, subject, body string, attachments ...notify.Attachment) error {
 	if s.SendMail != nil {
-		return s.SendMail(ctx, config, subject, body)
+		return s.SendMail(ctx, config, subject, body, attachments...)
 	}
-	return notify.Send(ctx, config, subject, body)
+	return notify.Send(ctx, config, subject, body, attachments...)
 }
 
 func (s *Service) runNotifications(ctx context.Context) {

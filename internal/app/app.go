@@ -68,7 +68,7 @@ type Service struct {
 	background sync.WaitGroup
 
 	// SendMail 发送邮件，为 nil 时通过 SMTP 发送（测试替换）。
-	SendMail func(ctx context.Context, config notify.Config, subject, body string) error
+	SendMail func(ctx context.Context, config notify.Config, subject, body string, attachments ...notify.Attachment) error
 	// ProbeEgress 替换出口探测，生产环境为 nil 时使用真实 SOCKS 请求。
 	ProbeEgress func(ctx context.Context, proxy deps.ProxyConfig, timeout time.Duration) ([]EgressResult, error)
 }

@@ -2262,11 +2262,15 @@ export interface components {
              * @description 数据库备份保留份数
              */
             keep?: number;
+            /** @description 配置导出邮件中凭据的加密口令，至少 8 个字符；读取时返回占位 */
+            passphrase?: string;
             /**
              * Format: int64
              * @description 每个 Stack 单次出口查询超时（秒）
              */
             probe_timeout?: number;
+            /** @description 配置导出邮件的收件人，留空时发给 SMTP 发件人地址 */
+            recipients?: string[];
             /**
              * Format: int64
              * @description 出口首次查询失败后的额外重试次数

@@ -15,6 +15,7 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"proxystack-web/internal/audit"
+	"proxystack-web/internal/configdoc"
 	"proxystack-web/internal/deps"
 	"proxystack-web/internal/store/dbq"
 )
@@ -29,6 +30,7 @@ const (
 	JobRemoteSync   = "remote_sync"
 	JobReconcile    = "reconcile"
 	JobEgressCheck  = "egress_check"
+	JobConfigMail   = "config_mail"
 )
 
 // 执行状态。
@@ -67,11 +69,16 @@ type jobType struct {
 	Run    func(ctx context.Context, s *Service, params JobParams, logf Logf) error
 }
 
-// JobParams 是备份保留和出口检测任务的参数。
+// errJobSkipped 表示任务按条件跳过本次执行，原因由任务自己写入日志。
+var errJobSkipped = errors.New("job skipped")
+
+// JobParams 是备份保留、出口检测和配置导出邮件任务的参数。
 type JobParams struct {
-	Keep int `json:"keep,omitempty" minimum:"0" doc:"数据库备份保留份数"`
-	RetryCount int `json:"retry_count" required:"false" minimum:"0" maximum:"10" doc:"出口首次查询失败后的额外重试次数"`
-	ProbeTimeout int `json:"probe_timeout,omitempty" minimum:"0" maximum:"60" doc:"每个 Stack 单次出口查询超时（秒）"`
+	Keep         int      `json:"keep,omitempty" minimum:"0" doc:"数据库备份保留份数"`
+	RetryCount   int      `json:"retry_count" required:"false" minimum:"0" maximum:"10" doc:"出口首次查询失败后的额外重试次数"`
+	ProbeTimeout int      `json:"probe_timeout,omitempty" minimum:"0" maximum:"60" doc:"每个 Stack 单次出口查询超时（秒）"`
+	Recipients   []string `json:"recipients,omitempty" doc:"配置导出邮件的收件人，留空时发给 SMTP 发件人地址"`
+	Passphrase   string   `json:"passphrase,omitempty" doc:"配置导出邮件中凭据的加密口令，至少 8 个字符；读取时返回占位"`
 }
 
 // jobTypes 是任务注册表，顺序决定列表页的显示顺序。
@@ -124,6 +131,8 @@ var jobTypes = []jobType{
 		}},
 	{Kind: JobEgressCheck, Name: "Stack 出口检测", Description: "检测运行中 Stack 的 IPv4/IPv6 出口，失败后间隔 1 秒重试，耗尽重试后告警、恢复后通知；仅支持已应用的 Mihomo SOCKS 监听",
 		Schedule: "*/2 * * * *", Timeout: 120, Params: JobParams{RetryCount: 3, ProbeTimeout: 12}, Run: runEgressCheckJob},
+	{Kind: JobConfigMail, Name: "配置导出邮件", Description: "导出全部配置作为邮件附件发送，凭据用任务口令加密；邮件通知未启用或未设置口令时跳过",
+		Schedule: "30 4 1,15 * *", Timeout: 120, Run: runConfigMailJob},
 }
 
 func jobTypeOf(kind string) *jobType {
@@ -317,7 +326,9 @@ func (s *Service) executeJob(ctx context.Context, job dbq.Job, trigger string) {
 	runCtx, cancel := context.WithTimeout(ctx, time.Duration(job.Timeout)*time.Second)
 	defer cancel()
 	status := RunSucceeded
-	if err := kind.Run(runCtx, s, params, logf); err != nil {
+	if err := kind.Run(runCtx, s, params, logf); errors.Is(err, errJobSkipped) {
+		status = RunSkipped
+	} else if err != nil {
 		status = RunFailed
 		if errors.Is(err, context.DeadlineExceeded) || runCtx.Err() == context.DeadlineExceeded {
 			status = RunTimeout
@@ -434,6 +445,9 @@ func (s *Service) ListJobs(ctx context.Context) ([]JobView, error) {
 			Enabled: row.Enabled != 0, Timeout: int(row.Timeout), Params: kind.Params, HasKeep: kind.Params.Keep > 0, NextRuns: []time.Time{},
 		}
 		_ = json.Unmarshal([]byte(row.Params), &view.Params)
+		if view.Params.Passphrase != "" {
+			view.Params.Passphrase = configdoc.MaskedValue
+		}
 		if next, err := s.JobSchedulePreview(ctx, row.Schedule, 5); err == nil {
 			view.NextRuns = next
 		}
@@ -475,6 +489,25 @@ func (s *Service) UpdateJob(ctx context.Context, actor Actor, id int64, update J
 		}
 		if definition.Params.Keep > 0 && update.Params.Keep < 1 {
 			return &FieldError{Field: "params.keep", Message: "must be at least 1"}
+		}
+		if kind == JobConfigMail {
+			if update.Params.Passphrase == configdoc.MaskedValue {
+				var stored JobParams
+				_ = json.Unmarshal([]byte(job.Params), &stored)
+				update.Params.Passphrase = stored.Passphrase
+			}
+			recipients := update.Params.Recipients[:0:0]
+			for _, recipient := range update.Params.Recipients {
+				if recipient = strings.TrimSpace(recipient); recipient != "" {
+					recipients = append(recipients, recipient)
+				}
+			}
+			update.Params.Recipients = recipients
+			if err := validateConfigMailParams(update.Params); err != nil {
+				return err
+			}
+		} else {
+			update.Params.Recipients, update.Params.Passphrase = nil, ""
 		}
 		if kind == JobEgressCheck {
 			if update.Params.RetryCount < 0 || update.Params.RetryCount > maxEgressRetries {

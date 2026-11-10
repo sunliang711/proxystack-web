@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
-  NButton, NCard, NCode, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NInputNumber, NSelect, NSpace, NSwitch, NTag, NText,
+  NButton, NCard, NCode, NDataTable, NDrawer, NDrawerContent, NDynamicTags, NForm, NFormItem, NInput, NInputNumber, NSelect, NSpace, NSwitch, NTag, NText,
   useMessage, type DataTableColumns,
 } from 'naive-ui'
 import { api, emptyErrors, fieldState, problemMessage, splitProblem, type FormErrors, type Schemas } from '../api/client'
@@ -31,12 +31,18 @@ const presets = [
   { label: '每月', value: '0 4 1 * *' },
   { label: '自定义', value: 'custom' },
 ]
-const planPresets = computed(() => editing.value?.kind === 'egress_check' ? [
-  { label: '每分钟', value: '* * * * *' },
-  { label: '每 2 分钟', value: '*/2 * * * *' },
-  { label: '每 5 分钟', value: '*/5 * * * *' },
-  ...presets,
-] : presets)
+const planPresets = computed(() => {
+  if (editing.value?.kind === 'egress_check') {
+    return [
+      { label: '每分钟', value: '* * * * *' },
+      { label: '每 2 分钟', value: '*/2 * * * *' },
+      { label: '每 5 分钟', value: '*/5 * * * *' },
+      ...presets,
+    ]
+  }
+  if (editing.value?.kind === 'config_mail') return [{ label: '每月 1 日和 15 日', value: '30 4 1,15 * *' }, ...presets]
+  return presets
+})
 const statusView: Record<Run['status'], { label: string; type: 'default' | 'info' | 'success' | 'warning' | 'error' }> = {
   running: { label: '执行中', type: 'info' },
   succeeded: { label: '成功', type: 'success' },
@@ -74,7 +80,9 @@ async function toggle(job: Job, enabled: boolean) {
 }
 
 function edit(job: Job) {
-  editing.value = JSON.parse(JSON.stringify(job))
+  const copy: Job = JSON.parse(JSON.stringify(job))
+  if (copy.kind === 'config_mail') copy.params.recipients ??= []
+  editing.value = copy
   preset.value = planPresets.value.find((item) => item.value === job.schedule)?.value ?? 'custom'
   errors.value = emptyErrors()
 }
@@ -170,6 +178,14 @@ const columns: DataTableColumns<Job> = [
           </NFormItem>
           <NFormItem label="每次查询超时（秒）" v-bind="fieldState(errors, 'params.probe_timeout', '每次 IPv4、IPv6 并发查询共享此超时；任务总超时需覆盖所有 Stack 的查询、重试及等待时间')">
             <NInputNumber v-model:value="editing.params.probe_timeout" :min="1" :max="60" />
+          </NFormItem>
+        </template>
+        <template v-if="editing.kind === 'config_mail'">
+          <NFormItem label="收件人" v-bind="fieldState(errors, 'params.recipients', '留空时发给系统设置中 SMTP 的发件人地址')">
+            <NDynamicTags v-model:value="editing.params.recipients" />
+          </NFormItem>
+          <NFormItem label="加密口令" v-bind="fieldState(errors, 'params.passphrase', '附件中的凭据用此口令加密，至少 8 个字符；导入配置时需要输入。请另行保存，未设置时任务跳过')">
+            <NInput v-model:value="editing.params.passphrase" type="password" show-password-on="click" :input-props="{ autocomplete: 'new-password' }" />
           </NFormItem>
         </template>
         <NFormItem v-if="editing.has_keep" label="保留份数" v-bind="fieldState(errors, 'params.keep')">
