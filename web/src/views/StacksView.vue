@@ -152,6 +152,8 @@ function runtimeCell(row: Summary) {
   ])
 }
 
+// 左侧固定的列用像素宽度；其余列按比例分配（以最小表宽 1080px 为基准换算），
+// 表格比最小宽度宽时多出的空间分给各列，不会全部落在最后一列。
 const allColumns: DataTableColumns<Summary> = [
   { type: 'selection', fixed: 'left' },
   {
@@ -165,7 +167,7 @@ const allColumns: DataTableColumns<Summary> = [
   {
     title: tipTitle('运行', '停用：不生成配置。保持停止：生成配置但让进程保持停止，在 stack 的「基本」页切换。进程标签：绿色运行中，灰色未生成或按设置停止，红色失败或本应运行却已停止，蓝色、黄色为启动中、停止中。'),
     key: 'runtime',
-    width: 220,
+    width: '21%',
     render: runtimeCell,
   },
   {
@@ -175,7 +177,7 @@ const allColumns: DataTableColumns<Summary> = [
     ),
     key: 'egress',
     // 放得下完整的 IPv4 和常见长度的 IPv6。
-    width: 290,
+    width: '27%',
     render: (row) =>
       h(EgressCell, {
         state: egress.states[row.id],
@@ -188,7 +190,7 @@ const allColumns: DataTableColumns<Summary> = [
   {
     title: 'Xray 入站',
     key: 'inbounds',
-    width: 190,
+    width: '18%',
     render: (row) => h(InboundSummary, { stack: row }),
   },
   {
@@ -304,7 +306,7 @@ async function create() {
       :data="shownStacks"
       :loading="loading"
       :row-key="rowKey"
-      :scroll-x="mobile ? 720 : 1060"
+      :scroll-x="mobile ? 720 : 1080"
       class="pre-line"
     >
       <template #empty>

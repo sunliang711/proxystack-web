@@ -129,6 +129,8 @@ async function setEnabled(enabled: boolean) {
 /** 窄屏只显示这些列，其余字段在用户详情页查看。 */
 const mobileKeys = new Set(['name', 'enabled', 'today', 'period', 'quota_bytes', 'expire_at', 'subscription'])
 
+// 左侧固定的列用像素宽度；其余列按比例分配（以最小表宽 1040px 为基准换算），
+// 表格比最小宽度宽时多出的空间分给各列，不会全部落在最后一列。
 const allColumns: DataTableColumns<User> = [
   { type: 'selection', fixed: 'left' },
   {
@@ -145,7 +147,7 @@ const allColumns: DataTableColumns<User> = [
   {
     title: '状态',
     key: 'enabled',
-    width: 100,
+    width: '9.5%',
     render: (row) => {
       const pauses = autoPauses(row)
       if (row.enabled && pauses.length) {
@@ -154,14 +156,14 @@ const allColumns: DataTableColumns<User> = [
       return h(NTag, { size: 'small', type: row.enabled ? 'success' : 'default' }, { default: () => (row.enabled ? '启用' : '停用') })
     },
   },
-  { title: '今日用量', key: 'today', width: 120, sorter: (a, b) => todayOf(a) - todayOf(b), render: (row) => used(usage.value[row.id ?? 0]?.today) },
-  { title: () => usageTitle.value, key: 'period', width: 150, sorter: (a, b) => periodOf(a) - periodOf(b), render: (row) => h(NTooltip, null, {
+  { title: '今日用量', key: 'today', width: '11.5%', sorter: (a, b) => todayOf(a) - todayOf(b), render: (row) => used(usage.value[row.id ?? 0]?.today) },
+  { title: () => usageTitle.value, key: 'period', width: '14.5%', sorter: (a, b) => periodOf(a) - periodOf(b), render: (row) => h(NTooltip, null, {
     trigger: () => h('span', { tabindex: 0 }, used(usage.value[row.id ?? 0]?.period)),
     default: () => row.reset_mode === 'monthly' ? `本周期用量，每月 ${row.reset_day} 日重置` : '累计用量：不按周期重置，包含历史流量',
   }) },
-  { title: tipTitle('每日阈值', '当日用量（上行与下行合计，全部 stack）达到阈值后，按用户详情中的设置暂停或只通知；暂停在次日自动恢复。'), key: 'daily_limit_bytes', width: 110, render: (row) => limitCell(row.daily_limit_bytes ?? 0, todayOf(row), '今日') },
-  { title: tipTitle('额度', '流量总额度。用量达到额度后自动暂停；到重置日或调高额度后自动恢复。'), key: 'quota_bytes', width: 130, sorter: (a, b) => (a.quota_bytes ? periodOf(a) / a.quota_bytes : -1) - (b.quota_bytes ? periodOf(b) / b.quota_bytes : -1), render: (row) => quotaCell(row) },
-  { title: '到期', key: 'expire_at', width: 120, render: (row) => expireCell(row) },
+  { title: tipTitle('每日阈值', '当日用量（上行与下行合计，全部 stack）达到阈值后，按用户详情中的设置暂停或只通知；暂停在次日自动恢复。'), key: 'daily_limit_bytes', width: '10.5%', render: (row) => limitCell(row.daily_limit_bytes ?? 0, todayOf(row), '今日') },
+  { title: tipTitle('额度', '流量总额度。用量达到额度后自动暂停；到重置日或调高额度后自动恢复。'), key: 'quota_bytes', width: '12.5%', sorter: (a, b) => (a.quota_bytes ? periodOf(a) / a.quota_bytes : -1) - (b.quota_bytes ? periodOf(b) / b.quota_bytes : -1), render: (row) => quotaCell(row) },
+  { title: '到期', key: 'expire_at', width: '11.5%', render: (row) => expireCell(row) },
   {
     title: '订阅',
     key: 'subscription',
