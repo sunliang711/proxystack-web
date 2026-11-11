@@ -84,6 +84,18 @@ function limitCell(limit: number, usedBytes: number, label: string) {
     h(NText, { depth: percent >= 80 ? undefined : 3, type: percent >= 100 ? 'error' : percent >= 80 ? 'warning' : 'default', style: 'font-size: 12px' }, () => `${label} ${percent}%`),
   ])
 }
+/** 额度单元格：限额和已用百分比，下方附重置周期。 */
+function quotaCell(row: User) {
+  const reset = h(NText, { depth: 3, style: 'font-size: 12px' }, () => (row.reset_mode === 'monthly' ? `每月 ${row.reset_day} 日重置` : '不重置'))
+  if (!row.quota_bytes) return h('div', ['不限', row.reset_mode === 'monthly' ? h('div', [reset]) : null])
+  return h('div', [limitCell(row.quota_bytes, periodOf(row), '已用'), h('div', [reset])])
+}
+/** 到期单元格：只显示日期，完整时间在悬停提示里。 */
+function expireCell(row: User) {
+  if (!row.expire_at) return '—'
+  const at = new Date(row.expire_at)
+  return h('span', { title: at.toLocaleString() }, at.toLocaleDateString())
+}
 const usageTitle = computed(() => {
   if (!rows.value.length) return '用量'
   if (rows.value.every((user) => user.reset_mode !== 'monthly')) return '累计用量'
@@ -122,10 +134,13 @@ const allColumns: DataTableColumns<User> = [
   {
     title: '名称',
     key: 'name',
-    width: 120,
+    width: 160,
     fixed: 'left',
-    ellipsis: { tooltip: true },
-    render: (row) => h(RouterLink, { to: { name: 'user', params: { id: row.id } } }, { default: () => row.name }),
+    // 备注显示在名称下方，省出单独一列。
+    render: (row) => h('div', { class: 'name-cell' }, [
+      h(RouterLink, { to: { name: 'user', params: { id: row.id } } }, { default: () => row.name }),
+      row.remark ? h(NText, { depth: 3, class: 'name-remark', title: row.remark }, () => row.remark) : null,
+    ]),
   },
   {
     title: '状态',
@@ -145,17 +160,14 @@ const allColumns: DataTableColumns<User> = [
     default: () => row.reset_mode === 'monthly' ? `本周期用量，每月 ${row.reset_day} 日重置` : '累计用量：不按周期重置，包含历史流量',
   }) },
   { title: tipTitle('每日阈值', '当日用量（上行与下行合计，全部 stack）达到阈值后，按用户详情中的设置暂停或只通知；暂停在次日自动恢复。'), key: 'daily_limit_bytes', width: 110, render: (row) => limitCell(row.daily_limit_bytes ?? 0, todayOf(row), '今日') },
-  { title: tipTitle('额度', '流量总额度。用量达到额度后自动暂停；到重置日或调高额度后自动恢复。'), key: 'quota_bytes', width: 110, sorter: (a, b) => (a.quota_bytes ? periodOf(a) / a.quota_bytes : -1) - (b.quota_bytes ? periodOf(b) / b.quota_bytes : -1), render: (row) => limitCell(row.quota_bytes, periodOf(row), '已用') },
-  { title: '额度重置', key: 'reset_mode', width: 100, render: (row) => (row.reset_mode === 'monthly' ? `每月 ${row.reset_day} 日` : '不重置') },
-  { title: '到期', key: 'expire_at', render: (row) => (row.expire_at ? new Date(row.expire_at).toLocaleString() : '—') },
-  { title: tipTitle('凭据档案', '该用户的凭据档案数量，含用户本身的 default 档案。入站引用用户时可以改选其他档案，使用不同的 UUID 或密码。'), key: 'profiles', width: 100, align: 'center', render: (row) => String(row.profiles.length + 1) },
+  { title: tipTitle('额度', '流量总额度。用量达到额度后自动暂停；到重置日或调高额度后自动恢复。'), key: 'quota_bytes', width: 130, sorter: (a, b) => (a.quota_bytes ? periodOf(a) / a.quota_bytes : -1) - (b.quota_bytes ? periodOf(b) / b.quota_bytes : -1), render: (row) => quotaCell(row) },
+  { title: '到期', key: 'expire_at', width: 120, render: (row) => expireCell(row) },
   {
     title: '订阅',
     key: 'subscription',
-    width: 100,
+    minWidth: 90,
     render: (row) => h(NButton, { text: true, type: 'primary', size: 'small', 'aria-label': `查看 ${row.name} 的订阅`, onClick: () => { subscriptionUser.value = row } }, { default: () => '查看链接' }),
   },
-  { title: '备注', key: 'remark' },
 ]
 const columns = computed(() => mobile.value ? allColumns.filter((column) => column.type === 'selection' || ('key' in column && mobileKeys.has(String(column.key)))) : allColumns)
 
@@ -226,7 +238,7 @@ async function submitCreate(body: User) {
       :data="rows"
       :loading="loading"
       :row-key="rowKey"
-      :scroll-x="mobile ? 760 : 1200"
+      :scroll-x="mobile ? 760 : 1040"
       :pagination="{ pageSize: 50 }"
     >
       <template #empty>
@@ -247,7 +259,7 @@ async function submitCreate(body: User) {
         <NFormItem label="名称" required v-bind="fieldState(errors, 'name', '字母或数字开头，可含 _ . -')">
           <NInput v-model:value="draft.name" />
         </NFormItem>
-        <NFormItem label="备注" feedback="仅用于管理识别，不影响订阅节点名">
+        <NFormItem label="备注" feedback="显示在用户列表的名称下方，便于识别；不影响订阅节点名">
           <NInput v-model:value="draft.remark" />
         </NFormItem>
         <NFormItem label="加入 stack" feedback="可选。把用户（default 档案）加进所选 stack 全部进入订阅的入站，应用后生效；之后可在用户详情的「接入」中调整">
@@ -270,3 +282,8 @@ async function submitCreate(body: User) {
   <ImportDialog v-model:show="showImport" scope="users" allow-csv @done="load" />
   <ExportDialog v-model:show="showExport" scope="users" :users="selectedNames" allow-csv />
 </template>
+
+<style scoped>
+.table-panel :deep(.name-cell) { display: flex; flex-direction: column; min-width: 0; }
+.table-panel :deep(.name-remark) { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>

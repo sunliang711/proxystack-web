@@ -43,10 +43,31 @@ const identityConfigured = ref<boolean | null>(null)
 /** 首次加载完成后才显示进度条，避免先闪出第 1 步。 */
 const loaded = ref(false)
 const selected = ref<number[]>([])
-const mode = ref<'online' | 'offline'>('online')
+/** 发布方式记在浏览器里；没有记录时，有就绪的订阅端才默认在线发布。 */
+const MODE_KEY = 'psw-publish-mode'
+const mode = ref<'online' | 'offline'>(readMode() ?? 'online')
+function readMode(): 'online' | 'offline' | null {
+  try {
+    const value = localStorage.getItem(MODE_KEY)
+    return value === 'online' || value === 'offline' ? value : null
+  } catch {
+    return null
+  }
+}
+/** 只记住手动选择的发布方式，按订阅端情况自动选的不记。 */
+function setMode(value: 'online' | 'offline') {
+  mode.value = value
+  try {
+    localStorage.setItem(MODE_KEY, value)
+  } catch {
+    // 存不下时只在本次会话生效。
+  }
+}
 const busy = ref(false)
 const submitted = ref<OnlinePublishResult | null>(null)
 
+/** 首次加载时按订阅端情况决定默认发布方式，之后不再自动切换。 */
+let modeChosen = false
 async function load() {
   const [statusResult, targetsResult, identityResult] = await Promise.all([
     api.GET('/api/sub-bundle'),
@@ -59,6 +80,8 @@ async function load() {
   if (targetsResult.error) message.error(problemMessage(targetsResult.error, '读取订阅端失败'))
   status.value = statusResult.data ?? null
   targets.value = (targetsResult.data ?? []).filter((target: PublishTarget) => target.enabled)
+  if (!modeChosen && readMode() === null && !targets.value.some(targetReady)) mode.value = 'offline'
+  modeChosen = true
   selected.value = selected.value.filter((id) => targets.value.some((target) => target.id === id && targetReady(target)))
 }
 onMounted(load)
@@ -129,7 +152,7 @@ const actionLabel = computed(() => mode.value === 'online' ? '签发并在线发
 const blockedReason = computed(() => {
   if (!status.value) return '正在读取订阅包状态'
   if (mode.value !== 'online') return ''
-  if (!targets.value.length) return '还没有启用的订阅端，请先在「SSH 发布与部署」中添加'
+  if (!targets.value.length) return '还没有启用的订阅端'
   if (!targets.value.some(targetReady)) return '还没有部署并测试通过的订阅端'
   if (!selected.value.length) return '请先在上方勾选要发布的订阅端'
   return ''
@@ -171,9 +194,6 @@ function targetNextStep(target: PublishTarget) {
   return '可签发'
 }
 
-/** 签发受阻于订阅端未就绪时，给出去配置订阅端的入口。 */
-const blockedByTargets = computed(() => mode.value === 'online' && !!status.value && !targets.value.some(targetReady))
-
 function openTask() {
   if (!submitted.value) return
   void router.push({ name: 'task-detail', params: { source: 'task', id: submitted.value.task_id } })
@@ -186,18 +206,18 @@ function openSSHSettings() {
 
 <template>
   <NSpace vertical :size="20">
-    <PublishFlowBar v-if="loaded && mode === 'online'" :input="{ identity: identityConfigured, targets, bundlePending: !!status?.pending }" page="publish" />
+    <PublishFlowBar v-if="loaded && mode === 'online' && targets.length" :input="{ identity: identityConfigured, targets, bundlePending: !!status?.pending }" page="publish" />
 
     <NCard title="订阅包状态">
       <NSpace v-if="status" vertical>
-        <NAlert v-if="status.manual_publish" type="default" :bordered="false">自动发布已关闭（系统设置 → 订阅），订阅内容变化后需要在本页签发。</NAlert>
+        <NAlert v-if="status.manual_publish" type="info" :bordered="false">自动发布已关闭（系统设置 → 订阅），订阅内容变化后需要在本页签发。</NAlert>
         <NAlert v-else-if="status.auto_publish_blocked" type="warning" :bordered="false" title="自动发布已暂停">
           {{ status.auto_publish_blocked }}。修复后自动恢复；确认缺少这些节点也要发布时，在本页手动签发。
         </NAlert>
         <NAlert v-else-if="status.auto_publish_targets" type="info" :bordered="false">
           已开启自动发布：订阅内容变化后（包括应用 stack、暂停或恢复用户）自动签发并发布到 {{ status.auto_publish_targets }} 个已就绪的订阅端，进度见后台任务。本页用于查看状态、离线签发或手动重发。
         </NAlert>
-        <NAlert v-else type="default" :bordered="false">已开启自动发布，但还没有部署并测试通过的订阅端，暂不会自动发布。</NAlert>
+        <NAlert v-else type="info" :bordered="false">已开启自动发布，但还没有部署并测试通过的订阅端，暂不会自动发布；可以在下方离线签发下载。</NAlert>
         <NAlert v-if="status.sequence === 0" type="info" :bordered="false">还没有发布过订阅包。</NAlert>
         <NAlert v-else-if="status.pending" type="warning" :bordered="false">
           订阅内容在上次签发（#{{ status.sequence }}）之后有变化。{{ autoPublishing ? '自动发布会在几秒内签发并推送，进度见后台任务。' : '暂停用户已经在代理端生效，订阅中的节点需要重新发布后才会去掉。' }}
@@ -237,15 +257,18 @@ function openSSHSettings() {
 
     <NCard title="发布方式">
       <NSpace vertical :size="16">
-        <NRadioGroup v-model:value="mode" size="small">
+        <NRadioGroup :value="mode" size="small" @update:value="setMode">
           <NRadioButton value="online">SSH 在线发布</NRadioButton>
           <NRadioButton value="offline">离线签发下载</NRadioButton>
         </NRadioGroup>
 
         <template v-if="mode === 'online'">
           <NAlert v-if="!targets.length" type="warning" :bordered="false">
-            还没有启用的订阅端。请先到「SSH 发布与部署」生成 SSH 密钥并添加订阅端。
-            <NButton size="small" style="margin-left: 8px" @click="openSSHSettings">去添加订阅端</NButton>
+            还没有启用的订阅端。先到「SSH 发布与部署」添加订阅端，或改用离线签发下载。
+            <NSpace :size="8" style="margin-top: 8px">
+              <NButton size="small" @click="openSSHSettings">去添加订阅端</NButton>
+              <NButton size="small" @click="setMode('offline')">改用离线签发下载</NButton>
+            </NSpace>
           </NAlert>
           <div v-else class="target-list">
             <div class="target-head">
@@ -284,8 +307,8 @@ function openSSHSettings() {
               </div>
             </div>
           </div>
-          <NText depth="3" class="publish-note">
-            只有部署完成且测试通过的目标可以选择（流程：检测部署 → 部署 → 测试 → 配置发布 Secret → 签发订阅包，SSH 部署会自动配置 Secret）。本次只签发一份订阅包，并向所有选中目标发送相同内容；部分目标失败时，已经成功的目标不会回滚，再次发布会生成新的序号。
+          <NText v-if="targets.length" depth="3" class="publish-note">
+            只有部署完成且测试通过的订阅端可以选择。所有选中的订阅端收到同一份订阅包；部分失败时已成功的不会回滚，再次发布会生成新的序号。
           </NText>
           <NAlert v-if="submitted" type="success" :bordered="false">
             订阅包 #{{ submitted.sequence }} 已提交，任务编号 #{{ submitted.task_id }}。
@@ -319,7 +342,6 @@ function openSSHSettings() {
           <NButton v-else type="primary" :loading="busy" :disabled="!!blockedReason" @click="publish">{{ actionLabel }}</NButton>
           <NText v-if="blockedReason" depth="3">{{ blockedReason }}</NText>
           <NText v-else-if="mode === 'online'" depth="3">将向 {{ selected.length }} 个订阅端发布：{{ selectedNames }}</NText>
-          <NButton v-if="blockedByTargets" size="small" @click="openSSHSettings">去配置订阅端</NButton>
         </NSpace>
       </NSpace>
     </NCard>

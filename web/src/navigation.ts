@@ -70,7 +70,7 @@ export const navGroups: { key: string; label: string; items: NavItem[] }[] = [
     label: '系统',
     items: [
       { name: 'settings', label: '系统设置', icon: SettingsOutline },
-      { name: 'system', label: '系统', icon: InformationCircleOutline },
+      { name: 'system', label: '版本与升级', icon: InformationCircleOutline },
     ],
   },
 ]

@@ -186,26 +186,19 @@ async function setMember(stack: Schemas['StackSummary'], member: boolean) {
   void notifySaved(message)
 }
 
-type AccessState = 'out' | 'on' | 'paused'
-const rowState = (row: { refs: Reference[]; paused: boolean }): AccessState => (!row.refs.length ? 'out' : row.paused ? 'paused' : 'on')
-function changeAccess(row: { stack: Schemas['StackSummary']; refs: Reference[]; paused: boolean }, next: AccessState) {
-  const current = rowState(row)
-  if (next === current) return
-  if (next === 'out') {
-    dialog.warning({
-      title: `把 ${savedName.value} 移出 ${row.stack.name}？`,
-      content: `将从该 stack 的 ${new Set(row.refs.map((item) => item.inbound)).size} 个入站中移除该用户，应用后生效。`,
-      positiveText: '移出',
-      negativeText: '取消',
-      onPositiveClick: () => setMember(row.stack, false),
-    })
-    return
-  }
-  if (current === 'out') {
+/** 加入或移出 stack：改的是入站配置，需要应用后生效；移出前确认。 */
+function changeMember(row: { stack: Schemas['StackSummary']; refs: Reference[] }, member: boolean) {
+  if (member) {
     void setMember(row.stack, true)
     return
   }
-  toggleStack(row.stack.name, next === 'paused')
+  dialog.warning({
+    title: `把 ${savedName.value} 移出 ${row.stack.name}？`,
+    content: `将从该 stack 的 ${new Set(row.refs.map((item) => item.inbound)).size} 个入站中移除该用户，应用后生效。`,
+    positiveText: '移出',
+    negativeText: '取消',
+    onPositiveClick: () => setMember(row.stack, false),
+  })
 }
 
 /** 取回明文凭据，只替换仍是占位的字段，不覆盖已修改的内容。 */
@@ -320,6 +313,7 @@ async function remove() {
   <NSpin :show="!user">
     <NForm v-if="user" label-placement="top" class="user-form">
       <!-- 顶部摘要在所有标签页都显示：状态、今日用量、额度、到期和保存。 -->
+      <div class="toolbar-sticky">
       <NCard size="small" class="user-toolbar">
         <div class="toolbar">
           <div class="summary">
@@ -340,6 +334,7 @@ async function remove() {
           </NSpace>
         </div>
       </NCard>
+      </div>
       <ErrorList :errors="errors.global" />
 
       <NTabs v-model:value="tab" type="line" animated class="detail-tabs">
@@ -352,7 +347,7 @@ async function remove() {
                   <NText strong>{{ user.enabled ? '已启用' : '已停用' }}</NText>
                   <NTag size="small" type="success" :bordered="false">当场生效</NTag>
                 </div>
-                <NText depth="3" class="status-desc">切换后立即通过 xray API 移除或加回该用户，配置保留，不需要保存和应用。只在部分 stack 上暂停请到「接入」设置。</NText>
+                <NText depth="3" class="status-desc">切换后立即在全部 stack 上停用或恢复该用户，配置保留，不需要保存和应用。只在部分 stack 上暂停请到「接入」设置。</NText>
               </div>
             </div>
           </section>
@@ -362,11 +357,11 @@ async function remove() {
               <NFormItem label="名称" required v-bind="f('name', '字母或数字开头，可含 _ . -；改名不影响引用')">
                 <NInput v-model:value="user.name" />
               </NFormItem>
-              <NFormItem label="备注" v-bind="f('remark', '仅用于管理识别，不影响订阅节点名')">
+              <NFormItem label="备注" v-bind="f('remark', '显示在用户列表的名称下方，便于识别；不影响订阅节点名')">
                 <NInput v-model:value="user.remark" />
               </NFormItem>
             </div>
-            <NFormItem label="说明" v-bind="f('note', '内部记录，例如联系方式、付费情况')">
+            <NFormItem label="内部笔记" v-bind="f('note', '只在这里显示的较长记录，例如联系方式、付费情况')">
               <NInput v-model:value="user.note" type="textarea" :autosize="{ minRows: 2 }" />
             </NFormItem>
           </section>
@@ -532,14 +527,16 @@ async function remove() {
           <section class="pane-section">
             <h3 class="pane-title">各 stack 接入</h3>
             <NText depth="3" tag="p" class="pane-desc">
-              每个 stack 一行，右侧选择该用户在这个 stack 上的状态。「加入」把该用户（default 档案）加进这个 stack 全部进入订阅的入站，「未加入」从这个 stack 的全部入站中移除该用户，两者都需要应用后生效；「启用」和「暂停」当场生效，不需要保存和应用。需要使用其他档案或只加入部分入站时，到 stack 的「入站」中编辑。SOCKS5/HTTP 入站的账号由多个用户共用，暂停只把它们从该用户的订阅中去掉。
+              「加入」把该用户（default 档案）加进这个 stack 全部进入订阅的入站，需要应用后生效；「启用」开关当场暂停或恢复该用户在这个 stack 上的使用。只加入部分入站或改用其他档案时，到 stack 的「入站」中编辑。
             </NText>
             <SubscriptionGapAlert :status="subscription" />
             <NAlert v-if="!user.enabled" type="warning" :bordered="false" style="margin-bottom: 12px">用户已停用，在「基本」中启用后才能按 stack 启用或暂停；加入和移出不受影响。</NAlert>
             <NEmpty v-if="!stacks.length" size="small" description="还没有 stack" />
             <div v-else class="access-list">
               <div class="access-row access-header">
-                <span>Stack</span><span>引用该用户的入站</span><span>状态</span>
+                <span>Stack</span><span>引用该用户的入站</span>
+                <span class="access-col">加入 <NTag size="tiny" type="warning" :bordered="false">需应用</NTag></span>
+                <span class="access-col">启用 <NTag size="tiny" type="success" :bordered="false">当场生效</NTag></span>
               </div>
               <div v-for="row in accessRows" :key="row.stack.id" class="access-row" :class="{ paused: row.paused }">
                 <div class="access-stack">
@@ -555,14 +552,23 @@ async function remove() {
                   <NText v-else depth="3" class="access-none">未加入</NText>
                   <NTag v-if="unapplied.has(row.stack.name)" size="small" type="warning" :bordered="false" title="入站已引用该用户，但这个 stack 还没有重新应用，节点暂时不在订阅中">未应用</NTag>
                 </div>
-                <NRadioGroup
-                  size="small" :value="rowState(row)" :disabled="pausing || joining" :aria-label="`该用户在 ${row.stack.name} 上的状态`"
-                  @update:value="(v: AccessState) => changeAccess(row, v)"
-                >
-                  <NRadioButton value="out">未加入</NRadioButton>
-                  <NRadioButton value="on" :disabled="!!row.refs.length && !user.enabled">{{ row.refs.length ? '启用' : '加入' }}</NRadioButton>
-                  <NRadioButton value="paused" :disabled="!row.refs.length || !user.enabled">暂停</NRadioButton>
-                </NRadioGroup>
+                <div class="access-col">
+                  <NSwitch
+                    size="small" :value="!!row.refs.length" :loading="joining" :disabled="pausing || joining"
+                    :aria-label="`把该用户加入 ${row.stack.name}`" @update:value="(v: boolean) => changeMember(row, v)"
+                  />
+                </div>
+                <div class="access-col">
+                  <NSwitch
+                    v-if="row.refs.length"
+                    size="small" :value="!row.paused" :loading="pausing" :disabled="pausing || joining || !user.enabled"
+                    :aria-label="`该用户在 ${row.stack.name} 上启用`" @update:value="(v: boolean) => toggleStack(row.stack.name, !v)"
+                  >
+                    <template #checked>启用</template>
+                    <template #unchecked>暂停</template>
+                  </NSwitch>
+                  <NText v-else depth="3" class="access-none">—</NText>
+                </div>
               </div>
             </div>
           </section>
@@ -578,12 +584,16 @@ async function remove() {
 </template>
 
 <style scoped>
-.user-toolbar {
+/* 吸顶区域整体带页面底色，滚动时下面的内容不会从卡片圆角和上方缝隙里透出来。 */
+.toolbar-sticky {
   position: sticky;
   top: 0;
   z-index: 10;
-  margin-bottom: 20px;
-  background: var(--n-color);
+  margin: -12px 0 8px;
+  padding: 12px 0;
+  background: var(--ps-bg);
+}
+.user-toolbar {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 .toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 20px; }
@@ -611,7 +621,8 @@ async function remove() {
 .profile-remark { font-size: 13px; }
 .profile-delete { margin-left: auto; }
 .access-list { border: 1px solid var(--ps-border); border-radius: 10px; overflow: hidden; }
-.access-row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(0, 2fr) auto; align-items: center; gap: 12px; padding: 10px 16px; }
+.access-row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(0, 2fr) 96px 120px; align-items: center; gap: 12px; padding: 10px 16px; }
+.access-col { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 .access-row + .access-row { border-top: 1px solid var(--ps-border); }
 .access-header { font-size: 12px; font-weight: 600; color: var(--ps-muted); background: var(--ps-surface-raised); padding-top: 8px; padding-bottom: 8px; }
 .access-row.paused .access-stack, .access-row.paused .access-refs { opacity: 0.55; }
@@ -623,7 +634,7 @@ async function remove() {
 }
 @media (max-width: 640px) {
   .access-header { display: none; }
-  .access-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .access-row { grid-template-columns: minmax(0, 1fr) auto auto; }
   .access-refs { grid-column: 1 / -1; grid-row: 2; }
 }
 .embedded-card :deep(> .n-card-header),

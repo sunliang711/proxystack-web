@@ -175,7 +175,6 @@ function onFile({ file }: { file: UploadFileInfo }) {
           <template #header-extra>
             <NSpace>
               <NTag v-if="!dep.installed" type="warning" size="small">未安装</NTag>
-              <NTag v-else-if="dep.update_available" type="info" size="small">有新版本 {{ dep.latest }}</NTag>
               <NTag v-else-if="dep.latest" type="success" size="small" :bordered="false">已是最新</NTag>
               <NButton v-if="!dep.installed || dep.update_available" size="small" type="primary" @click="open(dep.component, 'latest')">
                 {{ dep.installed ? `升级到 ${dep.latest}` : '安装最新版' }}
@@ -183,7 +182,7 @@ function onFile({ file }: { file: UploadFileInfo }) {
               <NButton v-if="dep.component !== 'geo'" size="small" @click="open(dep.component, 'version')">安装指定版本</NButton>
               <NButton size="small" @click="open(dep.component, 'upload')">上传安装包</NButton>
               <NPopconfirm v-if="dep.previous" @positive-click="rollback(dep.component)">
-                <template #trigger><NButton size="small" type="warning" ghost>回滚</NButton></template>
+                <template #trigger><NButton size="small">{{ dep.previous_version ? `回滚到 ${dep.previous_version}` : '回滚' }}</NButton></template>
                 切换回上一个版本{{ dep.previous_version ? `（${dep.previous_version}）` : '' }}，并逐个重启使用它的服务？
               </NPopconfirm>
             </NSpace>

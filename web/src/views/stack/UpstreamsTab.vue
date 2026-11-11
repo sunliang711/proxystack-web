@@ -278,7 +278,14 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
 </script>
 
 <template>
-  <NCard title="直连上游订阅" size="small" style="margin-bottom: 20px">
+  <NSpace justify="space-between" align="center" style="margin-bottom: 16px">
+    <NText depth="3">新增的上游会自动加入代理组，排在 DIRECT 之前；顺序和成员可以在「代理组」标签页调整。</NText>
+    <NButton type="primary" @click="open(stack.mihomo.upstreams.length)">添加上游</NButton>
+  </NSpace>
+  <NDataTable :columns="columns" :data="rows" :scroll-x="840" size="small" />
+
+  <!-- 直连订阅是附加功能，放在上游列表之后。 -->
+  <NCard title="直连上游订阅" size="small" style="margin-top: 20px">
     <NForm label-placement="top">
       <NFormItem label="允许直连的用户" v-bind="fieldState(errors, 'direct_users')">
         <NSpace vertical style="width: 100%">
@@ -304,11 +311,6 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
       直连会向授权用户下发上游连接凭据，流量不经过本机，无法计入本机用量统计或由本机限额阻断。取消授权并发布后停止下发，已下载配置需在上游更换凭据才能失效。
     </NAlert>
   </NCard>
-  <NSpace justify="space-between" align="center" style="margin-bottom: 16px">
-    <NText depth="3">新增的上游会自动加入代理组，排在 DIRECT 之前；顺序和成员可以在「代理组」标签页调整。</NText>
-    <NButton type="primary" @click="open(stack.mihomo.upstreams.length)">添加上游</NButton>
-  </NSpace>
-  <NDataTable :columns="columns" :data="rows" :scroll-x="840" size="small" />
 
   <NDrawer :show="!!editing" :width="640" @update:show="(v) => !v && (editing = null)">
     <NDrawerContent v-if="editing" :title="editing.draft.name ? `上游 ${editing.draft.name}` : '新上游'" closable>
@@ -372,11 +374,16 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
       </NForm>
       <template #footer>
         <NSpace align="center">
-          <NButton @click="editing = null">取消</NButton>
           <NText v-if="typeMissing" type="warning">先在 YAML 中填写 type</NText>
-          <NButton type="primary" :disabled="!editing.draft.name || !!yamlError || typeMissing" @click="confirm">确定</NButton>
+          <NText v-else depth="3" class="drawer-hint">暂存后回到页面点「保存」才会写入</NText>
+          <NButton @click="editing = null">取消</NButton>
+          <NButton type="primary" :disabled="!editing.draft.name || !!yamlError || typeMissing" @click="confirm">暂存修改</NButton>
         </NSpace>
       </template>
     </NDrawerContent>
   </NDrawer>
 </template>
+
+<style scoped>
+.drawer-hint { font-size: 12px; }
+</style>

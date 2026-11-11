@@ -264,7 +264,7 @@ async function onAccount(key: string) {
             </NButton>
           </NBadge>
           <NBadge :value="runtime.pendingCount" :show="runtime.pendingCount > 0 || !!runtime.pendingError" :dot="!!runtime.pendingError && !runtime.pendingCount">
-            <NButton :type="runtime.pendingCount ? 'warning' : 'default'" secondary size="small" class="pending-button" :aria-label="`待应用变更：${pendingSummary()}`" :title="pendingSummary()" @click="runtime.pendingDrawer = true">
+            <NButton :type="runtime.pendingCount ? 'warning' : 'default'" :secondary="!!runtime.pendingCount || !!runtime.pendingError" :quaternary="!runtime.pendingCount && !runtime.pendingError" size="small" class="pending-button" :class="{ idle: !runtime.pendingCount && !runtime.pendingError }" :aria-label="`待应用变更：${pendingSummary()}`" :title="pendingSummary()" @click="runtime.pendingDrawer = true">
               <template #icon><NIcon><GitPullRequestOutline /></NIcon></template>
               <span class="pending-label">待应用变更</span>
             </NButton>
@@ -378,6 +378,8 @@ async function onAccount(key: string) {
   gap: 12px;
 }
 .search-label { margin-right: 10px; }
+/* 没有待应用变更时按钮弱化成普通文字，有变更时才醒目。 */
+.pending-button.idle { color: var(--ps-muted); }
 .search-kbd {
   padding: 0 5px;
   border: 1px solid var(--ps-border);

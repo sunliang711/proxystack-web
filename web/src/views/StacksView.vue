@@ -120,36 +120,53 @@ function mihomoActive(name: string): boolean {
   return runtime.stacks[name]?.units.some((unit) => unit.unit.includes('mihomo') && unit.active === 'active') ?? false
 }
 
-/** 窄屏按此顺序优先显示运行状态、出口 IP 和角色，入站、监听和标记在编辑页查看。 */
-const mobileKeys = ['name', 'runtime', 'egress', 'role', 'enabled']
+/** 窄屏按此顺序优先显示名称、运行状态和出口 IP，入站和监听在编辑页查看。 */
+const mobileKeys = ['name', 'runtime', 'egress']
+
+/** 名称列的第二行：角色、标签和成员，合并显示以省出列宽。 */
+function nameCell(row: Summary) {
+  const meta = [
+    h(NText, { depth: 3, style: 'font-size: 12px' }, () => roleLabel(row.role)),
+    row.relays_only && row.role === 'edge'
+      ? h(NTooltip, null, {
+          trigger: () => h(NTag, { size: 'tiny', type: 'warning', bordered: false }, () => '应为 auto'),
+          default: () => '所有上游都引用其他 stack 的入站，按结构是聚合 stack。到编辑页「基本」中把角色改为 auto。',
+        })
+      : null,
+    ...row.labels.map((label) => h(NTag, { size: 'tiny', bordered: false }, () => label)),
+    row.loopback ? h(NTag, { size: 'tiny', type: 'info', bordered: false }, () => '仅本机') : null,
+  ]
+  return h('div', { class: 'name-cell' }, [
+    h(RouterLink, { to: { name: 'stack', params: { id: row.id } } }, { default: () => row.name }),
+    h('div', { class: 'name-meta' }, meta),
+    row.role === 'auto' ? h(NText, { depth: 3, style: 'font-size: 12px' }, () => `成员：${row.members.join('、') || '无'}`) : null,
+  ])
+}
+
+/** 运行列：启用状态只在非默认时显示（停用、保持停止），后面跟进程状态。 */
+function runtimeCell(row: Summary) {
+  if (!row.enabled) return h(NTag, { size: 'small' }, () => '停用')
+  return h(NSpace, { size: 4, align: 'center', vertical: false, wrap: true }, () => [
+    row.desired_running ? null : h(NTag, { size: 'small', type: 'warning' }, () => '保持停止'),
+    h(UnitStatus, { stack: row.name, actions: true, wrap: true, compact: true }),
+  ])
+}
 
 const allColumns: DataTableColumns<Summary> = [
   { type: 'selection', fixed: 'left' },
   {
-    title: '名称',
+    title: tipTitle('名称', '名称下方是角色和标签。edge：独立出口，流量经本 stack 的上游直接出去。auto：聚合多个 edge stack 的 relay 入站，按测速或负载均衡挑选出口。'),
     key: 'name',
-    width: 120,
+    width: 190,
     fixed: 'left',
-    ellipsis: { tooltip: true },
-    render: (row) => h(RouterLink, { to: { name: 'stack', params: { id: row.id } } }, { default: () => row.name }),
-  },
-  {
-    title: tipTitle('状态', '停用：不生成配置，也不参与对账。启用：生成配置并保持进程运行。启用 · 保持停止：生成配置，但对账时让进程保持停止。在 stack 的「基本」页切换。'),
-    key: 'enabled',
-    width: 140,
-    render: (row) => {
-      if (!row.enabled) return h(NTag, { size: 'small' }, () => '停用')
-      return row.desired_running
-        ? h(NTag, { size: 'small', type: 'success' }, () => '启用')
-        : h(NTag, { size: 'small', type: 'warning' }, () => '启用 · 保持停止')
-    },
+    render: nameCell,
   },
   // 紧凑显示：运行中只显示进程名；状态标签较多时在列内换行，不溢出到相邻列。
   {
-    title: tipTitle('运行', '绿色：运行中。灰色：未生成，或按「保持停止」设置停止。红色：失败，或本应运行却已停止。蓝色、黄色：启动中、停止中。悬停查看服务名和运行时间。'),
+    title: tipTitle('运行', '停用：不生成配置。保持停止：生成配置但让进程保持停止，在 stack 的「基本」页切换。进程标签：绿色运行中，灰色未生成或按设置停止，红色失败或本应运行却已停止，蓝色、黄色为启动中、停止中。'),
     key: 'runtime',
-    width: 200,
-    render: (row) => h(UnitStatus, { stack: row.name, actions: true, wrap: true, compact: true }),
+    width: 220,
+    render: runtimeCell,
   },
   {
     title: tipTitle(
@@ -158,7 +175,7 @@ const allColumns: DataTableColumns<Summary> = [
     ),
     key: 'egress',
     // 放得下完整的 IPv4 和常见长度的 IPv6。
-    width: 300,
+    width: 290,
     render: (row) =>
       h(EgressCell, {
         state: egress.states[row.id],
@@ -169,40 +186,16 @@ const allColumns: DataTableColumns<Summary> = [
       }),
   },
   {
-    title: tipTitle('角色', 'edge：独立出口，流量经本 stack 的上游直接出去。auto：聚合多个 edge stack 的 relay 入站，按测速或负载均衡挑选出口。'),
-    key: 'role', width: 160,
-    render: (row) => row.relays_only && row.role === 'edge'
-      ? h(NSpace, { size: 4, align: 'center' }, () => [
-          roleLabel(row.role),
-          h(NTooltip, null, {
-            trigger: () => h(NTag, { size: 'small', type: 'warning', bordered: false }, () => '应为 auto'),
-            default: () => '所有上游都引用其他 stack 的入站，按结构是聚合 stack。到编辑页「基本」中把角色改为 auto。',
-          }),
-        ])
-      : roleLabel(row.role),
-  },
-  {
     title: 'Xray 入站',
     key: 'inbounds',
-    width: 200,
+    width: 190,
     render: (row) => h(InboundSummary, { stack: row }),
   },
   {
     title: 'Mihomo 监听',
     key: 'mihomo',
-    width: 170,
+    minWidth: 140,
     render: (row) => h(MihomoSummary, { stack: row }),
-  },
-  {
-    title: '标记',
-    key: 'labels',
-    minWidth: 180,
-    render: (row) =>
-      h(NSpace, { size: 4 }, () => [
-        ...row.labels.map((label) => h(NTag, { size: 'small', bordered: false }, () => label)),
-        row.loopback ? h(NTag, { size: 'small', type: 'info' }, () => '仅本机') : null,
-        row.role === 'auto' ? h(NText, { depth: 3 }, () => `成员：${row.members.join('、') || '无'}`) : null,
-      ]),
   },
 ]
 const columnKey = (column: (typeof allColumns)[number]) => ('key' in column ? String(column.key) : '')
@@ -282,7 +275,7 @@ async function create() {
     <template v-if="showTopology">
       <NText v-if="topology.summary" strong tag="div" class="topology-summary">{{ topology.summary }}</NText>
       <NText depth="3" tag="div" class="topology-help">
-        按类别汇总流向，箭头上的数字是走这条路的 Stack 数量；聚合测速 Stack 经成员 Stack 的 relay 入站转发。悬停节点查看包含的 Stack，点击节点在下方列表中只显示这些 Stack。单个 Stack 的详细流向在其详情页的「流量拓扑」标签页查看。
+        箭头上的数字是走这条路的 Stack 数量；悬停节点查看包含的 Stack，点击节点筛选下方列表。
       </NText>
       <FlowDiagram v-if="topology.nodes.length" :nodes="topology.nodes" :edges="topology.edges" :columns="topology.columns" :selected="topologyFilter?.node" @select="selectTopology" />
       <NText v-else-if="!loading" depth="3">还没有 stack。</NText>
@@ -311,7 +304,7 @@ async function create() {
       :data="shownStacks"
       :loading="loading"
       :row-key="rowKey"
-      :scroll-x="mobile ? 960 : 1520"
+      :scroll-x="mobile ? 720 : 1060"
       class="pre-line"
     >
       <template #empty>
@@ -321,7 +314,7 @@ async function create() {
         </NEmpty>
       </template>
     </NDataTable>
-    <NText v-if="mobile && stacks.length" depth="3" class="mobile-table-note">窄屏只显示运行状态、出口 IP 和角色，左右滑动查看更多；入站、监听和标记在编辑页查看。</NText>
+    <NText v-if="mobile && stacks.length" depth="3" class="mobile-table-note">窄屏只显示运行状态和出口 IP，左右滑动查看更多；入站和监听在编辑页查看。</NText>
   </NCard>
 
   <NModal v-model:show="wizard" preset="card" title="新建 stack" style="max-width: 760px">
@@ -393,4 +386,6 @@ async function create() {
 .pre-line :deep(td) {
   white-space: pre-line;
 }
+.pre-line :deep(.name-cell) { display: flex; flex-direction: column; gap: 2px; min-width: 0; white-space: normal; }
+.pre-line :deep(.name-meta) { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 </style>

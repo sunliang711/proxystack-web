@@ -312,9 +312,10 @@ const showUsers = computed(() => isUserProtocol.value || (isAuthProtocol.value &
         </NCollapse>
       </NForm>
       <template #footer>
-        <NSpace>
+        <NSpace align="center">
+          <NText depth="3" class="drawer-hint">暂存后回到页面点「保存」才会写入</NText>
           <NButton @click="editing = null">取消</NButton>
-          <NButton type="primary" :disabled="!subChosen || !editing.draft.name" @click="confirm">确定</NButton>
+          <NButton type="primary" :disabled="!subChosen || !editing.draft.name" @click="confirm">暂存修改</NButton>
         </NSpace>
       </template>
     </NDrawerContent>
@@ -322,6 +323,7 @@ const showUsers = computed(() => isUserProtocol.value || (isAuthProtocol.value &
 </template>
 
 <style scoped>
+.drawer-hint { font-size: 12px; }
 .inbound-user-overrides { width: auto; margin: -8px 0 12px 120px; }
 .user-override-list { max-height: 360px; overflow-y: auto; padding-right: 4px; }
 @media (max-width: 767px) {

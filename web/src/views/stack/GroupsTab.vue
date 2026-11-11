@@ -2,7 +2,7 @@
 import { computed, h, ref } from 'vue'
 import {
   NButton, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NInputNumber, NPopconfirm, NRadioButton,
-  NRadioGroup, NSelect, NSpace, NTag, type DataTableColumns,
+  NRadioGroup, NSelect, NSpace, NTag, NText, type DataTableColumns,
 } from 'naive-ui'
 import { fieldState, hasErrorsUnder, type FormErrors, type Schemas } from '../../api/client'
 import OrderedPicker from '../../components/OrderedPicker.vue'
@@ -133,11 +133,16 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
         </NFormItem>
       </NForm>
       <template #footer>
-        <NSpace>
+        <NSpace align="center">
+          <NText depth="3" class="drawer-hint">暂存后回到页面点「保存」才会写入</NText>
           <NButton @click="editing = null">取消</NButton>
-          <NButton type="primary" :disabled="!editing.draft.name" @click="confirm">确定</NButton>
+          <NButton type="primary" :disabled="!editing.draft.name" @click="confirm">暂存修改</NButton>
         </NSpace>
       </template>
     </NDrawerContent>
   </NDrawer>
 </template>
+
+<style scoped>
+.drawer-hint { font-size: 12px; }
+</style>

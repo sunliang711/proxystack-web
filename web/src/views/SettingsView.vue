@@ -246,16 +246,19 @@ watch(() => route.query.section, async (section) => {
   if (route.query.section) void router.replace({ query: { ...route.query, section: undefined } })
 })
 
-function toggleNoAuth(value: boolean) {
+/** 两个安全字段合起来只决定一件事：校验是否要求公开的 SOCKS5/HTTP 入站设置密码。 */
+const publicAuthRequired = computed(() => !!settings.value && settings.value.security.require_auth_for_public_socks_http && !settings.value.security.allow_noauth_public)
+function togglePublicAuth(value: boolean) {
   if (!settings.value) return
-  if (!value) {
+  if (value) {
+    settings.value.security.require_auth_for_public_socks_http = true
     settings.value.security.allow_noauth_public = false
     return
   }
   dialog.warning({
-    title: '允许公开的无认证入站？',
-    content: '打开后，监听在非本机地址的 SOCKS5/HTTP 入站可以不设密码，任何能访问该端口的人都能使用代理。',
-    positiveText: '仍要允许',
+    title: '不再要求公开入站设置密码？',
+    content: '关闭后，监听在非本机地址的 SOCKS5/HTTP 入站可以不设密码，任何能访问该端口的人都能使用代理。',
+    positiveText: '仍要关闭',
     negativeText: '取消',
     onPositiveClick: () => {
       if (settings.value) settings.value.security.allow_noauth_public = true
@@ -286,9 +289,6 @@ async function save() {
   <NSpin :show="!settings">
     <NForm v-if="settings" label-placement="left" label-width="180" class="settings-form">
       <ErrorList :errors="errors.global" />
-      <NAlert type="info" :bordered="false" style="margin-bottom: 12px">
-        每个分组标题右侧标明保存后的生效方式：「立即生效」的设置保存后马上用于后续操作；「需要应用」的设置进入「待应用变更」，应用后才影响运行中的代理；「随订阅包生效」的设置在重新发布订阅包后生效。悬停标签查看详情。
-      </NAlert>
       <div class="settings-toolbar">
         <NInput v-model:value="query" clearable placeholder="搜索设置项，例如 SMTP、端口、时区" class="settings-search" :input-props="{ 'aria-label': '搜索设置项' }">
           <template #prefix><NIcon><SearchOutline /></NIcon></template>
@@ -312,11 +312,8 @@ async function save() {
             </NFormItem>
           </SettingsSection>
           <SettingsSection v-show="sectionShown('security')" title="安全" name="security">
-            <NFormItem label="公开入站必须认证" label-width="200">
-              <NSwitch v-model:value="form.security.require_auth_for_public_socks_http" />
-            </NFormItem>
-            <NFormItem label="允许公开的无认证入站" label-width="200">
-              <NSwitch :value="form.security.allow_noauth_public" @update:value="toggleNoAuth" />
+            <NFormItem label="公开入站必须设密码" feedback="开启时，监听在非本机地址的 SOCKS5/HTTP 入站没有设置密码时，保存和应用都会校验失败；本机地址的入站不受限制">
+              <NSwitch :value="publicAuthRequired" @update:value="togglePublicAuth" />
             </NFormItem>
           </SettingsSection>
         </NTabPane>

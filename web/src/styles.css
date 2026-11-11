@@ -71,6 +71,8 @@ body {
   background: var(--ps-accent);
   opacity: 0.75;
 }
+/* 同一行的指标卡片等高，附注行数不同也不会参差不齐。 */
+.n-grid > div > .metric-card { height: 100%; }
 .metric-card .n-statistic-value { font-variant-numeric: tabular-nums; letter-spacing: -0.7px; }
 .metric-card .n-statistic .n-statistic-value .n-statistic-value__content { font-size: clamp(22px, 2vw, 30px); }
 .filter-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
@@ -92,6 +94,8 @@ body {
 .n-form-item .n-form-item-feedback-wrapper { font-size: 12px; line-height: 1.6; }
 .n-form-item .n-form-item-feedback-wrapper:has(.n-form-item-feedback__line) { padding-bottom: 10px; }
 .n-form-item-blank { min-width: 0; }
+/* 禁用的按钮去掉颜色并进一步降低不透明度：深色主题下半透明的主色按钮和可点击的几乎一样。 */
+.n-button.n-button--disabled { filter: grayscale(1); opacity: 0.4; }
 .n-alert { border-radius: 10px; }
 .n-tag { font-weight: 500; }
 .n-input-number { max-width: 100%; }

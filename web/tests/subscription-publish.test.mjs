@@ -52,15 +52,21 @@ test('发布页同时保留 SSH 在线发布和统一离线部署', () => {
   assert.match(publish, /SSH 在线发布/)
   assert.match(publish, /离线签发下载/)
   assert.match(publish, /target_ids: selected\.value/)
-  assert.match(publish, /检测部署 → 部署 → 测试 → 配置发布 Secret → 签发订阅包/)
   assert.match(publish, /function targetReady\(target: PublishTarget\)/)
-  assert.match(publish, /只有部署完成且测试通过的目标可以选择/)
+  assert.match(publish, /只有部署完成且测试通过的订阅端可以选择/)
   assert.match(publish, /再次发布会生成新的序号/)
   assert.match(publish, /router\.push\(\{ name: 'sub-publish-settings' \}\)/)
   assert.match(publish, /releases\/latest\/download/)
   assert.match(publish, /sha256sum -c/)
   assert.match(publish, /deploy apply --sha256/)
   assert.doesNotMatch(publish, /curl[^\n]+\|\s*sudo bash/)
+})
+
+test('发布页记住手动选择的发布方式，没有就绪订阅端时默认离线', () => {
+  assert.match(publish, /psw-publish-mode/)
+  assert.match(publish, /!targets\.value\.some\(targetReady\)\) mode\.value = 'offline'/)
+  assert.match(publish, /setMode\('offline'\)">改用离线签发下载/)
+  assert.match(publish, /PublishFlowBar v-if="loaded && mode === 'online' && targets\.length"/)
 })
 
 test('复制命令在 Clipboard API 被拒绝时使用兼容降级路径', () => {

@@ -27,6 +27,8 @@ const deps = ref<Schemas['DepStatus'][]>([])
 const userCount = ref(0)
 const stacks = ref<Schemas['StackSummary'][]>([])
 const targets = ref<Schemas['PublishTargetView'][]>([])
+/** 已签发过的订阅包序号；离线签发下载也算发布过。 */
+const bundleSequence = ref(0)
 const loaded = ref(false)
 const dismissed = ref(readDismissed())
 
@@ -48,25 +50,27 @@ function dismiss() {
 
 onMounted(async () => {
   if (dismissed.value) return
-  const [settingsResult, depsResult, usersResult, stacksResult, targetsResult] = await Promise.all([
+  const [settingsResult, depsResult, usersResult, stacksResult, targetsResult, bundleResult] = await Promise.all([
     api.GET('/api/config/settings'),
     api.GET('/api/deps'),
     api.GET('/api/users'),
     api.GET('/api/stacks'),
     api.GET('/api/sub-publish/targets'),
+    api.GET('/api/sub-bundle'),
   ])
   settings.value = settingsResult.data ?? null
   deps.value = depsResult.data?.components ?? []
   userCount.value = usersResult.data?.users.length ?? 0
   stacks.value = stacksResult.data?.stacks ?? []
   targets.value = targetsResult.data ?? []
+  bundleSequence.value = bundleResult.data?.sequence ?? 0
   loaded.value = true
 })
 
 const installed = (component: string) => deps.value.some((dep) => dep.component === component && dep.installed)
 const applied = computed(() => stacks.value.some((stack) => (runtime.stacks[stack.name]?.applied_revision ?? 0) > 0))
 const readyTargets = computed(() => targets.value.filter((target) => target.enabled && targetReady(target)))
-const published = computed(() => readyTargets.value.some((target) => target.last_sequence && hasTime(target.last_publish_at) && !target.last_publish_error))
+const published = computed(() => bundleSequence.value > 0 || readyTargets.value.some((target) => target.last_sequence && hasTime(target.last_publish_at) && !target.last_publish_error))
 
 const steps = computed<Step[]>(() => [
   {
@@ -112,33 +116,47 @@ const steps = computed<Step[]>(() => [
   {
     key: 'publish',
     title: '发布订阅包',
-    detail: readyTargets.value.length ? '把订阅内容签名后发送到订阅端，用户才能拉取订阅。' : '先添加订阅端并完成部署和测试，再签发订阅包；也可以下载文件离线导入。',
+    detail: '把订阅内容签名后通过 SSH 发送到订阅端，或下载文件离线导入，用户才能拉取订阅。',
     done: published.value,
     optional: true,
-    action: readyTargets.value.length ? '去发布' : '配置订阅端',
-    to: { name: readyTargets.value.length ? 'sub-publish' : 'sub-publish-settings' },
+    action: '去发布',
+    to: { name: 'sub-publish' },
   },
 ])
 
 const required = computed(() => steps.value.filter((step) => !step.optional))
-const doneCount = computed(() => steps.value.filter((step) => step.done).length)
+const requiredDoneCount = computed(() => required.value.filter((step) => step.done).length)
+/** 必需步骤全部完成后清单缩成一行，只提示剩下的可选步骤。 */
+const pendingOptional = computed(() => steps.value.filter((step) => step.optional && !step.done))
 const current = computed(() => steps.value.find((step) => !step.done)?.key)
 const visible = computed(() => loaded.value && !dismissed.value && steps.value.some((step) => !step.done))
 const requiredDone = computed(() => required.value.every((step) => step.done))
 </script>
 
 <template>
-  <NCard v-if="visible" size="small" class="setup-card">
+  <!-- 必需步骤都完成后只剩一行：提示可选步骤，并可以永久关闭。 -->
+  <NCard v-if="visible && requiredDone" size="small" class="setup-card">
+    <div class="setup-compact">
+      <NIcon :size="18" class="setup-icon done-icon"><CheckmarkCircle /></NIcon>
+      <NText>初始化已完成</NText>
+      <NText v-for="step in pendingOptional" :key="step.key" depth="3" class="setup-compact-next">
+        可选：{{ step.title }}
+        <RouterLink :to="step.to!" class="setup-compact-link">{{ step.action }}</RouterLink>
+      </NText>
+      <NButton size="small" quaternary class="setup-dismiss" @click="dismiss">不再显示</NButton>
+    </div>
+  </NCard>
+  <NCard v-else-if="visible" size="small" class="setup-card">
     <template #header>
       <div class="setup-head">
         <span>初始化清单</span>
-        <NText depth="3" class="setup-count">已完成 {{ doneCount }} / {{ steps.length }}</NText>
+        <NText depth="3" class="setup-count">必需步骤已完成 {{ requiredDoneCount }} / {{ required.length }}</NText>
       </div>
     </template>
     <template #header-extra>
-      <NButton text size="small" @click="dismiss">{{ requiredDone ? '完成，不再显示' : '隐藏' }}</NButton>
+      <NButton size="small" quaternary @click="dismiss">隐藏</NButton>
     </template>
-    <NProgress type="line" :percentage="Math.round((doneCount / steps.length) * 100)" :show-indicator="false" :height="4" style="margin-bottom: 8px" />
+    <NProgress type="line" :percentage="Math.round((requiredDoneCount / required.length) * 100)" :show-indicator="false" :height="4" style="margin-bottom: 8px" />
     <ol class="setup-steps">
       <li v-for="(step, index) in steps" :key="step.key" :class="{ done: step.done, current: current === step.key }">
         <NIcon :size="20" class="setup-icon" :aria-label="step.done ? '已完成' : '未完成'">
@@ -148,7 +166,7 @@ const requiredDone = computed(() => required.value.every((step) => step.done))
         <div class="setup-text">
           <div class="setup-title">
             {{ index + 1 }}. {{ step.title }}
-            <NTag v-if="step.optional" size="tiny" :bordered="false">按需</NTag>
+            <NTag v-if="step.optional" size="tiny" :bordered="false">可选</NTag>
           </div>
           <NText depth="3" class="setup-detail">{{ step.detail }}</NText>
         </div>
@@ -182,4 +200,9 @@ const requiredDone = computed(() => required.value.every((step) => step.done))
 .setup-text { flex: 1; min-width: 0; }
 .setup-title { display: flex; align-items: center; gap: 6px; }
 .setup-detail { display: block; font-size: 12px; }
+.setup-compact { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+.done-icon { color: var(--ps-accent); }
+.setup-compact-next { font-size: 13px; }
+.setup-compact-link { margin-left: 6px; }
+.setup-dismiss { margin-left: auto; }
 </style>

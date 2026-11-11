@@ -58,6 +58,22 @@ const hasPending = computed(() => runtime.pendingStacks.includes(savedName.value
 
 const f = (path: string, hint?: string) => fieldState(errors.value, path, hint)
 
+/** 「启用」和「期望运行」两个字段合成一个三档的运行状态。 */
+type RunState = 'running' | 'stopped' | 'disabled'
+const runState = computed<RunState>({
+  get: () => (!stack.value?.enabled ? 'disabled' : stack.value.desired_running ? 'running' : 'stopped'),
+  set: (value) => {
+    if (!stack.value) return
+    stack.value.enabled = value !== 'disabled'
+    if (value !== 'disabled') stack.value.desired_running = value === 'running'
+  },
+})
+const runStateHint = computed(() => ({
+  running: '生成配置并保持 xray / mihomo 运行',
+  stopped: '仍生成配置，但让 xray / mihomo 保持停止',
+  disabled: '不生成配置，也不参与对账；配置保留，随时可以恢复',
+})[runState.value])
+
 async function load() {
   const [stackResult, listResult, userResult] = await Promise.all([
     api.GET('/api/stacks/{id}', { params: { path: { id: id.value } } }),
@@ -279,11 +295,13 @@ async function saveMembers() {
 <template>
   <NSpin :show="!stack">
     <template v-if="stack">
+      <div class="toolbar-sticky">
       <NCard size="small" class="stack-toolbar">
         <NSpace justify="space-between" align="center">
           <NSpace align="center">
             <UnitStatus :stack="stack.name" actions prominent />
             <NText v-if="dirty" type="warning">有未保存的修改</NText>
+            <NText v-else-if="hasPending" type="warning">已保存，尚未应用</NText>
           </NSpace>
           <NSpace>
             <NDropdown :options="moreOptions" trigger="click" placement="bottom-end" @select="onMore">
@@ -297,6 +315,7 @@ async function saveMembers() {
           </NSpace>
         </NSpace>
       </NCard>
+      </div>
       <ErrorList :errors="errors.global" />
 
       <NTabs v-model:value="group" type="line" animated class="detail-tabs">
@@ -307,11 +326,12 @@ async function saveMembers() {
                 <NFormItem label="名称" required v-bind="f('name', '改名会同步更新其他 stack 中的引用')">
                   <NInput v-model:value="stack.name" />
                 </NFormItem>
-                <NFormItem label="启用" v-bind="f('enabled', '关闭时不生成配置、不参与对账')">
-                  <NSwitch v-model:value="stack.enabled" />
-                </NFormItem>
-                <NFormItem label="期望运行" v-bind="f('desired_running', '关闭时仍生成配置，但对账会让 xray / mihomo 保持停止')">
-                  <NSwitch v-model:value="stack.desired_running" />
+                <NFormItem label="运行状态" v-bind="f(errors.fields.desired_running ? 'desired_running' : 'enabled', runStateHint)">
+                  <NRadioGroup v-model:value="runState">
+                    <NRadioButton value="running">运行</NRadioButton>
+                    <NRadioButton value="stopped">保持停止</NRadioButton>
+                    <NRadioButton value="disabled">停用</NRadioButton>
+                  </NRadioGroup>
                 </NFormItem>
                 <NFormItem label="每日流量阈值" v-bind="f('daily_limit_bytes', '按系统设置时区统计上行和下行总量；0 表示无限制')">
                   <ByteSizeInput small :value="stack.daily_limit_bytes ?? 0" @update:value="(value: number) => (stack!.daily_limit_bytes = value)" />
@@ -507,12 +527,16 @@ async function saveMembers() {
 .sub-tabs.single > :deep(.n-tabs-nav) {
   display: none;
 }
-.stack-toolbar {
+/* 吸顶区域整体带页面底色，滚动时下面的内容不会从卡片圆角和上方缝隙里透出来。 */
+.toolbar-sticky {
   position: sticky;
   top: 0;
   z-index: 10;
-  margin-bottom: 20px;
-  background: var(--n-color);
+  margin: -12px 0 8px;
+  padding: 12px 0;
+  background: var(--ps-bg);
+}
+.stack-toolbar {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 

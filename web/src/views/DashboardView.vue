@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { NAlert, NButton, NCard, NEmpty, NGrid, NGridItem, NRadioButton, NRadioGroup, NSpace, NStatistic, NTable, NTag, NText, NTooltip, useMessage } from 'naive-ui'
+import { NAlert, NButton, NCard, NEmpty, NGrid, NGridItem, NIcon, NRadioButton, NRadioGroup, NSpace, NStatistic, NTable, NTag, NText, NTooltip, useMessage } from 'naive-ui'
+import { RefreshOutline } from '@vicons/ionicons5'
 import { api, problemMessage, type Schemas } from '../api/client'
 import TrafficChart from '../components/TrafficChart.vue'
 import EntityLink from '../components/EntityLink.vue'
@@ -56,10 +57,36 @@ onUnmounted(() => {
 })
 
 const latest = computed(() => live.value[live.value.length - 1])
-const labels = computed(() => live.value.map((point) => new Date(point.at).toLocaleTimeString('zh-CN', { hour12: false })))
+/**
+ * 实时速率按分钟取平均后画成堆叠柱：采集间隔内的突发流量画成折线是一根根尖刺，
+ * 按分钟汇总后更容易看出哪段时间在用、用了多少。没有采集点的分钟留空。
+ */
+const minuteBuckets = computed(() => {
+  const buckets = new Map<number, { up: number; down: number; count: number }>()
+  for (const point of live.value) {
+    const minute = Math.floor(new Date(point.at).getTime() / 60_000)
+    const bucket = buckets.get(minute) ?? { up: 0, down: 0, count: 0 }
+    bucket.up += point.up
+    bucket.down += point.down
+    bucket.count++
+    buckets.set(minute, bucket)
+  }
+  const minutes = [...buckets.keys()]
+  if (!minutes.length) return []
+  const first = Math.min(...minutes)
+  const last = Math.max(...minutes)
+  const out: { minute: number; up: number; down: number }[] = []
+  for (let minute = first; minute <= last; minute++) {
+    const bucket = buckets.get(minute)
+    out.push({ minute, up: bucket ? bucket.up / bucket.count : 0, down: bucket ? bucket.down / bucket.count : 0 })
+  }
+  return out
+})
+const labels = computed(() => minuteBuckets.value.map((bucket) => new Date(bucket.minute * 60_000).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' })))
+// 上行、下行用色相差得远的两个槽位，深浅主题下都容易区分。
 const rateSeries = computed(() => [
-  { name: '上行', data: live.value.map((point) => point.up), slot: 0 },
-  { name: '下行', data: live.value.map((point) => point.down), slot: 1 },
+  { name: '上行', data: minuteBuckets.value.map((bucket) => bucket.up), slot: 2 },
+  { name: '下行', data: minuteBuckets.value.map((bucket) => bucket.down), slot: 1 },
 ])
 const periods = computed(() => overview.value ? [
   { key: 'today', label: '今日流量', previousLabel: '昨日同时段', data: overview.value.today },
@@ -132,8 +159,8 @@ const changeType = (trend: string) => (trend === 'up' || trend === 'new' ? 'warn
       今日、本月流量是各 Stack 入站之和<template v-if="autoStacks.length">，不含 auto stack {{ autoStacks.join('、') }}（它们的流量经 edge stack 的 relay 入站出去，已计入 edge stack）</template>；对比按上一期的同等已过时长计算。未归属到用户的流量通常来自 SOCKS5 / HTTP 共享账号。
     </NText>
 
-    <NCard title="实时速率（最近 1 小时）" size="small">
-      <TrafficChart v-if="live.length > 1" kind="line" :labels="labels" :series="rateSeries" :format="formatRate" />
+    <NCard title="实时速率（最近 1 小时，每分钟平均）" size="small">
+      <TrafficChart v-if="live.length > 1" kind="bar" :labels="labels" :series="rateSeries" :format="formatRate" />
       <NEmpty v-else description="最近一小时还没有采集到速率数据">
         <template #extra><RouterLink :to="{ name: 'health' }">查看采集状态</RouterLink></template>
       </NEmpty>
@@ -232,6 +259,12 @@ const changeType = (trend: string) => (trend === 'up' || trend === 'new' ? 'warn
     </NCard>
 
     <NCard v-if="overview.stacks.length" title="采集状态" size="small">
+      <template #header-extra>
+        <NButton size="small" secondary :loading="loading" @click="load">
+          <template #icon><NIcon><RefreshOutline /></NIcon></template>
+          刷新
+        </NButton>
+      </template>
       <NSpace>
         <RouterLink v-for="stack in overview.stacks" :key="stack.stack_id" :to="{ name: 'stack', params: { id: stack.stack_id } }" class="collection-link" :aria-label="`查看 ${stack.stack} 的详情，采集${stack.error ? '异常' : '正常'}`">
           <NTag :type="stack.error ? 'warning' : 'success'" size="small" class="collection-tag">
@@ -239,7 +272,6 @@ const changeType = (trend: string) => (trend === 'up' || trend === 'new' ? 'warn
           </NTag>
         </RouterLink>
       </NSpace>
-      <NButton size="tiny" quaternary :loading="loading" style="margin-top: 8px" @click="load">刷新</NButton>
     </NCard>
     </template>
     <NEmpty v-else :description="loading ? '正在加载' : '暂无数据'" />
