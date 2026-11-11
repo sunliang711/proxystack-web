@@ -69,6 +69,8 @@ function blank(): Inbound {
 function open(index: number) {
   const source = index < props.stack.xray.inbounds.length ? props.stack.xray.inbounds[index] : blank()
   editing.value = { index, draft: JSON.parse(JSON.stringify(source)) }
+  userFilter.value = ''
+  overridesOpen.value = userRefsHaveErrors.value ? ['overrides'] : []
   // 新建入站必须显式选择是否进入订阅。
   subChosen.value = index < props.stack.xray.inbounds.length
 }
@@ -118,6 +120,23 @@ function addAllUsers() {
   // 仅追加缺少的用户，保留已有凭据档案及覆盖设置。
   editing.value!.draft.users.push(...missingUsers.value.map((user) => ({ user: user.name, profile: '', remark: '', display_template: '', tag: '' })))
 }
+// 单用户设置默认收起，有错误时展开；用户多时可筛选，列表限高滚动。
+const overridesOpen = ref<string[]>([])
+const userFilter = ref('')
+const userRefsHaveErrors = computed(() => hasErrorsUnder(props.errors, `${prefix.value}.users`))
+const isCustomized = (ref: UserRef) => !!(ref.profile || ref.remark || ref.display_template || ref.tag)
+const customizedCount = computed(() => editing.value?.draft.users.filter(isCustomized).length ?? 0)
+const userRefError = (index: number) => props.errors.fields[`${prefix.value}.users[${index}].user`] || props.errors.fields[`${prefix.value}.users[${index}].profile`]
+const visibleUserRefs = computed(() => {
+  const keyword = userFilter.value.trim().toLowerCase()
+  return (editing.value?.draft.users ?? [])
+    .map((ref, index) => ({ ref, index }))
+    .filter(({ ref }) => {
+      if (!keyword) return true
+      const remark = props.users.find((u) => u.name === ref.user)?.remark ?? ''
+      return ref.user.toLowerCase().includes(keyword) || remark.toLowerCase().includes(keyword)
+    })
+})
 function profileOptions(ref: UserRef) {
   const user = props.users.find((u) => u.name === ref.user)
   return [{ label: 'default', value: '' }, ...(user?.profiles ?? []).map((p) => ({ label: p.name, value: p.name }))]
@@ -222,36 +241,50 @@ const showUsers = computed(() => isUserProtocol.value || (isAuthProtocol.value &
         <template v-if="showUsers">
           <NFormItem :label="isAuthProtocol ? '订阅用户' : '用户'" v-bind="f('users')">
             <NSpace vertical :size="6" style="width: 100%">
-              <NSelect v-model:value="selectedUsers" :options="userOptions" multiple filterable />
+              <NSelect v-model:value="selectedUsers" :options="userOptions" multiple filterable max-tag-count="responsive" />
               <NSpace justify="space-between" align="center">
                 <NText depth="3">已选 {{ selectedUserCount }} / 共 {{ users.length }}</NText>
                 <NButton size="tiny" secondary :disabled="!missingUsers.length" @click="addAllUsers">{{ !users.length ? '暂无用户' : missingUsers.length ? '添加全部' : '已全部添加' }}</NButton>
               </NSpace>
             </NSpace>
           </NFormItem>
-          <NCollapse v-if="editing.draft.users.length" class="inbound-user-overrides">
-            <NCollapseItem v-for="(ref, index) in editing.draft.users" :key="ref.user" :name="ref.user">
+          <NCollapse v-if="editing.draft.users.length" v-model:expanded-names="overridesOpen" class="inbound-user-overrides">
+            <NCollapseItem name="overrides">
               <template #header>
-                <NSpace align="center" :size="4">
-                  <EntityLink kind="user" :name="ref.user" target="_blank" rel="noopener" />
-                  <NTag v-if="ref.profile" size="small">{{ ref.profile }}</NTag>
-                  <NText v-if="f(`users[${index}].user`).feedback || f(`users[${index}].profile`).feedback" type="error">
-                    {{ f(`users[${index}].user`).feedback || f(`users[${index}].profile`).feedback }}
-                  </NText>
+                <NSpace align="center" :size="6">
+                  <span>单用户设置</span>
+                  <NText depth="3">{{ customizedCount ? `${customizedCount} 个已自定义` : '均为默认' }}</NText>
+                  <NTag v-if="userRefsHaveErrors" size="small" type="error">有错误</NTag>
                 </NSpace>
               </template>
-              <NFormItem label="档案" label-width="90">
-                <NSelect v-model:value="ref.profile" :options="profileOptions(ref)" />
-              </NFormItem>
-              <NFormItem label="remark" label-width="90">
-                <NInput v-model:value="ref.remark" placeholder="覆盖此用户在当前入站的节点名" />
-              </NFormItem>
-              <NFormItem label="展示名模板" label-width="90" v-bind="f(`users[${index}].display_template`)">
-                <TemplateInput v-model:value="ref.display_template" />
-              </NFormItem>
-              <NFormItem label="tag" label-width="90">
-                <NInput v-model:value="ref.tag" />
-              </NFormItem>
+              <NInput v-if="editing.draft.users.length > 8" v-model:value="userFilter" size="small" clearable placeholder="筛选用户" style="margin-bottom: 4px" />
+              <div class="user-override-list">
+                <NCollapse accordion :theme-overrides="{ itemMargin: '0', titlePadding: '6px 0' }">
+                  <NCollapseItem v-for="{ ref, index } in visibleUserRefs" :key="ref.user" :name="ref.user">
+                    <template #header>
+                      <NSpace align="center" :size="4">
+                        <EntityLink kind="user" :name="ref.user" target="_blank" rel="noopener" />
+                        <NTag v-if="ref.profile" size="small">{{ ref.profile }}</NTag>
+                        <NTag v-if="ref.remark || ref.display_template || ref.tag" size="small" type="info" :bordered="false">已自定义</NTag>
+                        <NText v-if="userRefError(index)" type="error">{{ userRefError(index) }}</NText>
+                      </NSpace>
+                    </template>
+                    <NFormItem label="档案" label-width="90">
+                      <NSelect v-model:value="ref.profile" :options="profileOptions(ref)" />
+                    </NFormItem>
+                    <NFormItem label="remark" label-width="90">
+                      <NInput v-model:value="ref.remark" placeholder="覆盖此用户在当前入站的节点名" />
+                    </NFormItem>
+                    <NFormItem label="展示名模板" label-width="90" v-bind="f(`users[${index}].display_template`)">
+                      <TemplateInput v-model:value="ref.display_template" />
+                    </NFormItem>
+                    <NFormItem label="tag" label-width="90">
+                      <NInput v-model:value="ref.tag" />
+                    </NFormItem>
+                  </NCollapseItem>
+                </NCollapse>
+                <NText v-if="!visibleUserRefs.length" depth="3">没有匹配的用户</NText>
+              </div>
             </NCollapseItem>
           </NCollapse>
         </template>
@@ -289,7 +322,8 @@ const showUsers = computed(() => isUserProtocol.value || (isAuthProtocol.value &
 </template>
 
 <style scoped>
-.inbound-user-overrides { margin: -8px 0 12px 120px; }
+.inbound-user-overrides { width: auto; margin: -8px 0 12px 120px; }
+.user-override-list { max-height: 360px; overflow-y: auto; padding-right: 4px; }
 @media (max-width: 767px) {
   .inbound-user-overrides { margin-left: 0; }
 }
