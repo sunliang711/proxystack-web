@@ -10,6 +10,7 @@ import { ChevronDownOutline } from '@vicons/ionicons5'
 import { api, emptyErrors, fieldState, MASKED, splitProblem, type FormErrors, type Schemas } from '../api/client'
 import ByteSizeInput from '../components/ByteSizeInput.vue'
 import ErrorList from '../components/ErrorList.vue'
+import PauseWindowsInput from '../components/PauseWindowsInput.vue'
 import SecretInput from '../components/SecretInput.vue'
 import SubscriptionCard from '../components/SubscriptionCard.vue'
 import SubscriptionGapAlert from '../components/SubscriptionGapAlert.vue'
@@ -37,6 +38,8 @@ const subscription = ref<Schemas['UserSubscriptionStatus'] | null>(null)
 const stacks = ref<Schemas['StackSummary'][]>([])
 /** 归属该用户的手工节点数，显示在「订阅」标签页。 */
 const manualNodes = ref(0)
+/** 系统设置中的每日停服时段，「跟随全局」时显示给管理员参考。 */
+const globalWindows = ref<string[]>([])
 const pausing = ref(false)
 const errors = ref<FormErrors>(emptyErrors())
 const saving = ref(false)
@@ -76,7 +79,7 @@ async function loadUsage() {
   const { data } = await api.GET('/api/users/{id}/usage', { params: { path: { id: id.value } } })
   if (data) usage.value = data
 }
-const pauseLabels = { daily: '每日阈值', quota: '额度', expired: '到期' } as const
+const pauseLabels = { daily: '每日阈值', quota: '额度', expired: '到期', schedule: '停服时段' } as const
 const statusView = computed(() => {
   if (!user.value?.enabled) return { type: 'default' as const, text: '停用' }
   const pauses = usage.value?.auto_pauses ?? []
@@ -99,6 +102,29 @@ const dailyText = computed(() => {
 })
 /** 额度和阈值下方显示的已用量，帮助判断设置是否合适。 */
 const periodUsedText = computed(() => `${new Date(usage.value?.period_start ?? 0).getFullYear() > 1 ? '本周期' : '累计'}已用 ${formatBytes(used(usage.value?.period))}`)
+/** 停服时段模式切换到「自定义」且还没有时段时，以全局时段（或 02:00-08:00）作为起点。 */
+const windowMode = computed({
+  get: () => user.value?.pause_window_mode || 'inherit',
+  set: (mode: 'inherit' | 'custom' | 'off') => {
+    if (!user.value) return
+    user.value.pause_window_mode = mode
+    // 只有自定义模式保留自己的时段（服务端同样处理），切回其他模式时清空，不留隐藏的旧值。
+    if (mode !== 'custom') {
+      user.value.pause_windows = []
+    } else if (!user.value.pause_windows?.length) {
+      const original = saved.value?.pause_window_mode === 'custom' ? saved.value.pause_windows ?? [] : []
+      user.value.pause_windows = original.length ? [...original] : globalWindows.value.length ? [...globalWindows.value] : ['02:00-08:00']
+    }
+  },
+})
+const formatWindows = (windows: string[]) => windows.map((w) => w.replace('-', '–')).join('、')
+const windowMeta = computed(() => {
+  switch (windowMode.value) {
+    case 'off': return '不受每日停服时段限制'
+    case 'custom': return '使用自己的时段，不受系统设置影响'
+    default: return globalWindows.value.length ? `跟随系统设置：每天 ${formatWindows(globalWindows.value)}` : '跟随系统设置：目前未设置停服时段'
+  }
+})
 const expireText = computed(() => {
   const value = saved.value?.expire_at
   if (!value) return '不过期'
@@ -117,8 +143,9 @@ async function load() {
   savedName.value = data.user.name
   references.value = data.references
   subscription.value = data.subscription ?? null
-  const [stackResult, nodeResult] = await Promise.all([api.GET('/api/stacks'), api.GET('/api/manual-nodes')])
+  const [stackResult, nodeResult, settingsResult] = await Promise.all([api.GET('/api/stacks'), api.GET('/api/manual-nodes'), api.GET('/api/config/settings')])
   stacks.value = stackResult.data?.stacks ?? []
+  globalWindows.value = settingsResult.data?.traffic.pause_windows ?? []
   manualNodes.value = (nodeResult.data ?? []).filter((node) => node.user === data.user.name).length
   markClean()
   void loadUsage()
@@ -412,6 +439,17 @@ async function remove() {
                   <NText depth="3" class="field-meta">延长从当前到期时间和现在两者中较晚的一个开始计算</NText>
                 </div>
               </NFormItem>
+              <NFormItem label="每日停服时段" class="span-all" v-bind="f('pause_windows', '时段内自动暂停该用户，结束后自动恢复')">
+                <div class="field-stack">
+                  <NRadioGroup v-model:value="windowMode" size="small">
+                    <NRadioButton value="inherit">跟随全局</NRadioButton>
+                    <NRadioButton value="custom">自定义</NRadioButton>
+                    <NRadioButton value="off">不限制</NRadioButton>
+                  </NRadioGroup>
+                  <PauseWindowsInput v-if="windowMode === 'custom'" :value="user.pause_windows ?? []" @update:value="(v: string[]) => (user!.pause_windows = v)" />
+                  <NText depth="3" class="field-meta">{{ windowMeta }}</NText>
+                </div>
+              </NFormItem>
             </div>
           </section>
         </NTabPane>
@@ -607,6 +645,7 @@ async function remove() {
 .pane-desc { margin: 0 0 12px; font-size: 13px; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; column-gap: 24px; }
 .field-stack { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.span-all { grid-column: 1 / -1; }
 .field-meta { font-size: 12px; }
 .status-row { display: flex; align-items: flex-start; gap: 14px; }
 .status-row > .n-switch { margin-top: 2px; }

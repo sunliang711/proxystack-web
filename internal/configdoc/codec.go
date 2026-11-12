@@ -126,6 +126,7 @@ func (s *Settings) Normalize() {
 	if s.Traffic.Interval == 0 {
 		s.Traffic = defaults.Traffic
 	}
+	s.Traffic.PauseWindows = normalizePauseWindows(s.Traffic.PauseWindows)
 	if s.Notify.WarnPercent == 0 {
 		s.Notify = defaults.Notify
 	}
@@ -155,6 +156,15 @@ func (u *User) Normalize() {
 	}
 	if u.DailyLimitAction == "" {
 		u.DailyLimitAction = DailyActionPause
+	}
+	if u.PauseWindowMode == "" {
+		u.PauseWindowMode = PauseWindowInherit
+	}
+	// 只有自定义模式使用自己的时段，其他模式不保留，避免隐藏的旧值参与校验。
+	if u.PauseWindowMode == PauseWindowCustom {
+		u.PauseWindows = normalizePauseWindows(u.PauseWindows)
+	} else {
+		u.PauseWindows = []string{}
 	}
 }
 

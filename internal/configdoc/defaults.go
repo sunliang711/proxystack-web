@@ -59,6 +59,7 @@ func DefaultSettings() Settings {
 		},
 		Traffic: TrafficSettings{
 			Enabled: true, Interval: 10, RetentionMinuteDays: 7, RetentionHourDays: 180, RetentionDayDays: 730,
+			PauseWindows: []string{},
 		},
 		Notify: NotifySettings{
 			Port: 587, Security: SMTPSecuritySTARTTLS, To: []string{},

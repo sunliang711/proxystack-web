@@ -371,6 +371,8 @@ type User struct {
 	Note             string `json:"note"`
 	DailyLimitBytes  int64  `json:"daily_limit_bytes"`
 	DailyLimitAction string `json:"daily_limit_action"`
+	PauseWindowMode  string `json:"pause_window_mode"`
+	PauseWindows     string `json:"pause_windows"`
 }
 
 type UserAutoPause struct {
@@ -409,4 +411,9 @@ type UserUsage struct {
 	PeriodStart int64 `json:"period_start"`
 	Up          int64 `json:"up"`
 	Down        int64 `json:"down"`
+}
+
+type UserWindowExempt struct {
+	UserID int64 `json:"user_id"`
+	Until  int64 `json:"until"`
 }

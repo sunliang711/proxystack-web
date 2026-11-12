@@ -144,7 +144,8 @@
             "enum": [
               "daily",
               "quota",
-              "expired"
+              "expired",
+              "schedule"
             ],
             "type": "string"
           },
@@ -5084,6 +5085,13 @@
             "format": "int64",
             "type": "integer"
           },
+          "pause_windows": {
+            "description": "每日停服时段，HH:MM-HH:MM，可跨零点；用户可单独设置",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "retention_day_days": {
             "format": "int64",
             "minimum": 0,
@@ -5462,6 +5470,23 @@
           "note": {
             "type": "string"
           },
+          "pause_window_mode": {
+            "description": "每日停服时段：inherit 跟随全局，custom 使用自己的时段，off 不限制",
+            "enum": [
+              "",
+              "inherit",
+              "custom",
+              "off"
+            ],
+            "type": "string"
+          },
+          "pause_windows": {
+            "description": "pause_window_mode=custom 时的停服时段，HH:MM-HH:MM，可跨零点",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "paused_stacks": {
             "items": {
               "type": "string"
@@ -5737,6 +5762,10 @@
           "user_id": {
             "format": "int64",
             "type": "integer"
+          },
+          "window_exempt_until": {
+            "format": "date-time",
+            "type": "string"
           }
         },
         "required": [
@@ -5746,6 +5775,7 @@
           "period_start",
           "next_reset",
           "exempt",
+          "window_exempt_until",
           "auto_pauses",
           "daily",
           "by_stack"
@@ -11588,7 +11618,8 @@
               "enum": [
                 "daily",
                 "quota",
-                "expired"
+                "expired",
+                "schedule"
               ],
               "type": "string"
             }

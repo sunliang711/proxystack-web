@@ -1814,7 +1814,7 @@ export interface components {
         };
         AutoPause: {
             /** @enum {string} */
-            reason: "daily" | "quota" | "expired";
+            reason: "daily" | "quota" | "expired" | "schedule";
             /** Format: date-time */
             resume_at: string;
             /** Format: date-time */
@@ -3210,6 +3210,8 @@ export interface components {
              * @enum {integer}
              */
             interval: 5 | 10 | 30;
+            /** @description 每日停服时段，HH:MM-HH:MM，可跨零点；用户可单独设置 */
+            pause_windows?: string[];
             /** Format: int64 */
             retention_day_days: number;
             /** Format: int64 */
@@ -3319,6 +3321,13 @@ export interface components {
             id?: number;
             name: string;
             note: string;
+            /**
+             * @description 每日停服时段：inherit 跟随全局，custom 使用自己的时段，off 不限制
+             * @enum {string}
+             */
+            pause_window_mode?: "" | "inherit" | "custom" | "off";
+            /** @description pause_window_mode=custom 时的停服时段，HH:MM-HH:MM，可跨零点 */
+            pause_windows?: string[];
             paused_stacks?: string[];
             profiles: components["schemas"]["Profile"][];
             /** Format: int64 */
@@ -3392,6 +3401,8 @@ export interface components {
             today: components["schemas"]["Bytes"];
             /** Format: int64 */
             user_id: number;
+            /** Format: date-time */
+            window_exempt_until: string;
         };
         Xray: {
             /**
@@ -7055,7 +7066,7 @@ export interface operations {
             header?: never;
             path: {
                 id: number;
-                reason: "daily" | "quota" | "expired";
+                reason: "daily" | "quota" | "expired" | "schedule";
             };
             cookie?: never;
         };

@@ -151,6 +151,8 @@ type TrafficSettings struct {
 	RetentionMonthDays  int `json:"retention_month_days" yaml:"retention_month_days" minimum:"0"`
 	// DisconnectOnPause 为真时自动暂停后重启受影响的 xray，切断已建立的连接。
 	DisconnectOnPause bool `json:"disconnect_on_pause" yaml:"disconnect_on_pause"`
+	// PauseWindows 是全部用户默认的每日停服时段，按基本设置的时区计算，时段内自动暂停用户。
+	PauseWindows []string `json:"pause_windows" yaml:"pause_windows,omitempty" required:"false" doc:"每日停服时段，HH:MM-HH:MM，可跨零点；用户可单独设置"`
 }
 
 // 邮件加密方式。
@@ -162,13 +164,13 @@ const (
 
 // 通知事件。
 const (
-	EventDailyLimit   = "daily_limit"
-	EventDailyWarning = "daily_warning"
-	EventQuotaLimit   = "quota_limit"
-	EventQuotaWarning = "quota_warning"
-	EventExpired      = "expired"
-	EventExpiring     = "expiring"
-	EventEgressDown = "egress_down"
+	EventDailyLimit      = "daily_limit"
+	EventDailyWarning    = "daily_warning"
+	EventQuotaLimit      = "quota_limit"
+	EventQuotaWarning    = "quota_warning"
+	EventExpired         = "expired"
+	EventExpiring        = "expiring"
+	EventEgressDown      = "egress_down"
 	EventEgressRecovered = "egress_recovered"
 )
 
@@ -310,13 +312,16 @@ type User struct {
 	SubToken        string `json:"sub_token" yaml:"sub_token"`
 	QuotaBytes      int64  `json:"quota_bytes" yaml:"quota_bytes" minimum:"0"`
 	// DailyLimitBytes 是每日用量阈值（上下行合计，按设置时区的自然日统计），0 表示不限。
-	DailyLimitBytes  int64     `json:"daily_limit_bytes" yaml:"daily_limit_bytes,omitempty" minimum:"0" required:"false"`
-	DailyLimitAction string    `json:"daily_limit_action" yaml:"daily_limit_action,omitempty" enum:"pause,notify" required:"false" doc:"达到每日阈值后：pause 暂停并通知，notify 只通知"`
-	ResetMode        string    `json:"reset_mode" yaml:"reset_mode" enum:"none,monthly"`
-	ResetDay         int       `json:"reset_day" yaml:"reset_day" minimum:"0" maximum:"28"`
-	ExpireAt         string    `json:"expire_at" yaml:"expire_at,omitempty" doc:"RFC 3339 时间，空表示不过期"`
-	Note             string    `json:"note" yaml:"note,omitempty"`
-	Profiles         []Profile `json:"profiles" yaml:"profiles,omitempty"`
+	DailyLimitBytes  int64  `json:"daily_limit_bytes" yaml:"daily_limit_bytes,omitempty" minimum:"0" required:"false"`
+	DailyLimitAction string `json:"daily_limit_action" yaml:"daily_limit_action,omitempty" enum:"pause,notify" required:"false" doc:"达到每日阈值后：pause 暂停并通知，notify 只通知"`
+	ResetMode        string `json:"reset_mode" yaml:"reset_mode" enum:"none,monthly"`
+	ResetDay         int    `json:"reset_day" yaml:"reset_day" minimum:"0" maximum:"28"`
+	ExpireAt         string `json:"expire_at" yaml:"expire_at,omitempty" doc:"RFC 3339 时间，空表示不过期"`
+	// PauseWindowMode 决定每日停服时段：inherit 跟随全局设置，custom 使用 PauseWindows，off 不限制。
+	PauseWindowMode string    `json:"pause_window_mode" yaml:"pause_window_mode,omitempty" enum:",inherit,custom,off" required:"false" doc:"每日停服时段：inherit 跟随全局，custom 使用自己的时段，off 不限制"`
+	PauseWindows    []string  `json:"pause_windows" yaml:"pause_windows,omitempty" required:"false" doc:"pause_window_mode=custom 时的停服时段，HH:MM-HH:MM，可跨零点"`
+	Note            string    `json:"note" yaml:"note,omitempty"`
+	Profiles        []Profile `json:"profiles" yaml:"profiles,omitempty"`
 	// PausedStacks 是手动暂停该用户的 stack；Enabled 为 false 时在全部 stack 上暂停。
 	PausedStacks []string `json:"paused_stacks" yaml:"paused_stacks,omitempty" required:"false"`
 }
@@ -334,16 +339,16 @@ type Profile struct {
 
 // Stack 是一组 xray + mihomo 进程的配置。
 type Stack struct {
-	ID             int64    `json:"id,omitempty" yaml:"-"`
-	Name           string   `json:"name" yaml:"name"`
-	Enabled        bool     `json:"enabled" yaml:"enabled"`
-	DesiredRunning bool     `json:"desired_running" yaml:"desired_running"`
+	ID             int64  `json:"id,omitempty" yaml:"-"`
+	Name           string `json:"name" yaml:"name"`
+	Enabled        bool   `json:"enabled" yaml:"enabled"`
+	DesiredRunning bool   `json:"desired_running" yaml:"desired_running"`
 	// DailyLimitBytes 是 Stack 每日用量阈值（上下行合计，按设置时区的自然日统计），0 表示不限。
-	DailyLimitBytes int64 `json:"daily_limit_bytes" yaml:"daily_limit_bytes,omitempty" minimum:"0" required:"false"`
-	Role           string   `json:"role" yaml:"role" enum:"edge,auto"`
-	Labels         []string `json:"labels" yaml:"labels,omitempty"`
-	Xray           Xray     `json:"xray" yaml:"xray"`
-	Mihomo         Mihomo   `json:"mihomo" yaml:"mihomo"`
+	DailyLimitBytes int64    `json:"daily_limit_bytes" yaml:"daily_limit_bytes,omitempty" minimum:"0" required:"false"`
+	Role            string   `json:"role" yaml:"role" enum:"edge,auto"`
+	Labels          []string `json:"labels" yaml:"labels,omitempty"`
+	Xray            Xray     `json:"xray" yaml:"xray"`
+	Mihomo          Mihomo   `json:"mihomo" yaml:"mihomo"`
 	// DirectUsers 可获取外部上游直连节点，与入站用户列表独立。
 	DirectUsers []string `json:"direct_users" yaml:"direct_users,omitempty" required:"false"`
 	// DirectSuffix 原样追加到直连节点名，空值使用默认后缀。

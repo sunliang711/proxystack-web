@@ -473,7 +473,7 @@ type DayUsage struct {
 
 // AutoPause 是一条生效中的自动暂停。
 type AutoPause struct {
-	Reason string    `json:"reason" enum:"daily,quota,expired"`
+	Reason string    `json:"reason" enum:"daily,quota,expired,schedule"`
 	Since  time.Time `json:"since"`
 	// ResumeAt 是预计恢复时间，零值表示要由管理员调整后才恢复。
 	ResumeAt time.Time `json:"resume_at"`
@@ -488,10 +488,12 @@ type UserUsage struct {
 	PeriodStart time.Time `json:"period_start"`
 	NextReset   time.Time `json:"next_reset"`
 	// Exempt 表示当天已解除每日暂停，不再按每日阈值暂停。
-	Exempt     bool              `json:"exempt"`
-	AutoPauses []AutoPause       `json:"auto_pauses"`
-	Daily      []DayUsage        `json:"daily"`
-	ByStack    []StackDailyUsage `json:"by_stack"`
+	Exempt bool `json:"exempt"`
+	// WindowExemptUntil 非零时表示本次停服时段已放行，到该时刻为止不按停服时段暂停。
+	WindowExemptUntil time.Time         `json:"window_exempt_until"`
+	AutoPauses        []AutoPause       `json:"auto_pauses"`
+	Daily             []DayUsage        `json:"daily"`
+	ByStack           []StackDailyUsage `json:"by_stack"`
 }
 
 // UsersUsage 返回全部用户的今日用量、本周期用量和自动暂停，不含日用量趋势。
@@ -521,6 +523,10 @@ func (s *Service) UsersUsage(ctx context.Context) ([]UserUsage, error) {
 		if err != nil {
 			return err
 		}
+		exempts, err := q.ListWindowExempts(ctx, now.Unix())
+		if err != nil {
+			return err
+		}
 		out = make([]UserUsage, 0, len(users))
 		for _, user := range users {
 			item := UserUsage{UserID: user.ID, AutoPauses: []AutoPause{}, Daily: []DayUsage{}, ByStack: []StackDailyUsage{}}
@@ -542,6 +548,11 @@ func (s *Service) UsersUsage(ctx context.Context) ([]UserUsage, error) {
 			}
 			item.Today.Add(pending[user.ID])
 			item.Period.Add(pending[user.ID])
+			for _, row := range exempts {
+				if row.UserID == user.ID {
+					item.WindowExemptUntil = time.Unix(row.Until, 0)
+				}
+			}
 			for _, row := range pauses {
 				if row.UserID != user.ID {
 					continue
@@ -552,6 +563,8 @@ func (s *Service) UsersUsage(ctx context.Context) ([]UserUsage, error) {
 					pause.ResumeAt = traffic.DayStart(now, loc).AddDate(0, 0, 1)
 				case PauseQuota:
 					pause.ResumeAt = item.NextReset
+				case PauseSchedule:
+					pause.ResumeAt, _ = pauseWindowEnd(now.In(loc), userPauseWindows(user, settings))
 				}
 				item.AutoPauses = append(item.AutoPauses, pause)
 			}

@@ -18,7 +18,7 @@ import { tipTitle } from '../util/table'
 type User = Schemas['User']
 type Usage = Schemas['UserUsage']
 
-const pauseLabels = { daily: '每日阈值', quota: '额度', expired: '到期' } as const
+const pauseLabels = { daily: '每日阈值', quota: '额度', expired: '到期', schedule: '停服时段' } as const
 
 const router = useRouter()
 const route = useRoute()

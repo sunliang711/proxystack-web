@@ -308,6 +308,11 @@ func validateUsers(issues *Issues, doc *Document) {
 			issues.add(path+".daily_limit_bytes", "must not be negative")
 		}
 		checkEnum(issues, path+".daily_limit_action", user.DailyLimitAction, DailyActionPause, DailyActionNotify)
+		checkEnum(issues, path+".pause_window_mode", user.PauseWindowMode, PauseWindowInherit, PauseWindowCustom, PauseWindowOff)
+		checkPauseWindows(issues, path+".pause_windows", user.PauseWindows)
+		if user.PauseWindowMode == PauseWindowCustom && len(user.PauseWindows) == 0 {
+			issues.add(path+".pause_windows", "at least one window is required for custom mode")
+		}
 		switch user.ResetMode {
 		case "none":
 		case "monthly":
@@ -754,6 +759,7 @@ func validateTrafficNotify(issues *Issues, settings Settings) {
 			issues.add("settings.traffic."+field, "must be 0 (keep forever) or at least %d days", retention.minimum)
 		}
 	}
+	checkPauseWindows(issues, "settings.traffic.pause_windows", traffic.PauseWindows)
 	notify := settings.Notify
 	checkEnum(issues, "settings.notify.security", notify.Security, SMTPSecurityNone, SMTPSecuritySTARTTLS, SMTPSecurityTLS)
 	if notify.WarnPercent < 1 || notify.WarnPercent > 100 {

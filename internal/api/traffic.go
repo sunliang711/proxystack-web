@@ -87,7 +87,7 @@ type stackUsageOutput struct {
 
 type releasePauseInput struct {
 	ID     int64  `path:"id"`
-	Reason string `path:"reason" enum:"daily,quota,expired"`
+	Reason string `path:"reason" enum:"daily,quota,expired,schedule"`
 }
 
 type notificationsInput struct {

@@ -15,7 +15,7 @@ const props = defineProps<{ userId: number; dailyLimit: number; quota: number }>
 const emit = defineEmits<{ update: [usage: Schemas['UserUsage']] }>()
 const message = useMessage()
 const stackId = ref<number | null>(null)
-const labels = { daily: '每日阈值', quota: '月度额度', expired: '到期' } as const
+const labels = { daily: '每日阈值', quota: '月度额度', expired: '到期', schedule: '停服时段' } as const
 
 const { data: usage, loading, error, updatedAt, refresh: load } = usePolling<Schemas['UserUsage']>(() => props.userId, async (signal) => {
   const { data, error } = await api.GET('/api/users/{id}/usage', { params: { path: { id: props.userId } }, signal })
@@ -32,15 +32,16 @@ const total = (bytes: { up: number; down: number }) => bytes.up + bytes.down
 const percent = (used: number, limit: number) => Math.min(100, Math.round((used / limit) * 100))
 const status = (value: number) => (value >= 100 ? 'error' : value >= 80 ? 'warning' : 'success')
 
-async function release() {
-  const { error } = await api.DELETE('/api/users/{id}/auto-pause/{reason}', { params: { path: { id: props.userId, reason: 'daily' } } })
+async function release(reason: 'daily' | 'schedule') {
+  const { error } = await api.DELETE('/api/users/{id}/auto-pause/{reason}', { params: { path: { id: props.userId, reason } } })
   if (error) {
     message.error(problemMessage(error))
     return
   }
-  message.success('已解除，今天不再按每日阈值暂停')
+  message.success(reason === 'daily' ? '已解除，今天不再按每日阈值暂停' : '已放行，本次停服时段内不再暂停')
   load()
 }
+const hasTime = (value: string) => new Date(value).getFullYear() > 1
 
 const selectedStacks = computed(() => (usage.value?.by_stack ?? []).filter((stack) => !stackId.value || stack.stack_id === stackId.value))
 const selectedTotal = computed(() => selectedStacks.value.reduce((sum, stack) => ({ today: sum.today + total(stack.today), recent: sum.recent + total(stack.recent) }), { today: 0, recent: 0 }))
@@ -84,14 +85,19 @@ const trafficLink = computed(() => ({
       <NAlert v-for="pause in usage.auto_pauses" :key="pause.reason" type="warning" :bordered="false" :title="`自动暂停：${labels[pause.reason]}`">
         <NSpace align="center" :size="8">
           <NText>{{ formatTime(pause.since) }} 起<template v-if="new Date(pause.resume_at).getFullYear() > 1">，预计 {{ formatTime(pause.resume_at) }} 恢复</template>。</NText>
-          <NPopconfirm v-if="pause.reason === 'daily'" @positive-click="release">
+          <NPopconfirm v-if="pause.reason === 'daily'" @positive-click="release('daily')">
             <template #trigger><NButton size="tiny">解除</NButton></template>
             解除后今天不再按每日阈值暂停，次日重新判定。
+          </NPopconfirm>
+          <NPopconfirm v-else-if="pause.reason === 'schedule'" @positive-click="release('schedule')">
+            <template #trigger><NButton size="tiny">本时段放行</NButton></template>
+            放行到这段停服结束为止，下一次停服时段照常暂停。
           </NPopconfirm>
           <NText v-else depth="3">调整{{ pause.reason === 'quota' ? '额度' : '到期时间' }}后自动解除。</NText>
         </NSpace>
       </NAlert>
       <NText v-if="usage.exempt" depth="3">今天已解除每日暂停，次日重新判定。</NText>
+      <NText v-if="hasTime(usage.window_exempt_until)" depth="3">本次停服时段已放行，至 {{ formatTime(usage.window_exempt_until) }}。</NText>
       <div class="usage-tiles">
         <div class="usage-tile">
           <NText depth="3" class="tile-label">今日用量（全部 Stack）</NText>

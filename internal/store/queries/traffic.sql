@@ -48,6 +48,16 @@ INSERT OR IGNORE INTO user_auto_pause (user_id, reason, since) VALUES (?, ?, ?);
 -- name: DeleteAutoPause :exec
 DELETE FROM user_auto_pause WHERE user_id = ? AND reason = ?;
 
+-- name: ListWindowExempts :many
+SELECT * FROM user_window_exempt WHERE until > ? ORDER BY user_id;
+
+-- name: UpsertWindowExempt :exec
+INSERT INTO user_window_exempt (user_id, until) VALUES (?, ?)
+ON CONFLICT (user_id) DO UPDATE SET until = excluded.until;
+
+-- name: DeleteWindowExemptsBefore :exec
+DELETE FROM user_window_exempt WHERE until <= ?;
+
 -- name: InsertNotification :execrows
 INSERT OR IGNORE INTO notifications (at, event, user_id, user_name, dedup_key, subject, body, status, next_attempt_at, stack_id, stack_name, incident)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);

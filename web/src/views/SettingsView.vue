@@ -11,6 +11,7 @@ import { randomString } from '../util/generate'
 import SecretInput from '../components/SecretInput.vue'
 import TemplateInput from '../components/TemplateInput.vue'
 import ErrorList from '../components/ErrorList.vue'
+import PauseWindowsInput from '../components/PauseWindowsInput.vue'
 import SettingsSection from '../components/SettingsSection.vue'
 import EntityLink from '../components/EntityLink.vue'
 import { SearchOutline } from '@vicons/ionicons5'
@@ -380,6 +381,9 @@ async function save() {
             </NFormItem>
             <NFormItem label="暂停时断开现有连接" v-bind="f('traffic.disconnect_on_pause', '自动暂停后重启受影响的 xray 以切断已建立的连接，其他用户的连接会被短暂中断')">
               <NSwitch v-model:value="form.traffic.disconnect_on_pause" />
+            </NFormItem>
+            <NFormItem label="每日停服时段" v-bind="f('traffic.pause_windows', '时段内自动暂停用户，结束后自动恢复；按基本设置的时区计算，可跨零点。用户可在详情页改用自己的时段或不受限制。留空表示不停服')">
+              <PauseWindowsInput :value="form.traffic.pause_windows ?? []" @update:value="(v: string[]) => (form.traffic.pause_windows = v)" />
             </NFormItem>
           </SettingsSection>
           <SettingsSection v-show="sectionShown('notify')" title="通知" name="notify">

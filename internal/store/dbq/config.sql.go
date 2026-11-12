@@ -795,7 +795,7 @@ func (q *Queries) ListUserProfiles(ctx context.Context) ([]UserProfile, error) {
 
 const listUsers = `-- name: ListUsers :many
 
-SELECT id, position, name, enabled, uuid, ss_password, remark, display_template, tag, sub_token, quota_bytes, reset_mode, reset_day, expire_at, note, daily_limit_bytes, daily_limit_action FROM users ORDER BY position, id
+SELECT id, position, name, enabled, uuid, ss_password, remark, display_template, tag, sub_token, quota_bytes, reset_mode, reset_day, expire_at, note, daily_limit_bytes, daily_limit_action, pause_window_mode, pause_windows FROM users ORDER BY position, id
 `
 
 // Config tables are saved as a whole: child rows are deleted, users and stacks are upserted,
@@ -827,6 +827,8 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.Note,
 			&i.DailyLimitBytes,
 			&i.DailyLimitAction,
+			&i.PauseWindowMode,
+			&i.PauseWindows,
 		); err != nil {
 			return nil, err
 		}
@@ -948,15 +950,16 @@ func (q *Queries) UpsertStack(ctx context.Context, arg UpsertStackParams) (int64
 
 const upsertUser = `-- name: UpsertUser :one
 INSERT INTO users (id, position, name, enabled, uuid, ss_password, remark, display_template, tag,
-                   sub_token, quota_bytes, daily_limit_bytes, daily_limit_action, reset_mode, reset_day, expire_at, note)
-VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   sub_token, quota_bytes, daily_limit_bytes, daily_limit_action, reset_mode, reset_day, expire_at, note,
+                   pause_window_mode, pause_windows)
+VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (id) DO UPDATE SET
     position = excluded.position, name = excluded.name, enabled = excluded.enabled, uuid = excluded.uuid,
     ss_password = excluded.ss_password, remark = excluded.remark, display_template = excluded.display_template,
     tag = excluded.tag, sub_token = excluded.sub_token, quota_bytes = excluded.quota_bytes,
     daily_limit_bytes = excluded.daily_limit_bytes, daily_limit_action = excluded.daily_limit_action,
     reset_mode = excluded.reset_mode, reset_day = excluded.reset_day, expire_at = excluded.expire_at,
-    note = excluded.note
+    note = excluded.note, pause_window_mode = excluded.pause_window_mode, pause_windows = excluded.pause_windows
 RETURNING id
 `
 
@@ -978,6 +981,8 @@ type UpsertUserParams struct {
 	ResetDay         int64       `json:"reset_day"`
 	ExpireAt         string      `json:"expire_at"`
 	Note             string      `json:"note"`
+	PauseWindowMode  string      `json:"pause_window_mode"`
+	PauseWindows     string      `json:"pause_windows"`
 }
 
 func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (int64, error) {
@@ -999,6 +1004,8 @@ func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (int64, 
 		arg.ResetDay,
 		arg.ExpireAt,
 		arg.Note,
+		arg.PauseWindowMode,
+		arg.PauseWindows,
 	)
 	var id int64
 	err := row.Scan(&id)

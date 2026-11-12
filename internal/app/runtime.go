@@ -609,7 +609,8 @@ func (s *Service) syncDisabled(ctx context.Context, current *configdoc.Document,
 			continue
 		}
 		notes = append(notes, s.hotToggle(ctx, rendered.Set, row.StackName, paused, resumed)...)
-		if disconnect && len(paused) > 0 {
+		// 自动暂停作用于全部 stack，只有确实引用了被暂停用户的 stack 才需要重启断开连接。
+		if disconnect && stackReferencesAny(rendered.Set, row.StackName, paused) {
 			unit := units.Name(units.Xray, row.StackName)
 			if states, err := s.Units.States(ctx, []string{unit}); err == nil && states[unit].Running() {
 				if err := s.Units.Restart(ctx, unit); err != nil {
@@ -714,6 +715,23 @@ func (s *Service) hotToggle(ctx context.Context, set domain.StackSet, stackName 
 		}
 	}
 	return notes
+}
+
+// stackReferencesAny 判断 stack 的入站是否引用了 users 中的任一用户。
+func stackReferencesAny(set domain.StackSet, stackName string, users []string) bool {
+	for _, stack := range set.Stacks {
+		if stack.Name != stackName {
+			continue
+		}
+		for _, inbound := range stack.Xray.Inbounds {
+			for _, user := range inbound.Users {
+				if slices.Contains(users, user.User) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func equalDisabled(a, b domain.DisabledUserSet) bool {

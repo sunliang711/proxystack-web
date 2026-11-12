@@ -160,6 +160,15 @@ func (q *Queries) DeleteUserDailyBefore(ctx context.Context, day string) error {
 	return err
 }
 
+const deleteWindowExemptsBefore = `-- name: DeleteWindowExemptsBefore :exec
+DELETE FROM user_window_exempt WHERE until <= ?
+`
+
+func (q *Queries) DeleteWindowExemptsBefore(ctx context.Context, until int64) error {
+	_, err := q.db.ExecContext(ctx, deleteWindowExemptsBefore, until)
+	return err
+}
+
 const exemptUserDaily = `-- name: ExemptUserDaily :exec
 INSERT INTO user_daily_usage (user_id, day, exempt) VALUES (?, ?, 1)
 ON CONFLICT (user_id, day) DO UPDATE SET exempt = 1
@@ -667,6 +676,33 @@ func (q *Queries) ListUserUsage(ctx context.Context) ([]UserUsage, error) {
 	return items, nil
 }
 
+const listWindowExempts = `-- name: ListWindowExempts :many
+SELECT user_id, until FROM user_window_exempt WHERE until > ? ORDER BY user_id
+`
+
+func (q *Queries) ListWindowExempts(ctx context.Context, until int64) ([]UserWindowExempt, error) {
+	rows, err := q.db.QueryContext(ctx, listWindowExempts, until)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []UserWindowExempt
+	for rows.Next() {
+		var i UserWindowExempt
+		if err := rows.Scan(&i.UserID, &i.Until); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const putTrafficHeartbeat = `-- name: PutTrafficHeartbeat :exec
 INSERT INTO traffic_heartbeat (id, at) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET at = excluded.at
 `
@@ -733,5 +769,20 @@ func (q *Queries) UpsertTrafficName(ctx context.Context, arg UpsertTrafficNamePa
 		arg.Name,
 		arg.Role,
 	)
+	return err
+}
+
+const upsertWindowExempt = `-- name: UpsertWindowExempt :exec
+INSERT INTO user_window_exempt (user_id, until) VALUES (?, ?)
+ON CONFLICT (user_id) DO UPDATE SET until = excluded.until
+`
+
+type UpsertWindowExemptParams struct {
+	UserID int64 `json:"user_id"`
+	Until  int64 `json:"until"`
+}
+
+func (q *Queries) UpsertWindowExempt(ctx context.Context, arg UpsertWindowExemptParams) error {
+	_, err := q.db.ExecContext(ctx, upsertWindowExempt, arg.UserID, arg.Until)
 	return err
 }

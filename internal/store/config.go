@@ -96,6 +96,7 @@ func LoadDocument(ctx context.Context, q *dbq.Queries) (*configdoc.Document, err
 			QuotaBytes: row.QuotaBytes, DailyLimitBytes: row.DailyLimitBytes, DailyLimitAction: row.DailyLimitAction,
 			ResetMode: row.ResetMode, ResetDay: int(row.ResetDay),
 			ExpireAt: row.ExpireAt, Note: row.Note, Profiles: []configdoc.Profile{},
+			PauseWindowMode: row.PauseWindowMode, PauseWindows: configdoc.SplitPauseWindows(row.PauseWindows),
 		})
 	}
 	profiles, err := q.ListUserProfiles(ctx)
@@ -411,6 +412,7 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 			Tag: user.Tag, SubToken: user.SubToken, QuotaBytes: user.QuotaBytes, DailyLimitBytes: user.DailyLimitBytes,
 			DailyLimitAction: user.DailyLimitAction, ResetMode: user.ResetMode,
 			ResetDay: int64(user.ResetDay), ExpireAt: user.ExpireAt, Note: user.Note,
+			PauseWindowMode: user.PauseWindowMode, PauseWindows: configdoc.JoinPauseWindows(user.PauseWindows),
 		})
 		if err != nil {
 			return fmt.Errorf("save user %s: %w", user.Name, err)
