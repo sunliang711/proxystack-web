@@ -44,7 +44,7 @@ const statusView: Record<Item['status'], { label: string; type: 'default' | 'inf
   skipped: { label: '未发送', type: 'default' },
 }
 
-/** 说明列：失败时显示错误；未发送且没有记录原因时，原因是邮件通知未开启或未订阅该事件。 */
+/** 说明列：失败时显示错误，未发送时显示记录时写明的原因；早期记录没有写原因，只能给出两种可能。 */
 function note(row: Item): string {
   if (row.error) return row.error
   if (row.status === 'skipped') return '邮件通知未开启或未订阅此事件，只记录不发送'
@@ -65,7 +65,7 @@ const columns: DataTableColumns<Item> = [
   { title: '尝试次数', key: 'attempts', width: 90 },
   {
     title: '说明', key: 'error', ellipsis: { tooltip: true },
-    render: (row) => (row.error || row.status !== 'skipped' ? note(row) : h(NText, { depth: 3 }, () => note(row))),
+    render: (row) => (row.status === 'skipped' ? h(NText, { depth: 3 }, () => note(row)) : note(row)),
   },
   {
     title: '', key: 'actions', width: 80,

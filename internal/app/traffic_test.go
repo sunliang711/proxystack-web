@@ -247,6 +247,34 @@ func TestDailyLimitNotifyOnly(t *testing.T) {
 	require.Len(t, items, 1)
 	require.Equal(t, configdoc.EventDailyLimit, items[0].Event)
 	require.Equal(t, app.NotifySkipped, items[0].Status, "mail is not enabled")
+	require.Equal(t, "邮件通知未开启，只记录不发送", items[0].Error)
+}
+
+// TestUnsubscribedEventRecordsReason 验证邮件已开启但事件未勾选时只记录，并写明是哪个事件未勾选。
+func TestUnsubscribedEventRecordsReason(t *testing.T) {
+	ctx := context.Background()
+	h := newTrafficHarness(t)
+	doc, err := h.svc.LoadConfig(ctx)
+	require.NoError(t, err)
+	settings := *doc.Settings
+	settings.Notify.Enabled = true
+	settings.Notify.Host, settings.Notify.Port = "smtp.example.com", 587
+	settings.Notify.From, settings.Notify.To = "panel@example.com", []string{"admin@example.com"}
+	settings.Notify.Events = []string{configdoc.EventDailyLimit}
+	_, err = h.svc.UpdateSettings(ctx, h.actor, settings)
+	require.NoError(t, err)
+	h.update(t, func(u *configdoc.User) { u.DailyLimitBytes = 1000 })
+	h.use(t, 900, 0)
+	items, err := h.svc.ListNotifications(ctx, 10)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.Equal(t, configdoc.EventDailyWarning, items[0].Event)
+	require.Equal(t, app.NotifySkipped, items[0].Status)
+	require.Equal(t, "通知事件中未勾选「每日用量预警」，只记录不发送", items[0].Error)
+	h.svc.DeliverNotifications(ctx)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	require.Empty(t, h.mails)
 }
 
 // TestQuotaPausesAndResetsWithPeriod 验证额度超限暂停，到重置日自动恢复；调高额度当场解除。

@@ -95,6 +95,17 @@ func stackUsageEvent(stackID int64, stackName, period string, used, limit int64)
 	}}
 }
 
+// notifyStatus 决定新记录的通知是否进入发送队列；不发送时返回写在记录上的具体原因。
+func notifyStatus(settings configdoc.NotifySettings, event string) (status, reason string) {
+	switch {
+	case !settings.Enabled:
+		return NotifySkipped, "邮件通知未开启，只记录不发送"
+	case !slices.Contains(settings.Events, event):
+		return NotifySkipped, fmt.Sprintf("通知事件中未勾选「%s」，只记录不发送", eventLabels[event])
+	}
+	return NotifyPending, ""
+}
+
 // enqueueNotification 记录一条通知。邮件未启用或未订阅该事件时只记录、不发送。
 func (s *Service) enqueueNotification(ctx context.Context, settings configdoc.Settings, event pendingEvent) {
 	key := fmt.Sprintf("%s:%d:%s", event.event, event.user.id, event.period)
@@ -104,11 +115,7 @@ func (s *Service) enqueueNotification(ctx context.Context, settings configdoc.Se
 	if s.autoPause.notified[key] {
 		return
 	}
-	notifySettings := settings.Notify
-	status := NotifySkipped
-	if notifySettings.Enabled && slices.Contains(notifySettings.Events, event.event) {
-		status = NotifyPending
-	}
+	status, reason := notifyStatus(settings.Notify, event.event)
 	label := eventLabels[event.event]
 	subjectName := event.user.name
 	lines := []string{"事件：" + label}
@@ -133,7 +140,7 @@ func (s *Service) enqueueNotification(ctx context.Context, settings configdoc.Se
 	err := s.Store.InTx(ctx, func(q *dbq.Queries) error {
 		_, err := q.InsertNotification(ctx, dbq.InsertNotificationParams{
 			At: s.Now().Unix(), Event: event.event, UserID: event.user.id, UserName: event.user.name, DedupKey: key,
-			Subject: subject, Body: strings.Join(lines, "\n") + "\n", Status: status, StackID: event.stackID, StackName: event.stackName,
+			Subject: subject, Body: strings.Join(lines, "\n") + "\n", Status: status, Error: reason, StackID: event.stackID, StackName: event.stackName,
 		})
 		return err
 	})

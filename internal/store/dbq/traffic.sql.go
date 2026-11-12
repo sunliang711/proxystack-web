@@ -288,8 +288,8 @@ func (q *Queries) InsertAutoPause(ctx context.Context, arg InsertAutoPauseParams
 }
 
 const insertNotification = `-- name: InsertNotification :execrows
-INSERT OR IGNORE INTO notifications (at, event, user_id, user_name, dedup_key, subject, body, status, next_attempt_at, stack_id, stack_name, incident)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT OR IGNORE INTO notifications (at, event, user_id, user_name, dedup_key, subject, body, status, error, next_attempt_at, stack_id, stack_name, incident)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertNotificationParams struct {
@@ -301,6 +301,7 @@ type InsertNotificationParams struct {
 	Subject       string `json:"subject"`
 	Body          string `json:"body"`
 	Status        string `json:"status"`
+	Error         string `json:"error"`
 	NextAttemptAt int64  `json:"next_attempt_at"`
 	StackID       int64  `json:"stack_id"`
 	StackName     string `json:"stack_name"`
@@ -317,6 +318,7 @@ func (q *Queries) InsertNotification(ctx context.Context, arg InsertNotification
 		arg.Subject,
 		arg.Body,
 		arg.Status,
+		arg.Error,
 		arg.NextAttemptAt,
 		arg.StackID,
 		arg.StackName,

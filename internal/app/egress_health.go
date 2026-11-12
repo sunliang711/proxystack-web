@@ -468,13 +468,10 @@ func (s *Service) enqueueEgressNotification(ctx context.Context, q *dbq.Queries,
 	if settings.Basic.PanelURL != "" {
 		lines = append(lines, "", "Stack 详情：", fmt.Sprintf("%s/stacks/%d", strings.TrimRight(settings.Basic.PanelURL, "/"), target.id))
 	}
-	status := NotifySkipped
-	if settings.Notify.Enabled && slices.Contains(settings.Notify.Events, event) {
-		status = NotifyPending
-	}
+	status, reason := notifyStatus(settings.Notify, event)
 	_, err = q.InsertNotification(ctx, dbq.InsertNotificationParams{
 		At: s.Now().Unix(), Event: event, DedupKey: fmt.Sprintf("%s:stack:%d:%d", event, target.id, row.Incident),
-		Subject: fmt.Sprintf("[proxystack-web] %s：%s", label, target.name), Body: strings.Join(lines, "\n") + "\n", Status: status,
+		Subject: fmt.Sprintf("[proxystack-web] %s：%s", label, target.name), Body: strings.Join(lines, "\n") + "\n", Status: status, Error: reason,
 		StackID: target.id, StackName: target.name, Incident: row.Incident,
 	})
 	return err

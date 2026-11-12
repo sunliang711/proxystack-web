@@ -59,8 +59,8 @@ ON CONFLICT (user_id) DO UPDATE SET until = excluded.until;
 DELETE FROM user_window_exempt WHERE until <= ?;
 
 -- name: InsertNotification :execrows
-INSERT OR IGNORE INTO notifications (at, event, user_id, user_name, dedup_key, subject, body, status, next_attempt_at, stack_id, stack_name, incident)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT OR IGNORE INTO notifications (at, event, user_id, user_name, dedup_key, subject, body, status, error, next_attempt_at, stack_id, stack_name, incident)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: ListDueNotifications :many
 SELECT * FROM notifications WHERE status = 'pending' AND next_attempt_at <= ? ORDER BY id LIMIT 20;
