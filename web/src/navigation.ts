@@ -78,6 +78,7 @@ export const navGroups: { key: string; label: string; items: NavItem[] }[] = [
 /** 不在侧栏、但可以从全局搜索直接打开的位置：页面内的标签页和账号菜单里的页面。 */
 export const extraDestinations: { key: string; label: string; group: string; keywords?: string[]; to: RouteLocationRaw }[] = [
   { key: 'traffic/ranking', label: '用量排行', group: '流量明细', keywords: ['排行', 'top'], to: { name: 'traffic', query: { tab: 'ranking' } } },
+  { key: 'traffic/access', label: '访问域名', group: '流量明细', keywords: ['域名', '网站', '访问记录', 'url', 'domain'], to: { name: 'traffic', query: { tab: 'access' } } },
   { key: 'extra-nodes/manual', label: '手工节点', group: '额外节点', to: { name: 'extra-nodes' } },
   { key: 'extra-nodes/remote', label: '远端节点源', group: '额外节点', keywords: ['同步', '拉取'], to: { name: 'extra-nodes', query: { tab: 'remote' } } },
   { key: 'records/audit', label: '审计日志', group: '日志与历史', keywords: ['操作记录', 'audit'], to: { name: 'records', query: { tab: 'audit' } } },

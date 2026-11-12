@@ -64,7 +64,7 @@ export const sectionEffects: Record<SettingsSectionName, SectionEffect> = {
   security: { label: '影响校验', type: 'info', tip: '保存后，stack 的保存和应用按新规则校验；不符合规则的 stack 在「待应用变更」中报错。' },
   subscription: { label: '随订阅包生效', type: 'info', tip: '随订阅包下发，在「发布订阅包」签发并送到订阅端后生效。' },
   node_export: { label: '立即生效', type: 'success', tip: '保存后其他实例立即按新设置拉取本机节点。' },
-  traffic: { label: '部分需要应用', type: 'warning', tip: '开启或关闭流量监控会改动生成的配置，需要应用；采集间隔和保留天数保存后立即生效。' },
+  traffic: { label: '部分需要应用', type: 'warning', tip: '开启或关闭流量监控会改动生成的配置，需要应用；采集间隔、保留天数和访问域名统计保存后立即生效。' },
   pause: { label: '立即生效', type: 'success', tip: '保存后立即重新判定，处于停服时段的用户随即暂停或恢复，无需应用。' },
   notify: { label: '立即生效', type: 'success', tip: '保存后之后的通知按新设置发送。' },
   deps: { label: '立即生效', type: 'success', tip: '保存后之后的安装、升级和自动升级按新设置执行。' },
@@ -87,8 +87,8 @@ export const sectionSearch: Record<SettingsSectionName, { title: string; fields:
   pause: { title: '停服时段', fields: ['每日停服时段', '暂停时断开现有连接'], keywords: ['停服', '自动暂停', '断开连接', '维护'] },
   traffic: {
     title: '流量',
-    fields: ['启用流量监控', '采集间隔', '分钟明细保留', '小时明细保留', '日明细保留', '月明细保留'],
-    keywords: ['保留天数'],
+    fields: ['启用流量监控', '采集间隔', '分钟明细保留', '小时明细保留', '日明细保留', '月明细保留', '统计访问域名', '访问域名保留'],
+    keywords: ['保留天数', '访问日志', '域名', '网站'],
   },
   notify: {
     title: '通知',

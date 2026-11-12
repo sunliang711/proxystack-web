@@ -127,6 +127,9 @@ func (s *Settings) Normalize() {
 		s.Traffic = defaults.Traffic
 	}
 	s.Traffic.PauseWindows = normalizePauseWindows(s.Traffic.PauseWindows)
+	if s.Traffic.AccessRetentionDays == 0 {
+		s.Traffic.AccessRetentionDays = DefaultAccessRetentionDays
+	}
 	if s.Notify.WarnPercent == 0 {
 		s.Notify = defaults.Notify
 	}

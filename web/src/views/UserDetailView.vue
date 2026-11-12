@@ -17,6 +17,7 @@ import SubscriptionCard from '../components/SubscriptionCard.vue'
 import SubscriptionGapAlert from '../components/SubscriptionGapAlert.vue'
 import TemplateInput from '../components/TemplateInput.vue'
 import UsageCard from '../components/UsageCard.vue'
+import UserAccessCard from '../components/UserAccessCard.vue'
 import { useDirty } from '../composables/useDirty'
 import { usePageTitle } from '../composables/usePageTitle'
 import { notifySaved, runtime } from '../runtime'
@@ -619,6 +620,7 @@ async function remove() {
         <!-- 只在打开时挂载，用量每 10 秒的刷新随之开始和停止。 -->
         <NTabPane name="usage" :tab="tabLabel('usage', '用量')" display-directive="if">
           <UsageCard :user-id="id" :daily-limit="user.daily_limit_bytes ?? 0" :quota="user.quota_bytes" :bordered="false" class="embedded-card" @update="(data: Schemas['UserUsage']) => (usage = data)" />
+          <UserAccessCard :user-id="id" class="embedded-card" />
         </NTabPane>
       </NTabs>
     </NForm>

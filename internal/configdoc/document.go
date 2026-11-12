@@ -153,6 +153,10 @@ type TrafficSettings struct {
 	DisconnectOnPause bool `json:"disconnect_on_pause" yaml:"disconnect_on_pause"`
 	// PauseWindows 是全部用户默认的每日停服时段，按基本设置的时区计算，时段内自动暂停用户。
 	PauseWindows []string `json:"pause_windows" yaml:"pause_windows,omitempty" required:"false" doc:"每日停服时段，HH:MM-HH:MM，可跨零点；用户可单独设置"`
+	// AccessStats 为真时读取 xray 访问日志，按用户统计访问的主域名。
+	AccessStats bool `json:"access_stats" yaml:"access_stats,omitempty" required:"false" doc:"按用户统计访问的主域名（读取 xray 访问日志）"`
+	// AccessRetentionDays 是访问域名统计的保留天数。
+	AccessRetentionDays int `json:"access_retention_days" yaml:"access_retention_days,omitempty" required:"false" minimum:"0" maximum:"3650" doc:"访问域名统计保留天数，缺省 90"`
 }
 
 // 邮件加密方式。

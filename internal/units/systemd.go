@@ -5,8 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/coreos/go-systemd/v22/dbus"
@@ -124,6 +128,147 @@ func (Journal) Read(ctx context.Context, unitNames []string, lines int, follow b
 	return err
 }
 
+// Follow 用 journalctl 从书签之后持续读取日志。
+func (Journal) Follow(ctx context.Context, unitNames []string, after string, emit func(LogEntry)) error {
+	args := []string{"-o", "json", "--no-pager", "-f"}
+	if after != "" {
+		args = append(args, "--after-cursor="+after)
+	} else {
+		args = append(args, "-n", "0")
+	}
+	for _, unit := range unitNames {
+		args = append(args, "-u", unit)
+	}
+	// 读取出错时先结束 journalctl 再等待它退出：-f 不会自行退出，没人读管道时会一直阻塞在写入上。
+	run, stop := context.WithCancel(ctx)
+	defer stop()
+	cmd := exec.CommandContext(run, "journalctl", args...)
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start journalctl: %w", err)
+	}
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		if entry, ok := parseJournalLine(scanner.Bytes()); ok {
+			emit(entry)
+		}
+	}
+	scanErr := scanner.Err()
+	stop()
+	err = cmd.Wait()
+	if ctx.Err() != nil {
+		return nil
+	}
+	if message := strings.TrimSpace(stderr.String()); message != "" {
+		return fmt.Errorf("journalctl: %s", message)
+	}
+	if scanErr != nil {
+		return fmt.Errorf("read journalctl: %w", scanErr)
+	}
+	if err != nil {
+		return fmt.Errorf("journalctl: %w", err)
+	}
+	return fmt.Errorf("journalctl exited")
+}
+
+// LogRateLimited 读取各 unit 的 LogRateLimitIntervalUSec 和 LogRateLimitBurst；值为 0 的一项沿用 journald 的全局设置。
+func (s *Systemd) LogRateLimited(ctx context.Context, unitNames []string) map[string]bool {
+	global := readJournaldRateLimit(journaldConfigFiles())
+	out := map[string]bool{}
+	for _, unit := range unitNames {
+		burstProp, err := s.conn.GetUnitTypePropertyContext(ctx, unit, "Service", "LogRateLimitBurst")
+		if err != nil || burstProp == nil {
+			continue
+		}
+		intervalProp, err := s.conn.GetUnitTypePropertyContext(ctx, unit, "Service", "LogRateLimitIntervalUSec")
+		if err != nil || intervalProp == nil {
+			continue
+		}
+		burst, ok := burstProp.Value.Value().(uint32)
+		if !ok {
+			continue
+		}
+		interval, ok := intervalProp.Value.Value().(uint64)
+		if !ok {
+			continue
+		}
+		limit := global
+		if interval > 0 {
+			limit.intervalZero = false
+		}
+		if burst > 0 {
+			limit.burst = uint64(burst)
+		}
+		out[unit] = limit.limited()
+	}
+	return out
+}
+
+// journaldRateLimit 是生效的限速设置：间隔为 0 或突发上限为 0 时不限速。
+type journaldRateLimit struct {
+	intervalZero bool
+	burst        uint64
+}
+
+func (l journaldRateLimit) limited() bool {
+	return !l.intervalZero && l.burst > 0 && l.burst < RateLimitBurstEnough
+}
+
+// journaldConfigFiles 按生效顺序返回 journald 的配置文件：主配置在前，drop-in 按文件名排序，同名时 /etc 优先。
+func journaldConfigFiles() []string {
+	files := []string{"/etc/systemd/journald.conf"}
+	dropins := map[string]string{}
+	for _, dir := range []string{"/usr/lib/systemd/journald.conf.d", "/run/systemd/journald.conf.d", "/etc/systemd/journald.conf.d"} {
+		matches, _ := filepath.Glob(filepath.Join(dir, "*.conf"))
+		for _, path := range matches {
+			dropins[filepath.Base(path)] = path
+		}
+	}
+	names := make([]string, 0, len(dropins))
+	for name := range dropins {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		files = append(files, dropins[name])
+	}
+	return files
+}
+
+// readJournaldRateLimit 读取 journald 的全局限速（缺省 30 秒内 10000 条），读不到的文件跳过。
+func readJournaldRateLimit(files []string) journaldRateLimit {
+	limit := journaldRateLimit{burst: 10000}
+	for _, path := range files {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
+			if !ok || strings.HasPrefix(key, "#") || strings.HasPrefix(key, ";") {
+				continue
+			}
+			value = strings.TrimSpace(value)
+			switch strings.TrimSpace(key) {
+			case "RateLimitIntervalSec", "RateLimitInterval":
+				digits := strings.TrimRightFunc(value, func(r rune) bool { return r < '0' || r > '9' })
+				limit.intervalZero = strings.Trim(digits, "0") == "" && digits != ""
+			case "RateLimitBurst":
+				if burst, err := strconv.ParseUint(value, 10, 64); err == nil {
+					limit.burst = burst
+				}
+			}
+		}
+	}
+	return limit
+}
+
 func parseJournalLine(line []byte) (LogEntry, bool) {
 	var raw map[string]any
 	if err := json.Unmarshal(line, &raw); err != nil {
@@ -140,6 +285,9 @@ func parseJournalLine(line []byte) (LogEntry, bool) {
 			entry.Unit = value
 			break
 		}
+	}
+	if value, ok := raw["__CURSOR"].(string); ok {
+		entry.Cursor = value
 	}
 	if value, ok := raw["PRIORITY"].(string); ok {
 		entry.Priority, _ = strconv.Atoi(value)

@@ -1,6 +1,193 @@
 {
   "components": {
     "schemas": {
+      "AccessDomainCount": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "days": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "users": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "domain",
+          "count"
+        ],
+        "type": "object"
+      },
+      "AccessDomainUser": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "days": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "user_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "name",
+          "deleted",
+          "count",
+          "days"
+        ],
+        "type": "object"
+      },
+      "AccessDomainUsers": {
+        "additionalProperties": false,
+        "properties": {
+          "domain": {
+            "type": "string"
+          },
+          "from_day": {
+            "type": "string"
+          },
+          "to_day": {
+            "type": "string"
+          },
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/AccessDomainUser"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "domain",
+          "from_day",
+          "to_day",
+          "users"
+        ],
+        "type": "object"
+      },
+      "AccessDomains": {
+        "additionalProperties": false,
+        "properties": {
+          "domain_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "domains": {
+            "items": {
+              "$ref": "#/components/schemas/AccessDomainCount"
+            },
+            "type": "array"
+          },
+          "from_day": {
+            "type": "string"
+          },
+          "to_day": {
+            "type": "string"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "from_day",
+          "to_day",
+          "total",
+          "domain_count",
+          "domains"
+        ],
+        "type": "object"
+      },
+      "AccessStackStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "access_log": {
+            "type": "boolean"
+          },
+          "rate_limit": {
+            "enum": [
+              "ok",
+              "limited",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "stack": {
+            "type": "string"
+          },
+          "stack_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stack_id",
+          "stack",
+          "access_log",
+          "rate_limit"
+        ],
+        "type": "object"
+      },
+      "AccessStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          },
+          "last_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "retention_days": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "running": {
+            "type": "boolean"
+          },
+          "stacks": {
+            "items": {
+              "$ref": "#/components/schemas/AccessStackStatus"
+            },
+            "type": "array"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "running",
+          "retention_days",
+          "timezone",
+          "last_at",
+          "error",
+          "stacks"
+        ],
+        "type": "object"
+      },
       "AdminView": {
         "additionalProperties": false,
         "properties": {
@@ -5118,6 +5305,17 @@
       "TrafficSettings": {
         "additionalProperties": false,
         "properties": {
+          "access_retention_days": {
+            "description": "访问域名统计保留天数，缺省 90",
+            "format": "int64",
+            "maximum": 3650,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "access_stats": {
+            "description": "按用户统计访问的主域名（读取 xray 访问日志）",
+            "type": "boolean"
+          },
           "disconnect_on_pause": {
             "type": "boolean"
           },
@@ -5969,6 +6167,272 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/access/domain-users": {
+      "get": {
+        "operationId": "listAccessDomainUsers",
+        "parameters": [
+          {
+            "description": "域名，先归并为主域名",
+            "explode": false,
+            "in": "query",
+            "name": "domain",
+            "schema": {
+              "description": "域名，先归并为主域名",
+              "maxLength": 253,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "开始时间（Unix 秒），按设置时区取所在日期",
+            "explode": false,
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "description": "开始时间（Unix 秒），按设置时区取所在日期",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "结束时间（Unix 秒），不含，按设置时区取前一秒所在日期",
+            "explode": false,
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "description": "结束时间（Unix 秒），不含，按设置时区取前一秒所在日期",
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessDomainUsers"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "访问过某个主域名的用户",
+        "tags": [
+          "traffic"
+        ]
+      }
+    },
+    "/api/access/domains": {
+      "get": {
+        "operationId": "listAccessDomains",
+        "parameters": [
+          {
+            "description": "开始时间（Unix 秒），按设置时区取所在日期",
+            "explode": false,
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "description": "开始时间（Unix 秒），按设置时区取所在日期",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "结束时间（Unix 秒），不含，按设置时区取前一秒所在日期",
+            "explode": false,
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "description": "结束时间（Unix 秒），不含，按设置时区取前一秒所在日期",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "返回的域名条数，0 表示 500",
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "返回的域名条数，0 表示 500",
+              "format": "int64",
+              "maximum": 500,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessDomains"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "全部用户的主域名访问排行",
+        "tags": [
+          "traffic"
+        ]
+      }
+    },
+    "/api/access/export": {
+      "get": {
+        "operationId": "exportAccessDomains",
+        "parameters": [
+          {
+            "description": "用户 ID，0 表示全部用户的域名排行",
+            "explode": false,
+            "in": "query",
+            "name": "user",
+            "schema": {
+              "description": "用户 ID，0 表示全部用户的域名排行",
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "开始时间（Unix 秒），按设置时区取所在日期",
+            "explode": false,
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "description": "开始时间（Unix 秒），按设置时区取所在日期",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "结束时间（Unix 秒），不含，按设置时区取前一秒所在日期",
+            "explode": false,
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "description": "结束时间（Unix 秒），不含，按设置时区取前一秒所在日期",
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "contentEncoding": "base64",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "导出主域名访问排行（CSV）",
+        "tags": [
+          "traffic"
+        ]
+      }
+    },
+    "/api/access/status": {
+      "get": {
+        "operationId": "getAccessStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "访问域名统计的运行状态",
+        "tags": [
+          "traffic"
+        ]
+      }
+    },
     "/api/audit": {
       "get": {
         "operationId": "listAudit",
@@ -11678,6 +12142,89 @@
         "summary": "保存用户",
         "tags": [
           "config"
+        ]
+      }
+    },
+    "/api/users/{id}/access": {
+      "get": {
+        "operationId": "listUserAccessDomains",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "开始时间（Unix 秒），按设置时区取所在日期",
+            "explode": false,
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "description": "开始时间（Unix 秒），按设置时区取所在日期",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "结束时间（Unix 秒），不含，按设置时区取前一秒所在日期",
+            "explode": false,
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "description": "结束时间（Unix 秒），不含，按设置时区取前一秒所在日期",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "返回的域名条数，0 表示 500",
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "返回的域名条数，0 表示 500",
+              "format": "int64",
+              "maximum": 500,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessDomains"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "用户的主域名访问排行",
+        "tags": [
+          "traffic"
         ]
       }
     },

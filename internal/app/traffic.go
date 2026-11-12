@@ -54,6 +54,8 @@ type collectTarget struct {
 	aggregator bool
 	// problem 非空时该 stack 无法采集（未开启统计接口）。
 	problem string
+	// accessLog 表示该 stack 的 xray 输出访问日志（访问日志开关打开且日志级别不是 none）。
+	accessLog bool
 }
 
 // trafficState 是采集器的内存状态。mu 保护数据字段；collectMu 串行化采集，
@@ -147,6 +149,8 @@ func (s *Service) collectTargets(ctx context.Context) ([]collectTarget, error) {
 			target.problem = "未开启 stats 或 StatsService，应用配置后恢复采集"
 		}
 		target.server = api.Listen
+		target.accessLog = domain.ResolveXrayAccessLog(set.Config.Defaults.Xray, stack.Xray) &&
+			domain.ResolveXrayLogLevel(set.Config.Defaults.Xray, stack.Xray) != "none"
 		targets = append(targets, target)
 	}
 	s.traffic.mu.Lock()
@@ -406,6 +410,7 @@ func (s *Service) pruneTraffic(ctx context.Context, settings configdoc.Settings,
 	}); err != nil {
 		slog.Warn("traffic prune", "err", err)
 	}
+	s.pruneAccess(ctx, retention.AccessRetentionDays, now, location(settings))
 	cutoff := traffic.Day(now.AddDate(0, 0, -2*dailySeriesDays), location(settings))
 	if err := s.Store.InTx(ctx, func(q *dbq.Queries) error {
 		if err := q.DeleteUserDailyBefore(ctx, cutoff); err != nil {

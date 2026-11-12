@@ -37,6 +37,11 @@ func (s *Service) StartBackground(ctx context.Context) error {
 		defer s.background.Done()
 		s.runTraffic(ctx)
 	}()
+	s.background.Add(1)
+	go func() {
+		defer s.background.Done()
+		s.runAccessStats(ctx)
+	}()
 	go s.runNotifications(ctx)
 	go s.runScheduler(ctx)
 	s.background.Add(1)

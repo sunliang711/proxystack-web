@@ -3,6 +3,7 @@ package units
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -14,6 +15,7 @@ type Fake struct {
 	logs      []LogEntry
 	FailStart map[string]bool
 	Calls     []string
+	following int
 }
 
 // NewFake 创建内存实现。
@@ -121,4 +123,73 @@ func (f *Fake) Read(ctx context.Context, unitNames []string, lines int, follow b
 			flush(0)
 		}
 	}
+}
+
+// AppendLog 追加一条日志，用于模拟 xray 写出的访问日志。
+func (f *Fake) AppendLog(entry LogEntry) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if entry.Time.IsZero() {
+		entry.Time = time.Now()
+	}
+	f.logs = append(f.logs, entry)
+}
+
+// Follow 从 after 之后持续输出日志，每 10 毫秒检查一次新日志；书签是日志的序号。
+func (f *Fake) Follow(ctx context.Context, unitNames []string, after string, emit func(LogEntry)) error {
+	wanted := map[string]bool{}
+	for _, unit := range unitNames {
+		wanted[unit] = true
+	}
+	next := -1
+	if after != "" {
+		position, err := strconv.Atoi(after)
+		if err != nil || position < 0 {
+			return fmt.Errorf("failed to seek to cursor %q: invalid argument", after)
+		}
+		next = position
+	}
+	f.mu.Lock()
+	if next < 0 {
+		next = len(f.logs)
+	}
+	f.following++
+	f.mu.Unlock()
+	defer func() {
+		f.mu.Lock()
+		f.following--
+		f.mu.Unlock()
+	}()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		f.mu.Lock()
+		matched := []LogEntry{}
+		for index := next; index < len(f.logs); index++ {
+			entry := f.logs[index]
+			entry.Cursor = strconv.Itoa(index + 1)
+			if wanted[entry.Unit] {
+				matched = append(matched, entry)
+			}
+		}
+		if len(f.logs) > next {
+			next = len(f.logs)
+		}
+		f.mu.Unlock()
+		for _, entry := range matched {
+			emit(entry)
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+		}
+	}
+}
+
+// Following 返回正在执行的 Follow 个数；Follow 计数之后写入的日志一定会被它读到。
+func (f *Fake) Following() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.following
 }

@@ -116,6 +116,7 @@ func (s *Server) register(api huma.API) {
 	registerDeps(api, s)
 	registerSubscription(api, s)
 	registerTraffic(api, s)
+	registerAccess(api, s)
 	registerOps(api, s)
 }
 

@@ -85,7 +85,7 @@ type JobParams struct {
 var jobTypes = []jobType{
 	{Kind: JobBackup, Name: "数据库备份", Description: "生成数据库快照到备份目录，超出保留份数的旧快照被删除",
 		Schedule: "0 4 * * *", Timeout: 600, Params: JobParams{Keep: 7}, Run: runBackupJob},
-	{Kind: JobTrafficPrune, Name: "流量数据清理", Description: "按保留策略删除过期的流量明细和通知记录",
+	{Kind: JobTrafficPrune, Name: "流量数据清理", Description: "按保留策略删除过期的流量明细、访问域名统计和通知记录",
 		Schedule: "0 3 * * *", Timeout: 600, Run: func(ctx context.Context, s *Service, _ JobParams, logf Logf) error {
 			s.PruneNow(ctx)
 			logf("清理完成")

@@ -760,6 +760,9 @@ func validateTrafficNotify(issues *Issues, settings Settings) {
 		}
 	}
 	checkPauseWindows(issues, "settings.traffic.pause_windows", traffic.PauseWindows)
+	if traffic.AccessRetentionDays < 1 || traffic.AccessRetentionDays > 3650 {
+		issues.add("settings.traffic.access_retention_days", "must be between 1 and 3650 days")
+	}
 	notify := settings.Notify
 	checkEnum(issues, "settings.notify.security", notify.Security, SMTPSecurityNone, SMTPSecuritySTARTTLS, SMTPSecurityTLS)
 	if notify.WarnPercent < 1 || notify.WarnPercent > 100 {

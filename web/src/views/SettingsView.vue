@@ -389,6 +389,12 @@ async function save() {
             <NFormItem label="月明细保留" v-bind="f('traffic.retention_month_days', '天，0 表示永久')">
               <NInputNumber v-model:value="form.traffic.retention_month_days" :min="0" />
             </NFormItem>
+            <NFormItem label="统计访问域名" v-bind="f('traffic.access_stats', '读取 xray 访问日志，按用户统计访问的主域名（连接次数），在「流量明细 → 访问域名」和用户详情的「用量」中查看；需要 Stack 开启「Xray 记录访问日志」。保存后立即生效，只统计开启以后的访问')">
+              <NSwitch v-model:value="form.traffic.access_stats" />
+            </NFormItem>
+            <NFormItem label="访问域名保留" v-bind="f('traffic.access_retention_days', '天，1～3650')">
+              <NInputNumber v-model:value="form.traffic.access_retention_days" :min="1" :max="3650" />
+            </NFormItem>
           </SettingsSection>
           <SettingsSection v-show="sectionShown('notify')" title="通知" name="notify">
             <NFormItem label="启用邮件通知" v-bind="f('notify.enabled', '未启用时事件只记录在「通知记录」页')">

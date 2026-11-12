@@ -6,11 +6,12 @@ import { api } from '../api/client'
 import { loadTimezone } from '../composables/useTrafficTrend'
 import StatsPanel from './traffic/StatsPanel.vue'
 import RankingPanel from './traffic/RankingPanel.vue'
+import AccessPanel from './traffic/AccessPanel.vue'
 
-type Tab = 'user' | 'stack' | 'ranking'
+type Tab = 'user' | 'stack' | 'ranking' | 'access'
 const route = useRoute()
 const router = useRouter()
-const tabs: Tab[] = ['user', 'stack', 'ranking']
+const tabs: Tab[] = ['user', 'stack', 'ranking', 'access']
 const tab = ref<Tab>(tabs.includes(route.query.tab as Tab) ? (route.query.tab as Tab) : 'user')
 // 已在本页时从全局搜索打开另一个标签页。
 watch(() => route.query.tab, (value) => { if (route.name === 'traffic') tab.value = tabs.includes(value as Tab) ? (value as Tab) : 'user' })
@@ -35,10 +36,12 @@ onMounted(async () => {
       <NTab name="user" tab="按用户" />
       <NTab name="stack" tab="按 Stack" />
       <NTab name="ranking" tab="排行" />
+      <NTab name="access" tab="访问域名" />
     </NTabs>
     <template v-if="timezone">
-      <StatsPanel v-if="tab !== 'ranking'" :key="tab" :view="tab" :timezone="timezone" :user-options="userOptions" :stack-options="stackOptions" />
-      <RankingPanel v-else :timezone="timezone" :stack-options="stackOptions" />
+      <RankingPanel v-if="tab === 'ranking'" :timezone="timezone" :stack-options="stackOptions" />
+      <AccessPanel v-else-if="tab === 'access'" :timezone="timezone" />
+      <StatsPanel v-else :key="tab" :view="tab" :timezone="timezone" :user-options="userOptions" :stack-options="stackOptions" />
     </template>
     <NEmpty v-else description="正在加载" />
   </NSpace>

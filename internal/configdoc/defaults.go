@@ -59,7 +59,7 @@ func DefaultSettings() Settings {
 		},
 		Traffic: TrafficSettings{
 			Enabled: true, Interval: 10, RetentionMinuteDays: 7, RetentionHourDays: 180, RetentionDayDays: 730,
-			PauseWindows: []string{},
+			PauseWindows: []string{}, AccessRetentionDays: DefaultAccessRetentionDays,
 		},
 		Notify: NotifySettings{
 			Port: 587, Security: SMTPSecuritySTARTTLS, To: []string{},
@@ -68,6 +68,9 @@ func DefaultSettings() Settings {
 		},
 	}
 }
+
+// DefaultAccessRetentionDays 是访问域名统计的缺省保留天数。
+const DefaultAccessRetentionDays = 90
 
 // 内置 stack 模板。
 const (

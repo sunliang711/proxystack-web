@@ -8,6 +8,19 @@ import (
 	"database/sql"
 )
 
+type AccessCursor struct {
+	ID     int64  `json:"id"`
+	Cursor string `json:"cursor"`
+	At     int64  `json:"at"`
+}
+
+type AccessDomainDay struct {
+	UserID int64  `json:"user_id"`
+	Day    string `json:"day"`
+	Domain string `json:"domain"`
+	Count  int64  `json:"count"`
+}
+
 type Admin struct {
 	ID                 int64  `json:"id"`
 	Username           string `json:"username"`

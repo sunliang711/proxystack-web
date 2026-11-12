@@ -53,6 +53,7 @@ type Service struct {
 	subs          subCache
 	autoPublish   autoPublishState
 	traffic       trafficState
+	access        accessState
 	autoPause     autoPauseState
 	scheduler     schedulerState
 	subDeployMu   sync.Mutex

@@ -4,6 +4,74 @@
  */
 
 export interface paths {
+    "/api/access/domain-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 访问过某个主域名的用户 */
+        get: operations["listAccessDomainUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/access/domains": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 全部用户的主域名访问排行 */
+        get: operations["listAccessDomains"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/access/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 导出主域名访问排行（CSV） */
+        get: operations["exportAccessDomains"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/access/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 访问域名统计的运行状态 */
+        get: operations["getAccessStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/audit": {
         parameters: {
             query?: never;
@@ -1652,6 +1720,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/users/{id}/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 用户的主域名访问排行 */
+        get: operations["listUserAccessDomains"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users/{id}/auto-pause/{reason}": {
         parameters: {
             query?: never;
@@ -1792,6 +1877,59 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AccessDomainCount: {
+            /** Format: int64 */
+            count: number;
+            /** Format: int64 */
+            days?: number;
+            domain: string;
+            /** Format: int64 */
+            users?: number;
+        };
+        AccessDomainUser: {
+            /** Format: int64 */
+            count: number;
+            /** Format: int64 */
+            days: number;
+            deleted: boolean;
+            name: string;
+            /** Format: int64 */
+            user_id: number;
+        };
+        AccessDomainUsers: {
+            domain: string;
+            from_day: string;
+            to_day: string;
+            users: components["schemas"]["AccessDomainUser"][];
+        };
+        AccessDomains: {
+            /** Format: int64 */
+            domain_count: number;
+            domains: components["schemas"]["AccessDomainCount"][];
+            from_day: string;
+            to_day: string;
+            /** Format: int64 */
+            total: number;
+        };
+        AccessStackStatus: {
+            access_log: boolean;
+            /** @enum {string} */
+            rate_limit: "ok" | "limited" | "unknown";
+            stack: string;
+            /** Format: int64 */
+            stack_id: number;
+        };
+        AccessStatus: {
+            enabled: boolean;
+            error: string;
+            /** Format: date-time */
+            last_at: string;
+            /** Format: int64 */
+            retention_days: number;
+            running: boolean;
+            stacks: components["schemas"]["AccessStackStatus"][];
+            timezone: string;
+        };
         AdminView: {
             /** Format: int64 */
             id: number;
@@ -3235,6 +3373,13 @@ export interface components {
             total: components["schemas"]["Bytes"];
         };
         TrafficSettings: {
+            /**
+             * Format: int64
+             * @description 访问域名统计保留天数，缺省 90
+             */
+            access_retention_days?: number;
+            /** @description 按用户统计访问的主域名（读取 xray 访问日志） */
+            access_stats?: boolean;
             disconnect_on_pause: boolean;
             enabled: boolean;
             /**
@@ -3475,6 +3620,145 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listAccessDomainUsers: {
+        parameters: {
+            query?: {
+                /** @description 域名，先归并为主域名 */
+                domain?: string;
+                /** @description 开始时间（Unix 秒），按设置时区取所在日期 */
+                from?: number;
+                /** @description 结束时间（Unix 秒），不含，按设置时区取前一秒所在日期 */
+                to?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessDomainUsers"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listAccessDomains: {
+        parameters: {
+            query?: {
+                /** @description 开始时间（Unix 秒），按设置时区取所在日期 */
+                from?: number;
+                /** @description 结束时间（Unix 秒），不含，按设置时区取前一秒所在日期 */
+                to?: number;
+                /** @description 返回的域名条数，0 表示 500 */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessDomains"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    exportAccessDomains: {
+        parameters: {
+            query?: {
+                /** @description 用户 ID，0 表示全部用户的域名排行 */
+                user?: number;
+                /** @description 开始时间（Unix 秒），按设置时区取所在日期 */
+                from?: number;
+                /** @description 结束时间（Unix 秒），不含，按设置时区取前一秒所在日期 */
+                to?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getAccessStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listAudit: {
         parameters: {
             query?: {
@@ -7109,6 +7393,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listUserAccessDomains: {
+        parameters: {
+            query?: {
+                /** @description 开始时间（Unix 秒），按设置时区取所在日期 */
+                from?: number;
+                /** @description 结束时间（Unix 秒），不含，按设置时区取前一秒所在日期 */
+                to?: number;
+                /** @description 返回的域名条数，0 表示 500 */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessDomains"];
+                };
             };
             /** @description Error */
             default: {
