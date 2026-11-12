@@ -45,16 +45,48 @@ export const sectionEffects: Record<SettingsSectionName, SectionEffect> = {
   download_proxy: { label: '立即生效', type: 'success', tip: '保存后依赖管理和面板自更新的对外请求立即使用新设置。' },
 }
 
-/** 各分组在页面上的标题，以及全局搜索按其匹配的字段名和常用说法。 */
-export const sectionSearch: Record<SettingsSectionName, { title: string; keywords: string[] }> = {
-  basic: { title: '基本', keywords: ['对外地址', '面板地址', '时区', 'external host', 'panel url', 'timezone'] },
-  security: { title: '安全', keywords: ['公开入站必须认证', '无认证入站', '认证'] },
-  subscription: { title: '订阅', keywords: ['来源名', '订阅端对外地址', '展示名模板', 'surge managed', '更新间隔', 'strict', '停用或到期用户', '自动发布'] },
-  traffic: { title: '流量', keywords: ['流量监控', '采集间隔', '明细保留', '保留天数', '断开连接'] },
-  notify: { title: '通知', keywords: ['邮件通知', 'smtp', '发件人', '收件人', '通知事件', '用量预警', '到期提醒', 'email'] },
-  download_proxy: { title: '下载代理', keywords: ['代理', 'http', 'socks5', '测试连接', 'proxy'] },
-  deps: { title: '依赖源', keywords: ['xray 版本', 'mihomo 版本', 'geo', 'sha256', '下载地址', '构建变体', '自动升级', '维护时间窗'] },
-  defaults: { title: '默认值', keywords: ['mihomo 模式', '日志级别', '访问日志', 'access log', 'xray api', 'stats', 'policy'] },
-  port_pools: { title: '端口池', keywords: ['端口', '入站端口', 'socks 监听', 'http 监听', 'controller', 'port'] },
-  node_export: { title: '节点导出', keywords: ['只读导出', 'token', '导出地址', '远端节点源'] },
+/**
+ * 各分组在页面上的标题、表单字段名和常用说法，供全局搜索使用：每个字段单独成为一条结果，
+ * 分组本身也可以按字段名和说法找到。fields 必须覆盖页面上的全部字段标签（由测试检查），
+ * 动态生成的标签（依赖源、端口池）在这里展开列出。
+ */
+export const sectionSearch: Record<SettingsSectionName, { title: string; fields: string[]; keywords: string[] }> = {
+  basic: { title: '基本', fields: ['对外地址', '面板地址', '时区'], keywords: ['external host', 'panel url', 'timezone'] },
+  security: { title: '安全', fields: ['公开入站必须设密码'], keywords: ['公开入站必须认证', '无认证入站', '认证'] },
+  subscription: {
+    title: '订阅',
+    fields: ['来源名', '订阅端对外地址', '全局展示名模板', 'Surge managed config', '更新间隔', 'strict', '自动发布订阅包', '停用或到期用户'],
+    keywords: ['展示名模板', '自动发布'],
+  },
+  traffic: {
+    title: '流量',
+    fields: ['启用流量监控', '采集间隔', '分钟明细保留', '小时明细保留', '日明细保留', '月明细保留', '暂停时断开现有连接', '每日停服时段'],
+    keywords: ['保留天数', '断开连接', '停服', '自动暂停'],
+  },
+  notify: {
+    title: '通知',
+    fields: ['启用邮件通知', 'SMTP 服务器', '端口', '加密方式', '用户名', '密码', '发件人', '收件人', '通知事件', '用量预警比例', '到期提前提醒', '测试'],
+    keywords: ['邮件通知', 'smtp', 'email', '用量预警', '到期提醒'],
+  },
+  download_proxy: {
+    title: '下载代理',
+    fields: ['模式', 'stack', '监听', '协议', '主机', '端口', '用户名', '密码', '由代理解析域名', '测试连接'],
+    keywords: ['代理', 'http', 'socks5', 'proxy'],
+  },
+  deps: {
+    title: '依赖源',
+    fields: ['xray 版本', 'xray 来源', 'mihomo 版本', 'mihomo 来源', 'geo 版本', 'geo 来源', '下载地址', 'sha256', '归档成员', 'mihomo 构建变体', '自动升级 xray', '自动升级 mihomo', '维护时间窗'],
+    keywords: ['构建变体', '自动升级'],
+  },
+  defaults: {
+    title: '默认值',
+    fields: ['Mihomo 模式', 'Mihomo 日志级别', 'Xray 日志级别', 'Xray 记录访问日志', 'Xray API', 'API 服务', 'Xray stats', 'Xray policy'],
+    keywords: ['日志级别', '访问日志', 'access log', 'stats', 'policy'],
+  },
+  port_pools: {
+    title: '端口池',
+    fields: ['Xray 入站', 'Mihomo SOCKS 监听', 'Mihomo HTTP 监听', 'Xray API', 'Mihomo controller'],
+    keywords: ['端口', '入站端口', 'port'],
+  },
+  node_export: { title: '节点导出', fields: ['开启只读导出', 'token', '导出地址'], keywords: ['只读导出', '远端节点源'] },
 }

@@ -28,3 +28,16 @@ test('分组和校验错误字段定位到所在标签页', () => {
   assert.equal(mod.tabForField('basic.external_host'), 'basic')
   assert.equal(mod.tabForField('subscription.interval'), 'subscription')
 })
+
+test('全局搜索的字段索引覆盖设置页上的全部字段标签', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const source = await readFile(new URL('../src/views/SettingsView.vue', import.meta.url), 'utf8')
+  const sections = [...source.matchAll(/<SettingsSection\b[^>]*\bname="(\w+)"[^>]*>([\s\S]*?)<\/SettingsSection>/g)]
+  assert.deepEqual(sections.map((match) => match[1]).sort(), [...mod.settingsSections].sort())
+  for (const [, name, body] of sections) {
+    // 只检查静态标签；动态标签（:label）在索引中手工展开。
+    const labels = [...body.matchAll(/<NFormItem\b[^>]*?\slabel="([^"]+)"/g)].map((match) => match[1])
+    const fields = mod.sectionSearch[name].fields
+    for (const label of labels) assert.ok(fields.includes(label), `设置分组 ${name} 的字段「${label}」没有加入全局搜索索引`)
+  }
+})

@@ -73,16 +73,15 @@ const entries = computed<SearchEntry[]>(() => {
     subtitle: [stack.role === 'auto' ? 'auto' : '', ...(stack.labels ?? []), stack.enabled ? '' : '已停用'].filter(Boolean).join(' · '),
     to: { name: 'stack', params: { id: stack.id } },
   }))
-  const settings = settingsSections.map((name): SearchEntry => {
-    const tab = tabOfSection(name)
-    return {
-      id: `setting:${name}`,
-      kind: 'setting',
-      title: sectionSearch[name].title,
-      subtitle: `系统设置 · ${settingsTabs.find((t) => t.name === tab)!.label}`,
-      keywords: sectionSearch[name].keywords,
-      to: { name: 'settings', query: { section: name } },
-    }
+  // 每个分组一条，分组内每个字段再各一条，字段结果标明所在分组。
+  const settings = settingsSections.flatMap((name): SearchEntry[] => {
+    const { title, fields, keywords } = sectionSearch[name]
+    const tabLabel = settingsTabs.find((t) => t.name === tabOfSection(name))!.label
+    const to = { name: 'settings', query: { section: name } }
+    return [
+      { id: `setting:${name}`, kind: 'setting', title, subtitle: `系统设置 · ${tabLabel}`, keywords: [...fields, ...keywords], to },
+      ...fields.map((field): SearchEntry => ({ id: `setting:${name}:${field}`, kind: 'setting', title: field, subtitle: `系统设置 · ${tabLabel} · ${title}`, to })),
+    ]
   })
   return [...users, ...stacks, ...pageEntries.value, ...settings]
 })
