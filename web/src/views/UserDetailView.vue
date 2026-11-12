@@ -11,6 +11,7 @@ import { api, emptyErrors, fieldState, MASKED, splitProblem, type FormErrors, ty
 import ByteSizeInput from '../components/ByteSizeInput.vue'
 import ErrorList from '../components/ErrorList.vue'
 import PauseWindowsInput from '../components/PauseWindowsInput.vue'
+import { refreshPauseWindow } from '../composables/usePauseWindow'
 import SecretInput from '../components/SecretInput.vue'
 import SubscriptionCard from '../components/SubscriptionCard.vue'
 import SubscriptionGapAlert from '../components/SubscriptionGapAlert.vue'
@@ -296,6 +297,9 @@ async function save() {
   savedName.value = data!.name
   markClean()
   void refreshSubscription()
+  // 停服设置或启用状态可能变了，顶栏和总览的停服人数随之更新。
+  void refreshPauseWindow()
+  void loadUsage()
   void notifySaved(message)
 }
 

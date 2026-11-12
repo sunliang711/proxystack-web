@@ -1,13 +1,13 @@
 /** 系统设置的分组、所在标签页和生效方式。 */
 
-export const settingsSections = ['basic', 'security', 'subscription', 'traffic', 'notify', 'download_proxy', 'deps', 'defaults', 'port_pools', 'node_export'] as const
+export const settingsSections = ['basic', 'pause', 'security', 'subscription', 'traffic', 'notify', 'download_proxy', 'deps', 'defaults', 'port_pools', 'node_export'] as const
 export type SettingsSectionName = (typeof settingsSections)[number]
 
 export type SettingsTab = 'basic' | 'subscription' | 'monitor' | 'download' | 'advanced'
 
 /** 标签页按用途划分；「高级」放平时很少调整、需要了解 xray / mihomo 细节的设置。 */
 export const settingsTabs: { name: SettingsTab; label: string; sections: SettingsSectionName[] }[] = [
-  { name: 'basic', label: '基本', sections: ['basic', 'security'] },
+  { name: 'basic', label: '基本', sections: ['basic', 'pause', 'security'] },
   { name: 'subscription', label: '订阅', sections: ['subscription'] },
   { name: 'monitor', label: '流量与通知', sections: ['traffic', 'notify'] },
   { name: 'download', label: '下载与依赖', sections: ['download_proxy', 'deps'] },
@@ -19,9 +19,34 @@ export function tabOfSection(section: string): SettingsTab {
   return settingsTabs.find((tab) => (tab.sections as string[]).includes(section))?.name ?? 'basic'
 }
 
-/** 校验错误的字段路径（例如 notify.host）所在的标签页。 */
+/**
+ * 存放在其他设置分组里、但显示在独立分组中的字段：停服时段的两项保存在 traffic 下，
+ * 页面上放在「基本」标签页的「停服时段」分组。
+ */
+const relocatedFields: Record<string, SettingsSectionName> = {
+  'traffic.pause_windows': 'pause',
+  'traffic.disconnect_on_pause': 'pause',
+}
+
+/** 字段路径（例如 notify.host、traffic.pause_windows[0]）在页面上所属的分组。 */
+export function sectionOfField(path: string): string {
+  const relocated = Object.entries(relocatedFields).find(([field]) => path === field || path.startsWith(`${field}[`) || path.startsWith(`${field}.`))
+  return relocated ? relocated[1] : path.split('.')[0]!
+}
+
+/** 校验错误的字段路径所在的标签页。 */
 export function tabForField(path: string): SettingsTab {
-  return tabOfSection(path.split('.')[0]!)
+  return tabOfSection(sectionOfField(path))
+}
+
+/** 分组在页面上显示的那部分设置，用于判断各标签页有没有未保存的修改。 */
+export function sectionValue(settings: Record<string, unknown>, section: SettingsSectionName): unknown {
+  const fields = Object.entries(relocatedFields).filter(([, target]) => target === section).map(([field]) => field.split('.'))
+  if (fields.length) return Object.fromEntries(fields.map(([group, key]) => [key, (settings[group!] as Record<string, unknown> | undefined)?.[key!]]))
+  const value = settings[section]
+  if (!value || typeof value !== 'object') return value
+  const moved = Object.keys(relocatedFields).filter((field) => field.startsWith(`${section}.`)).map((field) => field.slice(section.length + 1))
+  return moved.length ? Object.fromEntries(Object.entries(value).filter(([key]) => !moved.includes(key))) : value
 }
 
 /** 分组的生效方式。 */
@@ -39,7 +64,8 @@ export const sectionEffects: Record<SettingsSectionName, SectionEffect> = {
   security: { label: '影响校验', type: 'info', tip: '保存后，stack 的保存和应用按新规则校验；不符合规则的 stack 在「待应用变更」中报错。' },
   subscription: { label: '随订阅包生效', type: 'info', tip: '随订阅包下发，在「发布订阅包」签发并送到订阅端后生效。' },
   node_export: { label: '立即生效', type: 'success', tip: '保存后其他实例立即按新设置拉取本机节点。' },
-  traffic: { label: '部分需要应用', type: 'warning', tip: '开启或关闭流量监控会改动生成的配置，需要应用；采集间隔、保留天数和断开连接设置保存后立即生效。' },
+  traffic: { label: '部分需要应用', type: 'warning', tip: '开启或关闭流量监控会改动生成的配置，需要应用；采集间隔和保留天数保存后立即生效。' },
+  pause: { label: '立即生效', type: 'success', tip: '保存后立即重新判定，处于停服时段的用户随即暂停或恢复，无需应用。' },
   notify: { label: '立即生效', type: 'success', tip: '保存后之后的通知按新设置发送。' },
   deps: { label: '立即生效', type: 'success', tip: '保存后之后的安装、升级和自动升级按新设置执行。' },
   download_proxy: { label: '立即生效', type: 'success', tip: '保存后依赖管理和面板自更新的对外请求立即使用新设置。' },
@@ -58,10 +84,11 @@ export const sectionSearch: Record<SettingsSectionName, { title: string; fields:
     fields: ['来源名', '订阅端对外地址', '全局展示名模板', 'Surge managed config', '更新间隔', 'strict', '自动发布订阅包', '停用或到期用户'],
     keywords: ['展示名模板', '自动发布'],
   },
+  pause: { title: '停服时段', fields: ['每日停服时段', '暂停时断开现有连接'], keywords: ['停服', '自动暂停', '断开连接', '维护'] },
   traffic: {
     title: '流量',
-    fields: ['启用流量监控', '采集间隔', '分钟明细保留', '小时明细保留', '日明细保留', '月明细保留', '暂停时断开现有连接', '每日停服时段'],
-    keywords: ['保留天数', '断开连接', '停服', '自动暂停'],
+    fields: ['启用流量监控', '采集间隔', '分钟明细保留', '小时明细保留', '日明细保留', '月明细保留'],
+    keywords: ['保留天数'],
   },
   notify: {
     title: '通知',

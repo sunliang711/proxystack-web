@@ -2,7 +2,7 @@
 import { computed, h, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
-  NButton, NCard, NDataTable, NDrawer, NDrawerContent, NEmpty, NForm, NFormItem, NInput, NModal, NPopconfirm, NSelect, NSpace, NTag, NText, NTooltip, useMessage,
+  NButton, NCard, NDataTable, NDrawer, NDrawerContent, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NPopconfirm, NSelect, NSpace, NTag, NText, NTooltip, useMessage,
   type DataTableColumns,
 } from 'naive-ui'
 import { api, emptyErrors, fieldState, problemMessage, splitProblem, type FormErrors, type Schemas } from '../api/client'
@@ -14,6 +14,8 @@ import { notifySaved } from '../runtime'
 import { useMobile } from '../composables/useMobile'
 import { formatBytes } from '../util/format'
 import { tipTitle } from '../util/table'
+import { windowsText } from '../util/pause-window'
+import { TimeOutline } from '@vicons/ionicons5'
 
 type User = Schemas['User']
 type Usage = Schemas['UserUsage']
@@ -26,7 +28,16 @@ const mobile = useMobile()
 const message = useMessage()
 const users = ref<User[]>([])
 const usage = ref<Record<number, Usage>>({})
-const filter = ref<'all' | 'paused' | 'auto'>('all')
+type Filter = 'all' | 'paused' | 'auto' | 'schedule' | 'window_exception'
+const filterOptions: { label: string; value: Filter }[] = [
+  { label: '全部用户', value: 'all' }, { label: '已暂停', value: 'paused' }, { label: '自动暂停', value: 'auto' },
+  { label: '停服暂停', value: 'schedule' }, { label: '停服例外', value: 'window_exception' },
+]
+/** 筛选记在地址栏里，顶栏和总览的停服入口用 ?filter=schedule 直接打开对应列表。 */
+const filter = computed<Filter>({
+  get: () => (filterOptions.some((option) => option.value === route.query.filter) ? (route.query.filter as Filter) : 'all'),
+  set: (value) => void router.replace({ query: { ...route.query, filter: value === 'all' ? undefined : value } }),
+})
 const loading = ref(true)
 const checked = ref<string[]>([])
 const creating = ref(false)
@@ -69,6 +80,8 @@ const autoPauses = (user: User) => usage.value[user.id ?? 0]?.auto_pauses ?? []
 const rows = computed(() => users.value.filter((user) => {
   if (filter.value === 'auto') return autoPauses(user).length > 0
   if (filter.value === 'paused') return !user.enabled || autoPauses(user).length > 0
+  if (filter.value === 'schedule') return autoPauses(user).some((pause) => pause.reason === 'schedule')
+  if (filter.value === 'window_exception') return user.pause_window_mode === 'custom' || user.pause_window_mode === 'off'
   return true
 }))
 const sum = (bytes?: { up: number; down: number }) => (bytes?.up ?? 0) + (bytes?.down ?? 0)
@@ -126,6 +139,17 @@ async function setEnabled(enabled: boolean) {
   load()
 }
 
+/** 用户单独设置了停服时段（自定义或不限制）时，在名称旁标一个时钟，悬停查看具体设置。 */
+function windowMarker(row: User) {
+  const mode = row.pause_window_mode
+  if (mode !== 'custom' && mode !== 'off') return null
+  const text = mode === 'off' ? '不受每日停服时段限制' : `自定义停服时段：每天 ${windowsText(row.pause_windows ?? [])}`
+  return h(NTooltip, null, {
+    trigger: () => h(NIcon, { class: 'window-marker', size: 14, 'aria-label': text, role: 'img', tabindex: 0 }, () => h(TimeOutline)),
+    default: () => text,
+  })
+}
+
 /** 窄屏只显示这些列，其余字段在用户详情页查看。 */
 const mobileKeys = new Set(['name', 'enabled', 'today', 'period', 'quota_bytes', 'expire_at', 'subscription'])
 
@@ -140,7 +164,10 @@ const allColumns: DataTableColumns<User> = [
     fixed: 'left',
     // 备注显示在名称下方，省出单独一列。
     render: (row) => h('div', { class: 'name-cell' }, [
-      h(RouterLink, { to: { name: 'user', params: { id: row.id } } }, { default: () => row.name }),
+      h('span', { class: 'name-line' }, [
+        h(RouterLink, { to: { name: 'user', params: { id: row.id } } }, { default: () => row.name }),
+        windowMarker(row),
+      ]),
       row.remark ? h(NText, { depth: 3, class: 'name-remark', title: row.remark }, () => row.remark) : null,
     ]),
   },
@@ -221,7 +248,7 @@ async function submitCreate(body: User) {
       <NSpace justify="end">
         <NSelect
           v-model:value="filter"
-          :options="[{ label: '全部用户', value: 'all' }, { label: '已暂停', value: 'paused' }, { label: '自动暂停', value: 'auto' }]"
+          :options="filterOptions"
           style="width: 120px"
         />
         <NPopconfirm @positive-click="setEnabled(false)">
@@ -288,4 +315,6 @@ async function submitCreate(body: User) {
 <style scoped>
 .table-panel :deep(.name-cell) { display: flex; flex-direction: column; min-width: 0; }
 .table-panel :deep(.name-remark) { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.table-panel :deep(.name-line) { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.table-panel :deep(.window-marker) { color: var(--ps-muted); flex: none; }
 </style>

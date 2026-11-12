@@ -54,3 +54,13 @@ func TestPauseWindowEnd(t *testing.T) {
 	require.True(t, in)
 	require.False(t, end.Before(at(12, 3, 0)))
 }
+
+// TestPauseWindowNextStart 验证下一次开始时刻：取当天或次日最近的一个开始时刻。
+func TestPauseWindowNextStart(t *testing.T) {
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	require.NoError(t, err)
+	at := func(day, hour, minute int) time.Time { return time.Date(2026, 11, day, hour, minute, 0, 0, loc) }
+	require.True(t, at(10, 13, 0).Equal(pauseWindowNextStart(at(10, 12, 0), []string{"02:00-08:00", "13:00-14:00"})))
+	require.True(t, at(11, 2, 0).Equal(pauseWindowNextStart(at(10, 15, 0), []string{"02:00-08:00", "13:00-14:00"})))
+	require.True(t, pauseWindowNextStart(at(10, 15, 0), nil).IsZero())
+}

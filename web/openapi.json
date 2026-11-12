@@ -2685,6 +2685,54 @@
         ],
         "type": "object"
       },
+      "PauseWindowStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "custom": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "exempt": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "next_start": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "paused": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "resume_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "windows": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "windows",
+          "timezone",
+          "active",
+          "resume_at",
+          "next_start",
+          "paused",
+          "custom",
+          "exempt"
+        ],
+        "type": "object"
+      },
       "PendingView": {
         "additionalProperties": false,
         "properties": {
@@ -7960,6 +8008,42 @@
           }
         ],
         "summary": "重新发送通知",
+        "tags": [
+          "traffic"
+        ]
+      }
+    },
+    "/api/pause-window": {
+      "get": {
+        "operationId": "getPauseWindowStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PauseWindowStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "每日停服时段的当前状态",
         "tags": [
           "traffic"
         ]

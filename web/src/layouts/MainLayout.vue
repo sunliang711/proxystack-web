@@ -34,6 +34,8 @@ import { themePreference, type ThemePreference } from '../theme'
 import PendingDrawer from '../components/PendingDrawer.vue'
 import ReloginDialog from '../components/ReloginDialog.vue'
 import SessionExpiry from '../components/SessionExpiry.vue'
+import PauseWindowIndicator from '../components/PauseWindowIndicator.vue'
+import { startPauseWindow, stopPauseWindow } from '../composables/usePauseWindow'
 import { connectEvents, disconnectEvents, pendingSummary, refreshPending, runtime } from '../runtime'
 import { api, type Schemas } from '../api/client'
 import brandLogo from '/favicon.svg?url'
@@ -146,8 +148,10 @@ onMounted(() => {
   taskCenter.start(session.admin!.username)
   connectEvents()
   refreshPending()
+  startPauseWindow()
 })
 onBeforeUnmount(() => {
+  stopPauseWindow()
   stopNotices()
   taskCenter.stop()
   disconnectEvents()
@@ -251,6 +255,7 @@ async function onAccount(key: string) {
             <span class="search-label">搜索</span>
             <kbd class="search-kbd">{{ searchShortcut }}</kbd>
           </NButton>
+          <PauseWindowIndicator />
           <SessionExpiry />
           <NDropdown :options="themeOptions" trigger="click" placement="bottom-end" @select="(key: ThemePreference) => (themePreference = key)">
             <NButton quaternary circle size="small" :title="`主题：${themeLabels[themePreference]}`" :aria-label="`切换主题，当前：${themeLabels[themePreference]}`">

@@ -12,10 +12,11 @@ import SecretInput from '../components/SecretInput.vue'
 import TemplateInput from '../components/TemplateInput.vue'
 import ErrorList from '../components/ErrorList.vue'
 import PauseWindowsInput from '../components/PauseWindowsInput.vue'
+import { refreshPauseWindow } from '../composables/usePauseWindow'
 import SettingsSection from '../components/SettingsSection.vue'
 import EntityLink from '../components/EntityLink.vue'
 import { SearchOutline } from '@vicons/ionicons5'
-import { settingsSections, settingsTabs, tabForField, tabOfSection, type SettingsTab } from '../composables/useSettingsSections'
+import { sectionValue, settingsSections, settingsTabs, tabForField, tabOfSection, type SettingsTab } from '../composables/useSettingsSections'
 import { useDirty } from '../composables/useDirty'
 import { notifySaved } from '../runtime'
 import { mihomoLogLevels, xrayLogLevels } from '../util/options'
@@ -77,7 +78,7 @@ const tabDirty = computed(() => {
   const base = saved.value
   if (!current || !base) return out
   for (const t of settingsTabs) {
-    if (t.sections.some((key) => JSON.stringify(current[key]) !== JSON.stringify(base[key]))) out.add(t.name)
+    if (t.sections.some((key) => JSON.stringify(sectionValue(current, key)) !== JSON.stringify(sectionValue(base, key)))) out.add(t.name)
   }
   return out
 })
@@ -282,6 +283,7 @@ async function save() {
   errors.value = emptyErrors()
   settings.value = data!
   markClean()
+  void refreshPauseWindow()
   void notifySaved(message, '已保存，后续后台任务立即使用新设置；生成的配置没有变化，无需应用')
 }
 </script>
@@ -310,6 +312,14 @@ async function save() {
             </NFormItem>
             <NFormItem label="时区" v-bind="f('basic.timezone', '流量统计的日、月边界按此时区计算')">
               <NSelect v-model:value="form.basic.timezone" :options="timezones" filterable />
+            </NFormItem>
+          </SettingsSection>
+          <SettingsSection v-show="sectionShown('pause')" title="停服时段" name="pause">
+            <NFormItem label="每日停服时段" v-bind="f('traffic.pause_windows', '时段内自动暂停用户，结束后自动恢复；按上方的时区计算，可跨零点。用户可在详情页改用自己的时段或不受限制。留空表示不停服')">
+              <PauseWindowsInput :value="form.traffic.pause_windows ?? []" @update:value="(v: string[]) => (form.traffic.pause_windows = v)" />
+            </NFormItem>
+            <NFormItem label="暂停时断开现有连接" v-bind="f('traffic.disconnect_on_pause', '停服时段、每日阈值、额度和到期等自动暂停生效后，重启引用了被暂停用户的 stack 的 xray，切断已建立的连接；同一 stack 上其他用户的连接会被短暂中断')">
+              <NSwitch v-model:value="form.traffic.disconnect_on_pause" />
             </NFormItem>
           </SettingsSection>
           <SettingsSection v-show="sectionShown('security')" title="安全" name="security">
@@ -378,12 +388,6 @@ async function save() {
             </NFormItem>
             <NFormItem label="月明细保留" v-bind="f('traffic.retention_month_days', '天，0 表示永久')">
               <NInputNumber v-model:value="form.traffic.retention_month_days" :min="0" />
-            </NFormItem>
-            <NFormItem label="暂停时断开现有连接" v-bind="f('traffic.disconnect_on_pause', '自动暂停后重启受影响的 xray 以切断已建立的连接，其他用户的连接会被短暂中断')">
-              <NSwitch v-model:value="form.traffic.disconnect_on_pause" />
-            </NFormItem>
-            <NFormItem label="每日停服时段" v-bind="f('traffic.pause_windows', '时段内自动暂停用户，结束后自动恢复；按基本设置的时区计算，可跨零点。用户可在详情页改用自己的时段或不受限制。留空表示不停服')">
-              <PauseWindowsInput :value="form.traffic.pause_windows ?? []" @update:value="(v: string[]) => (form.traffic.pause_windows = v)" />
             </NFormItem>
           </SettingsSection>
           <SettingsSection v-show="sectionShown('notify')" title="通知" name="notify">

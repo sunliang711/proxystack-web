@@ -7,6 +7,7 @@ import { api, problemMessage, type Schemas } from '../api/client'
 import TrafficChart from '../components/TrafficChart.vue'
 import EntityLink from '../components/EntityLink.vue'
 import SetupChecklist from '../components/SetupChecklist.vue'
+import PauseWindowCard from '../components/PauseWindowCard.vue'
 import GapNotice from './traffic/GapNotice.vue'
 import { onTrafficEvent } from '../runtime'
 import { formatBytes, formatRate } from '../util/format'
@@ -119,6 +120,7 @@ const changeType = (trend: string) => (trend === 'up' || trend === 'new' ? 'warn
 <template>
   <NSpace vertical :size="20">
     <SetupChecklist />
+    <PauseWindowCard />
     <template v-if="overview">
     <NAlert v-if="!overview.enabled" type="info" :bordered="false">
       流量监控未开启，下面的流量和速率不会更新。<RouterLink :to="{ name: 'settings', query: { section: 'traffic' } }">去系统设置开启</RouterLink>

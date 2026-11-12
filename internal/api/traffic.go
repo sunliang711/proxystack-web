@@ -68,6 +68,10 @@ type trafficRankingOutput struct {
 	Body app.TrafficRanking
 }
 
+type pauseWindowStatusOutput struct {
+	Body app.PauseWindowStatus
+}
+
 type usersUsageOutput struct {
 	Body []app.UserUsage
 }
@@ -157,6 +161,14 @@ func registerTraffic(api huma.API, s *Server) {
 				return nil, toHTTPError(err)
 			}
 			return &trafficRankingOutput{Body: *result}, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "getPauseWindowStatus", Method: http.MethodGet, Path: "/api/pause-window", Summary: "每日停服时段的当前状态"}),
+		func(ctx context.Context, _ *struct{}) (*pauseWindowStatusOutput, error) {
+			status, err := s.svc.PauseWindowStatus(ctx)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &pauseWindowStatusOutput{Body: *status}, nil
 		})
 	huma.Register(api, reg(huma.Operation{OperationID: "listUsersUsage", Method: http.MethodGet, Path: "/api/traffic/users", Summary: "全部用户的用量和自动暂停"}),
 		func(ctx context.Context, _ *struct{}) (*usersUsageOutput, error) {

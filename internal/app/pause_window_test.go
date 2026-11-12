@@ -174,3 +174,37 @@ func TestPauseWindowsClearedOutsideCustom(t *testing.T) {
 	})
 	require.Empty(t, h.alice(t).PauseWindows)
 }
+
+// TestPauseWindowStatus 验证停服状态：未到时段时给出下一次开始时刻，时段内给出恢复时刻和暂停人数，并统计例外用户。
+func TestPauseWindowStatus(t *testing.T) {
+	ctx := context.Background()
+	h := newTrafficHarness(t)
+	status, err := h.svc.PauseWindowStatus(ctx)
+	require.NoError(t, err)
+	require.Empty(t, status.Windows)
+	require.False(t, status.Active)
+	require.True(t, status.NextStart.IsZero())
+
+	// 时钟 12:00:30：13:00 开始的时段还没到。
+	h.setPauseWindows(t, "13:00-14:00", "02:00-03:00")
+	status, err = h.svc.PauseWindowStatus(ctx)
+	require.NoError(t, err)
+	require.False(t, status.Active)
+	require.Equal(t, 13, status.NextStart.In(h.now.Location()).Hour())
+	require.Zero(t, status.Paused)
+
+	h.now = h.now.Add(time.Hour)
+	h.tick(t, time.Second)
+	status, err = h.svc.PauseWindowStatus(ctx)
+	require.NoError(t, err)
+	require.True(t, status.Active)
+	require.Equal(t, 14, status.ResumeAt.In(h.now.Location()).Hour())
+	require.Equal(t, 1, status.Paused)
+
+	h.update(t, func(u *configdoc.User) { u.PauseWindowMode = configdoc.PauseWindowOff })
+	status, err = h.svc.PauseWindowStatus(ctx)
+	require.NoError(t, err)
+	require.Zero(t, status.Paused)
+	require.Equal(t, 1, status.Exempt)
+	require.Zero(t, status.Custom)
+}

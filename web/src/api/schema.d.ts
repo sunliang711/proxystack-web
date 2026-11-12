@@ -686,6 +686,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/pause-window": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 每日停服时段的当前状态 */
+        get: operations["getPauseWindowStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ports/allocate": {
         parameters: {
             query?: never;
@@ -2527,6 +2544,21 @@ export interface components {
         PauseOutputBody: {
             notes: string[];
             user: components["schemas"]["User"];
+        };
+        PauseWindowStatus: {
+            active: boolean;
+            /** Format: int64 */
+            custom: number;
+            /** Format: int64 */
+            exempt: number;
+            /** Format: date-time */
+            next_start: string;
+            /** Format: int64 */
+            paused: number;
+            /** Format: date-time */
+            resume_at: string;
+            timezone: string;
+            windows: string[];
         };
         PendingView: {
             changes: components["schemas"]["Change"][];
@@ -4801,6 +4833,35 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getPauseWindowStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PauseWindowStatus"];
+                };
             };
             /** @description Error */
             default: {

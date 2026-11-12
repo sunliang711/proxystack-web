@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"time"
 
 	"proxystack-web/internal/configdoc"
@@ -69,4 +70,83 @@ func wallClock(year int, month time.Month, day, minute int, loc *time.Location) 
 		at = at.Add(diff)
 	}
 	return at
+}
+
+// pauseWindowNextStart 返回 at 之后最近一次停服时段的开始时刻；没有时段时返回零值。
+func pauseWindowNextStart(at time.Time, windows []string) time.Time {
+	var next time.Time
+	year, month, day := at.Date()
+	for _, window := range windows {
+		start, _, err := configdoc.ParsePauseWindow(window)
+		if err != nil {
+			continue
+		}
+		for _, offset := range []int{0, 1} {
+			begin := wallClock(year, month, day+offset, start, at.Location())
+			if begin.After(at) && (next.IsZero() || begin.Before(next)) {
+				next = begin
+			}
+		}
+	}
+	return next
+}
+
+// PauseWindowStatus 是每日停服时段的当前状态，供顶栏、总览和用户列表展示。
+type PauseWindowStatus struct {
+	// Windows 是系统设置中的全局停服时段，Timezone 是计算时段使用的时区。
+	Windows  []string `json:"windows"`
+	Timezone string   `json:"timezone"`
+	// Active 表示全局停服时段当前生效；ResumeAt 是这段停服的结束时刻，NextStart 是下一次开始时刻（Active 时为零值）。
+	Active    bool      `json:"active"`
+	ResumeAt  time.Time `json:"resume_at"`
+	NextStart time.Time `json:"next_start"`
+	// Paused 是当前因停服时段暂停的用户数，包括使用自定义时段的用户。
+	Paused int `json:"paused"`
+	// Custom 和 Exempt 分别是使用自定义时段和不受停服时段限制的用户数。
+	Custom int `json:"custom"`
+	Exempt int `json:"exempt"`
+}
+
+// PauseWindowStatus 返回每日停服时段的当前状态。
+func (s *Service) PauseWindowStatus(ctx context.Context) (*PauseWindowStatus, error) {
+	settings, err := s.loadSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	now, loc := s.Now(), location(settings)
+	out := &PauseWindowStatus{Windows: settings.Traffic.PauseWindows, Timezone: loc.String()}
+	if out.Windows == nil {
+		out.Windows = []string{}
+	}
+	local := now.In(loc)
+	if end, in := pauseWindowEnd(local, out.Windows); in {
+		out.Active, out.ResumeAt = true, end
+	} else {
+		out.NextStart = pauseWindowNextStart(local, out.Windows)
+	}
+	err = s.Store.InTx(ctx, func(q *dbq.Queries) error {
+		users, err := q.ListUsers(ctx)
+		if err != nil {
+			return err
+		}
+		for _, user := range users {
+			switch user.PauseWindowMode {
+			case configdoc.PauseWindowCustom:
+				out.Custom++
+			case configdoc.PauseWindowOff:
+				out.Exempt++
+			}
+		}
+		pauses, err := q.ListAutoPauses(ctx)
+		if err != nil {
+			return err
+		}
+		for _, pause := range pauses {
+			if pause.Reason == PauseSchedule {
+				out.Paused++
+			}
+		}
+		return nil
+	})
+	return out, err
 }

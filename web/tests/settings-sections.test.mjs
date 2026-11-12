@@ -41,3 +41,14 @@ test('全局搜索的字段索引覆盖设置页上的全部字段标签', async
     for (const label of labels) assert.ok(fields.includes(label), `设置分组 ${name} 的字段「${label}」没有加入全局搜索索引`)
   }
 })
+
+test('停服时段的字段存放在 traffic 下，但归属「基本」标签页的停服时段分组', () => {
+  assert.equal(mod.tabOfSection('pause'), 'basic')
+  assert.equal(mod.sectionOfField('traffic.pause_windows'), 'pause')
+  assert.equal(mod.sectionOfField('traffic.pause_windows[0]'), 'pause')
+  assert.equal(mod.tabForField('traffic.disconnect_on_pause'), 'basic')
+  assert.equal(mod.tabForField('traffic.interval'), 'monitor')
+  const settings = { traffic: { interval: 10, pause_windows: ['02:00-08:00'], disconnect_on_pause: true } }
+  assert.deepEqual(mod.sectionValue(settings, 'pause'), { pause_windows: ['02:00-08:00'], disconnect_on_pause: true })
+  assert.deepEqual(mod.sectionValue(settings, 'traffic'), { interval: 10 })
+})
