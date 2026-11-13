@@ -29,6 +29,12 @@ const (
 	topUsers = 10
 )
 
+// 采集状态中不属于采集故障的两种原因。
+const (
+	collectNotRunning = "xray 未运行"
+	collectNoStats    = "未开启 stats 或 StatsService，应用配置后恢复采集"
+)
+
 // CollectStatus 是一个 stack 的采集状态。
 type CollectStatus struct {
 	StackID int64     `json:"stack_id"`
@@ -146,7 +152,7 @@ func (s *Service) collectTargets(ctx context.Context) ([]collectTarget, error) {
 		api := domain.ResolveXrayAPIConfig(set.Config.Defaults.Xray, stack.Xray)
 		stats := domain.ResolveXrayStatsConfig(set.Config.Defaults.Xray, stack.Xray)
 		if !api.Enabled || !api.HasService("StatsService") || !stats.Enabled {
-			target.problem = "未开启 stats 或 StatsService，应用配置后恢复采集"
+			target.problem = collectNoStats
 		}
 		target.server = api.Listen
 		target.accessLog = domain.ResolveXrayAccessLog(set.Config.Defaults.Xray, stack.Xray) &&
@@ -213,7 +219,7 @@ func (s *Service) collectTraffic(ctx context.Context) {
 			status.Error = target.problem
 			check.result = gapUncounted
 		case !state.Running():
-			status.Error = "xray 未运行"
+			status.Error = collectNotRunning
 			check.result = gapStopped
 		default:
 			stats, err := s.XrayAPI.QueryStats(ctx, target.server)

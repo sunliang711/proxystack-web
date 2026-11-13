@@ -38,6 +38,8 @@ var eventLabels = map[string]string{
 	configdoc.EventExpiring:        "用户即将到期",
 	configdoc.EventEgressDown:      "Stack 出口异常",
 	configdoc.EventEgressRecovered: "Stack 出口恢复",
+	configdoc.EventHealthAlert:     "系统健康异常",
+	configdoc.EventHealthRecovered: "系统健康恢复",
 }
 
 type notifyUser struct {

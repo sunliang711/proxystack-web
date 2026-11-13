@@ -2772,6 +2772,8 @@ export interface components {
             user_name: string;
         };
         NotifySettings: {
+            /** Format: int64 */
+            db_warn_mb: number;
             enabled: boolean;
             events: string[];
             /** Format: int64 */

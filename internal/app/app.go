@@ -58,6 +58,7 @@ type Service struct {
 	favicons      faviconState
 	geosite       geositeState
 	autoPause     autoPauseState
+	healthAlert   healthAlertState
 	scheduler     schedulerState
 	subDeployMu   sync.Mutex
 	subDeploying  map[int64]bool
@@ -71,6 +72,8 @@ type Service struct {
 	// background 跟踪退出前要收尾的后台循环。
 	background sync.WaitGroup
 
+	// DiskFree 返回路径所在文件系统的可用字节数，为 nil 时读取真实文件系统（测试替换）。
+	DiskFree func(path string) (uint64, error)
 	// SendMail 发送邮件，为 nil 时通过 SMTP 发送（测试替换）。
 	SendMail func(ctx context.Context, config notify.Config, subject, body string, attachments ...notify.Attachment) error
 	// FetchFavicon 替换网站图标的获取，生产环境为 nil 时经下载代理真实请求。

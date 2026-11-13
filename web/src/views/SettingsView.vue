@@ -200,6 +200,8 @@ const notifyEvents = [
   { value: 'expiring', label: '即将到期' },
   { value: 'egress_down', label: 'Stack 出口异常' },
   { value: 'egress_recovered', label: 'Stack 出口恢复' },
+  { value: 'health_alert', label: '系统健康异常' },
+  { value: 'health_recovered', label: '系统健康恢复' },
 ]
 const testingMail = ref(false)
 const mailResult = ref('')
@@ -450,6 +452,9 @@ async function save() {
             </NFormItem>
             <NFormItem label="到期提前提醒" v-bind="f('notify.expire_days', '天')">
               <NInputNumber v-model:value="form.notify.expire_days" :min="1" />
+            </NFormItem>
+            <NFormItem label="数据库大小告警阈值" v-bind="f('notify.db_warn_mb', 'MB')">
+              <NInputNumber v-model:value="form.notify.db_warn_mb" :min="1" :max="1048576" />
             </NFormItem>
             <NFormItem label="测试">
               <NSpace vertical>

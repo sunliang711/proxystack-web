@@ -180,6 +180,8 @@ const (
 	EventExpiring        = "expiring"
 	EventEgressDown      = "egress_down"
 	EventEgressRecovered = "egress_recovered"
+	EventHealthAlert     = "health_alert"
+	EventHealthRecovered = "health_recovered"
 )
 
 // NotifySettings 是邮件通知设置。
@@ -197,6 +199,8 @@ type NotifySettings struct {
 	// WarnPercent 是用量预警比例，ExpireDays 是到期提醒提前天数。
 	WarnPercent int `json:"warn_percent" yaml:"warn_percent" minimum:"1" maximum:"100"`
 	ExpireDays  int `json:"expire_days" yaml:"expire_days" minimum:"1"`
+	// DBWarnMB 是数据库大小的告警阈值（MB），超过后健康检查给出警告。
+	DBWarnMB int `json:"db_warn_mb" yaml:"db_warn_mb" minimum:"1" maximum:"1048576"`
 }
 
 // NodeExportSettings 是只读节点导出接口：其他实例凭 token 拉取本机节点。

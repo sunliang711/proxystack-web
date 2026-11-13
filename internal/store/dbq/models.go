@@ -93,6 +93,13 @@ type Favicon struct {
 	ExpiresAt   int64  `json:"expires_at"`
 }
 
+type HealthAlert struct {
+	CheckKey string `json:"check_key"`
+	Since    int64  `json:"since"`
+	Status   string `json:"status"`
+	Detail   string `json:"detail"`
+}
+
 type Inbound struct {
 	ID              int64  `json:"id"`
 	StackID         int64  `json:"stack_id"`

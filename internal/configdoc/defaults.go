@@ -63,11 +63,18 @@ func DefaultSettings() Settings {
 		},
 		Notify: NotifySettings{
 			Port: 587, Security: SMTPSecuritySTARTTLS, To: []string{},
-			Events:      []string{EventDailyLimit, EventQuotaLimit, EventExpired, EventEgressDown, EventEgressRecovered},
-			WarnPercent: 80, ExpireDays: 3,
+			Events: []string{EventDailyLimit, EventQuotaLimit, EventExpired, EventEgressDown, EventEgressRecovered,
+				EventHealthAlert, EventHealthRecovered},
+			WarnPercent: 80, ExpireDays: 3, DBWarnMB: DefaultDBWarnMB,
 		},
 	}
 }
+
+// DefaultDBWarnMB 是数据库大小告警阈值的缺省值（MB）。
+const DefaultDBWarnMB = 2048
+
+// MaxDBWarnMB 是数据库大小告警阈值的上限（MB），即 1 TB。
+const MaxDBWarnMB = 1 << 20
 
 // DefaultAccessRetentionDays 是访问域名统计的缺省保留天数。
 const DefaultAccessRetentionDays = 90

@@ -2761,6 +2761,12 @@
       "NotifySettings": {
         "additionalProperties": false,
         "properties": {
+          "db_warn_mb": {
+            "format": "int64",
+            "maximum": 1048576,
+            "minimum": 1,
+            "type": "integer"
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -2825,7 +2831,8 @@
           "to",
           "events",
           "warn_percent",
-          "expire_days"
+          "expire_days",
+          "db_warn_mb"
         ],
         "type": "object"
       },

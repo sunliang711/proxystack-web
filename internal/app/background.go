@@ -43,6 +43,7 @@ func (s *Service) StartBackground(ctx context.Context) error {
 		s.runAccessStats(ctx)
 	}()
 	go s.runNotifications(ctx)
+	go s.runHealthAlerts(ctx)
 	go s.runScheduler(ctx)
 	s.background.Add(1)
 	go func() {

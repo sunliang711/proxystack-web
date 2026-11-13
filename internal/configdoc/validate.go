@@ -774,9 +774,13 @@ func validateTrafficNotify(issues *Issues, settings Settings) {
 	if notify.ExpireDays < 1 {
 		issues.add("settings.notify.expire_days", "must be at least 1")
 	}
+	if notify.DBWarnMB < 1 || notify.DBWarnMB > MaxDBWarnMB {
+		issues.add("settings.notify.db_warn_mb", "must be between 1 and %d", MaxDBWarnMB)
+	}
 	for index, event := range notify.Events {
 		checkEnum(issues, fmt.Sprintf("settings.notify.events[%d]", index), event,
-			EventDailyLimit, EventDailyWarning, EventQuotaLimit, EventQuotaWarning, EventExpired, EventExpiring, EventEgressDown, EventEgressRecovered)
+			EventDailyLimit, EventDailyWarning, EventQuotaLimit, EventQuotaWarning, EventExpired, EventExpiring, EventEgressDown, EventEgressRecovered,
+			EventHealthAlert, EventHealthRecovered)
 	}
 	if notify.From != "" {
 		if _, err := mail.ParseAddress(notify.From); err != nil {

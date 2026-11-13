@@ -141,6 +141,9 @@ func (s *Settings) Normalize() {
 	if s.Notify.Events == nil {
 		s.Notify.Events = []string{}
 	}
+	if s.Notify.DBWarnMB == 0 {
+		s.Notify.DBWarnMB = DefaultDBWarnMB
+	}
 	if s.DownloadProxy.Mode == "" {
 		s.DownloadProxy = defaults.DownloadProxy
 	}
