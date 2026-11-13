@@ -3,6 +3,7 @@ package xray
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"proxystack-web/internal/domain"
 	"proxystack-web/internal/graph"
@@ -90,6 +91,7 @@ type vmessInbound struct {
 	Protocol       string         `json:"protocol"`
 	Settings       vmessSettings  `json:"settings"`
 	StreamSettings streamSettings `json:"streamSettings"`
+	Sniffing       *Sniffing      `json:"sniffing,omitempty"`
 }
 
 type vmessSettings struct {
@@ -123,6 +125,7 @@ type shadowsocksInbound struct {
 	Port     int                 `json:"port"`
 	Protocol string              `json:"protocol"`
 	Settings shadowsocksSettings `json:"settings"`
+	Sniffing *Sniffing           `json:"sniffing,omitempty"`
 }
 
 type shadowsocksSettings struct {
@@ -144,6 +147,7 @@ type socksInbound struct {
 	Port     int           `json:"port"`
 	Protocol string        `json:"protocol"`
 	Settings socksSettings `json:"settings"`
+	Sniffing *Sniffing     `json:"sniffing,omitempty"`
 }
 
 type socksSettings struct {
@@ -158,6 +162,7 @@ type httpInbound struct {
 	Port     int          `json:"port"`
 	Protocol string       `json:"protocol"`
 	Settings httpSettings `json:"settings"`
+	Sniffing *Sniffing    `json:"sniffing,omitempty"`
 }
 
 type httpSettings struct {
@@ -191,7 +196,14 @@ type directOutbound struct {
 	Settings emptyObject `json:"settings"`
 }
 
-// RoutingConfig 保存 Xray 路由规则，仅在需要本地分流时生成。
+// Sniffing 是入站的流量嗅探：从 HTTP Host、TLS SNI 和 QUIC 中识别目标域名，只用于路由匹配，不改写连接目标。
+type Sniffing struct {
+	Enabled      bool     `json:"enabled"`
+	DestOverride []string `json:"destOverride"`
+	RouteOnly    bool     `json:"routeOnly"`
+}
+
+// RoutingConfig 保存 Xray 路由规则，仅在需要本地分流或域名拦截时生成。
 type RoutingConfig struct {
 	Rules []RoutingRule `json:"rules"`
 }
@@ -199,6 +211,7 @@ type RoutingConfig struct {
 // RoutingRule 保存单条 Xray field 路由规则。
 type RoutingRule struct {
 	Type        string   `json:"type"`
+	User        []string `json:"user,omitempty"`
 	Domain      []string `json:"domain,omitempty"`
 	IP          []string `json:"ip,omitempty"`
 	OutboundTag string   `json:"outboundTag"`
@@ -237,6 +250,8 @@ func RenderConfig(stackSet domain.StackSet, stackName string) (Config, error) {
 	if policyConfig.Enabled || statsConfig.Enabled {
 		config.Policy = RenderPolicy(policyConfig, statsConfig.Enabled)
 	}
+	// 拦截规则按入站引用的全部用户生成，不受暂停影响：暂停经 API 热移除和热恢复用户，不重新生成配置。
+	blockRules := RenderBlockRules(stackSet.Config, stack.Xray.Inbounds, BlockOutboundTag(stack.Name))
 	config.Inbounds = make([]any, 0, len(stack.Xray.Inbounds))
 	for _, inbound := range stack.Xray.Inbounds {
 		inbound, err := applyDisabledUsers(inbound, stackSet.DisabledUsers, stack.Name, stack.Clash.Controller.Secret)
@@ -247,15 +262,84 @@ func RenderConfig(stackSet domain.StackSet, stackName string) (Config, error) {
 		if err != nil {
 			return Config{}, err
 		}
+		if len(blockRules) > 0 {
+			rendered = withSniffing(rendered)
+		}
 		config.Inbounds = append(config.Inbounds, rendered)
 	}
 	outbounds, routing, err := RenderOutbounds(stack.Xray.Outbound, referenceGraph, stack.Name)
 	if err != nil {
 		return Config{}, err
 	}
+	if len(blockRules) > 0 {
+		// 第一个 outbound 是默认出口，黑洞只能排在后面。
+		outbounds = append(outbounds, directOutbound{Tag: BlockOutboundTag(stack.Name), Protocol: "blackhole", Settings: emptyObject{}})
+		if routing == nil {
+			routing = &RoutingConfig{}
+		}
+		routing.Rules = append(blockRules, routing.Rules...)
+	}
 	config.Routing = routing
 	config.Outbounds = outbounds
 	return config, nil
+}
+
+// BlockOutboundTag 生成域名拦截使用的黑洞 outbound tag。
+func BlockOutboundTag(stackName string) string {
+	return domain.BlockOutboundTagPrefix + stackName
+}
+
+// RenderBlockRules 生成域名拦截的路由规则：每个有个人名单的用户一条（匹配该用户在本 stack 入站中的全部 email），
+// 全局名单一条（匹配全部连接）。没有任何名单时返回空。
+func RenderBlockRules(global domain.GlobalConfig, inbounds []domain.Inbound, outboundTag string) []RoutingRule {
+	var rules []RoutingRule
+	emails := map[string][]string{}
+	for _, inbound := range inbounds {
+		for _, user := range inbound.Users {
+			if len(global.UserBlockedDomains[user.User]) == 0 {
+				continue
+			}
+			if email := user.StatsEmail(); !slices.Contains(emails[user.User], email) {
+				emails[user.User] = append(emails[user.User], email)
+			}
+		}
+	}
+	names := make([]string, 0, len(emails))
+	for name := range emails {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		users := append([]string(nil), emails[name]...)
+		slices.Sort(users)
+		rules = append(rules, RoutingRule{
+			Type: "field", User: users, Domain: append([]string(nil), global.UserBlockedDomains[name]...), OutboundTag: outboundTag,
+		})
+	}
+	if len(global.BlockedDomains) > 0 {
+		rules = append(rules, RoutingRule{Type: "field", Domain: append([]string(nil), global.BlockedDomains...), OutboundTag: outboundTag})
+	}
+	return rules
+}
+
+// withSniffing 给入站开启只用于路由的流量嗅探，让客户端以 IP 发起的连接也能按域名匹配拦截规则。
+func withSniffing(inbound any) any {
+	sniffing := &Sniffing{Enabled: true, DestOverride: []string{"http", "tls", "quic"}, RouteOnly: true}
+	switch value := inbound.(type) {
+	case vmessInbound:
+		value.Sniffing = sniffing
+		return value
+	case shadowsocksInbound:
+		value.Sniffing = sniffing
+		return value
+	case socksInbound:
+		value.Sniffing = sniffing
+		return value
+	case httpInbound:
+		value.Sniffing = sniffing
+		return value
+	}
+	return inbound
 }
 
 // DumpsConfig 将指定 stack 的 Xray 配置编码为稳定、可读的 JSON 文本。

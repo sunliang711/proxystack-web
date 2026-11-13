@@ -102,6 +102,17 @@ func compileGlobal(settings Settings, users []User) domain.GlobalConfig {
 			config.Defaults.Xray.API.Services = append(config.Defaults.Xray.API.Services, "StatsService")
 		}
 	}
+	for _, entry := range settings.Traffic.BlockedDomains {
+		config.BlockedDomains = append(config.BlockedDomains, XrayDomainRule(entry))
+	}
+	for _, user := range users {
+		for _, entry := range user.BlockedDomains {
+			if config.UserBlockedDomains == nil {
+				config.UserBlockedDomains = map[string][]string{}
+			}
+			config.UserBlockedDomains[user.Name] = append(config.UserBlockedDomains[user.Name], XrayDomainRule(entry))
+		}
+	}
 	for _, user := range users {
 		// 用户备注仅用于管理识别，不作为 default 档案的订阅节点名。
 		config.Users = append(config.Users, domain.UserProfile{

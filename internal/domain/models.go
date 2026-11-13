@@ -233,6 +233,10 @@ type GlobalConfig struct {
 	PortRanges                  PortRanges     `json:"port_ranges"`
 	Defaults                    DefaultsConfig `json:"defaults"`
 	Security                    SecurityConfig `json:"security"`
+	// BlockedDomains 是对全部连接生效的拦截规则，UserBlockedDomains 按用户名给出只对该用户生效的拦截规则；
+	// 规则使用 xray 路由的域名匹配写法（domain:example.com、full:www.example.com）。
+	BlockedDomains     []string            `json:"blocked_domains,omitempty"`
+	UserBlockedDomains map[string][]string `json:"user_blocked_domains,omitempty"`
 }
 
 // Validate 校验全局配置字段和默认值枚举。
@@ -345,6 +349,9 @@ func (u InboundUser) StatsEmail() string {
 	}
 	return u.User
 }
+
+// BlockOutboundTagPrefix 是域名拦截使用的黑洞 outbound tag 前缀，后接 stack 名；访问日志按它识别被拦截的连接。
+const BlockOutboundTagPrefix = "block-"
 
 // UserStatsEmail 返回用户（或其档案）在 xray 中的 email。用户名方便查看日志，ID 后缀保证改名后统计仍然连续。
 // userID 为 0（尚未入库）时返回空字符串；用户名为空时返回旧格式，供运行中实例兼容使用。

@@ -112,7 +112,7 @@ func TestAccessStatsCountsDomainsPerUser(t *testing.T) {
 	require.Equal(t, int64(2), users.Users[0].Count)
 
 	csv := string(app.AccessDomainsCSV(top, false))
-	require.Contains(t, csv, "domain,count,users\ngoogle.com,2,1\n")
+	require.Contains(t, csv, "domain,count,blocked,users\ngoogle.com,2,0,1\n")
 
 	// 重启：新进程从数据库中的书签继续，停机期间写出的日志补读一次，已计入的不重复。
 	h.svc.StopAccess(ctx)
@@ -194,4 +194,122 @@ func TestAccessStatsDisabledAtStartupDropsCursor(t *testing.T) {
 	h.waitFollowing(t)
 	h.visit(email, "tcp:example.org:443")
 	waitAccess(t, restarted, alice, h.now, map[string]int64{"google.com": 1, "example.org": 1})
+}
+
+// TestAccessStatsCountsBlockedConnections 验证被域名黑名单送进黑洞的连接单独计数，不混进放行次数。
+func TestAccessStatsCountsBlockedConnections(t *testing.T) {
+	h := newTrafficHarness(t)
+	ctx := context.Background()
+	alice := h.alice(t).ID
+	email := fmt.Sprintf("alice.u%d", alice)
+	t.Cleanup(func() { h.svc.StopAccess(context.Background()) })
+	h.setAccessStats(t, true)
+	h.svc.AccessTick(ctx)
+	h.waitFollowing(t)
+
+	h.visit(email, "tcp:www.google.com:443")
+	for range 2 {
+		h.units.AppendLog(units.LogEntry{
+			Unit: units.Name(units.Xray, "usa1"), Time: h.now,
+			Message: "from 1.2.3.4:5678 accepted tcp:ads.google.com:443 [vmess -> block-usa1] email: " + email,
+		})
+	}
+	h.visit(email, "tcp:example.org:443")
+	waitAccess(t, h.svc, alice, h.now, map[string]int64{"google.com": 1, "example.org": 1})
+	window := app.AccessQuery{From: h.now.Add(-time.Hour), To: h.now.Add(time.Hour)}
+	require.Eventually(t, func() bool {
+		h.svc.AccessTick(ctx)
+		result, err := h.svc.AccessUserDomains(ctx, alice, window)
+		return err == nil && result.Blocked == 2
+	}, 3*time.Second, 20*time.Millisecond)
+
+	top, err := h.svc.AccessTopDomains(ctx, window)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), top.Total)
+	require.Equal(t, int64(2), top.Blocked)
+	require.Equal(t, "google.com", top.Domains[0].Domain, "blocked connections count toward the ranking")
+	require.Equal(t, int64(1), top.Domains[0].Count)
+	require.Equal(t, int64(2), top.Domains[0].Blocked)
+	require.Contains(t, string(app.AccessDomainsCSV(top, false)), "google.com,1,2,1\n")
+
+	users, err := h.svc.AccessDomainUsersData(ctx, "google.com", window)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), users.Users[0].Blocked)
+}
+
+// TestSetDomainBlockedUpdatesListsAndPendingChanges 验证一键拉黑写入全局或用户名单、进入待应用变更，并在访问排行中标出。
+func TestSetDomainBlockedUpdatesListsAndPendingChanges(t *testing.T) {
+	h := newTrafficHarness(t)
+	ctx := context.Background()
+	alice := h.alice(t).ID
+	email := fmt.Sprintf("alice.u%d", alice)
+	t.Cleanup(func() { h.svc.StopAccess(context.Background()) })
+	h.setAccessStats(t, true)
+	h.svc.AccessTick(ctx)
+	h.waitFollowing(t)
+	h.visit(email, "tcp:www.google.com:443")
+	h.visit(email, "tcp:example.org:443")
+	waitAccess(t, h.svc, alice, h.now, map[string]int64{"google.com": 1, "example.org": 1})
+	window := app.AccessQuery{From: h.now.Add(-time.Hour), To: h.now.Add(time.Hour)}
+
+	// 全局拉黑：输入子域名时按主域名写入，配置出现待应用的 xray 变更。
+	result, err := h.svc.SetDomainBlocked(ctx, h.actor, "WWW.Google.com", 0, true)
+	require.NoError(t, err)
+	require.Equal(t, app.BlockDomainResult{Domain: "google.com", Entry: "google.com", Changed: true, Listed: app.BlockListedGlobal}, *result)
+	doc, err := h.svc.LoadConfig(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []string{"google.com"}, doc.Settings.Traffic.BlockedDomains)
+	pending, err := h.svc.Pending(ctx)
+	require.NoError(t, err)
+	diffs := map[string]string{}
+	for _, change := range pending.Changes {
+		diffs[change.Stack+"/"+change.Component] += change.Diff
+	}
+	require.Contains(t, diffs["usa1/xray"], "domain:google.com")
+	require.Contains(t, diffs["usa1/xray"], "block-usa1")
+	require.Contains(t, diffs["usa1/xray"], "routeOnly")
+	require.NotContains(t, diffs, "usa1/mihomo", "the blocklist never touches mihomo")
+
+	result, err = h.svc.SetDomainBlocked(ctx, h.actor, "google.com", 0, true)
+	require.NoError(t, err)
+	require.False(t, result.Changed, "already listed")
+
+	// 用户拉黑：只写入该用户的名单；全局名单的状态优先显示。
+	result, err = h.svc.SetDomainBlocked(ctx, h.actor, "example.org", alice, true)
+	require.NoError(t, err)
+	require.Equal(t, app.BlockListedUser, result.Listed)
+	mine, err := h.svc.AccessUserDomains(ctx, alice, window)
+	require.NoError(t, err)
+	listed := map[string]string{}
+	for _, row := range mine.Domains {
+		listed[row.Domain] = row.Listed
+	}
+	require.Equal(t, map[string]string{"google.com": app.BlockListedGlobal, "example.org": app.BlockListedUser}, listed)
+	top, err := h.svc.AccessTopDomains(ctx, window)
+	require.NoError(t, err)
+	for _, row := range top.Domains {
+		if row.Domain == "example.org" {
+			require.Empty(t, row.Listed, "the global view ignores per-user lists")
+		}
+	}
+
+	// 移出：只删除相同条目；由上级域名条目拦截时报错。
+	result, err = h.svc.SetDomainBlocked(ctx, h.actor, "example.org", alice, false)
+	require.NoError(t, err)
+	require.True(t, result.Changed)
+	require.Empty(t, result.Listed)
+	settings := *doc.Settings
+	settings.Traffic.BlockedDomains = []string{"org"}
+	_, err = h.svc.UpdateSettings(ctx, h.actor, settings)
+	require.NoError(t, err)
+	_, err = h.svc.SetDomainBlocked(ctx, h.actor, "example.org", 0, false)
+	var fieldErr *app.FieldError
+	require.ErrorAs(t, err, &fieldErr)
+	for _, bad := range []string{"1.2.3.4", "full:foo.com", "domain:foo.com", "a:b.com", "例子.中国"} {
+		_, err = h.svc.SetDomainBlocked(ctx, h.actor, bad, 0, true)
+		require.ErrorAs(t, err, &fieldErr, bad)
+		require.Equal(t, "domain", fieldErr.Field, bad)
+	}
+	_, err = h.svc.SetDomainBlocked(ctx, h.actor, "example.org", 9999, true)
+	require.ErrorIs(t, err, app.ErrNotFound)
 }

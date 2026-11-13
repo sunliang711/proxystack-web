@@ -157,6 +157,8 @@ type TrafficSettings struct {
 	AccessStats bool `json:"access_stats" yaml:"access_stats,omitempty" required:"false" doc:"按用户统计访问的主域名（读取 xray 访问日志）"`
 	// AccessRetentionDays 是访问域名统计的保留天数。
 	AccessRetentionDays int `json:"access_retention_days" yaml:"access_retention_days,omitempty" required:"false" minimum:"0" maximum:"3650" doc:"访问域名统计保留天数，缺省 90"`
+	// BlockedDomains 是对全部连接生效的域名黑名单，由 xray 路由拦截。
+	BlockedDomains []string `json:"blocked_domains" yaml:"blocked_domains,omitempty" required:"false" doc:"全局域名黑名单：example.com 拦截该域名及全部子域名，full:www.example.com 只拦截该域名"`
 }
 
 // 邮件加密方式。
@@ -322,10 +324,12 @@ type User struct {
 	ResetDay         int    `json:"reset_day" yaml:"reset_day" minimum:"0" maximum:"28"`
 	ExpireAt         string `json:"expire_at" yaml:"expire_at,omitempty" doc:"RFC 3339 时间，空表示不过期"`
 	// PauseWindowMode 决定每日停服时段：inherit 跟随全局设置，custom 使用 PauseWindows，off 不限制。
-	PauseWindowMode string    `json:"pause_window_mode" yaml:"pause_window_mode,omitempty" enum:",inherit,custom,off" required:"false" doc:"每日停服时段：inherit 跟随全局，custom 使用自己的时段，off 不限制"`
-	PauseWindows    []string  `json:"pause_windows" yaml:"pause_windows,omitempty" required:"false" doc:"pause_window_mode=custom 时的停服时段，HH:MM-HH:MM，可跨零点"`
-	Note            string    `json:"note" yaml:"note,omitempty"`
-	Profiles        []Profile `json:"profiles" yaml:"profiles,omitempty"`
+	PauseWindowMode string   `json:"pause_window_mode" yaml:"pause_window_mode,omitempty" enum:",inherit,custom,off" required:"false" doc:"每日停服时段：inherit 跟随全局，custom 使用自己的时段，off 不限制"`
+	PauseWindows    []string `json:"pause_windows" yaml:"pause_windows,omitempty" required:"false" doc:"pause_window_mode=custom 时的停服时段，HH:MM-HH:MM，可跨零点"`
+	// BlockedDomains 是只对该用户生效的域名黑名单，与全局名单叠加。
+	BlockedDomains []string  `json:"blocked_domains" yaml:"blocked_domains,omitempty" required:"false" doc:"用户域名黑名单，与全局名单叠加；写法同全局名单"`
+	Note           string    `json:"note" yaml:"note,omitempty"`
+	Profiles       []Profile `json:"profiles" yaml:"profiles,omitempty"`
 	// PausedStacks 是手动暂停该用户的 stack；Enabled 为 false 时在全部 stack 上暂停。
 	PausedStacks []string `json:"paused_stacks" yaml:"paused_stacks,omitempty" required:"false"`
 }

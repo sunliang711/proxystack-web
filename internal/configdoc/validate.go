@@ -310,6 +310,7 @@ func validateUsers(issues *Issues, doc *Document) {
 		checkEnum(issues, path+".daily_limit_action", user.DailyLimitAction, DailyActionPause, DailyActionNotify)
 		checkEnum(issues, path+".pause_window_mode", user.PauseWindowMode, PauseWindowInherit, PauseWindowCustom, PauseWindowOff)
 		checkPauseWindows(issues, path+".pause_windows", user.PauseWindows)
+		checkBlockedDomains(issues, path+".blocked_domains", user.BlockedDomains)
 		if user.PauseWindowMode == PauseWindowCustom && len(user.PauseWindows) == 0 {
 			issues.add(path+".pause_windows", "at least one window is required for custom mode")
 		}
@@ -760,6 +761,7 @@ func validateTrafficNotify(issues *Issues, settings Settings) {
 		}
 	}
 	checkPauseWindows(issues, "settings.traffic.pause_windows", traffic.PauseWindows)
+	checkBlockedDomains(issues, "settings.traffic.blocked_domains", traffic.BlockedDomains)
 	if traffic.AccessRetentionDays < 1 || traffic.AccessRetentionDays > 3650 {
 		issues.add("settings.traffic.access_retention_days", "must be between 1 and 3650 days")
 	}

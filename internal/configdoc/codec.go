@@ -127,6 +127,7 @@ func (s *Settings) Normalize() {
 		s.Traffic = defaults.Traffic
 	}
 	s.Traffic.PauseWindows = normalizePauseWindows(s.Traffic.PauseWindows)
+	s.Traffic.BlockedDomains = normalizeBlockedDomains(s.Traffic.BlockedDomains)
 	if s.Traffic.AccessRetentionDays == 0 {
 		s.Traffic.AccessRetentionDays = DefaultAccessRetentionDays
 	}
@@ -160,6 +161,7 @@ func (u *User) Normalize() {
 	if u.DailyLimitAction == "" {
 		u.DailyLimitAction = DailyActionPause
 	}
+	u.BlockedDomains = normalizeBlockedDomains(u.BlockedDomains)
 	if u.PauseWindowMode == "" {
 		u.PauseWindowMode = PauseWindowInherit
 	}

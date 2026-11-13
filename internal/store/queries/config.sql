@@ -67,15 +67,16 @@ DELETE FROM stacks;
 -- name: UpsertUser :one
 INSERT INTO users (id, position, name, enabled, uuid, ss_password, remark, display_template, tag,
                    sub_token, quota_bytes, daily_limit_bytes, daily_limit_action, reset_mode, reset_day, expire_at, note,
-                   pause_window_mode, pause_windows)
-VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   pause_window_mode, pause_windows, blocked_domains)
+VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (id) DO UPDATE SET
     position = excluded.position, name = excluded.name, enabled = excluded.enabled, uuid = excluded.uuid,
     ss_password = excluded.ss_password, remark = excluded.remark, display_template = excluded.display_template,
     tag = excluded.tag, sub_token = excluded.sub_token, quota_bytes = excluded.quota_bytes,
     daily_limit_bytes = excluded.daily_limit_bytes, daily_limit_action = excluded.daily_limit_action,
     reset_mode = excluded.reset_mode, reset_day = excluded.reset_day, expire_at = excluded.expire_at,
-    note = excluded.note, pause_window_mode = excluded.pause_window_mode, pause_windows = excluded.pause_windows
+    note = excluded.note, pause_window_mode = excluded.pause_window_mode, pause_windows = excluded.pause_windows,
+    blocked_domains = excluded.blocked_domains
 RETURNING id;
 
 -- name: InsertUserProfile :one

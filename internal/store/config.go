@@ -97,6 +97,7 @@ func LoadDocument(ctx context.Context, q *dbq.Queries) (*configdoc.Document, err
 			ResetMode: row.ResetMode, ResetDay: int(row.ResetDay),
 			ExpireAt: row.ExpireAt, Note: row.Note, Profiles: []configdoc.Profile{},
 			PauseWindowMode: row.PauseWindowMode, PauseWindows: configdoc.SplitPauseWindows(row.PauseWindows),
+			BlockedDomains: configdoc.SplitBlockedDomains(row.BlockedDomains),
 		})
 	}
 	profiles, err := q.ListUserProfiles(ctx)
@@ -413,6 +414,7 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 			DailyLimitAction: user.DailyLimitAction, ResetMode: user.ResetMode,
 			ResetDay: int64(user.ResetDay), ExpireAt: user.ExpireAt, Note: user.Note,
 			PauseWindowMode: user.PauseWindowMode, PauseWindows: configdoc.JoinPauseWindows(user.PauseWindows),
+			BlockedDomains: configdoc.JoinBlockedDomains(user.BlockedDomains),
 		})
 		if err != nil {
 			return fmt.Errorf("save user %s: %w", user.Name, err)
@@ -450,7 +452,7 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 			NULLIF: stack.ID, Position: int64(index), Name: stack.Name, Enabled: boolInt(stack.Enabled),
 			DesiredRunning: boolInt(stack.DesiredRunning), Role: stack.Role, Labels: labels, DailyLimitBytes: stack.DailyLimitBytes,
 			DirectSuffix: stack.DirectSuffix,
-			XrayEnabled: boolInt(xray.Enabled), XrayLoglevel: xray.LogLevel, XrayApi: xray.API,
+			XrayEnabled:  boolInt(xray.Enabled), XrayLoglevel: xray.LogLevel, XrayApi: xray.API,
 			XrayAccessLog: xray.AccessLog,
 			XrayStats:     xray.Stats, XrayPolicy: xray.Policy, XrayApiPort: int64(xray.APIPort),
 			OutboundType: outbound.Type, OutboundServer: outbound.Server, OutboundPort: int64(outbound.Port),

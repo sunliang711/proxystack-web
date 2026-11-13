@@ -1,13 +1,13 @@
 /** 系统设置的分组、所在标签页和生效方式。 */
 
-export const settingsSections = ['basic', 'pause', 'security', 'subscription', 'traffic', 'notify', 'download_proxy', 'deps', 'defaults', 'port_pools', 'node_export'] as const
+export const settingsSections = ['basic', 'pause', 'blocklist', 'security', 'subscription', 'traffic', 'notify', 'download_proxy', 'deps', 'defaults', 'port_pools', 'node_export'] as const
 export type SettingsSectionName = (typeof settingsSections)[number]
 
 export type SettingsTab = 'basic' | 'subscription' | 'monitor' | 'download' | 'advanced'
 
 /** 标签页按用途划分；「高级」放平时很少调整、需要了解 xray / mihomo 细节的设置。 */
 export const settingsTabs: { name: SettingsTab; label: string; sections: SettingsSectionName[] }[] = [
-  { name: 'basic', label: '基本', sections: ['basic', 'pause', 'security'] },
+  { name: 'basic', label: '基本', sections: ['basic', 'pause', 'blocklist', 'security'] },
   { name: 'subscription', label: '订阅', sections: ['subscription'] },
   { name: 'monitor', label: '流量与通知', sections: ['traffic', 'notify'] },
   { name: 'download', label: '下载与依赖', sections: ['download_proxy', 'deps'] },
@@ -20,12 +20,13 @@ export function tabOfSection(section: string): SettingsTab {
 }
 
 /**
- * 存放在其他设置分组里、但显示在独立分组中的字段：停服时段的两项保存在 traffic 下，
- * 页面上放在「基本」标签页的「停服时段」分组。
+ * 存放在其他设置分组里、但显示在独立分组中的字段：停服时段的两项和域名黑名单保存在 traffic 下，
+ * 页面上放在「基本」标签页的「停服时段」和「域名黑名单」分组。
  */
 const relocatedFields: Record<string, SettingsSectionName> = {
   'traffic.pause_windows': 'pause',
   'traffic.disconnect_on_pause': 'pause',
+  'traffic.blocked_domains': 'blocklist',
 }
 
 /** 字段路径（例如 notify.host、traffic.pause_windows[0]）在页面上所属的分组。 */
@@ -66,6 +67,7 @@ export const sectionEffects: Record<SettingsSectionName, SectionEffect> = {
   node_export: { label: '立即生效', type: 'success', tip: '保存后其他实例立即按新设置拉取本机节点。' },
   traffic: { label: '部分需要应用', type: 'warning', tip: '开启或关闭流量监控会改动生成的配置，需要应用；采集间隔、保留天数和访问域名统计保存后立即生效。' },
   pause: { label: '立即生效', type: 'success', tip: '保存后立即重新判定，处于停服时段的用户随即暂停或恢复，无需应用。' },
+  blocklist: { label: '需要应用', type: 'warning', tip: '写入生成的 xray 路由规则，保存后进入「待应用变更」，应用后重启受影响的 stack 生效。' },
   notify: { label: '立即生效', type: 'success', tip: '保存后之后的通知按新设置发送。' },
   deps: { label: '立即生效', type: 'success', tip: '保存后之后的安装、升级和自动升级按新设置执行。' },
   download_proxy: { label: '立即生效', type: 'success', tip: '保存后依赖管理和面板自更新的对外请求立即使用新设置。' },
@@ -85,6 +87,7 @@ export const sectionSearch: Record<SettingsSectionName, { title: string; fields:
     keywords: ['展示名模板', '自动发布'],
   },
   pause: { title: '停服时段', fields: ['每日停服时段', '暂停时断开现有连接'], keywords: ['停服', '自动暂停', '断开连接', '维护'] },
+  blocklist: { title: '域名黑名单', fields: ['全局域名黑名单'], keywords: ['黑名单', '拦截', '屏蔽', '封禁', '禁止访问', 'block', 'blacklist', '网站'] },
   traffic: {
     title: '流量',
     fields: ['启用流量监控', '采集间隔', '分钟明细保留', '小时明细保留', '日明细保留', '月明细保留', '统计访问域名', '访问域名保留'],

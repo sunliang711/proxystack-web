@@ -60,6 +60,18 @@ type accessDomainUsersOutput struct {
 	Body app.AccessDomainUsers
 }
 
+type blockDomainInput struct {
+	Body struct {
+		Domain  string `json:"domain" minLength:"1" maxLength:"253" doc:"域名，先归并为主域名"`
+		UserID  int64  `json:"user_id" minimum:"0" doc:"用户 ID，0 表示全局名单"`
+		Blocked bool   `json:"blocked" doc:"true 加入名单，false 移出名单"`
+	}
+}
+
+type blockDomainOutput struct {
+	Body app.BlockDomainResult
+}
+
 func registerAccess(api huma.API, s *Server) {
 	reg := func(op huma.Operation) huma.Operation {
 		op.Tags = []string{"traffic"}
@@ -88,6 +100,14 @@ func registerAccess(api huma.API, s *Server) {
 				return nil, toHTTPError(err)
 			}
 			return &accessDomainUsersOutput{Body: *result}, nil
+		})
+	huma.Register(api, reg(huma.Operation{OperationID: "setDomainBlocked", Method: http.MethodPost, Path: "/api/access/block", Summary: "把主域名加入或移出域名黑名单（应用配置后生效）"}),
+		func(ctx context.Context, in *blockDomainInput) (*blockDomainOutput, error) {
+			result, err := s.svc.SetDomainBlocked(ctx, actorFrom(ctx), in.Body.Domain, in.Body.UserID, in.Body.Blocked)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &blockDomainOutput{Body: *result}, nil
 		})
 	huma.Register(api, reg(huma.Operation{OperationID: "listUserAccessDomains", Method: http.MethodGet, Path: "/api/users/{id}/access", Summary: "用户的主域名访问排行"}),
 		func(ctx context.Context, in *accessUserInput) (*accessDomainsOutput, error) {

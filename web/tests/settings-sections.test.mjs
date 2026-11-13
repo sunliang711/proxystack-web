@@ -52,3 +52,12 @@ test('停服时段的字段存放在 traffic 下，但归属「基本」标签�
   assert.deepEqual(mod.sectionValue(settings, 'pause'), { pause_windows: ['02:00-08:00'], disconnect_on_pause: true })
   assert.deepEqual(mod.sectionValue(settings, 'traffic'), { interval: 10 })
 })
+
+test('全局域名黑名单存放在 traffic 下，但归属「基本」标签页的域名黑名单分组', () => {
+  assert.equal(mod.tabOfSection('blocklist'), 'basic')
+  assert.equal(mod.sectionOfField('traffic.blocked_domains'), 'blocklist')
+  assert.equal(mod.tabForField('traffic.blocked_domains'), 'basic')
+  const settings = { traffic: { interval: 10, pause_windows: [], disconnect_on_pause: false, blocked_domains: ['example.com'] } }
+  assert.deepEqual(mod.sectionValue(settings, 'blocklist'), { blocked_domains: ['example.com'] })
+  assert.deepEqual(mod.sectionValue(settings, 'traffic'), { interval: 10 })
+})

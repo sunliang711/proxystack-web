@@ -15,10 +15,11 @@ type AccessCursor struct {
 }
 
 type AccessDomainDay struct {
-	UserID int64  `json:"user_id"`
-	Day    string `json:"day"`
-	Domain string `json:"domain"`
-	Count  int64  `json:"count"`
+	UserID  int64  `json:"user_id"`
+	Day     string `json:"day"`
+	Domain  string `json:"domain"`
+	Count   int64  `json:"count"`
+	Blocked int64  `json:"blocked"`
 }
 
 type Admin struct {
@@ -386,6 +387,7 @@ type User struct {
 	DailyLimitAction string `json:"daily_limit_action"`
 	PauseWindowMode  string `json:"pause_window_mode"`
 	PauseWindows     string `json:"pause_windows"`
+	BlockedDomains   string `json:"blocked_domains"`
 }
 
 type UserAutoPause struct {

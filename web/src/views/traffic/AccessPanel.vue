@@ -7,6 +7,7 @@ import AccessRangePicker, { type AccessBounds, type AccessPeriod } from '../../c
 import AccessStatusNotice from '../../components/AccessStatusNotice.vue'
 import EntityLink from '../../components/EntityLink.vue'
 import { recentDayRange, type TrafficRange } from '../../util/traffic-range'
+import { useBlockDomain } from '../../composables/useBlockDomain'
 
 type DomainRow = Schemas['AccessDomainCount']
 type UserRow = Schemas['AccessDomainUser']
@@ -93,20 +94,38 @@ async function exportCSV() {
   saveBlob(data as unknown as Blob, filename)
 }
 
+const { busy, setBlocked } = useBlockDomain()
+async function toggleBlock(row: DomainRow) {
+  const listed = await setBlocked(row.domain, 0, row.listed !== 'global')
+  if (listed !== null) row.listed = listed
+}
+
 const rangeText = (from?: string, to?: string) => (!from ? '' : from === to ? from : `${from} ～ ${to}`)
-const peak = computed(() => Math.max(1, ...(top.value?.domains ?? []).map((row) => row.count)))
+const peak = computed(() => Math.max(1, ...(top.value?.domains ?? []).map((row) => row.count + row.blocked)))
 const hidden = computed(() => (top.value ? top.value.domain_count - top.value.domains.length : 0))
 const domainColumns = computed<DataTableColumns<DomainRow>>(() => [
   { title: '名次', key: 'rank', width: 64, render: (_row, index) => index + 1 },
   {
     title: '主域名', key: 'domain', minWidth: 200,
-    render: (row) => h(NButton, { text: true, type: row.domain === users.value?.domain ? 'primary' : 'default', class: 'domain', onClick: () => pick(row.domain) }, () => row.domain),
+    render: (row) => h(NSpace, { size: 6, align: 'center', wrap: false }, () => [
+      h(NButton, { text: true, type: row.domain === users.value?.domain ? 'primary' : 'default', class: 'domain', onClick: () => pick(row.domain) }, () => row.domain),
+      row.listed === 'global' ? h(NTag, { size: 'small', type: 'error', bordered: false }, () => '已拉黑') : null,
+    ]),
   },
-  { title: '连接次数', key: 'count', minWidth: 100, render: (row) => row.count.toLocaleString() },
+  { title: '放行次数', key: 'count', minWidth: 100, render: (row) => row.count.toLocaleString() },
+  { title: '拦截次数', key: 'blocked', minWidth: 100, render: (row) => (row.blocked ? h(NText, { type: 'error' }, () => row.blocked.toLocaleString()) : '0') },
   { title: '用户数', key: 'users', minWidth: 80, render: (row) => row.users ?? 0 },
   {
     title: '占比', key: 'bar', minWidth: 140,
-    render: (row) => h('div', { class: 'bar-cell' }, [h('span', { class: 'bar', style: { width: `${(row.count / peak.value) * 80}%` } })]),
+    render: (row) => h('div', { class: 'bar-cell' }, [
+      h('span', { class: 'bar', style: { width: `${(row.count / peak.value) * 80}%` } }),
+      row.blocked ? h('span', { class: 'bar blocked', style: { width: `${(row.blocked / peak.value) * 80}%` } }) : null,
+    ]),
+  },
+  {
+    title: '全局黑名单', key: 'action', width: 100, fixed: 'right',
+    render: (row) => h(NButton, { size: 'tiny', secondary: true, type: row.listed === 'global' ? 'default' : 'error', loading: busy.value === row.domain, onClick: () => toggleBlock(row) },
+      () => (row.listed === 'global' ? '移出' : '拉黑')),
   },
 ])
 const userColumns: DataTableColumns<UserRow> = [
@@ -117,7 +136,8 @@ const userColumns: DataTableColumns<UserRow> = [
       ? h(NSpace, { size: 6, align: 'center', wrap: false }, () => [h(NText, null, () => row.name), h(NTag, { size: 'small', bordered: false }, () => '已删除')])
       : h(EntityLink, { kind: 'user', id: row.user_id, name: row.name, tab: 'usage' }),
   },
-  { title: '连接次数', key: 'count', minWidth: 100, render: (row) => row.count.toLocaleString() },
+  { title: '放行次数', key: 'count', minWidth: 100, render: (row) => row.count.toLocaleString() },
+  { title: '拦截次数', key: 'blocked', minWidth: 100, render: (row) => (row.blocked ? h(NText, { type: 'error' }, () => row.blocked.toLocaleString()) : '0') },
   { title: '有访问的天数', key: 'days', minWidth: 110 },
 ]
 </script>
@@ -142,7 +162,8 @@ const userColumns: DataTableColumns<UserRow> = [
     </NCard>
     </div>
     <NGrid cols="2 m:3" responsive="screen" :x-gap="20" :y-gap="20">
-      <NGridItem><NCard size="small"><NStatistic label="连接次数" :value="(top?.total ?? 0).toLocaleString()" /></NCard></NGridItem>
+      <NGridItem><NCard size="small"><NStatistic label="放行次数" :value="(top?.total ?? 0).toLocaleString()" /></NCard></NGridItem>
+      <NGridItem><NCard size="small"><NStatistic label="拦截次数" :value="(top?.blocked ?? 0).toLocaleString()" /></NCard></NGridItem>
       <NGridItem><NCard size="small"><NStatistic label="主域名个数" :value="top?.domain_count ?? 0" /></NCard></NGridItem>
     </NGrid>
     <NCard title="主域名排行" size="small">
@@ -150,9 +171,9 @@ const userColumns: DataTableColumns<UserRow> = [
         <NButton size="small" :disabled="!top?.domains.length" @click="exportCSV">导出 CSV</NButton>
       </template>
       <NText v-if="top" depth="3" class="summary">
-        {{ rangeText(top.from_day, top.to_day) }}，全部用户合计；点击域名查看访问过它的用户<template v-if="hidden > 0">。只列出前 {{ top.domains.length }} 个，完整列表请导出 CSV</template>。
+        {{ rangeText(top.from_day, top.to_day) }}，全部用户合计；点击域名查看访问过它的用户。「拉黑」把主域名及其全部子域名加入全局域名黑名单，应用配置后生效<template v-if="hidden > 0">。只列出前 {{ top.domains.length }} 个，完整列表请导出 CSV</template>。
       </NText>
-      <NDataTable :columns="domainColumns" :data="top?.domains ?? []" :loading="topLoading" :row-key="(row: DomainRow) => row.domain" :pagination="{ pageSize: 20 }" :scroll-x="640" size="small" />
+      <NDataTable :columns="domainColumns" :data="top?.domains ?? []" :loading="topLoading" :row-key="(row: DomainRow) => row.domain" :pagination="{ pageSize: 20 }" :scroll-x="860" size="small" />
     </NCard>
   </NSpace>
 </template>
@@ -164,6 +185,7 @@ const userColumns: DataTableColumns<UserRow> = [
 :deep(.domain) { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
 :deep(.bar-cell) { display: flex; align-items: center; }
 :deep(.bar) { height: 8px; min-width: 2px; border-radius: 4px; background: var(--ps-accent); }
+:deep(.bar.blocked) { margin-left: 2px; background: var(--ps-danger); }
 @media (max-width: 600px) {
   .domain-search { width: 100%; }
 }

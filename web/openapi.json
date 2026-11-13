@@ -4,6 +4,10 @@
       "AccessDomainCount": {
         "additionalProperties": false,
         "properties": {
+          "blocked": {
+            "format": "int64",
+            "type": "integer"
+          },
           "count": {
             "format": "int64",
             "type": "integer"
@@ -15,6 +19,14 @@
           "domain": {
             "type": "string"
           },
+          "listed": {
+            "enum": [
+              "",
+              "global",
+              "user"
+            ],
+            "type": "string"
+          },
           "users": {
             "format": "int64",
             "type": "integer"
@@ -22,13 +34,19 @@
         },
         "required": [
           "domain",
-          "count"
+          "count",
+          "blocked",
+          "listed"
         ],
         "type": "object"
       },
       "AccessDomainUser": {
         "additionalProperties": false,
         "properties": {
+          "blocked": {
+            "format": "int64",
+            "type": "integer"
+          },
           "count": {
             "format": "int64",
             "type": "integer"
@@ -53,6 +71,7 @@
           "name",
           "deleted",
           "count",
+          "blocked",
           "days"
         ],
         "type": "object"
@@ -87,6 +106,10 @@
       "AccessDomains": {
         "additionalProperties": false,
         "properties": {
+          "blocked": {
+            "format": "int64",
+            "type": "integer"
+          },
           "domain_count": {
             "format": "int64",
             "type": "integer"
@@ -112,6 +135,7 @@
           "from_day",
           "to_day",
           "total",
+          "blocked",
           "domain_count",
           "domains"
         ],
@@ -402,6 +426,62 @@
           "external_host",
           "timezone",
           "panel_url"
+        ],
+        "type": "object"
+      },
+      "BlockDomainInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "blocked": {
+            "description": "true 加入名单，false 移出名单",
+            "type": "boolean"
+          },
+          "domain": {
+            "description": "域名，先归并为主域名",
+            "maxLength": 253,
+            "minLength": 1,
+            "type": "string"
+          },
+          "user_id": {
+            "description": "用户 ID，0 表示全局名单",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "domain",
+          "user_id",
+          "blocked"
+        ],
+        "type": "object"
+      },
+      "BlockDomainResult": {
+        "additionalProperties": false,
+        "properties": {
+          "changed": {
+            "type": "boolean"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "entry": {
+            "type": "string"
+          },
+          "listed": {
+            "enum": [
+              "",
+              "global",
+              "user"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain",
+          "entry",
+          "changed",
+          "listed"
         ],
         "type": "object"
       },
@@ -5316,6 +5396,13 @@
             "description": "按用户统计访问的主域名（读取 xray 访问日志）",
             "type": "boolean"
           },
+          "blocked_domains": {
+            "description": "全局域名黑名单：example.com 拦截该域名及全部子域名，full:www.example.com 只拦截该域名",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "disconnect_on_pause": {
             "type": "boolean"
           },
@@ -5683,6 +5770,13 @@
       "User": {
         "additionalProperties": false,
         "properties": {
+          "blocked_domains": {
+            "description": "用户域名黑名单，与全局名单叠加；写法同全局名单",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "daily_limit_action": {
             "description": "达到每日阈值后：pause 暂停并通知，notify 只通知",
             "enum": [
@@ -6167,6 +6261,52 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/access/block": {
+      "post": {
+        "operationId": "setDomainBlocked",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlockDomainInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlockDomainResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "把主域名加入或移出域名黑名单（应用配置后生效）",
+        "tags": [
+          "traffic"
+        ]
+      }
+    },
     "/api/access/domain-users": {
       "get": {
         "operationId": "listAccessDomainUsers",

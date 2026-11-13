@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"proxystack-web/internal/access"
+	"proxystack-web/internal/configdoc"
 	"proxystack-web/internal/store/dbq"
 	"proxystack-web/internal/traffic"
 	"proxystack-web/internal/units"
@@ -33,13 +34,19 @@ type accessKey struct {
 	domain string
 }
 
+// accessCount 是一个维度上放行和被拦截的连接次数。
+type accessCount struct {
+	count   int64
+	blocked int64
+}
+
 // accessState 是访问统计的内存状态。pending 是已读取但尚未写库的计数，cursor 是已读取的最后一条日志的书签；
 // 两者总是在同一把锁下更新并一起写库，书签之前的日志都已计入，重启后从书签继续读取不会重复计数。
 // runMu 保护日志读取的启停（cancel、done、key），只由 AccessTick 和 StopAccess 使用。
 type accessState struct {
 	mu      sync.Mutex
 	loaded  bool
-	pending map[accessKey]int64
+	pending map[accessKey]accessCount
 	cursor  string
 	saved   string
 	loc     *time.Location
@@ -281,9 +288,16 @@ func (s *Service) recordAccess(entry units.LogEntry) {
 		loc = time.UTC
 	}
 	if s.access.pending == nil {
-		s.access.pending = map[accessKey]int64{}
+		s.access.pending = map[accessKey]accessCount{}
 	}
-	s.access.pending[accessKey{userID: record.UserID, day: traffic.Day(at, loc), domain: record.Domain}]++
+	key := accessKey{userID: record.UserID, day: traffic.Day(at, loc), domain: record.Domain}
+	total := s.access.pending[key]
+	if record.Blocked {
+		total.blocked++
+	} else {
+		total.count++
+	}
+	s.access.pending[key] = total
 }
 
 // flushAccess 把未写库的计数和书签在同一事务中写入；已删除用户的计数丢弃。写入失败时计数放回内存。
@@ -306,11 +320,13 @@ func (s *Service) flushAccess(ctx context.Context) error {
 		for _, user := range users {
 			known[user.ID] = true
 		}
-		for key, count := range pending {
+		for key, total := range pending {
 			if !known[key.userID] {
 				continue
 			}
-			if err := q.AddAccessDomain(ctx, dbq.AddAccessDomainParams{UserID: key.userID, Day: key.day, Domain: key.domain, Count: count}); err != nil {
+			if err := q.AddAccessDomain(ctx, dbq.AddAccessDomainParams{
+				UserID: key.userID, Day: key.day, Domain: key.domain, Count: total.count, Blocked: total.blocked,
+			}); err != nil {
 				return err
 			}
 		}
@@ -323,10 +339,13 @@ func (s *Service) flushAccess(ctx context.Context) error {
 	defer s.access.mu.Unlock()
 	if err != nil {
 		if s.access.pending == nil {
-			s.access.pending = map[accessKey]int64{}
+			s.access.pending = map[accessKey]accessCount{}
 		}
-		for key, count := range pending {
-			s.access.pending[key] += count
+		for key, total := range pending {
+			merged := s.access.pending[key]
+			merged.count += total.count
+			merged.blocked += total.blocked
+			s.access.pending[key] = merged
 		}
 		return err
 	}
@@ -435,21 +454,51 @@ func accessLimit(limit int64) int64 {
 	return limit
 }
 
+// 主域名在域名黑名单中的状态：被全局名单或该用户的名单整体拦截（含全部子域名）。
+const (
+	BlockListedGlobal = "global"
+	BlockListedUser   = "user"
+)
+
 // AccessDomainCount 是一个主域名的访问次数。
 type AccessDomainCount struct {
 	Domain string `json:"domain"`
-	Count  int64  `json:"count"`
+	// Count 是放行的连接次数，Blocked 是被域名黑名单拦截的连接次数。
+	Count   int64 `json:"count"`
+	Blocked int64 `json:"blocked"`
 	// Days 是有访问的天数（用户视角），Users 是访问过的用户数（全局视角）。
 	Days  int64 `json:"days,omitempty"`
 	Users int64 `json:"users,omitempty"`
+	// Listed 是该主域名当前在哪个黑名单中被整体拦截：global、user（仅用户视角）或空。
+	Listed string `json:"listed" enum:",global,user"`
+}
+
+// blockListed 返回主域名被哪个名单整体拦截（条目是它本身或它的上级域名，不含 full: 条目）。
+func blockListed(name string, global, user []string) string {
+	covers := func(entries []string) bool {
+		for _, entry := range entries {
+			if !strings.HasPrefix(entry, configdoc.BlockFullPrefix) && configdoc.BlockedDomainMatches(entry, name) {
+				return true
+			}
+		}
+		return false
+	}
+	switch {
+	case covers(global):
+		return BlockListedGlobal
+	case covers(user):
+		return BlockListedUser
+	}
+	return ""
 }
 
 // AccessDomains 是一段时间内的域名访问排行。
 type AccessDomains struct {
 	FromDay string `json:"from_day"`
 	ToDay   string `json:"to_day"`
-	// Total 是范围内的访问总次数，DomainCount 是不同主域名的个数；Domains 只含排名靠前的部分。
+	// Total 是范围内放行的访问总次数，Blocked 是被拦截的总次数，DomainCount 是不同主域名的个数；Domains 只含排名靠前的部分。
 	Total       int64               `json:"total"`
+	Blocked     int64               `json:"blocked"`
 	DomainCount int64               `json:"domain_count"`
 	Domains     []AccessDomainCount `json:"domains"`
 }
@@ -460,16 +509,23 @@ func (s *Service) AccessTopDomains(ctx context.Context, query AccessQuery) (*Acc
 	if err != nil {
 		return nil, err
 	}
+	settings, err := s.loadSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
 	out := &AccessDomains{FromDay: from, ToDay: to, Domains: []AccessDomainCount{}}
 	err = s.Store.InTx(ctx, func(q *dbq.Queries) error {
 		summary, err := q.CountAccessDomains(ctx, dbq.CountAccessDomainsParams{FromDay: from, ToDay: to})
 		if err != nil {
 			return err
 		}
-		out.Total, out.DomainCount = summary.Count, summary.Domains
+		out.Total, out.Blocked, out.DomainCount = summary.Count, summary.Blocked, summary.Domains
 		rows, err := q.ListAccessTopDomains(ctx, dbq.ListAccessTopDomainsParams{FromDay: from, ToDay: to, RowLimit: accessLimit(query.Limit)})
 		for _, row := range rows {
-			out.Domains = append(out.Domains, AccessDomainCount{Domain: row.Domain, Count: row.Count, Users: row.Users})
+			out.Domains = append(out.Domains, AccessDomainCount{
+				Domain: row.Domain, Count: row.Count, Blocked: row.Blocked, Users: row.Users,
+				Listed: blockListed(row.Domain, settings.Traffic.BlockedDomains, nil),
+			})
 		}
 		return err
 	})
@@ -482,8 +538,22 @@ func (s *Service) AccessUserDomains(ctx context.Context, userID int64, query Acc
 	if err != nil {
 		return nil, err
 	}
+	settings, err := s.loadSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
 	out := &AccessDomains{FromDay: from, ToDay: to, Domains: []AccessDomainCount{}}
 	err = s.Store.InTx(ctx, func(q *dbq.Queries) error {
+		users, err := q.ListUsers(ctx)
+		if err != nil {
+			return err
+		}
+		var own []string
+		for _, user := range users {
+			if user.ID == userID {
+				own = configdoc.SplitBlockedDomains(user.BlockedDomains)
+			}
+		}
 		rows, err := q.ListAccessUserDomains(ctx, dbq.ListAccessUserDomainsParams{UserID: userID, FromDay: from, ToDay: to, RowLimit: -1})
 		if err != nil {
 			return err
@@ -492,8 +562,12 @@ func (s *Service) AccessUserDomains(ctx context.Context, userID int64, query Acc
 		limit := accessLimit(query.Limit)
 		for index, row := range rows {
 			out.Total += row.Count
+			out.Blocked += row.Blocked
 			if limit < 0 || int64(index) < limit {
-				out.Domains = append(out.Domains, AccessDomainCount{Domain: row.Domain, Count: row.Count, Days: row.Days})
+				out.Domains = append(out.Domains, AccessDomainCount{
+					Domain: row.Domain, Count: row.Count, Blocked: row.Blocked, Days: row.Days,
+					Listed: blockListed(row.Domain, settings.Traffic.BlockedDomains, own),
+				})
 			}
 		}
 		return nil
@@ -507,6 +581,7 @@ type AccessDomainUser struct {
 	Name    string `json:"name"`
 	Deleted bool   `json:"deleted"`
 	Count   int64  `json:"count"`
+	Blocked int64  `json:"blocked"`
 	Days    int64  `json:"days"`
 }
 
@@ -544,7 +619,7 @@ func (s *Service) AccessDomainUsersData(ctx context.Context, name string, query 
 			return err
 		}
 		for _, row := range rows {
-			user := AccessDomainUser{UserID: row.UserID, Count: row.Count, Days: row.Days}
+			user := AccessDomainUser{UserID: row.UserID, Count: row.Count, Blocked: row.Blocked, Days: row.Days}
 			if name, ok := current[row.UserID]; ok {
 				user.Name = name
 			} else {
@@ -567,16 +642,17 @@ func (s *Service) AccessDomainUsersData(ctx context.Context, name string, query 
 func AccessDomainsCSV(result *AccessDomains, perUser bool) []byte {
 	var b strings.Builder
 	if perUser {
-		b.WriteString("domain,count,days\n")
+		b.WriteString("domain,count,blocked,days\n")
 	} else {
-		b.WriteString("domain,count,users\n")
+		b.WriteString("domain,count,blocked,users\n")
 	}
 	for _, row := range result.Domains {
 		extra := row.Users
 		if perUser {
 			extra = row.Days
 		}
-		b.WriteString(csvField(row.Domain) + "," + strconv.FormatInt(row.Count, 10) + "," + strconv.FormatInt(extra, 10) + "\n")
+		b.WriteString(csvField(row.Domain) + "," + strconv.FormatInt(row.Count, 10) + "," + strconv.FormatInt(row.Blocked, 10) + "," +
+			strconv.FormatInt(extra, 10) + "\n")
 	}
 	return []byte(b.String())
 }

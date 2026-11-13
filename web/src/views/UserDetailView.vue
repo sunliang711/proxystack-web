@@ -18,6 +18,7 @@ import SubscriptionGapAlert from '../components/SubscriptionGapAlert.vue'
 import TemplateInput from '../components/TemplateInput.vue'
 import UsageCard from '../components/UsageCard.vue'
 import UserAccessCard from '../components/UserAccessCard.vue'
+import BlockedDomainsInput from '../components/BlockedDomainsInput.vue'
 import { useDirty } from '../composables/useDirty'
 import { usePageTitle } from '../composables/usePageTitle'
 import { notifySaved, runtime } from '../runtime'
@@ -42,6 +43,7 @@ const stacks = ref<Schemas['StackSummary'][]>([])
 const manualNodes = ref(0)
 /** 系统设置中的每日停服时段，「跟随全局」时显示给管理员参考。 */
 const globalWindows = ref<string[]>([])
+const globalBlocked = ref<string[]>([])
 const pausing = ref(false)
 const errors = ref<FormErrors>(emptyErrors())
 const saving = ref(false)
@@ -148,11 +150,22 @@ async function load() {
   const [stackResult, nodeResult, settingsResult] = await Promise.all([api.GET('/api/stacks'), api.GET('/api/manual-nodes'), api.GET('/api/config/settings')])
   stacks.value = stackResult.data?.stacks ?? []
   globalWindows.value = settingsResult.data?.traffic.pause_windows ?? []
+  globalBlocked.value = settingsResult.data?.traffic.blocked_domains ?? []
   manualNodes.value = (nodeResult.data ?? []).filter((node) => node.user === data.user.name).length
   markClean()
   void loadUsage()
 }
 onMounted(load)
+
+/** 「常访问站点」的一键拉黑已写入数据库：同步表单和基准快照，表单里其他未保存的修改保持不变。 */
+function syncBlocklist(entry: string, blocked: boolean) {
+  const apply = (list: string[] | undefined) => {
+    const rest = (list ?? []).filter((item) => item !== entry)
+    return blocked ? [...rest, entry] : rest
+  }
+  if (user.value) user.value.blocked_domains = apply(user.value.blocked_domains)
+  patchBaseline((base) => { base.blocked_domains = apply(base.blocked_domains) })
+}
 
 /** 只刷新入站引用和订阅节点情况，不动表单；应用完成或保存后调用。 */
 async function refreshSubscription() {
@@ -457,6 +470,16 @@ async function remove() {
               </NFormItem>
             </div>
           </section>
+          <section class="pane-section">
+            <h3 class="pane-title">域名黑名单</h3>
+            <NText depth="3" tag="p" class="pane-desc">
+              只对该用户生效，与全局名单叠加，由 xray 在服务端拦截，不修改订阅。保存后需要应用。
+              <RouterLink :to="{ name: 'settings', query: { section: 'blocklist' } }">全局名单</RouterLink>目前 {{ globalBlocked.length }} 条。
+            </NText>
+            <NFormItem label="用户域名黑名单" v-bind="f('blocked_domains', '每行一条：example.com 拦截该域名及全部子域名，full:www.example.com 只拦截该域名；国际化域名写成 xn-- 形式')">
+              <BlockedDomainsInput :value="user.blocked_domains ?? []" @update:value="(v: string[]) => (user!.blocked_domains = v)" />
+            </NFormItem>
+          </section>
         </NTabPane>
 
         <NTabPane name="subscription" :tab="tabLabel('subscription', '订阅')">
@@ -620,7 +643,7 @@ async function remove() {
         <!-- 只在打开时挂载，用量每 10 秒的刷新随之开始和停止。 -->
         <NTabPane name="usage" :tab="tabLabel('usage', '用量')" display-directive="if">
           <UsageCard :user-id="id" :daily-limit="user.daily_limit_bytes ?? 0" :quota="user.quota_bytes" :bordered="false" class="embedded-card" @update="(data: Schemas['UserUsage']) => (usage = data)" />
-          <UserAccessCard :user-id="id" class="embedded-card" />
+          <UserAccessCard :user-id="id" class="embedded-card" @blocklist="syncBlocklist" />
         </NTabPane>
       </NTabs>
     </NForm>

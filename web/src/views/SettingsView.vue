@@ -12,6 +12,7 @@ import SecretInput from '../components/SecretInput.vue'
 import TemplateInput from '../components/TemplateInput.vue'
 import ErrorList from '../components/ErrorList.vue'
 import PauseWindowsInput from '../components/PauseWindowsInput.vue'
+import BlockedDomainsInput from '../components/BlockedDomainsInput.vue'
 import { refreshPauseWindow } from '../composables/usePauseWindow'
 import SettingsSection from '../components/SettingsSection.vue'
 import EntityLink from '../components/EntityLink.vue'
@@ -320,6 +321,11 @@ async function save() {
             </NFormItem>
             <NFormItem label="暂停时断开现有连接" v-bind="f('traffic.disconnect_on_pause', '停服时段、每日阈值、额度和到期等自动暂停生效后，重启引用了被暂停用户的 stack 的 xray，切断已建立的连接；同一 stack 上其他用户的连接会被短暂中断')">
               <NSwitch v-model:value="form.traffic.disconnect_on_pause" />
+            </NFormItem>
+          </SettingsSection>
+          <SettingsSection v-show="sectionShown('blocklist')" title="域名黑名单" name="blocklist">
+            <NFormItem label="全局域名黑名单" v-bind="f('traffic.blocked_domains', '对全部连接生效，由 xray 在服务端拦截，不修改订阅。每行一条：example.com 拦截该域名及全部子域名，full:www.example.com 只拦截该域名；国际化域名写成 xn-- 形式。用户详情页可以为单个用户追加名单。名单不为空的 stack 会开启流量嗅探，用 HTTP Host、TLS SNI 和 QUIC 识别域名；使用加密 SNI（ECH）或不带域名的连接无法识别；SSH 等由服务器先发数据的协议建立连接时会稍慢。保存后需要应用')">
+              <BlockedDomainsInput :value="form.traffic.blocked_domains ?? []" @update:value="(v: string[]) => (form.traffic.blocked_domains = v)" />
             </NFormItem>
           </SettingsSection>
           <SettingsSection v-show="sectionShown('security')" title="安全" name="security">

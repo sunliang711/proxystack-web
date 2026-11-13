@@ -10,15 +10,16 @@ import (
 )
 
 const addAccessDomain = `-- name: AddAccessDomain :exec
-INSERT INTO access_domain_day (user_id, day, domain, count) VALUES (?, ?, ?, ?)
-ON CONFLICT (user_id, day, domain) DO UPDATE SET count = count + excluded.count
+INSERT INTO access_domain_day (user_id, day, domain, count, blocked) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (user_id, day, domain) DO UPDATE SET count = count + excluded.count, blocked = blocked + excluded.blocked
 `
 
 type AddAccessDomainParams struct {
-	UserID int64  `json:"user_id"`
-	Day    string `json:"day"`
-	Domain string `json:"domain"`
-	Count  int64  `json:"count"`
+	UserID  int64  `json:"user_id"`
+	Day     string `json:"day"`
+	Domain  string `json:"domain"`
+	Count   int64  `json:"count"`
+	Blocked int64  `json:"blocked"`
 }
 
 func (q *Queries) AddAccessDomain(ctx context.Context, arg AddAccessDomainParams) error {
@@ -27,12 +28,14 @@ func (q *Queries) AddAccessDomain(ctx context.Context, arg AddAccessDomainParams
 		arg.Day,
 		arg.Domain,
 		arg.Count,
+		arg.Blocked,
 	)
 	return err
 }
 
 const countAccessDomains = `-- name: CountAccessDomains :one
-SELECT COUNT(DISTINCT domain) AS domains, CAST(COALESCE(SUM(count), 0) AS INTEGER) AS count
+SELECT COUNT(DISTINCT domain) AS domains, CAST(COALESCE(SUM(count), 0) AS INTEGER) AS count,
+       CAST(COALESCE(SUM(blocked), 0) AS INTEGER) AS blocked
 FROM access_domain_day
 WHERE day >= ?1 AND day <= ?2
 `
@@ -45,12 +48,13 @@ type CountAccessDomainsParams struct {
 type CountAccessDomainsRow struct {
 	Domains int64 `json:"domains"`
 	Count   int64 `json:"count"`
+	Blocked int64 `json:"blocked"`
 }
 
 func (q *Queries) CountAccessDomains(ctx context.Context, arg CountAccessDomainsParams) (CountAccessDomainsRow, error) {
 	row := q.db.QueryRowContext(ctx, countAccessDomains, arg.FromDay, arg.ToDay)
 	var i CountAccessDomainsRow
-	err := row.Scan(&i.Domains, &i.Count)
+	err := row.Scan(&i.Domains, &i.Count, &i.Blocked)
 	return i, err
 }
 
@@ -84,11 +88,12 @@ func (q *Queries) GetAccessCursor(ctx context.Context) (AccessCursor, error) {
 }
 
 const listAccessDomainUsers = `-- name: ListAccessDomainUsers :many
-SELECT user_id, CAST(SUM(count) AS INTEGER) AS count, COUNT(DISTINCT day) AS days
+SELECT user_id, CAST(SUM(count) AS INTEGER) AS count, CAST(SUM(blocked) AS INTEGER) AS blocked,
+       COUNT(DISTINCT day) AS days
 FROM access_domain_day
 WHERE domain = ?1 AND day >= ?2 AND day <= ?3
 GROUP BY user_id
-ORDER BY count DESC, user_id
+ORDER BY SUM(count) + SUM(blocked) DESC, user_id
 `
 
 type ListAccessDomainUsersParams struct {
@@ -98,9 +103,10 @@ type ListAccessDomainUsersParams struct {
 }
 
 type ListAccessDomainUsersRow struct {
-	UserID int64 `json:"user_id"`
-	Count  int64 `json:"count"`
-	Days   int64 `json:"days"`
+	UserID  int64 `json:"user_id"`
+	Count   int64 `json:"count"`
+	Blocked int64 `json:"blocked"`
+	Days    int64 `json:"days"`
 }
 
 func (q *Queries) ListAccessDomainUsers(ctx context.Context, arg ListAccessDomainUsersParams) ([]ListAccessDomainUsersRow, error) {
@@ -112,7 +118,12 @@ func (q *Queries) ListAccessDomainUsers(ctx context.Context, arg ListAccessDomai
 	var items []ListAccessDomainUsersRow
 	for rows.Next() {
 		var i ListAccessDomainUsersRow
-		if err := rows.Scan(&i.UserID, &i.Count, &i.Days); err != nil {
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Count,
+			&i.Blocked,
+			&i.Days,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -127,11 +138,12 @@ func (q *Queries) ListAccessDomainUsers(ctx context.Context, arg ListAccessDomai
 }
 
 const listAccessTopDomains = `-- name: ListAccessTopDomains :many
-SELECT domain, CAST(SUM(count) AS INTEGER) AS count, COUNT(DISTINCT user_id) AS users
+SELECT domain, CAST(SUM(count) AS INTEGER) AS count, CAST(SUM(blocked) AS INTEGER) AS blocked,
+       COUNT(DISTINCT user_id) AS users
 FROM access_domain_day
 WHERE day >= ?1 AND day <= ?2
 GROUP BY domain
-ORDER BY count DESC, domain
+ORDER BY SUM(count) + SUM(blocked) DESC, domain
 LIMIT ?3
 `
 
@@ -142,9 +154,10 @@ type ListAccessTopDomainsParams struct {
 }
 
 type ListAccessTopDomainsRow struct {
-	Domain string `json:"domain"`
-	Count  int64  `json:"count"`
-	Users  int64  `json:"users"`
+	Domain  string `json:"domain"`
+	Count   int64  `json:"count"`
+	Blocked int64  `json:"blocked"`
+	Users   int64  `json:"users"`
 }
 
 func (q *Queries) ListAccessTopDomains(ctx context.Context, arg ListAccessTopDomainsParams) ([]ListAccessTopDomainsRow, error) {
@@ -156,7 +169,12 @@ func (q *Queries) ListAccessTopDomains(ctx context.Context, arg ListAccessTopDom
 	var items []ListAccessTopDomainsRow
 	for rows.Next() {
 		var i ListAccessTopDomainsRow
-		if err := rows.Scan(&i.Domain, &i.Count, &i.Users); err != nil {
+		if err := rows.Scan(
+			&i.Domain,
+			&i.Count,
+			&i.Blocked,
+			&i.Users,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -171,11 +189,12 @@ func (q *Queries) ListAccessTopDomains(ctx context.Context, arg ListAccessTopDom
 }
 
 const listAccessUserDomains = `-- name: ListAccessUserDomains :many
-SELECT domain, CAST(SUM(count) AS INTEGER) AS count, COUNT(DISTINCT day) AS days
+SELECT domain, CAST(SUM(count) AS INTEGER) AS count, CAST(SUM(blocked) AS INTEGER) AS blocked,
+       COUNT(DISTINCT day) AS days
 FROM access_domain_day
 WHERE user_id = ?1 AND day >= ?2 AND day <= ?3
 GROUP BY domain
-ORDER BY count DESC, domain
+ORDER BY SUM(count) + SUM(blocked) DESC, domain
 LIMIT ?4
 `
 
@@ -187,9 +206,10 @@ type ListAccessUserDomainsParams struct {
 }
 
 type ListAccessUserDomainsRow struct {
-	Domain string `json:"domain"`
-	Count  int64  `json:"count"`
-	Days   int64  `json:"days"`
+	Domain  string `json:"domain"`
+	Count   int64  `json:"count"`
+	Blocked int64  `json:"blocked"`
+	Days    int64  `json:"days"`
 }
 
 func (q *Queries) ListAccessUserDomains(ctx context.Context, arg ListAccessUserDomainsParams) ([]ListAccessUserDomainsRow, error) {
@@ -206,7 +226,12 @@ func (q *Queries) ListAccessUserDomains(ctx context.Context, arg ListAccessUserD
 	var items []ListAccessUserDomainsRow
 	for rows.Next() {
 		var i ListAccessUserDomainsRow
-		if err := rows.Scan(&i.Domain, &i.Count, &i.Days); err != nil {
+		if err := rows.Scan(
+			&i.Domain,
+			&i.Count,
+			&i.Blocked,
+			&i.Days,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

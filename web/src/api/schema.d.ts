@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/access/block": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 把主域名加入或移出域名黑名单（应用配置后生效） */
+        post: operations["setDomainBlocked"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/access/domain-users": {
         parameters: {
             query?: never;
@@ -1879,14 +1896,20 @@ export interface components {
     schemas: {
         AccessDomainCount: {
             /** Format: int64 */
+            blocked: number;
+            /** Format: int64 */
             count: number;
             /** Format: int64 */
             days?: number;
             domain: string;
+            /** @enum {string} */
+            listed: "" | "global" | "user";
             /** Format: int64 */
             users?: number;
         };
         AccessDomainUser: {
+            /** Format: int64 */
+            blocked: number;
             /** Format: int64 */
             count: number;
             /** Format: int64 */
@@ -1903,6 +1926,8 @@ export interface components {
             users: components["schemas"]["AccessDomainUser"][];
         };
         AccessDomains: {
+            /** Format: int64 */
+            blocked: number;
             /** Format: int64 */
             domain_count: number;
             domains: components["schemas"]["AccessDomainCount"][];
@@ -1991,6 +2016,24 @@ export interface components {
             panel_url: string;
             /** @description 流量统计周期边界使用的时区 */
             timezone: string;
+        };
+        BlockDomainInputBody: {
+            /** @description true 加入名单，false 移出名单 */
+            blocked: boolean;
+            /** @description 域名，先归并为主域名 */
+            domain: string;
+            /**
+             * Format: int64
+             * @description 用户 ID，0 表示全局名单
+             */
+            user_id: number;
+        };
+        BlockDomainResult: {
+            changed: boolean;
+            domain: string;
+            entry: string;
+            /** @enum {string} */
+            listed: "" | "global" | "user";
         };
         BundleStatus: {
             auto_publish_blocked: string;
@@ -3380,6 +3423,8 @@ export interface components {
             access_retention_days?: number;
             /** @description 按用户统计访问的主域名（读取 xray 访问日志） */
             access_stats?: boolean;
+            /** @description 全局域名黑名单：example.com 拦截该域名及全部子域名，full:www.example.com 只拦截该域名 */
+            blocked_domains?: string[];
             disconnect_on_pause: boolean;
             enabled: boolean;
             /**
@@ -3483,6 +3528,8 @@ export interface components {
             type: "raw" | "xray-socks5";
         };
         User: {
+            /** @description 用户域名黑名单，与全局名单叠加；写法同全局名单 */
+            blocked_domains?: string[];
             /**
              * @description 达到每日阈值后：pause 暂停并通知，notify 只通知
              * @enum {string}
@@ -3620,6 +3667,39 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    setDomainBlocked: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockDomainInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockDomainResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listAccessDomainUsers: {
         parameters: {
             query?: {

@@ -36,6 +36,16 @@ func TestParseLine(t *testing.T) {
 			message: "from 1.2.3.4:5678 accepted tcp:example.org:80 email: u3",
 			want:    Record{UserID: 3, Domain: "example.org"}, ok: true,
 		},
+		{
+			name:    "blocked by rule",
+			message: "from 1.2.3.4:5678 accepted tcp:ads.example.com:443 [vmess -> block-usa1] email: alice.u7",
+			want:    Record{UserID: 7, Domain: "example.com", Blocked: true}, ok: true,
+		},
+		{
+			name:    "inbound tag that looks like the block tag",
+			message: "from 1.2.3.4:5678 accepted tcp:example.com:443 [block-in >> egress-usa1] email: alice.u7",
+			want:    Record{UserID: 7, Domain: "example.com"}, ok: true,
+		},
 		{name: "rejected", message: "from 1.2.3.4:5678 rejected tcp:example.org:80 [in -> block] email: u3"},
 		{name: "relay without email", message: "from 127.0.0.1:5678 accepted tcp:example.org:443 [relay -> out]"},
 		{name: "shared account", message: "from 1.2.3.4:5678 accepted tcp:example.org:443 [socks -> out] email: shared"},
