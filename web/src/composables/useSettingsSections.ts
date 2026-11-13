@@ -90,8 +90,8 @@ export const sectionSearch: Record<SettingsSectionName, { title: string; fields:
   blocklist: { title: '域名黑名单', fields: ['全局域名黑名单'], keywords: ['黑名单', '拦截', '屏蔽', '封禁', '禁止访问', 'block', 'blacklist', '网站'] },
   traffic: {
     title: '流量',
-    fields: ['启用流量监控', '采集间隔', '分钟明细保留', '小时明细保留', '日明细保留', '月明细保留', '统计访问域名', '访问域名保留', '访问域名归类'],
-    keywords: ['保留天数', '访问日志', '域名', '网站', '服务', 'geosite'],
+    fields: ['启用流量监控', '采集间隔', '分钟明细保留', '小时明细保留', '日明细保留', '月明细保留', '统计访问域名', '访问域名保留', '访问域名归类', '网站图标'],
+    keywords: ['保留天数', '访问日志', '域名', '网站', '服务', 'geosite', '图标', 'favicon', 'icon'],
   },
   notify: {
     title: '通知',

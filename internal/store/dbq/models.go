@@ -148,6 +148,15 @@ type JobRun struct {
 	Log        string `json:"log"`
 }
 
+type ManualIcon struct {
+	Kind        string `json:"kind"`
+	Name        string `json:"name"`
+	ContentType string `json:"content_type"`
+	Data        []byte `json:"data"`
+	UpdatedAt   int64  `json:"updated_at"`
+	UpdatedBy   string `json:"updated_by"`
+}
+
 type ManualNode struct {
 	ID       int64  `json:"id"`
 	UserID   int64  `json:"user_id"`

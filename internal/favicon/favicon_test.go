@@ -303,3 +303,55 @@ func mustParse(t *testing.T, raw string) *url.URL {
 	}
 	return parsed
 }
+
+func TestImageTypeAndFetchImage(t *testing.T) {
+	svg := []byte("\ufeff<?xml version=\"1.0\"?>\n<!-- logo -->\n<!DOCTYPE svg>\n<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>")
+	if got := ImageType(svg, true); got != "image/svg+xml" {
+		t.Fatalf("svg = %q", got)
+	}
+	if got := ImageType(svg, false); got != "" {
+		t.Fatalf("automatic icons must not accept SVG, got %q", got)
+	}
+	illustrator := []byte(`<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 24.0.0 -->
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd" [
+	<!ENTITY ns_extend "http://ns.adobe.com/Extensibility/1.0/">
+	<!ENTITY ns_ai "http://ns.adobe.com/AdobeIllustrator/10.0/">
+]>
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg"></svg>`)
+	if got := ImageType(illustrator, true); got != "image/svg+xml" {
+		t.Fatalf("DOCTYPE with an internal subset = %q", got)
+	}
+	longComment := append([]byte("<!--"+strings.Repeat("x", 8000)+"-->"), []byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`)...)
+	if got := ImageType(longComment, true); got != "image/svg+xml" {
+		t.Fatalf("long leading comment = %q", got)
+	}
+	if got := ImageType([]byte("<html><svg></svg></html>"), true); got != "" {
+		t.Fatalf("HTML containing svg is not an SVG file, got %q", got)
+	}
+	if got := ImageType(pngIcon, true); got != "image/png" {
+		t.Fatalf("png = %q", got)
+	}
+	f, targets := testFetcher(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/logo.svg":
+			_, _ = w.Write(svg)
+		case "/page":
+			_, _ = w.Write([]byte("<html></html>"))
+		default:
+			http.NotFound(w, r)
+		}
+	}), map[string]string{"intranet.example.org": "10.0.0.5"})
+	icon, err := f.FetchImage(context.Background(), "https://cdn.example.com/logo.svg")
+	if err != nil || icon.ContentType != "image/svg+xml" {
+		t.Fatalf("icon %+v, err %v", icon, err)
+	}
+	if (*targets)[0] != "93.184.215.14:443" {
+		t.Fatalf("targets = %v", *targets)
+	}
+	for _, target := range []string{"https://cdn.example.com/page", "https://intranet.example.org/logo.svg", "ftp://cdn.example.com/x.png", "https://10.0.0.1/x.png", "https://cdn.example.com:8443/x.png", "not a url"} {
+		if _, err := f.FetchImage(context.Background(), target); err == nil {
+			t.Errorf("FetchImage(%q) should fail", target)
+		}
+	}
+}

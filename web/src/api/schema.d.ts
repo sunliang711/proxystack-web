@@ -81,11 +81,88 @@ export interface paths {
         };
         /**
          * 主域名的网站图标
-         * @description 优先返回缓存；缓存没有时经下载代理获取。没有图标时返回 404，页面改用首字母色块。
+         * @description 按主域名：优先返回手动设置的图标，其次是缓存，缓存没有时经下载代理获取。按服务：只返回服务的手动图标。没有图标时返回 404，页面改用其他候选或首字母色块。缓存一天并带 ETag，用 If-None-Match 确认时未变化返回 304。
          */
         get: operations["getAccessFavicon"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/access/icons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 手动设置的网站图标 */
+        get: operations["listManualIcons"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/access/icons/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 删除手动图标
+         * @description 删除后主域名恢复使用自动获取的图标，服务恢复使用代表域名的图标。
+         */
+        post: operations["deleteManualIcons"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/access/icons/fetch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 从网址获取手动图标
+         * @description 按下载代理设置下载图片；只访问公网域名的 80、443 端口，格式和大小限制与上传相同。
+         */
+        post: operations["fetchManualIcon"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/access/icons/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 上传手动图标
+         * @description 接受 PNG、GIF、JPEG、WebP、ICO 和 SVG，不超过 100 KB；已有时替换。
+         */
+        post: operations["uploadManualIcon"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2397,6 +2474,11 @@ export interface components {
             status: "ok" | "warn" | "fail";
             title: string;
         };
+        IconRef: {
+            /** @enum {string} */
+            kind: "domain" | "service";
+            name: string;
+        };
         ImportBody: {
             /** @enum {string} */
             conflict: "skip" | "overwrite" | "rename";
@@ -2584,6 +2666,31 @@ export interface components {
             /** @description 开启两步验证后必填 */
             totp_code?: string;
             username: string;
+        };
+        ManualIcon: {
+            content_type: string;
+            /** @enum {string} */
+            kind: "domain" | "service";
+            name: string;
+            /** Format: int64 */
+            size: number;
+            /** Format: date-time */
+            updated_at: string;
+            updated_by: string;
+        };
+        ManualIconDeleteInputBody: {
+            items: components["schemas"]["IconRef"][];
+        };
+        ManualIconDeleteOutputBody: {
+            /** Format: int64 */
+            deleted: number;
+        };
+        ManualIconFetchInputBody: {
+            /** @enum {string} */
+            kind: "domain" | "service";
+            name: string;
+            /** @description 图片地址，http 或 https */
+            url: string;
         };
         ManualNode: {
             auth_password: string;
@@ -3845,10 +3952,16 @@ export interface operations {
     getAccessFavicon: {
         parameters: {
             query?: {
-                /** @description 域名，先归并为主域名 */
+                /** @description 域名，先归并为主域名；与 service 二选一 */
                 domain?: string;
+                /** @description 服务名，只返回该服务的手动图标；与 domain 二选一 */
+                service?: string;
+                /** @description 页面在图标变化后改变它，让浏览器重新请求；服务端忽略 */
+                v?: string;
             };
-            header?: never;
+            header?: {
+                "If-None-Match"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3860,11 +3973,146 @@ export interface operations {
                     "Cache-Control"?: string;
                     "Content-Security-Policy"?: string;
                     "Content-Type"?: string;
+                    ETag?: string;
                     "X-Content-Type-Options"?: string;
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": string;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listManualIcons: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualIcon"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteManualIcons: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualIconDeleteInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualIconDeleteOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    fetchManualIcon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualIconFetchInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualIcon"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    uploadManualIcon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description 图片文件；另带表单字段 kind（domain 或 service）和 name（主域名或服务名）
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualIcon"];
                 };
             };
             /** @description Error */

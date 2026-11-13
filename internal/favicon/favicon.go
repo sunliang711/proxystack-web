@@ -202,7 +202,7 @@ func (f *Fetcher) get(ctx context.Context, target string, limit int64, truncate 
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return response, nil, fmt.Errorf("%w: GET %s returned %s", ErrNoIcon, target, response.Status)
+		return response, nil, fmt.Errorf("%w: GET %s returned %s", ErrNoIcon, request.URL.Redacted(), response.Status)
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
 	if err != nil {
@@ -230,9 +230,16 @@ func (f *Fetcher) icon(ctx context.Context, target string) (*Icon, error) {
 	return &Icon{ContentType: contentType, Data: data}, nil
 }
 
-func imageType(data []byte) string {
+func imageType(data []byte) string { return ImageType(data, false) }
+
+// ImageType 按内容识别图标格式，返回 Content-Type；不是支持的格式时返回空串。自动获取的图标不接受 SVG
+// （来自不可信的网站）；管理员手动设置的图标 allowSVG 为真时接受 SVG，返回时由接口加上禁止执行脚本的响应头。
+func ImageType(data []byte, allowSVG bool) string {
 	if len(data) == 0 {
 		return ""
+	}
+	if allowSVG && isSVG(data) {
+		return "image/svg+xml"
 	}
 	switch detected := http.DetectContentType(data); detected {
 	case "image/png", "image/gif", "image/jpeg", "image/webp", "image/x-icon", "image/vnd.microsoft.icon":
@@ -243,6 +250,69 @@ func imageType(data []byte) string {
 		return "image/x-icon"
 	}
 	return ""
+}
+
+// isSVG 判断内容是否是 SVG：开头（跳过 BOM、空白、XML 声明、注释和 DOCTYPE，DOCTYPE 可以带 [...] 内部子集，
+// 例如 Illustrator 导出的文件）是 <svg 元素。
+func isSVG(data []byte) bool {
+	text := strings.TrimPrefix(string(data), "\ufeff")
+	for {
+		text = strings.TrimLeft(text, " \t\r\n")
+		lower := strings.ToLower(text[:min(len(text), 16)])
+		switch {
+		case strings.HasPrefix(lower, "<svg"):
+			return true
+		case strings.HasPrefix(lower, "<?xml"):
+			end := strings.Index(text, "?>")
+			if end < 0 {
+				return false
+			}
+			text = text[end+2:]
+		case strings.HasPrefix(lower, "<!--"):
+			end := strings.Index(text, "-->")
+			if end < 0 {
+				return false
+			}
+			text = text[end+3:]
+		case strings.HasPrefix(lower, "<!doctype"):
+			head := text
+			if subset := strings.IndexByte(head, '['); subset >= 0 && subset < strings.IndexByte(head, '>') {
+				closing := strings.IndexByte(head[subset:], ']')
+				if closing < 0 {
+					return false
+				}
+				head = head[subset+closing:]
+			}
+			end := strings.IndexByte(head, '>')
+			if end < 0 {
+				return false
+			}
+			text = head[end+1:]
+		default:
+			return false
+		}
+	}
+}
+
+// FetchImage 下载管理员指定的图片地址作为手动图标：同样只访问公网域名的 80、443 端口并做内网检查，
+// 接受 PNG、GIF、JPEG、WebP、ICO 和 SVG，不超过 MaxIcon。
+func (f *Fetcher) FetchImage(ctx context.Context, target string) (*Icon, error) {
+	parsed, err := url.Parse(strings.TrimSpace(target))
+	if err != nil || parsed.Host == "" {
+		return nil, fmt.Errorf("%w: invalid URL", ErrForbidden)
+	}
+	if err := checkURL(parsed); err != nil {
+		return nil, err
+	}
+	_, data, err := f.get(ctx, parsed.String(), MaxIcon, false)
+	if err != nil {
+		return nil, err
+	}
+	contentType := ImageType(data, true)
+	if contentType == "" {
+		return nil, fmt.Errorf("%w: %s is not a supported image", ErrNoIcon, parsed.Redacted())
+	}
+	return &Icon{ContentType: contentType, Data: data}, nil
 }
 
 // pageIcons 读取首页，按偏好顺序返回声明的图标地址和用于解析相对地址的最终页面地址。

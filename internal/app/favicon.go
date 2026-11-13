@@ -45,11 +45,18 @@ type faviconCall struct {
 	icon *favicon.Icon
 }
 
-// AccessFavicon 返回主域名的图标：缓存未到期时直接使用缓存，否则经下载代理获取。
+// AccessFavicon 返回主域名的图标：有手动设置的图标时用它；否则缓存未到期时直接使用缓存，再否则经下载代理获取。
 // 没有图标、域名不是公网域名、下载代理不可用或获取排队过久时返回 ErrNotFound。
 func (s *Service) AccessFavicon(ctx context.Context, name string) (*favicon.Icon, error) {
 	domain := access.Domain(name)
-	if domain == "" || !favicon.PublicDomain(domain) {
+	if domain == "" {
+		return nil, ErrNotFound
+	}
+	// 手动设置的图标优先，包括不会自动获取的内部域名。
+	if manual, err := s.manualIcon(ctx, IconRef{Kind: IconKindDomain, Name: domain}); err != nil || manual != nil {
+		return manual, err
+	}
+	if !favicon.PublicDomain(domain) {
 		return nil, ErrNotFound
 	}
 	cached, err := s.cachedFavicon(ctx, domain)

@@ -13,6 +13,7 @@ import TemplateInput from '../components/TemplateInput.vue'
 import ErrorList from '../components/ErrorList.vue'
 import PauseWindowsInput from '../components/PauseWindowsInput.vue'
 import BlockedDomainsInput from '../components/BlockedDomainsInput.vue'
+import ManualIconsCard from '../components/ManualIconsCard.vue'
 import { refreshPauseWindow } from '../composables/usePauseWindow'
 import SettingsSection from '../components/SettingsSection.vue'
 import EntityLink from '../components/EntityLink.vue'
@@ -403,6 +404,9 @@ async function save() {
             </NFormItem>
             <NFormItem label="访问域名归类" v-bind="f('traffic.access_groups', '「按服务归类」时补充或修正 geosite 的归类，每行一条：域名=服务名，例如 cdn-example.net=example；域名写主域名（不能写 www. 等子域名），匹配它本身及全部子域名，优先于 geosite。服务名与 geosite 清单同名（例如 google）时并入该服务。保存后立即生效')">
               <BlockedDomainsInput :value="form.traffic.access_groups ?? []" placeholder="cdn-example.net=example" @update:value="(v: string[]) => (form.traffic.access_groups = v)" />
+            </NFormItem>
+            <NFormItem label="网站图标" :show-feedback="false">
+              <ManualIconsCard />
             </NFormItem>
           </SettingsSection>
           <SettingsSection v-show="sectionShown('notify')" title="通知" name="notify">

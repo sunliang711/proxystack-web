@@ -6,6 +6,7 @@ import { api, problemMessage, saveBlob, type Schemas } from '../../api/client'
 import AccessRangePicker, { type AccessBounds, type AccessPeriod } from '../../components/AccessRangePicker.vue'
 import AccessStatusNotice from '../../components/AccessStatusNotice.vue'
 import DomainIcon from '../../components/DomainIcon.vue'
+import IconMenu from '../../components/IconMenu.vue'
 import EntityLink from '../../components/EntityLink.vue'
 import { recentDayRange, type TrafficRange } from '../../util/traffic-range'
 import { useBlockDomain } from '../../composables/useBlockDomain'
@@ -136,12 +137,12 @@ const domainColumns = computed<DataTableColumns<DomainRow>>(() => [
     title: group.value ? '服务 / 主域名' : '主域名', key: 'domain', minWidth: 220,
     render: (row) => isServiceRow(row)
       ? h(NSpace, { size: 6, align: 'center', wrap: false }, () => [
-        h(DomainIcon, { domain: row.domain, fallbacks: iconFallbacks(row) }),
+        h(IconMenu, { domain: row.domain, service: row.service, fallbacks: iconFallbacks(row) }),
         h(NButton, { text: true, strong: true, type: row.service === service.value ? 'primary' : 'default', onClick: () => pickService(row.service ?? '') }, () => row.service),
         h(NTag, { size: 'small', bordered: false }, () => `${row.children?.length ?? 0} 个域名`),
       ])
       : h(NSpace, { size: 6, align: 'center', wrap: false }, () => [
-        h(DomainIcon, { domain: row.domain }),
+        h(IconMenu, { domain: row.domain }),
         h(NButton, { text: true, type: !service.value && row.domain === users.value?.domain ? 'primary' : 'default', class: 'domain', onClick: () => pick(row.domain) }, () => row.domain),
         // 一级行显示所属服务；服务内的主域名不重复显示。
         row.service && ranks.value.has(row.key) ? h(NTag, { size: 'small', bordered: false }, () => row.service) : null,
@@ -192,7 +193,7 @@ const userColumns: DataTableColumns<UserRow> = [
     <div v-if="domain || service" ref="usersCard">
     <NCard size="small">
       <template #header>
-        <span v-if="users && users.domain" class="users-title"><DomainIcon :domain="users.domain" :fallbacks="usersIconFallbacks" :size="18" />访问 {{ service || users.domain }} 的用户</span>
+        <span v-if="users && users.domain" class="users-title"><DomainIcon :domain="users.domain" :service="service" :fallbacks="usersIconFallbacks" :size="18" />访问 {{ service || users.domain }} 的用户</span>
         <template v-else>访问{{ service ? ` ${service} ` : '该域名' }}的用户</template>
       </template>
       <template #header-extra><NButton size="small" quaternary @click="pick('')">关闭</NButton></template>

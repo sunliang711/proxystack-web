@@ -6,7 +6,7 @@ import { loadTimezone } from '../composables/useTrafficTrend'
 import { recentDayRange, type TrafficRange } from '../util/traffic-range'
 import AccessRangePicker, { type AccessBounds, type AccessPeriod } from './AccessRangePicker.vue'
 import AccessStatusNotice from './AccessStatusNotice.vue'
-import DomainIcon from './DomainIcon.vue'
+import IconMenu from './IconMenu.vue'
 import { useBlockDomain } from '../composables/useBlockDomain'
 import { accessRanks, accessRows, iconFallbacks, isServiceRow, setListed, type AccessRow } from '../util/access-rows'
 
@@ -74,12 +74,12 @@ const columns = computed<DataTableColumns<Row>>(() => [
     title: group.value ? '服务 / 主域名' : '主域名', key: 'domain', minWidth: 220,
     render: (row) => isServiceRow(row)
       ? h(NSpace, { size: 6, align: 'center', wrap: false }, () => [
-        h(DomainIcon, { domain: row.domain, fallbacks: iconFallbacks(row) }),
+        h(IconMenu, { domain: row.domain, service: row.service, fallbacks: iconFallbacks(row) }),
         h(NText, { strong: true }, () => row.service),
         h(NTag, { size: 'small', bordered: false }, () => `${row.children?.length ?? 0} 个域名`),
       ])
       : h(NSpace, { size: 6, align: 'center', wrap: false }, () => [
-        h(DomainIcon, { domain: row.domain }),
+        h(IconMenu, { domain: row.domain }),
         h('span', { class: 'domain' }, row.domain),
         // 一级行显示所属服务；服务内的主域名不重复显示。
         row.service && ranks.value.has(row.key) ? h(NTag, { size: 'small', bordered: false }, () => row.service) : null,

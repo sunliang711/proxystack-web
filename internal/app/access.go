@@ -523,7 +523,9 @@ func (s *Service) AccessTopDomains(ctx context.Context, query AccessQuery) (*Acc
 		return nil, err
 	}
 	classifier := s.accessClassifier(settings)
-	listed := func(row *AccessDomainCount) { row.Listed = blockListed(row.Domain, settings.Traffic.BlockedDomains, nil) }
+	listed := func(row *AccessDomainCount) {
+		row.Listed = blockListed(row.Domain, settings.Traffic.BlockedDomains, nil)
+	}
 	limit := accessLimit(query.Limit)
 	out := &AccessDomains{FromDay: from, ToDay: to, Domains: []AccessDomainCount{}}
 	err = s.Store.InTx(ctx, func(q *dbq.Queries) error {
@@ -602,7 +604,9 @@ func (s *Service) AccessUserDomains(ctx context.Context, userID int64, query Acc
 		}
 		out.DomainCount = int64(len(seen))
 		rows := groupAccess(facts, classifier, query.Group, func(row *AccessDomainCount, n int64) { row.Days = n },
-			func(row *AccessDomainCount) { row.Listed = blockListed(row.Domain, settings.Traffic.BlockedDomains, own) })
+			func(row *AccessDomainCount) {
+				row.Listed = blockListed(row.Domain, settings.Traffic.BlockedDomains, own)
+			})
 		out.Rows = int64(len(rows))
 		out.Domains = truncateAccess(rows, accessLimit(query.Limit))
 		return nil

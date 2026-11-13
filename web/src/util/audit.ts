@@ -32,6 +32,8 @@ const actionLabels: Record<string, string> = {
   'backup.restore': '恢复备份',
   'backup.delete': '删除备份',
   'job.update': '修改定时任务',
+  'access.icon_set': '设置网站图标',
+  'access.icon_delete': '删除网站图标',
   'job.run': '执行定时任务',
   'subscription.publish': '签发订阅包',
   'subscription.deliver': '投递订阅包',

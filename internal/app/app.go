@@ -75,6 +75,8 @@ type Service struct {
 	SendMail func(ctx context.Context, config notify.Config, subject, body string, attachments ...notify.Attachment) error
 	// FetchFavicon 替换网站图标的获取，生产环境为 nil 时经下载代理真实请求。
 	FetchFavicon func(ctx context.Context, proxy deps.ProxyConfig, domain string) (*favicon.Icon, error)
+	// FetchIconURL 替换按网址获取手动图标，生产环境为 nil 时经下载代理真实请求。
+	FetchIconURL func(ctx context.Context, proxy deps.ProxyConfig, target string) (*favicon.Icon, error)
 	// ProbeEgress 替换出口探测，生产环境为 nil 时使用真实 SOCKS 请求。
 	ProbeEgress func(ctx context.Context, proxy deps.ProxyConfig, timeout time.Duration) ([]EgressResult, error)
 }
