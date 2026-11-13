@@ -10,6 +10,11 @@ export function isServiceRow(row: AccessDomainCount): boolean {
   return (row.members?.length ?? 0) > 0
 }
 
+/** 服务行图标的备选域名：代表域名没有图标时，按访问次数依次尝试各主域名。 */
+export function iconFallbacks(row: AccessDomainCount): string[] {
+  return (row.members ?? []).map((member) => member.domain)
+}
+
 /** 把接口返回的排行转成表格行：服务行的 key 用服务名，主域名行用域名，避免代表域名与成员域名重复。 */
 export function accessRows(rows: AccessDomainCount[]): AccessRow[] {
   return rows.map((row) => isServiceRow(row)

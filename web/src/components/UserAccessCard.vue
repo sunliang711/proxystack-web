@@ -8,7 +8,7 @@ import AccessRangePicker, { type AccessBounds, type AccessPeriod } from './Acces
 import AccessStatusNotice from './AccessStatusNotice.vue'
 import DomainIcon from './DomainIcon.vue'
 import { useBlockDomain } from '../composables/useBlockDomain'
-import { accessRanks, accessRows, isServiceRow, setListed, type AccessRow } from '../util/access-rows'
+import { accessRanks, accessRows, iconFallbacks, isServiceRow, setListed, type AccessRow } from '../util/access-rows'
 
 type Row = AccessRow
 
@@ -69,12 +69,12 @@ const ranks = computed(() => accessRanks(rows.value))
 const peak = computed(() => Math.max(1, ...rows.value.map((row) => row.count + row.blocked)))
 const hidden = computed(() => (result.value ? result.value.rows - result.value.domains.length : 0))
 const columns = computed<DataTableColumns<Row>>(() => [
-  { title: '名次', key: 'rank', width: 64, render: (row) => ranks.value.get(row.key) ?? '' },
+  { title: '名次', key: 'rank', width: 84, className: 'rank', render: (row) => ranks.value.get(row.key) ?? '' },
   {
     title: group.value ? '服务 / 主域名' : '主域名', key: 'domain', minWidth: 220,
     render: (row) => isServiceRow(row)
       ? h(NSpace, { size: 6, align: 'center', wrap: false }, () => [
-        h(DomainIcon, { domain: row.domain }),
+        h(DomainIcon, { domain: row.domain, fallbacks: iconFallbacks(row) }),
         h(NText, { strong: true }, () => row.service),
         h(NTag, { size: 'small', bordered: false }, () => `${row.children?.length ?? 0} 个域名`),
       ])
@@ -131,6 +131,7 @@ const columns = computed<DataTableColumns<Row>>(() => [
 .access-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
 .access-toolbar > :first-child { min-width: 0; max-width: 100%; }
 .group-switch { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+:deep(.rank) { white-space: nowrap; }
 :deep(.domain) { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
 :deep(.bar-cell) { display: flex; align-items: center; }
 :deep(.bar) { height: 8px; min-width: 2px; border-radius: 4px; background: var(--ps-accent); }

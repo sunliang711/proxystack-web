@@ -9,7 +9,7 @@ import DomainIcon from '../../components/DomainIcon.vue'
 import EntityLink from '../../components/EntityLink.vue'
 import { recentDayRange, type TrafficRange } from '../../util/traffic-range'
 import { useBlockDomain } from '../../composables/useBlockDomain'
-import { accessRanks, accessRows, isServiceRow, setListed, type AccessRow } from '../../util/access-rows'
+import { accessRanks, accessRows, iconFallbacks, isServiceRow, setListed, type AccessRow } from '../../util/access-rows'
 
 type DomainRow = AccessRow
 type UserRow = Schemas['AccessDomainUser']
@@ -119,18 +119,24 @@ async function toggleBlock(row: DomainRow) {
   if (listed !== null && top.value) setListed(top.value.domains, row.domain, listed)
 }
 
+// 服务的图标备选：排行里有该服务行时按访问次数取成员，否则用查询结果里的成员（按名称排序）。
+const usersIconFallbacks = computed(() => {
+  if (!service.value) return []
+  const row = top.value?.domains.find((item) => item.service === service.value && isServiceRow(item))
+  return row ? iconFallbacks(row) : (users.value?.members ?? [])
+})
 const rangeText = (from?: string, to?: string) => (!from ? '' : from === to ? from : `${from} ～ ${to}`)
 const rows = computed(() => accessRows(top.value?.domains ?? []))
 const ranks = computed(() => accessRanks(rows.value))
 const peak = computed(() => Math.max(1, ...rows.value.map((row) => row.count + row.blocked)))
 const hidden = computed(() => (top.value ? top.value.rows - top.value.domains.length : 0))
 const domainColumns = computed<DataTableColumns<DomainRow>>(() => [
-  { title: '名次', key: 'rank', width: 64, render: (row) => ranks.value.get(row.key) ?? '' },
+  { title: '名次', key: 'rank', width: 84, className: 'rank', render: (row) => ranks.value.get(row.key) ?? '' },
   {
     title: group.value ? '服务 / 主域名' : '主域名', key: 'domain', minWidth: 220,
     render: (row) => isServiceRow(row)
       ? h(NSpace, { size: 6, align: 'center', wrap: false }, () => [
-        h(DomainIcon, { domain: row.domain }),
+        h(DomainIcon, { domain: row.domain, fallbacks: iconFallbacks(row) }),
         h(NButton, { text: true, strong: true, type: row.service === service.value ? 'primary' : 'default', onClick: () => pickService(row.service ?? '') }, () => row.service),
         h(NTag, { size: 'small', bordered: false }, () => `${row.children?.length ?? 0} 个域名`),
       ])
@@ -186,7 +192,7 @@ const userColumns: DataTableColumns<UserRow> = [
     <div v-if="domain || service" ref="usersCard">
     <NCard size="small">
       <template #header>
-        <span v-if="users && users.domain" class="users-title"><DomainIcon :domain="users.domain" :size="18" />访问 {{ service || users.domain }} 的用户</span>
+        <span v-if="users && users.domain" class="users-title"><DomainIcon :domain="users.domain" :fallbacks="usersIconFallbacks" :size="18" />访问 {{ service || users.domain }} 的用户</span>
         <template v-else>访问{{ service ? ` ${service} ` : '该域名' }}的用户</template>
       </template>
       <template #header-extra><NButton size="small" quaternary @click="pick('')">关闭</NButton></template>
@@ -219,6 +225,7 @@ const userColumns: DataTableColumns<UserRow> = [
 .group-switch { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; white-space: nowrap; }
 .users-title { display: inline-flex; align-items: center; gap: 8px; }
 .summary { display: block; font-size: 12px; margin-bottom: 8px; }
+:deep(.rank) { white-space: nowrap; }
 :deep(.domain) { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
 :deep(.bar-cell) { display: flex; align-items: center; }
 :deep(.bar) { height: 8px; min-width: 2px; border-radius: 4px; background: var(--ps-accent); }
