@@ -16,7 +16,7 @@ const props = defineProps<{ userId: number }>()
 /** 一键拉黑或移出改了该用户的名单（条目即主域名），所在页面据此同步表单，避免之后保存时覆盖。 */
 const emit = defineEmits<{ blocklist: [entry: string, blocked: boolean] }>()
 const message = useMessage()
-const period = ref<AccessPeriod>('7d')
+const period = ref<AccessPeriod>('today')
 const timezone = ref('')
 const custom = ref<TrafficRange>(['', ''])
 onMounted(async () => {

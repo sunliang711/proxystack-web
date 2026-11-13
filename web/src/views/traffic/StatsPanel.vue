@@ -30,7 +30,8 @@ const linked = route.query
 const rangeParam = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
 const levels = ['hour', 'day', 'month', 'year'] as const
 const ids = (value: unknown) => (typeof value === 'string' && value ? value.split(',').map(Number).filter((id) => Number.isInteger(id) && id > 0) : [])
-const level = ref<TrafficLevel>((levels as readonly unknown[]).includes(linked.level) ? (linked.level as TrafficLevel) : 'day')
+// 默认按小时查看统计时区的当天，即快捷时间段「今日」。
+const level = ref<TrafficLevel>((levels as readonly unknown[]).includes(linked.level) ? (linked.level as TrafficLevel) : 'hour')
 const range = ref<TrafficRange>(
   typeof linked.from === 'string' && typeof linked.to === 'string' && rangeParam.test(linked.from) && rangeParam.test(linked.to) && linked.from <= linked.to
     ? [linked.from, linked.to]
@@ -80,7 +81,7 @@ function switchCoarser() {
 watch([level, range, users, stacks, compare, showZero], () => {
   const custom = range.value.join() !== defaultTrafficRange(level.value, props.timezone).join()
   const ours = {
-    level: level.value === 'day' ? undefined : level.value,
+    level: level.value === 'hour' ? undefined : level.value,
     from: custom ? range.value[0] : undefined,
     to: custom ? range.value[1] : undefined,
     users: users.value.length ? users.value.join(',') : undefined,
