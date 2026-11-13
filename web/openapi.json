@@ -6537,6 +6537,80 @@
         ]
       }
     },
+    "/api/access/favicon": {
+      "get": {
+        "description": "优先返回缓存；缓存没有时经下载代理获取。没有图标时返回 404，页面改用首字母色块。",
+        "operationId": "getAccessFavicon",
+        "parameters": [
+          {
+            "description": "域名，先归并为主域名",
+            "explode": false,
+            "in": "query",
+            "name": "domain",
+            "schema": {
+              "description": "域名，先归并为主域名",
+              "maxLength": 253,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "contentEncoding": "base64",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Security-Policy": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "主域名的网站图标",
+        "tags": [
+          "traffic"
+        ]
+      }
+    },
     "/api/access/status": {
       "get": {
         "operationId": "getAccessStatus",

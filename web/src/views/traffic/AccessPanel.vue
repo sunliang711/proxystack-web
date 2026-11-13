@@ -5,6 +5,7 @@ import { NButton, NCard, NDataTable, NGrid, NGridItem, NInput, NSpace, NStatisti
 import { api, problemMessage, saveBlob, type Schemas } from '../../api/client'
 import AccessRangePicker, { type AccessBounds, type AccessPeriod } from '../../components/AccessRangePicker.vue'
 import AccessStatusNotice from '../../components/AccessStatusNotice.vue'
+import DomainIcon from '../../components/DomainIcon.vue'
 import EntityLink from '../../components/EntityLink.vue'
 import { recentDayRange, type TrafficRange } from '../../util/traffic-range'
 import { useBlockDomain } from '../../composables/useBlockDomain'
@@ -108,6 +109,7 @@ const domainColumns = computed<DataTableColumns<DomainRow>>(() => [
   {
     title: '主域名', key: 'domain', minWidth: 200,
     render: (row) => h(NSpace, { size: 6, align: 'center', wrap: false }, () => [
+      h(DomainIcon, { domain: row.domain }),
       h(NButton, { text: true, type: row.domain === users.value?.domain ? 'primary' : 'default', class: 'domain', onClick: () => pick(row.domain) }, () => row.domain),
       row.listed === 'global' ? h(NTag, { size: 'small', type: 'error', bordered: false }, () => '已拉黑') : null,
     ]),
@@ -153,7 +155,11 @@ const userColumns: DataTableColumns<UserRow> = [
       </div>
     </NCard>
     <div v-if="domain" ref="usersCard">
-    <NCard size="small" :title="users ? `访问 ${users.domain} 的用户` : '访问该域名的用户'">
+    <NCard size="small">
+      <template #header>
+        <span v-if="users" class="users-title"><DomainIcon :domain="users.domain" :size="18" />访问 {{ users.domain }} 的用户</span>
+        <template v-else>访问该域名的用户</template>
+      </template>
       <template #header-extra><NButton size="small" quaternary @click="pick('')">关闭</NButton></template>
       <NText v-if="users" depth="3" class="summary">
         {{ rangeText(users.from_day, users.to_day) }}<template v-if="users.domain !== domain">；输入的 {{ domain }} 已合并为主域名 {{ users.domain }}</template>。
@@ -181,6 +187,7 @@ const userColumns: DataTableColumns<UserRow> = [
 <style scoped>
 .access-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
 .domain-search { width: 280px; }
+.users-title { display: inline-flex; align-items: center; gap: 8px; }
 .summary { display: block; font-size: 12px; margin-bottom: 8px; }
 :deep(.domain) { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
 :deep(.bar-cell) { display: flex; align-items: center; }

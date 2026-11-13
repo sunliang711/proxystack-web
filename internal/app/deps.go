@@ -214,21 +214,31 @@ func (s *Service) probeVersion(ctx context.Context, component, path string) stri
 
 // fetcher 按下载代理设置创建下载器。经 stack 出站时要求该 stack 的 mihomo 正在运行。
 func (s *Service) fetcher(ctx context.Context, doc *configdoc.Document, proxy configdoc.DownloadProxySettings) (*deps.HTTPFetcher, deps.ProxyConfig, error) {
+	cfg, err := s.downloadProxyConfig(ctx, doc, proxy)
+	if err != nil {
+		return nil, cfg, err
+	}
+	fetcher, err := deps.NewHTTPFetcher(cfg)
+	return fetcher, cfg, err
+}
+
+// downloadProxyConfig 把下载代理设置换算成连接参数。经 stack 出站时要求该 stack 的 mihomo 正在运行。
+func (s *Service) downloadProxyConfig(ctx context.Context, doc *configdoc.Document, proxy configdoc.DownloadProxySettings) (deps.ProxyConfig, error) {
 	cfg := deps.ProxyConfig{Kind: deps.ProxyDirect}
 	switch proxy.Mode {
 	case configdoc.ProxyModeStack:
 		index := doc.StackByName(proxy.Stack)
 		if index < 0 {
-			return nil, cfg, fmt.Errorf("download proxy stack does not exist: %s", proxy.Stack)
+			return cfg, fmt.Errorf("download proxy stack does not exist: %s", proxy.Stack)
 		}
 		stack := doc.Stacks[index]
 		unit := units.Name(units.Mihomo, stack.Name)
 		states, err := s.Units.States(ctx, []string{unit})
 		if err != nil {
-			return nil, cfg, err
+			return cfg, err
 		}
 		if !states[unit].Running() {
-			return nil, cfg, fmt.Errorf("download proxy stack %s is not running; start it or choose another proxy mode", stack.Name)
+			return cfg, fmt.Errorf("download proxy stack %s is not running; start it or choose another proxy mode", stack.Name)
 		}
 		listener := stack.Mihomo.Socks
 		cfg.Kind = deps.ProxySOCKS5
@@ -255,8 +265,7 @@ func (s *Service) fetcher(ctx context.Context, doc *configdoc.Document, proxy co
 		cfg.Address = net.JoinHostPort(proxy.Host, strconv.Itoa(proxy.Port))
 		cfg.Username, cfg.Password, cfg.RemoteDNS = proxy.Username, proxy.Password, proxy.RemoteDNS
 	}
-	fetcher, err := deps.NewHTTPFetcher(cfg)
-	return fetcher, cfg, err
+	return cfg, nil
 }
 
 // ProxyTestResult 是下载代理测试结果。

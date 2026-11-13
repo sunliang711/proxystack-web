@@ -84,6 +84,15 @@ type DepInstall struct {
 	Error      string `json:"error"`
 }
 
+type Favicon struct {
+	Domain      string `json:"domain"`
+	Ok          int64  `json:"ok"`
+	ContentType string `json:"content_type"`
+	Data        []byte `json:"data"`
+	FetchedAt   int64  `json:"fetched_at"`
+	ExpiresAt   int64  `json:"expires_at"`
+}
+
 type Inbound struct {
 	ID              int64  `json:"id"`
 	StackID         int64  `json:"stack_id"`

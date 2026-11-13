@@ -6,6 +6,7 @@ import { loadTimezone } from '../composables/useTrafficTrend'
 import { recentDayRange, type TrafficRange } from '../util/traffic-range'
 import AccessRangePicker, { type AccessBounds, type AccessPeriod } from './AccessRangePicker.vue'
 import AccessStatusNotice from './AccessStatusNotice.vue'
+import DomainIcon from './DomainIcon.vue'
 import { useBlockDomain } from '../composables/useBlockDomain'
 
 type Row = Schemas['AccessDomainCount']
@@ -67,6 +68,7 @@ const columns = computed<DataTableColumns<Row>>(() => [
   {
     title: '主域名', key: 'domain', minWidth: 200,
     render: (row) => h(NSpace, { size: 6, align: 'center', wrap: false }, () => [
+      h(DomainIcon, { domain: row.domain }),
       h('span', { class: 'domain' }, row.domain),
       row.listed ? h(NTag, { size: 'small', type: 'error', bordered: false }, () => (row.listed === 'global' ? '全局黑名单' : '已拉黑')) : null,
     ]),

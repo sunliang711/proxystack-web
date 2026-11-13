@@ -72,11 +72,36 @@ type blockDomainOutput struct {
 	Body app.BlockDomainResult
 }
 
+type faviconInput struct {
+	Domain string `query:"domain" minLength:"1" maxLength:"253" doc:"域名，先归并为主域名"`
+}
+
+type faviconOutput struct {
+	ContentType  string `header:"Content-Type"`
+	CacheControl string `header:"Cache-Control"`
+	// 图标来自外部网站，禁止浏览器猜测类型，并且即使被直接打开也不执行任何内容。
+	NoSniff string `header:"X-Content-Type-Options"`
+	CSP     string `header:"Content-Security-Policy"`
+	Body    []byte
+}
+
 func registerAccess(api huma.API, s *Server) {
 	reg := func(op huma.Operation) huma.Operation {
 		op.Tags = []string{"traffic"}
 		return secured(op)
 	}
+	huma.Register(api, reg(huma.Operation{OperationID: "getAccessFavicon", Method: http.MethodGet, Path: "/api/access/favicon", Summary: "主域名的网站图标",
+		Description: "优先返回缓存；缓存没有时经下载代理获取。没有图标时返回 404，页面改用首字母色块。"}),
+		func(ctx context.Context, in *faviconInput) (*faviconOutput, error) {
+			icon, err := s.svc.AccessFavicon(ctx, in.Domain)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &faviconOutput{
+				ContentType: icon.ContentType, CacheControl: "private, max-age=86400",
+				NoSniff: "nosniff", CSP: "default-src 'none'; sandbox", Body: icon.Data,
+			}, nil
+		})
 	huma.Register(api, reg(huma.Operation{OperationID: "getAccessStatus", Method: http.MethodGet, Path: "/api/access/status", Summary: "访问域名统计的运行状态"}),
 		func(ctx context.Context, _ *struct{}) (*accessStatusOutput, error) {
 			status, err := s.svc.AccessStatusData(ctx)

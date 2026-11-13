@@ -11,6 +11,7 @@ import (
 	"proxystack-web/internal/deps"
 	"proxystack-web/internal/domain/validation"
 	"proxystack-web/internal/events"
+	"proxystack-web/internal/favicon"
 	"proxystack-web/internal/notify"
 	"proxystack-web/internal/paths"
 	"proxystack-web/internal/runtime"
@@ -54,6 +55,7 @@ type Service struct {
 	autoPublish   autoPublishState
 	traffic       trafficState
 	access        accessState
+	favicons      faviconState
 	autoPause     autoPauseState
 	scheduler     schedulerState
 	subDeployMu   sync.Mutex
@@ -70,6 +72,8 @@ type Service struct {
 
 	// SendMail 发送邮件，为 nil 时通过 SMTP 发送（测试替换）。
 	SendMail func(ctx context.Context, config notify.Config, subject, body string, attachments ...notify.Attachment) error
+	// FetchFavicon 替换网站图标的获取，生产环境为 nil 时经下载代理真实请求。
+	FetchFavicon func(ctx context.Context, proxy deps.ProxyConfig, domain string) (*favicon.Icon, error)
 	// ProbeEgress 替换出口探测，生产环境为 nil 时使用真实 SOCKS 请求。
 	ProbeEgress func(ctx context.Context, proxy deps.ProxyConfig, timeout time.Duration) ([]EgressResult, error)
 }

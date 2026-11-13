@@ -72,6 +72,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/access/favicon": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 主域名的网站图标
+         * @description 优先返回缓存；缓存没有时经下载代理获取。没有图标时返回 404，页面改用首字母色块。
+         */
+        get: operations["getAccessFavicon"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/access/status": {
         parameters: {
             query?: never;
@@ -3793,6 +3813,42 @@ export interface operations {
                 headers: {
                     "Content-Disposition"?: string;
                     "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getAccessFavicon: {
+        parameters: {
+            query?: {
+                /** @description 域名，先归并为主域名 */
+                domain?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Security-Policy"?: string;
+                    "Content-Type"?: string;
+                    "X-Content-Type-Options"?: string;
                     [name: string]: unknown;
                 };
                 content: {

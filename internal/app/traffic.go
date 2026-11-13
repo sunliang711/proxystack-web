@@ -411,6 +411,7 @@ func (s *Service) pruneTraffic(ctx context.Context, settings configdoc.Settings,
 		slog.Warn("traffic prune", "err", err)
 	}
 	s.pruneAccess(ctx, retention.AccessRetentionDays, now, location(settings))
+	s.pruneFavicons(ctx, now)
 	cutoff := traffic.Day(now.AddDate(0, 0, -2*dailySeriesDays), location(settings))
 	if err := s.Store.InTx(ctx, func(q *dbq.Queries) error {
 		if err := q.DeleteUserDailyBefore(ctx, cutoff); err != nil {
