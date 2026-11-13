@@ -28,7 +28,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 访问过某个主域名的用户 */
+        /** 访问过某个主域名或服务的用户 */
         get: operations["listAccessDomainUsers"];
         put?: never;
         post?: never;
@@ -1924,6 +1924,8 @@ export interface components {
             domain: string;
             /** @enum {string} */
             listed: "" | "global" | "user";
+            members?: components["schemas"]["AccessDomainCount"][];
+            service?: string;
             /** Format: int64 */
             users?: number;
         };
@@ -1942,6 +1944,8 @@ export interface components {
         AccessDomainUsers: {
             domain: string;
             from_day: string;
+            members?: string[];
+            service?: string;
             to_day: string;
             users: components["schemas"]["AccessDomainUser"][];
         };
@@ -1952,6 +1956,8 @@ export interface components {
             domain_count: number;
             domains: components["schemas"]["AccessDomainCount"][];
             from_day: string;
+            /** Format: int64 */
+            rows: number;
             to_day: string;
             /** Format: int64 */
             total: number;
@@ -3436,6 +3442,8 @@ export interface components {
             total: components["schemas"]["Bytes"];
         };
         TrafficSettings: {
+            /** @description 访问域名的手动归类，每条 域名=服务名，域名匹配它本身及全部子域名 */
+            access_groups?: string[];
             /**
              * Format: int64
              * @description 访问域名统计保留天数，缺省 90
@@ -3723,8 +3731,10 @@ export interface operations {
     listAccessDomainUsers: {
         parameters: {
             query?: {
-                /** @description 域名，先归并为主域名 */
+                /** @description 域名，先归并为主域名；与 service 二选一 */
                 domain?: string;
+                /** @description 服务名，列出访问过该服务任一主域名的用户；与 domain 二选一 */
+                service?: string;
                 /** @description 开始时间（Unix 秒），按设置时区取所在日期 */
                 from?: number;
                 /** @description 结束时间（Unix 秒），不含，按设置时区取前一秒所在日期 */
@@ -3763,8 +3773,10 @@ export interface operations {
                 from?: number;
                 /** @description 结束时间（Unix 秒），不含，按设置时区取前一秒所在日期 */
                 to?: number;
-                /** @description 返回的域名条数，0 表示 500 */
+                /** @description 返回的行数，0 表示 500 */
                 limit?: number;
+                /** @description domain 每个主域名一行；service 把同一服务的主域名合并为一行 */
+                group?: "domain" | "service";
             };
             header?: never;
             path?: never;
@@ -7548,8 +7560,10 @@ export interface operations {
                 from?: number;
                 /** @description 结束时间（Unix 秒），不含，按设置时区取前一秒所在日期 */
                 to?: number;
-                /** @description 返回的域名条数，0 表示 500 */
+                /** @description 返回的行数，0 表示 500 */
                 limit?: number;
+                /** @description domain 每个主域名一行；service 把同一服务的主域名合并为一行 */
+                group?: "domain" | "service";
             };
             header?: never;
             path: {

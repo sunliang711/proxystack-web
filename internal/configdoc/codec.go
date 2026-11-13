@@ -128,6 +128,7 @@ func (s *Settings) Normalize() {
 	}
 	s.Traffic.PauseWindows = normalizePauseWindows(s.Traffic.PauseWindows)
 	s.Traffic.BlockedDomains = normalizeBlockedDomains(s.Traffic.BlockedDomains)
+	s.Traffic.AccessGroups = normalizeAccessGroups(s.Traffic.AccessGroups)
 	if s.Traffic.AccessRetentionDays == 0 {
 		s.Traffic.AccessRetentionDays = DefaultAccessRetentionDays
 	}

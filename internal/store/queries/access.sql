@@ -46,3 +46,24 @@ SELECT COUNT(DISTINCT domain) AS domains, CAST(COALESCE(SUM(count), 0) AS INTEGE
        CAST(COALESCE(SUM(blocked), 0) AS INTEGER) AS blocked
 FROM access_domain_day
 WHERE day >= sqlc.arg(from_day) AND day <= sqlc.arg(to_day);
+
+-- name: ListAccessDomainUserPairs :many
+SELECT domain, user_id, CAST(SUM(count) AS INTEGER) AS count, CAST(SUM(blocked) AS INTEGER) AS blocked
+FROM access_domain_day
+WHERE day >= sqlc.arg(from_day) AND day <= sqlc.arg(to_day)
+GROUP BY domain, user_id;
+
+-- name: ListAccessUserDomainDays :many
+SELECT domain, day, count, blocked
+FROM access_domain_day
+WHERE user_id = sqlc.arg(user_id) AND day >= sqlc.arg(from_day) AND day <= sqlc.arg(to_day);
+
+-- name: ListAccessDomainsUserDays :many
+SELECT user_id, day, CAST(SUM(count) AS INTEGER) AS count, CAST(SUM(blocked) AS INTEGER) AS blocked
+FROM access_domain_day
+WHERE day >= sqlc.arg(from_day) AND day <= sqlc.arg(to_day) AND domain IN (sqlc.slice(domains))
+GROUP BY user_id, day;
+
+-- name: ListAccessDomainNames :many
+SELECT DISTINCT domain FROM access_domain_day
+WHERE day >= sqlc.arg(from_day) AND day <= sqlc.arg(to_day);

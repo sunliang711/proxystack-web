@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -428,6 +429,8 @@ func (s *Service) AccessStatusData(ctx context.Context) (*AccessStatus, error) {
 type AccessQuery struct {
 	From, To time.Time
 	Limit    int64
+	// Group 为真时把同一服务的主域名合并为一行。
+	Group bool
 }
 
 // accessDays 把时间范围换算成设置时区下的起止日期（都含）。
@@ -469,8 +472,12 @@ type AccessDomainCount struct {
 	// Days 是有访问的天数（用户视角），Users 是访问过的用户数（全局视角）。
 	Days  int64 `json:"days,omitempty"`
 	Users int64 `json:"users,omitempty"`
-	// Listed 是该主域名当前在哪个黑名单中被整体拦截：global、user（仅用户视角）或空。
+	// Listed 是该主域名当前在哪个黑名单中被整体拦截：global、user（仅用户视角）或空。服务行为空。
 	Listed string `json:"listed" enum:",global,user"`
+	// Service 是主域名所属的服务（geosite 清单名或手动归类的服务名），不属于任何服务时为空。
+	// 按服务归类时，Members 非空的行是一个服务：Domain 是用于显示图标的代表域名，Members 是各主域名。
+	Service string              `json:"service,omitempty"`
+	Members []AccessDomainCount `json:"members,omitempty"`
 }
 
 // blockListed 返回主域名被哪个名单整体拦截（条目是它本身或它的上级域名，不含 full: 条目）。
@@ -497,13 +504,15 @@ type AccessDomains struct {
 	FromDay string `json:"from_day"`
 	ToDay   string `json:"to_day"`
 	// Total 是范围内放行的访问总次数，Blocked 是被拦截的总次数，DomainCount 是不同主域名的个数；Domains 只含排名靠前的部分。
-	Total       int64               `json:"total"`
-	Blocked     int64               `json:"blocked"`
-	DomainCount int64               `json:"domain_count"`
-	Domains     []AccessDomainCount `json:"domains"`
+	Total       int64 `json:"total"`
+	Blocked     int64 `json:"blocked"`
+	DomainCount int64 `json:"domain_count"`
+	// Rows 是截断前的行数：不归类时等于 DomainCount，按服务归类时一个服务算一行。
+	Rows    int64               `json:"rows"`
+	Domains []AccessDomainCount `json:"domains"`
 }
 
-// AccessTopDomains 返回全部用户的主域名访问排行。
+// AccessTopDomains 返回全部用户的主域名访问排行，可按服务归类。
 func (s *Service) AccessTopDomains(ctx context.Context, query AccessQuery) (*AccessDomains, error) {
 	from, to, err := s.accessDays(ctx, query)
 	if err != nil {
@@ -513,26 +522,50 @@ func (s *Service) AccessTopDomains(ctx context.Context, query AccessQuery) (*Acc
 	if err != nil {
 		return nil, err
 	}
+	classifier := s.accessClassifier(settings)
+	listed := func(row *AccessDomainCount) { row.Listed = blockListed(row.Domain, settings.Traffic.BlockedDomains, nil) }
+	limit := accessLimit(query.Limit)
 	out := &AccessDomains{FromDay: from, ToDay: to, Domains: []AccessDomainCount{}}
 	err = s.Store.InTx(ctx, func(q *dbq.Queries) error {
 		summary, err := q.CountAccessDomains(ctx, dbq.CountAccessDomainsParams{FromDay: from, ToDay: to})
 		if err != nil {
 			return err
 		}
-		out.Total, out.Blocked, out.DomainCount = summary.Count, summary.Blocked, summary.Domains
-		rows, err := q.ListAccessTopDomains(ctx, dbq.ListAccessTopDomainsParams{FromDay: from, ToDay: to, RowLimit: accessLimit(query.Limit)})
-		for _, row := range rows {
-			out.Domains = append(out.Domains, AccessDomainCount{
-				Domain: row.Domain, Count: row.Count, Blocked: row.Blocked, Users: row.Users,
-				Listed: blockListed(row.Domain, settings.Traffic.BlockedDomains, nil),
-			})
+		out.Total, out.Blocked, out.DomainCount, out.Rows = summary.Count, summary.Blocked, summary.Domains, summary.Domains
+		if !query.Group {
+			rows, err := q.ListAccessTopDomains(ctx, dbq.ListAccessTopDomainsParams{FromDay: from, ToDay: to, RowLimit: limit})
+			for _, row := range rows {
+				item := AccessDomainCount{Domain: row.Domain, Count: row.Count, Blocked: row.Blocked, Users: row.Users}
+				item.Service, _ = classifier.Service(row.Domain)
+				listed(&item)
+				out.Domains = append(out.Domains, item)
+			}
+			return err
 		}
-		return err
+		pairs, err := q.ListAccessDomainUserPairs(ctx, dbq.ListAccessDomainUserPairsParams{FromDay: from, ToDay: to})
+		if err != nil {
+			return err
+		}
+		facts := make([]accessFact, 0, len(pairs))
+		for _, pair := range pairs {
+			facts = append(facts, accessFact{domain: pair.Domain, key: strconv.FormatInt(pair.UserID, 10), count: pair.Count, blocked: pair.Blocked})
+		}
+		rows := groupAccess(facts, classifier, true, func(row *AccessDomainCount, n int64) { row.Users = n }, listed)
+		out.Rows = int64(len(rows))
+		out.Domains = truncateAccess(rows, limit)
+		return nil
 	})
 	return out, err
 }
 
-// AccessUserDomains 返回一个用户的主域名访问排行。
+func truncateAccess(rows []AccessDomainCount, limit int64) []AccessDomainCount {
+	if limit >= 0 && int64(len(rows)) > limit {
+		return rows[:limit]
+	}
+	return rows
+}
+
+// AccessUserDomains 返回一个用户的主域名访问排行，可按服务归类。
 func (s *Service) AccessUserDomains(ctx context.Context, userID int64, query AccessQuery) (*AccessDomains, error) {
 	from, to, err := s.accessDays(ctx, query)
 	if err != nil {
@@ -542,6 +575,7 @@ func (s *Service) AccessUserDomains(ctx context.Context, userID int64, query Acc
 	if err != nil {
 		return nil, err
 	}
+	classifier := s.accessClassifier(settings)
 	out := &AccessDomains{FromDay: from, ToDay: to, Domains: []AccessDomainCount{}}
 	err = s.Store.InTx(ctx, func(q *dbq.Queries) error {
 		users, err := q.ListUsers(ctx)
@@ -554,22 +588,23 @@ func (s *Service) AccessUserDomains(ctx context.Context, userID int64, query Acc
 				own = configdoc.SplitBlockedDomains(user.BlockedDomains)
 			}
 		}
-		rows, err := q.ListAccessUserDomains(ctx, dbq.ListAccessUserDomainsParams{UserID: userID, FromDay: from, ToDay: to, RowLimit: -1})
+		days, err := q.ListAccessUserDomainDays(ctx, dbq.ListAccessUserDomainDaysParams{UserID: userID, FromDay: from, ToDay: to})
 		if err != nil {
 			return err
 		}
-		out.DomainCount = int64(len(rows))
-		limit := accessLimit(query.Limit)
-		for index, row := range rows {
-			out.Total += row.Count
-			out.Blocked += row.Blocked
-			if limit < 0 || int64(index) < limit {
-				out.Domains = append(out.Domains, AccessDomainCount{
-					Domain: row.Domain, Count: row.Count, Blocked: row.Blocked, Days: row.Days,
-					Listed: blockListed(row.Domain, settings.Traffic.BlockedDomains, own),
-				})
-			}
+		facts := make([]accessFact, 0, len(days))
+		seen := map[string]bool{}
+		for _, day := range days {
+			facts = append(facts, accessFact{domain: day.Domain, key: day.Day, count: day.Count, blocked: day.Blocked})
+			out.Total += day.Count
+			out.Blocked += day.Blocked
+			seen[day.Domain] = true
 		}
+		out.DomainCount = int64(len(seen))
+		rows := groupAccess(facts, classifier, query.Group, func(row *AccessDomainCount, n int64) { row.Days = n },
+			func(row *AccessDomainCount) { row.Listed = blockListed(row.Domain, settings.Traffic.BlockedDomains, own) })
+		out.Rows = int64(len(rows))
+		out.Domains = truncateAccess(rows, accessLimit(query.Limit))
 		return nil
 	})
 	return out, err
@@ -585,10 +620,13 @@ type AccessDomainUser struct {
 	Days    int64  `json:"days"`
 }
 
-// AccessDomainUsers 是访问过某个主域名的用户列表。
+// AccessDomainUsers 是访问过某个主域名（或某个服务）的用户列表。
 type AccessDomainUsers struct {
-	// Domain 是归并后的主域名，输入 www.example.com 时为 example.com。
-	Domain  string             `json:"domain"`
+	// Domain 是归并后的主域名，输入 www.example.com 时为 example.com；按服务查询时是服务的代表域名。
+	Domain string `json:"domain"`
+	// Service 是该主域名所属的服务；按服务查询时是所查的服务，Members 是范围内属于它的主域名。
+	Service string             `json:"service,omitempty"`
+	Members []string           `json:"members,omitempty"`
 	FromDay string             `json:"from_day"`
 	ToDay   string             `json:"to_day"`
 	Users   []AccessDomainUser `json:"users"`
@@ -604,7 +642,12 @@ func (s *Service) AccessDomainUsersData(ctx context.Context, name string, query 
 	if err != nil {
 		return nil, err
 	}
+	settings, err := s.loadSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
 	out := &AccessDomainUsers{Domain: normalized, FromDay: from, ToDay: to, Users: []AccessDomainUser{}}
+	out.Service, _ = s.accessClassifier(settings).Service(normalized)
 	err = s.Store.InTx(ctx, func(q *dbq.Queries) error {
 		current, err := userNames(ctx, q)
 		if err != nil {
@@ -619,20 +662,99 @@ func (s *Service) AccessDomainUsersData(ctx context.Context, name string, query 
 			return err
 		}
 		for _, row := range rows {
-			user := AccessDomainUser{UserID: row.UserID, Count: row.Count, Blocked: row.Blocked, Days: row.Days}
-			if name, ok := current[row.UserID]; ok {
-				user.Name = name
-			} else {
-				user.Deleted = true
-				user.Name = "#" + strconv.FormatInt(row.UserID, 10)
-				for _, item := range history {
-					if item.Kind == "user" && item.ID == row.UserID {
-						user.Name = item.Name
-					}
+			out.Users = append(out.Users, namedAccessUser(AccessDomainUser{UserID: row.UserID, Count: row.Count, Blocked: row.Blocked, Days: row.Days}, current, history))
+		}
+		return nil
+	})
+	return out, err
+}
+
+// namedAccessUser 填上用户名；已删除的用户取最后保存的名字并标为已删除。
+func namedAccessUser(user AccessDomainUser, current map[int64]string, history []dbq.TrafficName) AccessDomainUser {
+	if name, ok := current[user.UserID]; ok {
+		user.Name = name
+		return user
+	}
+	user.Deleted = true
+	user.Name = "#" + strconv.FormatInt(user.UserID, 10)
+	for _, item := range history {
+		if item.Kind == "user" && item.ID == user.UserID {
+			user.Name = item.Name
+		}
+	}
+	return user
+}
+
+// AccessServiceUsers 返回访问过某个服务（范围内属于它的全部主域名）的用户，天数按日期去重。
+func (s *Service) AccessServiceUsers(ctx context.Context, service string, query AccessQuery) (*AccessDomainUsers, error) {
+	service = strings.TrimSpace(service)
+	if service == "" {
+		return nil, &FieldError{Field: "service", Message: "is required"}
+	}
+	from, to, err := s.accessDays(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	settings, err := s.loadSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	classifier := s.accessClassifier(settings)
+	out := &AccessDomainUsers{Service: service, FromDay: from, ToDay: to, Members: []string{}, Users: []AccessDomainUser{}}
+	err = s.Store.InTx(ctx, func(q *dbq.Queries) error {
+		names, err := q.ListAccessDomainNames(ctx, dbq.ListAccessDomainNamesParams{FromDay: from, ToDay: to})
+		if err != nil {
+			return err
+		}
+		for _, name := range names {
+			if found, representative := classifier.Service(name); found == service {
+				out.Members = append(out.Members, name)
+				if out.Domain == "" {
+					out.Domain = representative
 				}
 			}
-			out.Users = append(out.Users, user)
 		}
+		if len(out.Members) == 0 {
+			return nil
+		}
+		slices.Sort(out.Members)
+		if out.Domain == "" {
+			out.Domain = out.Members[0]
+		}
+		current, err := userNames(ctx, q)
+		if err != nil {
+			return err
+		}
+		history, err := q.ListTrafficNames(ctx)
+		if err != nil {
+			return err
+		}
+		// 查询里域名列表放在日期条件之后：sqlc 把列表展开成多个 ?，放在带编号的日期参数前面会错位。
+		rows, err := q.ListAccessDomainsUserDays(ctx, dbq.ListAccessDomainsUserDaysParams{Domains: out.Members, FromDay: from, ToDay: to})
+		if err != nil {
+			return err
+		}
+		byUser := map[int64]*AccessDomainUser{}
+		for _, row := range rows {
+			user := byUser[row.UserID]
+			if user == nil {
+				user = &AccessDomainUser{UserID: row.UserID}
+				byUser[row.UserID] = user
+			}
+			user.Count += row.Count
+			user.Blocked += row.Blocked
+			user.Days++
+		}
+		for _, user := range byUser {
+			out.Users = append(out.Users, namedAccessUser(*user, current, history))
+		}
+		sort.Slice(out.Users, func(i, j int) bool {
+			a, b := out.Users[i], out.Users[j]
+			if a.Count+a.Blocked != b.Count+b.Blocked {
+				return a.Count+a.Blocked > b.Count+b.Blocked
+			}
+			return a.UserID < b.UserID
+		})
 		return nil
 	})
 	return out, err
@@ -642,16 +764,16 @@ func (s *Service) AccessDomainUsersData(ctx context.Context, name string, query 
 func AccessDomainsCSV(result *AccessDomains, perUser bool) []byte {
 	var b strings.Builder
 	if perUser {
-		b.WriteString("domain,count,blocked,days\n")
+		b.WriteString("domain,service,count,blocked,days\n")
 	} else {
-		b.WriteString("domain,count,blocked,users\n")
+		b.WriteString("domain,service,count,blocked,users\n")
 	}
 	for _, row := range result.Domains {
 		extra := row.Users
 		if perUser {
 			extra = row.Days
 		}
-		b.WriteString(csvField(row.Domain) + "," + strconv.FormatInt(row.Count, 10) + "," + strconv.FormatInt(row.Blocked, 10) + "," +
+		b.WriteString(csvField(row.Domain) + "," + csvField(row.Service) + "," + strconv.FormatInt(row.Count, 10) + "," + strconv.FormatInt(row.Blocked, 10) + "," +
 			strconv.FormatInt(extra, 10) + "\n")
 	}
 	return []byte(b.String())

@@ -762,6 +762,7 @@ func validateTrafficNotify(issues *Issues, settings Settings) {
 	}
 	checkPauseWindows(issues, "settings.traffic.pause_windows", traffic.PauseWindows)
 	checkBlockedDomains(issues, "settings.traffic.blocked_domains", traffic.BlockedDomains)
+	checkAccessGroups(issues, "settings.traffic.access_groups", traffic.AccessGroups)
 	if traffic.AccessRetentionDays < 1 || traffic.AccessRetentionDays > 3650 {
 		issues.add("settings.traffic.access_retention_days", "must be between 1 and 3650 days")
 	}

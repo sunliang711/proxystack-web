@@ -401,6 +401,9 @@ async function save() {
             <NFormItem label="访问域名保留" v-bind="f('traffic.access_retention_days', '天，1～3650')">
               <NInputNumber v-model:value="form.traffic.access_retention_days" :min="1" :max="3650" />
             </NFormItem>
+            <NFormItem label="访问域名归类" v-bind="f('traffic.access_groups', '「按服务归类」时补充或修正 geosite 的归类，每行一条：域名=服务名，例如 cdn-example.net=example；域名写主域名（不能写 www. 等子域名），匹配它本身及全部子域名，优先于 geosite。服务名与 geosite 清单同名（例如 google）时并入该服务。保存后立即生效')">
+              <BlockedDomainsInput :value="form.traffic.access_groups ?? []" placeholder="cdn-example.net=example" @update:value="(v: string[]) => (form.traffic.access_groups = v)" />
+            </NFormItem>
           </SettingsSection>
           <SettingsSection v-show="sectionShown('notify')" title="通知" name="notify">
             <NFormItem label="启用邮件通知" v-bind="f('notify.enabled', '未启用时事件只记录在「通知记录」页')">

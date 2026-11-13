@@ -2,6 +2,7 @@ package favicon
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"net"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"proxystack-web/internal/deps"
 )
@@ -27,9 +29,10 @@ func testFetcher(t *testing.T, handler http.Handler, resolved map[string]string)
 	t.Cleanup(server.Close)
 	f := New(deps.ProxyConfig{Kind: deps.ProxyDirect})
 	t.Cleanup(f.Close)
-	f.client.Transport.(*http.Transport).TLSClientConfig = server.Client().Transport.(*http.Transport).TLSClientConfig
+	// 测试证书只覆盖 example.com 和 *.example.com，这里测的是获取逻辑，不校验证书。
+	f.client.Transport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	f.Resolve = func(_ context.Context, host string) ([]netip.Addr, error) {
-		if value, ok := resolved[host]; ok {
+		if value, ok := resolved[strings.TrimPrefix(host, "www.")]; ok {
 			return []netip.Addr{netip.MustParseAddr(value)}, nil
 		}
 		return []netip.Addr{netip.MustParseAddr("93.184.215.14")}, nil
@@ -91,6 +94,76 @@ func TestFetchFaviconFromPageAfterRedirect(t *testing.T) {
 	}
 }
 
+// 首页超过读取长度时截断后解析，不整页放弃；主域名的 favicon.ico 没有时试 www. 主机。
+func TestFetchLargePageAndWWW(t *testing.T) {
+	f, _ := testFetcher(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := strings.Split(r.Host, ":")[0]
+		switch {
+		case host == "big.example.com" && r.URL.Path == "/":
+			_, _ = w.Write([]byte(`<html><head><link rel="shortcut icon" href="https://static.example.com/i.ico"></head><body>`))
+			_, _ = w.Write([]byte(strings.Repeat("x", maxPage+1024)))
+		case host == "static.example.com" && r.URL.Path == "/i.ico":
+			_, _ = w.Write(icoIcon)
+		case host == "www.cdn.example.com" && r.URL.Path == "/favicon.ico":
+			_, _ = w.Write(pngIcon)
+		default:
+			http.NotFound(w, r)
+		}
+	}), nil)
+	if icon, err := f.Fetch(context.Background(), "big.example.com"); err != nil || icon.ContentType != "image/x-icon" {
+		t.Fatalf("large page: icon %+v, err %v", icon, err)
+	}
+	if icon, err := f.Fetch(context.Background(), "cdn.example.com"); err != nil || icon.ContentType != "image/png" {
+		t.Fatalf("www favicon: icon %+v, err %v", icon, err)
+	}
+}
+
+// 主域名连不上（请求超时）时继续试 www. 主机，不让一个地址耗光整个获取时间。
+func TestFetchSlowApexFallsBackToWWW(t *testing.T) {
+	previous := attemptTimeout
+	attemptTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { attemptTimeout = previous })
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	f, _ := testFetcher(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Split(r.Host, ":")[0] == "slow.example.com" {
+			select {
+			case <-release:
+			case <-r.Context().Done():
+			}
+			return
+		}
+		if r.URL.Path == "/favicon.ico" {
+			_, _ = w.Write(pngIcon)
+			return
+		}
+		http.NotFound(w, r)
+	}), nil)
+	start := time.Now()
+	icon, err := f.Fetch(context.Background(), "slow.example.com")
+	if err != nil || icon.ContentType != "image/png" {
+		t.Fatalf("icon %+v, err %v", icon, err)
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("took %s", elapsed)
+	}
+}
+
+// 主域名有应答但没有图标、www. 主机不存在时，是可以缓存的「没有图标」，不是暂时失败。
+func TestFetchMissingWWWIsNotTransient(t *testing.T) {
+	f, _ := testFetcher(t, http.NotFoundHandler(), nil)
+	resolve := f.Resolve
+	f.Resolve = func(ctx context.Context, host string) ([]netip.Addr, error) {
+		if strings.HasPrefix(host, "www.") {
+			return nil, &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
+		}
+		return resolve(ctx, host)
+	}
+	if _, err := f.Fetch(context.Background(), "api.example.com"); !errors.Is(err, ErrNoIcon) {
+		t.Fatalf("error = %v, want ErrNoIcon", err)
+	}
+}
+
 func TestFetchRejectsNonImages(t *testing.T) {
 	f, _ := testFetcher(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -111,7 +184,7 @@ func TestFetchRejectsNonImages(t *testing.T) {
 
 func TestFetchBlocksPrivateTargets(t *testing.T) {
 	f, targets := testFetcher(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Host == "example.com" {
+		if host := strings.Split(r.Host, ":")[0]; host == "example.com" || host == "www.example.com" {
 			http.Redirect(w, r, "https://evil.example.net/favicon.ico", http.StatusFound)
 			return
 		}

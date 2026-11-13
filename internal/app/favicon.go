@@ -23,7 +23,7 @@ const (
 	// faviconKeep 是缓存的保留时长：超过这么久没有获取过的记录由流量数据清理任务删除。
 	faviconKeep = 90 * 24 * time.Hour
 	// faviconTimeout 是获取一个图标的总时长上限（含跟随跳转和读取首页），从拿到获取名额时开始计算。
-	faviconTimeout = 15 * time.Second
+	faviconTimeout = 25 * time.Second
 	// faviconQueueWait 是等待获取名额的时长上限。等不到时本次返回没有图标、不写缓存，避免请求长时间占住浏览器连接。
 	faviconQueueWait = 3 * time.Second
 	// faviconConcurrency 是同时获取图标的个数上限。

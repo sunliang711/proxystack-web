@@ -18,28 +18,39 @@ type accessStatusOutput struct {
 // 时间范围参数：From、To 是 Unix 秒（To 不含），按设置时区换算成起止日期。
 // huma 不读取未导出嵌入结构体的参数，所以各输入结构体分别声明这些字段。
 type accessRangeInput struct {
-	From  int64 `query:"from" doc:"开始时间（Unix 秒），按设置时区取所在日期"`
-	To    int64 `query:"to" doc:"结束时间（Unix 秒），不含，按设置时区取前一秒所在日期"`
-	Limit int64 `query:"limit" minimum:"0" maximum:"500" doc:"返回的域名条数，0 表示 500"`
+	From  int64  `query:"from" doc:"开始时间（Unix 秒），按设置时区取所在日期"`
+	To    int64  `query:"to" doc:"结束时间（Unix 秒），不含，按设置时区取前一秒所在日期"`
+	Limit int64  `query:"limit" minimum:"0" maximum:"500" doc:"返回的行数，0 表示 500"`
+	Group string `query:"group" enum:"domain,service" default:"domain" doc:"domain 每个主域名一行；service 把同一服务的主域名合并为一行"`
 }
 
 func accessQuery(from, to, limit int64) app.AccessQuery {
 	return app.AccessQuery{From: time.Unix(from, 0), To: time.Unix(to, 0), Limit: limit}
 }
 
-func (in *accessRangeInput) query() app.AccessQuery { return accessQuery(in.From, in.To, in.Limit) }
-
-type accessUserInput struct {
-	ID    int64 `path:"id" minimum:"1"`
-	From  int64 `query:"from" doc:"开始时间（Unix 秒），按设置时区取所在日期"`
-	To    int64 `query:"to" doc:"结束时间（Unix 秒），不含，按设置时区取前一秒所在日期"`
-	Limit int64 `query:"limit" minimum:"0" maximum:"500" doc:"返回的域名条数，0 表示 500"`
+func (in *accessRangeInput) query() app.AccessQuery {
+	query := accessQuery(in.From, in.To, in.Limit)
+	query.Group = in.Group == "service"
+	return query
 }
 
-func (in *accessUserInput) query() app.AccessQuery { return accessQuery(in.From, in.To, in.Limit) }
+type accessUserInput struct {
+	ID    int64  `path:"id" minimum:"1"`
+	From  int64  `query:"from" doc:"开始时间（Unix 秒），按设置时区取所在日期"`
+	To    int64  `query:"to" doc:"结束时间（Unix 秒），不含，按设置时区取前一秒所在日期"`
+	Limit int64  `query:"limit" minimum:"0" maximum:"500" doc:"返回的行数，0 表示 500"`
+	Group string `query:"group" enum:"domain,service" default:"domain" doc:"domain 每个主域名一行；service 把同一服务的主域名合并为一行"`
+}
+
+func (in *accessUserInput) query() app.AccessQuery {
+	query := accessQuery(in.From, in.To, in.Limit)
+	query.Group = in.Group == "service"
+	return query
+}
 
 type accessDomainInput struct {
-	Domain string `query:"domain" minLength:"1" maxLength:"253" doc:"域名，先归并为主域名"`
+	Domain  string `query:"domain" maxLength:"253" doc:"域名，先归并为主域名；与 service 二选一"`
+	Service string `query:"service" maxLength:"64" doc:"服务名，列出访问过该服务任一主域名的用户；与 domain 二选一"`
 	From   int64  `query:"from" doc:"开始时间（Unix 秒），按设置时区取所在日期"`
 	To     int64  `query:"to" doc:"结束时间（Unix 秒），不含，按设置时区取前一秒所在日期"`
 }
@@ -118,9 +129,22 @@ func registerAccess(api huma.API, s *Server) {
 			}
 			return &accessDomainsOutput{Body: *result}, nil
 		})
-	huma.Register(api, reg(huma.Operation{OperationID: "listAccessDomainUsers", Method: http.MethodGet, Path: "/api/access/domain-users", Summary: "访问过某个主域名的用户"}),
+	huma.Register(api, reg(huma.Operation{OperationID: "listAccessDomainUsers", Method: http.MethodGet, Path: "/api/access/domain-users", Summary: "访问过某个主域名或服务的用户"}),
 		func(ctx context.Context, in *accessDomainInput) (*accessDomainUsersOutput, error) {
-			result, err := s.svc.AccessDomainUsersData(ctx, in.Domain, in.query())
+			var (
+				result *app.AccessDomainUsers
+				err    error
+			)
+			switch {
+			case in.Service != "" && in.Domain != "":
+				return nil, huma.Error422UnprocessableEntity("domain and service are mutually exclusive")
+			case in.Service != "":
+				result, err = s.svc.AccessServiceUsers(ctx, in.Service, in.query())
+			case in.Domain != "":
+				result, err = s.svc.AccessDomainUsersData(ctx, in.Domain, in.query())
+			default:
+				return nil, huma.Error422UnprocessableEntity("domain or service is required")
+			}
 			if err != nil {
 				return nil, toHTTPError(err)
 			}

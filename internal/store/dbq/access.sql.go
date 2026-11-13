@@ -7,6 +7,7 @@ package dbq
 
 import (
 	"context"
+	"strings"
 )
 
 const addAccessDomain = `-- name: AddAccessDomain :exec
@@ -87,6 +88,86 @@ func (q *Queries) GetAccessCursor(ctx context.Context) (AccessCursor, error) {
 	return i, err
 }
 
+const listAccessDomainNames = `-- name: ListAccessDomainNames :many
+SELECT DISTINCT domain FROM access_domain_day
+WHERE day >= ?1 AND day <= ?2
+`
+
+type ListAccessDomainNamesParams struct {
+	FromDay string `json:"from_day"`
+	ToDay   string `json:"to_day"`
+}
+
+func (q *Queries) ListAccessDomainNames(ctx context.Context, arg ListAccessDomainNamesParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listAccessDomainNames, arg.FromDay, arg.ToDay)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var domain string
+		if err := rows.Scan(&domain); err != nil {
+			return nil, err
+		}
+		items = append(items, domain)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAccessDomainUserPairs = `-- name: ListAccessDomainUserPairs :many
+SELECT domain, user_id, CAST(SUM(count) AS INTEGER) AS count, CAST(SUM(blocked) AS INTEGER) AS blocked
+FROM access_domain_day
+WHERE day >= ?1 AND day <= ?2
+GROUP BY domain, user_id
+`
+
+type ListAccessDomainUserPairsParams struct {
+	FromDay string `json:"from_day"`
+	ToDay   string `json:"to_day"`
+}
+
+type ListAccessDomainUserPairsRow struct {
+	Domain  string `json:"domain"`
+	UserID  int64  `json:"user_id"`
+	Count   int64  `json:"count"`
+	Blocked int64  `json:"blocked"`
+}
+
+func (q *Queries) ListAccessDomainUserPairs(ctx context.Context, arg ListAccessDomainUserPairsParams) ([]ListAccessDomainUserPairsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAccessDomainUserPairs, arg.FromDay, arg.ToDay)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAccessDomainUserPairsRow
+	for rows.Next() {
+		var i ListAccessDomainUserPairsRow
+		if err := rows.Scan(
+			&i.Domain,
+			&i.UserID,
+			&i.Count,
+			&i.Blocked,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAccessDomainUsers = `-- name: ListAccessDomainUsers :many
 SELECT user_id, CAST(SUM(count) AS INTEGER) AS count, CAST(SUM(blocked) AS INTEGER) AS blocked,
        COUNT(DISTINCT day) AS days
@@ -123,6 +204,66 @@ func (q *Queries) ListAccessDomainUsers(ctx context.Context, arg ListAccessDomai
 			&i.Count,
 			&i.Blocked,
 			&i.Days,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAccessDomainsUserDays = `-- name: ListAccessDomainsUserDays :many
+SELECT user_id, day, CAST(SUM(count) AS INTEGER) AS count, CAST(SUM(blocked) AS INTEGER) AS blocked
+FROM access_domain_day
+WHERE day >= ?1 AND day <= ?2 AND domain IN (/*SLICE:domains*/?)
+GROUP BY user_id, day
+`
+
+type ListAccessDomainsUserDaysParams struct {
+	FromDay string   `json:"from_day"`
+	ToDay   string   `json:"to_day"`
+	Domains []string `json:"domains"`
+}
+
+type ListAccessDomainsUserDaysRow struct {
+	UserID  int64  `json:"user_id"`
+	Day     string `json:"day"`
+	Count   int64  `json:"count"`
+	Blocked int64  `json:"blocked"`
+}
+
+func (q *Queries) ListAccessDomainsUserDays(ctx context.Context, arg ListAccessDomainsUserDaysParams) ([]ListAccessDomainsUserDaysRow, error) {
+	query := listAccessDomainsUserDays
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.FromDay)
+	queryParams = append(queryParams, arg.ToDay)
+	if len(arg.Domains) > 0 {
+		for _, v := range arg.Domains {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:domains*/?", strings.Repeat(",?", len(arg.Domains))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:domains*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAccessDomainsUserDaysRow
+	for rows.Next() {
+		var i ListAccessDomainsUserDaysRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Day,
+			&i.Count,
+			&i.Blocked,
 		); err != nil {
 			return nil, err
 		}
@@ -174,6 +315,53 @@ func (q *Queries) ListAccessTopDomains(ctx context.Context, arg ListAccessTopDom
 			&i.Count,
 			&i.Blocked,
 			&i.Users,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAccessUserDomainDays = `-- name: ListAccessUserDomainDays :many
+SELECT domain, day, count, blocked
+FROM access_domain_day
+WHERE user_id = ?1 AND day >= ?2 AND day <= ?3
+`
+
+type ListAccessUserDomainDaysParams struct {
+	UserID  int64  `json:"user_id"`
+	FromDay string `json:"from_day"`
+	ToDay   string `json:"to_day"`
+}
+
+type ListAccessUserDomainDaysRow struct {
+	Domain  string `json:"domain"`
+	Day     string `json:"day"`
+	Count   int64  `json:"count"`
+	Blocked int64  `json:"blocked"`
+}
+
+func (q *Queries) ListAccessUserDomainDays(ctx context.Context, arg ListAccessUserDomainDaysParams) ([]ListAccessUserDomainDaysRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAccessUserDomainDays, arg.UserID, arg.FromDay, arg.ToDay)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAccessUserDomainDaysRow
+	for rows.Next() {
+		var i ListAccessUserDomainDaysRow
+		if err := rows.Scan(
+			&i.Domain,
+			&i.Day,
+			&i.Count,
+			&i.Blocked,
 		); err != nil {
 			return nil, err
 		}

@@ -112,7 +112,7 @@ func TestAccessStatsCountsDomainsPerUser(t *testing.T) {
 	require.Equal(t, int64(2), users.Users[0].Count)
 
 	csv := string(app.AccessDomainsCSV(top, false))
-	require.Contains(t, csv, "domain,count,blocked,users\ngoogle.com,2,0,1\n")
+	require.Contains(t, csv, "domain,service,count,blocked,users\ngoogle.com,,2,0,1\n")
 
 	// 重启：新进程从数据库中的书签继续，停机期间写出的日志补读一次，已计入的不重复。
 	h.svc.StopAccess(ctx)
@@ -230,7 +230,7 @@ func TestAccessStatsCountsBlockedConnections(t *testing.T) {
 	require.Equal(t, "google.com", top.Domains[0].Domain, "blocked connections count toward the ranking")
 	require.Equal(t, int64(1), top.Domains[0].Count)
 	require.Equal(t, int64(2), top.Domains[0].Blocked)
-	require.Contains(t, string(app.AccessDomainsCSV(top, false)), "google.com,1,2,1\n")
+	require.Contains(t, string(app.AccessDomainsCSV(top, false)), "google.com,,1,2,1\n")
 
 	users, err := h.svc.AccessDomainUsersData(ctx, "google.com", window)
 	require.NoError(t, err)

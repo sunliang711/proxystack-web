@@ -31,16 +31,20 @@ import (
 const (
 	// MaxIcon 是图标文件的大小上限。
 	MaxIcon = 100 << 10
-	// maxPage 是为查找图标声明而读取的首页大小上限。
+	// maxPage 是为查找图标声明而读取的首页长度：图标声明在 <head> 里，只读开头这一段，更长的页面截断而不是放弃。
 	maxPage = 512 << 10
+	// dialTimeout 是连接单个地址的时长上限，比单个请求的上限短，第一个地址不通时还来得及试下一个。
+	dialTimeout = 2500 * time.Millisecond
 	// maxRedirects 是跟随跳转的次数上限。
 	maxRedirects = 3
 	// maxLinks 是首页声明的图标地址最多尝试的个数。
 	maxLinks = 4
 	// maxAddrs 是一个域名最多尝试连接的地址个数。
-	maxAddrs    = 3
-	dialTimeout = 8 * time.Second
+	maxAddrs = 3
 )
+
+// attemptTimeout 是单个请求（含跟随跳转）的时长上限，一个地址卡住不会耗光整个获取的时间。测试时缩短。
+var attemptTimeout = 5 * time.Second
 
 // ErrProxy 表示连不上下载代理或代理认证失败。这类失败与网站无关，调用方不应把它当作「该网站没有图标」缓存下来。
 var ErrProxy = errors.New("download proxy unavailable")
@@ -77,7 +81,7 @@ func New(cfg deps.ProxyConfig) *Fetcher {
 	transport.DialContext = f.guardedDial
 	transport.MaxIdleConns = 4
 	transport.IdleConnTimeout = 30 * time.Second
-	transport.ResponseHeaderTimeout = dialTimeout
+	transport.ResponseHeaderTimeout = attemptTimeout
 	f.client = &http.Client{
 		Transport: transport,
 		CheckRedirect: func(request *http.Request, via []*http.Request) error {
@@ -93,39 +97,63 @@ func New(cfg deps.ProxyConfig) *Fetcher {
 // Close 关闭空闲连接。
 func (f *Fetcher) Close() { f.client.CloseIdleConnections() }
 
-// Fetch 获取主域名的图标：先取 /favicon.ico，没有时读取首页中声明的图标，首页跳转到其他主机时再试那台主机的
-// /favicon.ico。有连接类失败（连不上、超时）时返回其中最后一个；没有时，目标不允许访问返回 ErrForbidden，
+// Fetch 获取主域名的图标：先取主域名和 www. 主机的 /favicon.ico，没有时读取首页（主域名打不开时读 www. 主机的）
+// 中声明的图标，首页跳转到其他主机时再试那台主机的 /favicon.ico。每个请求单独限时。有连接类失败（连不上、超时）时返回其中最后一个；没有时，目标不允许访问返回 ErrForbidden，
 // 网站有应答但没有可用图标返回 ErrNoIcon。
 func (f *Fetcher) Fetch(ctx context.Context, domain string) (*Icon, error) {
 	if !PublicDomain(domain) {
 		return nil, ErrForbidden
 	}
 	var transient, forbidden error
-	attempt := func(target string) (*Icon, bool, error) {
+	// note 记录一次失败。fallback 表示这是对 www. 主机的补充尝试：很多域名没有 www. 主机，它连不上不算暂时失败。
+	note := func(err error, fallback bool) {
+		switch {
+		case errors.Is(err, ErrForbidden):
+			forbidden = err
+		case err != nil && !errors.Is(err, ErrNoIcon) && !fallback:
+			transient = err
+		}
+	}
+	attempt := func(target string, fallback bool) (*Icon, bool, error) {
 		icon, err := f.icon(ctx, target)
 		switch {
 		case err == nil:
 			return icon, true, nil
 		case errors.Is(err, ErrProxy):
 			return nil, true, err
-		case errors.Is(err, ErrForbidden):
-			forbidden = err
-		case !errors.Is(err, ErrNoIcon):
-			transient = err
 		}
+		note(err, fallback)
 		return nil, false, nil
 	}
-	if icon, done, err := attempt("https://" + domain + "/favicon.ico"); done {
-		return icon, err
+	hosts := []string{domain}
+	if !strings.HasPrefix(domain, "www.") {
+		hosts = append(hosts, "www."+domain)
 	}
-	links, base, err := f.pageIcons(ctx, "https://"+domain+"/")
-	switch {
-	case errors.Is(err, ErrProxy):
-		return nil, err
-	case errors.Is(err, ErrForbidden):
-		forbidden = err
-	case err != nil && !errors.Is(err, ErrNoIcon):
-		transient = err
+	for index, host := range hosts {
+		if icon, done, err := attempt("https://"+host+"/favicon.ico", index > 0); done {
+			return icon, err
+		}
+	}
+	var links []string
+	var base *url.URL
+	for index, host := range hosts {
+		pageLinks, pageBase, err := f.pageIcons(ctx, "https://"+host+"/")
+		if errors.Is(err, ErrProxy) {
+			return nil, err
+		}
+		note(err, index > 0)
+		// 保留第一个得到的最终页面地址：主域名首页跳转到其他主机时，最后还要试那台主机的 /favicon.ico。
+		if base == nil {
+			base = pageBase
+		}
+		if err == nil {
+			links, base = pageLinks, pageBase
+			break
+		}
+		// 主域名首页已经跳转到 www. 主机，不必再取一次。
+		if pageBase != nil && pageBase.Host == "www."+domain {
+			break
+		}
 	}
 	tried := 0
 	for _, link := range links {
@@ -137,12 +165,12 @@ func (f *Fetcher) Fetch(ctx context.Context, domain string) (*Icon, error) {
 			continue
 		}
 		tried++
-		if icon, done, err := attempt(target.String()); done {
+		if icon, done, err := attempt(target.String(), false); done {
 			return icon, err
 		}
 	}
-	if base != nil && base.Host != domain {
-		if icon, done, err := attempt((&url.URL{Scheme: base.Scheme, Host: base.Host, Path: "/favicon.ico"}).String()); done {
+	if base != nil && base.Host != domain && base.Host != "www."+domain {
+		if icon, done, err := attempt((&url.URL{Scheme: base.Scheme, Host: base.Host, Path: "/favicon.ico"}).String(), false); done {
 			return icon, err
 		}
 	}
@@ -155,7 +183,10 @@ func (f *Fetcher) Fetch(ctx context.Context, domain string) (*Icon, error) {
 	return nil, fmt.Errorf("%w: %s", ErrNoIcon, domain)
 }
 
-func (f *Fetcher) get(ctx context.Context, target string, limit int64) (*http.Response, []byte, error) {
+// get 读取 target 的响应。truncate 为 false 时超过 limit 视为没有可用内容；为 true 时只取前 limit 字节。
+func (f *Fetcher) get(ctx context.Context, target string, limit int64, truncate bool) (*http.Response, []byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, attemptTimeout)
+	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
 		return nil, nil, err
@@ -178,6 +209,9 @@ func (f *Fetcher) get(ctx context.Context, target string, limit int64) (*http.Re
 		return response, nil, err
 	}
 	if int64(len(data)) > limit {
+		if truncate {
+			return response, data[:limit], nil
+		}
 		return response, nil, fmt.Errorf("%w: response larger than %d bytes", ErrNoIcon, limit)
 	}
 	return response, data, nil
@@ -185,7 +219,7 @@ func (f *Fetcher) get(ctx context.Context, target string, limit int64) (*http.Re
 
 // icon 下载并校验一个图标文件：只接受按内容识别为 PNG、GIF、JPEG、WebP 或 ICO 的文件。SVG 可以内嵌脚本，不接受。
 func (f *Fetcher) icon(ctx context.Context, target string) (*Icon, error) {
-	_, data, err := f.get(ctx, target, MaxIcon)
+	_, data, err := f.get(ctx, target, MaxIcon, false)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +247,7 @@ func imageType(data []byte) string {
 
 // pageIcons 读取首页，按偏好顺序返回声明的图标地址和用于解析相对地址的最终页面地址。
 func (f *Fetcher) pageIcons(ctx context.Context, target string) ([]string, *url.URL, error) {
-	response, data, err := f.get(ctx, target, maxPage)
+	response, data, err := f.get(ctx, target, maxPage, true)
 	var base *url.URL
 	if response != nil && response.Request != nil {
 		base = response.Request.URL

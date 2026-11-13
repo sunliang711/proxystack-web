@@ -157,6 +157,8 @@ type TrafficSettings struct {
 	AccessStats bool `json:"access_stats" yaml:"access_stats,omitempty" required:"false" doc:"按用户统计访问的主域名（读取 xray 访问日志）"`
 	// AccessRetentionDays 是访问域名统计的保留天数。
 	AccessRetentionDays int `json:"access_retention_days" yaml:"access_retention_days,omitempty" required:"false" minimum:"0" maximum:"3650" doc:"访问域名统计保留天数，缺省 90"`
+	// AccessGroups 是访问域名统计中手动补充的归类，每条为「域名=服务名」，优先于 geosite 清单。
+	AccessGroups []string `json:"access_groups" yaml:"access_groups,omitempty" required:"false" doc:"访问域名的手动归类，每条 域名=服务名，域名匹配它本身及全部子域名"`
 	// BlockedDomains 是对全部连接生效的域名黑名单，由 xray 路由拦截。
 	BlockedDomains []string `json:"blocked_domains" yaml:"blocked_domains,omitempty" required:"false" doc:"全局域名黑名单：example.com 拦截该域名及全部子域名，full:www.example.com 只拦截该域名"`
 }

@@ -56,6 +56,7 @@ type Service struct {
 	traffic       trafficState
 	access        accessState
 	favicons      faviconState
+	geosite       geositeState
 	autoPause     autoPauseState
 	scheduler     schedulerState
 	subDeployMu   sync.Mutex
