@@ -169,3 +169,51 @@ func TestAppliedNodesFallBackWhenCurrentDisplayTemplateConflictsWithAppliedTopol
 	require.Contains(t, preview, "name: usa1 relay socks\n")
 	require.Contains(t, preview, "name: usa1 vmess\n")
 }
+
+// TestDirectOverrideSubscription 验证覆盖经签名包下发后只改变对应用户的字段，并随上游改名和用户删除维护。
+func TestDirectOverrideSubscription(t *testing.T) {
+	ctx := context.Background()
+	h := newRuntimeHarness(t)
+	subs := newSubServer(t, sourceOf(t, h, true))
+	bob, err := h.svc.CreateUser(ctx, h.actor, configdoc.User{Name: "bob", Enabled: true, ResetMode: "none"})
+	require.NoError(t, err)
+	doc, err := h.svc.LoadConfig(ctx)
+	require.NoError(t, err)
+	stack := doc.Stacks[doc.StackByName("usa1")]
+	stack.DirectUsers = []string{"alice", "bob"}
+	var upstream, override configdoc.RawMapping
+	require.NoError(t, yaml.Unmarshal([]byte("type: http\nserver: remote-http.example.com\nport: 8443\nusername: upstream-user\npassword: upstream-password"), &upstream))
+	require.NoError(t, yaml.Unmarshal([]byte("username: bob-user\npassword: bob-password"), &override))
+	stack.Mihomo.Upstreams = append(stack.Mihomo.Upstreams, configdoc.Upstream{Name: "server-b", Type: "raw", Config: upstream})
+	stack.DirectOverrides = []configdoc.DirectOverride{{User: "bob", Upstream: "server-b", Config: override}}
+	saved, err := h.svc.UpdateStack(ctx, h.actor, stack.ID, stack)
+	require.NoError(t, err)
+	stack = *saved
+
+	subs.deliver(t, publish(t, h))
+	for _, format := range []string{"clash", "premium", "surge"} {
+		_, body, _ := get(t, subs.http, "/s/alice-token/"+format)
+		require.Contains(t, body, "upstream-password", format)
+		require.NotContains(t, body, "bob-password", format)
+		_, body, _ = get(t, subs.http, "/s/"+bob.SubToken+"/"+format)
+		require.Contains(t, body, "bob-user", format)
+		require.Contains(t, body, "bob-password", format)
+		require.Contains(t, body, "remote-http.example.com", format)
+		require.NotContains(t, body, "upstream-password", format)
+	}
+
+	// 上游按 ID 改名时覆盖跟随新名字。
+	stack.Mihomo.Upstreams[len(stack.Mihomo.Upstreams)-1].Name = "server-c"
+	saved, err = h.svc.UpdateStack(ctx, h.actor, stack.ID, stack)
+	require.NoError(t, err)
+	require.Equal(t, "server-c", saved.DirectOverrides[0].Upstream)
+	preview, err := h.svc.PreviewSubscription(ctx, bob.ID, "clash", nil)
+	require.NoError(t, err)
+	require.Contains(t, preview, "bob-password")
+
+	// 删除用户时覆盖一并删除。
+	require.NoError(t, h.svc.DeleteUser(ctx, h.actor, bob.ID))
+	doc, err = h.svc.LoadConfig(ctx)
+	require.NoError(t, err)
+	require.Empty(t, doc.Stacks[doc.StackByName("usa1")].DirectOverrides)
+}

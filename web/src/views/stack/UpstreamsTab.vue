@@ -8,6 +8,7 @@ import {
 } from 'naive-ui'
 import { fieldState, hasErrorsUnder, type FormErrors, type Schemas } from '../../api/client'
 import CodeEditor from '../../components/CodeEditor.vue'
+import DirectOverrides from './DirectOverrides.vue'
 import EntityLink from '../../components/EntityLink.vue'
 import { ssMethods } from '../../util/options'
 
@@ -19,8 +20,20 @@ const message = useMessage()
 
 const directUsers = computed({
   get: () => props.stack.direct_users ?? [],
-  set: (value: string[]) => { props.stack.direct_users = value },
+  set: (value: string[]) => {
+    props.stack.direct_users = value
+    const dropped = dropOverrides((override) => !value.includes(override.user))
+    if (dropped) message.warning(`已同时移除 ${dropped} 条取消授权用户的单独覆盖，保存后生效`)
+  },
 })
+
+/** 删除满足条件的直连覆盖，返回删除条数。 */
+function dropOverrides(match: (override: Schemas['DirectOverride']) => boolean): number {
+  const before = props.stack.direct_overrides ?? []
+  const kept = before.filter((override) => !match(override))
+  if (kept.length !== before.length) props.stack.direct_overrides = kept
+  return before.length - kept.length
+}
 const directSuffix = computed({
   get: () => props.stack.direct_suffix ?? ' [DRT]',
   set: (value: string) => { props.stack.direct_suffix = value },
@@ -82,6 +95,8 @@ function remove(index: number) {
   for (const group of props.stack.mihomo.groups) {
     group.proxies = group.proxies.filter((proxy) => proxy !== name)
   }
+  const dropped = dropOverrides((override) => override.upstream === name)
+  if (dropped) message.warning(`已同时移除该上游的 ${dropped} 条直连覆盖，保存后生效`)
 }
 
 function open(index: number) {
@@ -109,6 +124,11 @@ function confirm() {
     const oldName = props.stack.mihomo.upstreams[index].name
     props.stack.mihomo.upstreams[index] = draft
     if (oldName && oldName !== draft.name) renameTarget(oldName, draft.name)
+    // 改成引用其他 stack 入站的上游不再生成直连节点，其覆盖一并删除。
+    if (draft.type !== 'raw') {
+      const dropped = dropOverrides((override) => override.upstream === oldName || override.upstream === draft.name)
+      if (dropped) message.warning(`该上游不再是外部节点，已移除 ${dropped} 条直连覆盖，保存后生效`)
+    }
   } else {
     props.stack.mihomo.upstreams.push(draft)
     const joined = joinGroups(draft.name)
@@ -146,8 +166,11 @@ function joinGroups(name: string): string[] {
   return targets.map((group) => group.name)
 }
 
-/** 上游改名时同步本 stack 内的组成员和规则目标。 */
+/** 上游改名时同步本 stack 内的组成员、规则目标和直连覆盖。 */
 function renameTarget(oldName: string, newName: string) {
+  for (const override of props.stack.direct_overrides ?? []) {
+    if (override.upstream === oldName) override.upstream = newName
+  }
   for (const group of props.stack.mihomo.groups) {
     group.proxies = group.proxies.map((p) => (p === oldName ? newName : p))
   }
@@ -206,6 +229,14 @@ const protocol = computed({
     current.config.type = value
     if (wasOther) editorTab.value = 'form'
   },
+})
+/** 上游名与本 stack 其他上游或代理组重名时不能暂存，避免改名同步把引用并到另一个目标上。 */
+const nameConflict = computed(() => {
+  const current = editing.value
+  if (!current?.draft.name) return false
+  const name = current.draft.name
+  return props.stack.mihomo.upstreams.some((upstream, index) => index !== current.index && upstream.name === name) ||
+    props.stack.mihomo.groups.some((group) => group.name === name)
 })
 /** 外部节点必须填写协议类型。 */
 const typeMissing = computed(() => editing.value?.draft.type === 'raw' && !String(editing.value.config.type ?? '').trim())
@@ -310,6 +341,7 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
     <NAlert v-if="directUsers.length" type="info" :show-icon="false" style="margin-top: 12px">
       直连会向授权用户下发上游连接凭据，流量不经过本机，无法计入本机用量统计或由本机限额阻断。取消授权并发布后停止下发，已下载配置需在上游更换凭据才能失效。
     </NAlert>
+    <DirectOverrides :stack="stack" :errors="errors" />
   </NCard>
 
   <NDrawer :show="!!editing" :width="640" @update:show="(v) => !v && (editing = null)">
@@ -374,10 +406,11 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
       </NForm>
       <template #footer>
         <NSpace align="center">
-          <NText v-if="typeMissing" type="warning">先在 YAML 中填写 type</NText>
+          <NText v-if="nameConflict" type="error">名称与已有上游或代理组重复</NText>
+          <NText v-else-if="typeMissing" type="warning">先在 YAML 中填写 type</NText>
           <NText v-else depth="3" class="drawer-hint">暂存后回到页面点「保存」才会写入</NText>
           <NButton @click="editing = null">取消</NButton>
-          <NButton type="primary" :disabled="!editing.draft.name || !!yamlError || typeMissing" @click="confirm">暂存修改</NButton>
+          <NButton type="primary" :disabled="!editing.draft.name || !!yamlError || typeMissing || nameConflict" @click="confirm">暂存修改</NButton>
         </NSpace>
       </template>
     </NDrawerContent>

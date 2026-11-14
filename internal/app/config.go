@@ -424,6 +424,16 @@ func renameTargets(stack *configdoc.Stack, old configdoc.Stack) {
 	for _, upstream := range stack.Mihomo.Upstreams {
 		rename(upstream.ID, upstream.Name)
 	}
+	// 直连覆盖只引用上游；上游与代理组 ID 来自不同的表，单独按上游 ID 对应旧名。
+	// 与代理组引用相同，旧名仍被本次保存中的其他上游占用时无法判断引用指向哪一个，保持原样：
+	// 页面在暂存改名时已同步覆盖并禁止重名，只有直接调用 API 同时改名并复用旧名才会遇到。
+	for _, upstream := range stack.Mihomo.Upstreams {
+		for _, previous := range old.Mihomo.Upstreams {
+			if upstream.ID != 0 && previous.ID == upstream.ID && previous.Name != upstream.Name && !exists[previous.Name] {
+				configdoc.RenameDirectOverrideUpstream(stack, previous.Name, upstream.Name)
+			}
+		}
+	}
 	for _, group := range stack.Mihomo.Groups {
 		rename(group.ID, group.Name)
 	}

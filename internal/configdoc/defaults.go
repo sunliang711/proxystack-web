@@ -124,13 +124,14 @@ func NewStack(doc *Document, settings Settings, opts NewStackOptions) (Stack, er
 		refs = append(refs, UserRef{User: user.Name})
 	}
 	stack := Stack{
-		Name:           opts.Name,
-		Enabled:        true,
-		DesiredRunning: true,
-		Role:           "edge",
-		Labels:         append([]string{}, opts.Labels...),
-		DirectUsers:    []string{},
-		DirectSuffix:   DefaultDirectSuffix,
+		Name:            opts.Name,
+		Enabled:         true,
+		DesiredRunning:  true,
+		Role:            "edge",
+		Labels:          append([]string{}, opts.Labels...),
+		DirectUsers:     []string{},
+		DirectSuffix:    DefaultDirectSuffix,
+		DirectOverrides: []DirectOverride{},
 		Xray: Xray{
 			AccessLog: Inherit,
 			Enabled:   true,

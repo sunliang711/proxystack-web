@@ -157,6 +157,19 @@ func LoadDocument(ctx context.Context, q *dbq.Queries) (*configdoc.Document, err
 		stack.DirectUsers = append(stack.DirectUsers, doc.Users[userIndex[row.UserID]].Name)
 	}
 
+	directOverrides, err := q.ListStackDirectOverrides(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range directOverrides {
+		stack := &doc.Stacks[stackIndex[row.StackID]]
+		override := configdoc.DirectOverride{User: doc.Users[userIndex[row.UserID]].Name, Upstream: row.Upstream}
+		if err := override.Config.UnmarshalJSON([]byte(row.Config)); err != nil {
+			return nil, fmt.Errorf("stack %s direct override for %s on %s: %w", stack.Name, override.User, override.Upstream, err)
+		}
+		stack.DirectOverrides = append(stack.DirectOverrides, override)
+	}
+
 	inbounds, err := q.ListInbounds(ctx)
 	if err != nil {
 		return nil, err
@@ -376,7 +389,7 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 		}
 	}
 	for _, clear := range []func(context.Context) error{
-		q.DeleteStackDirectUsers,
+		q.DeleteStackDirectUsers, q.DeleteStackDirectOverrides,
 		q.DeleteUserPausedStacks, q.DeleteManualNodes, q.DeleteMihomoUpstreams, q.DeleteMihomoGroups, q.DeleteMihomoListeners,
 		q.DeleteInboundUserRefs, q.DeleteInbounds, q.DeleteUserProfiles,
 	} {
@@ -473,6 +486,21 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 			}
 			if err := q.InsertStackDirectUser(ctx, dbq.InsertStackDirectUserParams{StackID: id, UserID: userID, Position: int64(position)}); err != nil {
 				return err
+			}
+		}
+		for position, override := range stack.DirectOverrides {
+			userID, ok := userIDByName[override.User]
+			if !ok {
+				return fmt.Errorf("stack %s direct override references a missing user: %s", stack.Name, override.User)
+			}
+			config, err := override.Config.MarshalJSON()
+			if err != nil {
+				return err
+			}
+			if err := q.InsertStackDirectOverride(ctx, dbq.InsertStackDirectOverrideParams{
+				StackID: id, UserID: userID, Upstream: override.Upstream, Position: int64(position), Config: string(config),
+			}); err != nil {
+				return fmt.Errorf("save direct override %s.%s for %s: %w", stack.Name, override.Upstream, override.User, err)
 			}
 		}
 		for position := range stack.Xray.Inbounds {

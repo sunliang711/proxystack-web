@@ -367,6 +367,16 @@ type Stack struct {
 	DirectUsers []string `json:"direct_users" yaml:"direct_users,omitempty" required:"false"`
 	// DirectSuffix 原样追加到直连节点名，空值使用默认后缀。
 	DirectSuffix string `json:"direct_suffix" yaml:"direct_suffix,omitempty" required:"false" doc:"直连节点后缀，留空使用默认值（前导空格加 [DRT]）"`
+	// DirectOverrides 为直连用户在单个外部上游上覆盖节点字段，未列出的组合沿用上游配置。
+	DirectOverrides []DirectOverride `json:"direct_overrides" yaml:"direct_overrides,omitempty" required:"false"`
+}
+
+// DirectOverride 是某个直连用户在某个外部上游上覆盖的 mihomo 节点字段。
+// 顶层字段整体替换上游中的同名字段，嵌套映射不逐层合并。
+type DirectOverride struct {
+	User     string     `json:"user" yaml:"user"`
+	Upstream string     `json:"upstream" yaml:"upstream"`
+	Config   RawMapping `json:"config" yaml:"config" doc:"覆盖的 mihomo proxy 字段，不能包含 type、name 及服务器专用字段"`
 }
 
 // Xray 是 stack 的 xray 部分。

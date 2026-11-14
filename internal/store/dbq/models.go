@@ -296,6 +296,14 @@ type StackAutoStop struct {
 	RestoreMihomo int64  `json:"restore_mihomo"`
 }
 
+type StackDirectOverride struct {
+	StackID  int64  `json:"stack_id"`
+	UserID   int64  `json:"user_id"`
+	Upstream string `json:"upstream"`
+	Position int64  `json:"position"`
+	Config   string `json:"config"`
+}
+
 type StackDirectUser struct {
 	StackID  int64 `json:"stack_id"`
 	UserID   int64 `json:"user_id"`

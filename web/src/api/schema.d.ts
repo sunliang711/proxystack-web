@@ -2325,6 +2325,14 @@ export interface components {
             kind: "settings" | "user" | "stack" | "manual_node" | "remote_source" | "templates";
             name: string;
         };
+        DirectOverride: {
+            /** @description 覆盖的 mihomo proxy 字段，不能包含 type、name 及服务器专用字段 */
+            config: {
+                [key: string]: unknown;
+            } | null;
+            upstream: string;
+            user: string;
+        };
         DownloadProxySettings: {
             host: string;
             /** @enum {string} */
@@ -3248,6 +3256,7 @@ export interface components {
             /** Format: int64 */
             daily_limit_bytes?: number;
             desired_running: boolean;
+            direct_overrides?: components["schemas"]["DirectOverride"][];
             /** @description 直连节点后缀，留空使用默认值（前导空格加 [DRT]） */
             direct_suffix?: string;
             direct_users?: string[];

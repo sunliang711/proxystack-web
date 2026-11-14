@@ -361,6 +361,7 @@ func validateStack(issues *Issues, doc *Document, path string, stack *Stack) {
 		}
 		directUsers[user] = true
 	}
+	validateDirectOverrides(issues, path, stack, directUsers)
 	if stack.Role != "edge" && stack.Role != "auto" {
 		issues.add(path+".role", "must be edge or auto")
 	}

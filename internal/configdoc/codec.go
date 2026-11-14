@@ -185,6 +185,9 @@ func (s *Stack) Normalize() {
 	if s.DirectUsers == nil {
 		s.DirectUsers = []string{}
 	}
+	if s.DirectOverrides == nil {
+		s.DirectOverrides = []DirectOverride{}
+	}
 	if s.Labels == nil {
 		s.Labels = []string{}
 	}

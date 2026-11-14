@@ -22,6 +22,15 @@ DELETE FROM stack_direct_users;
 -- name: InsertStackDirectUser :exec
 INSERT INTO stack_direct_users (stack_id, user_id, position) VALUES (?, ?, ?);
 
+-- name: ListStackDirectOverrides :many
+SELECT * FROM stack_direct_overrides ORDER BY stack_id, position;
+
+-- name: DeleteStackDirectOverrides :exec
+DELETE FROM stack_direct_overrides;
+
+-- name: InsertStackDirectOverride :exec
+INSERT INTO stack_direct_overrides (stack_id, user_id, upstream, position, config) VALUES (?, ?, ?, ?, ?);
+
 -- name: ListInboundUserRefs :many
 SELECT * FROM inbound_user_refs ORDER BY inbound_id, position;
 

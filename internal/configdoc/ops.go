@@ -29,6 +29,11 @@ func RenameUser(doc *Document, oldName, newName string) {
 				doc.Stacks[index].DirectUsers[position] = newName
 			}
 		}
+		for position := range doc.Stacks[index].DirectOverrides {
+			if doc.Stacks[index].DirectOverrides[position].User == oldName {
+				doc.Stacks[index].DirectOverrides[position].User = newName
+			}
+		}
 	}
 }
 
@@ -62,6 +67,9 @@ func RemoveProfileRefs(doc *Document, user, profile string) {
 func RemoveUserRefs(doc *Document, user string) {
 	for stackIndex := range doc.Stacks {
 		doc.Stacks[stackIndex].DirectUsers = slices.DeleteFunc(doc.Stacks[stackIndex].DirectUsers, func(name string) bool { return name == user })
+		doc.Stacks[stackIndex].DirectOverrides = slices.DeleteFunc(doc.Stacks[stackIndex].DirectOverrides, func(override DirectOverride) bool {
+			return override.User == user
+		})
 		inbounds := doc.Stacks[stackIndex].Xray.Inbounds
 		for inboundIndex := range inbounds {
 			inbounds[inboundIndex].Users = slices.DeleteFunc(inbounds[inboundIndex].Users, func(ref UserRef) bool {
@@ -132,6 +140,18 @@ func RenameProxyTarget(stack *Stack, oldName, newName string) {
 	for index := range stack.Mihomo.Rules.Extra {
 		if stack.Mihomo.Rules.Extra[index].Target == oldName {
 			stack.Mihomo.Rules.Extra[index].Target = newName
+		}
+	}
+}
+
+// RenameDirectOverrideUpstream 在 stack 内把直连覆盖对上游 oldName 的引用改为 newName。
+func RenameDirectOverrideUpstream(stack *Stack, oldName, newName string) {
+	if oldName == newName {
+		return
+	}
+	for index := range stack.DirectOverrides {
+		if stack.DirectOverrides[index].Upstream == oldName {
+			stack.DirectOverrides[index].Upstream = newName
 		}
 	}
 }

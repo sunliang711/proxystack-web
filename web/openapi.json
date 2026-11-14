@@ -1173,6 +1173,31 @@
         ],
         "type": "object"
       },
+      "DirectOverride": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "description": "覆盖的 mihomo proxy 字段，不能包含 type、name 及服务器专用字段",
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "upstream": {
+            "type": "string"
+          },
+          "user": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "user",
+          "upstream",
+          "config"
+        ],
+        "type": "object"
+      },
       "DownloadProxySettings": {
         "additionalProperties": false,
         "properties": {
@@ -4411,6 +4436,12 @@
           },
           "desired_running": {
             "type": "boolean"
+          },
+          "direct_overrides": {
+            "items": {
+              "$ref": "#/components/schemas/DirectOverride"
+            },
+            "type": "array"
           },
           "direct_suffix": {
             "description": "直连节点后缀，留空使用默认值（前导空格加 [DRT]）",

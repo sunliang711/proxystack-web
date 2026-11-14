@@ -85,6 +85,15 @@ func (q *Queries) DeleteMihomoUpstreams(ctx context.Context) error {
 	return err
 }
 
+const deleteStackDirectOverrides = `-- name: DeleteStackDirectOverrides :exec
+DELETE FROM stack_direct_overrides
+`
+
+func (q *Queries) DeleteStackDirectOverrides(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteStackDirectOverrides)
+	return err
+}
+
 const deleteStackDirectUsers = `-- name: DeleteStackDirectUsers :exec
 DELETE FROM stack_direct_users
 `
@@ -369,6 +378,29 @@ func (q *Queries) InsertMihomoUpstream(ctx context.Context, arg InsertMihomoUpst
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const insertStackDirectOverride = `-- name: InsertStackDirectOverride :exec
+INSERT INTO stack_direct_overrides (stack_id, user_id, upstream, position, config) VALUES (?, ?, ?, ?, ?)
+`
+
+type InsertStackDirectOverrideParams struct {
+	StackID  int64  `json:"stack_id"`
+	UserID   int64  `json:"user_id"`
+	Upstream string `json:"upstream"`
+	Position int64  `json:"position"`
+	Config   string `json:"config"`
+}
+
+func (q *Queries) InsertStackDirectOverride(ctx context.Context, arg InsertStackDirectOverrideParams) error {
+	_, err := q.db.ExecContext(ctx, insertStackDirectOverride,
+		arg.StackID,
+		arg.UserID,
+		arg.Upstream,
+		arg.Position,
+		arg.Config,
+	)
+	return err
 }
 
 const insertStackDirectUser = `-- name: InsertStackDirectUser :exec
@@ -657,6 +689,39 @@ func (q *Queries) ListMihomoUpstreams(ctx context.Context) ([]MihomoUpstream, er
 			&i.Type,
 			&i.RefInboundID,
 			&i.RawConfig,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStackDirectOverrides = `-- name: ListStackDirectOverrides :many
+SELECT stack_id, user_id, upstream, position, config FROM stack_direct_overrides ORDER BY stack_id, position
+`
+
+func (q *Queries) ListStackDirectOverrides(ctx context.Context) ([]StackDirectOverride, error) {
+	rows, err := q.db.QueryContext(ctx, listStackDirectOverrides)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []StackDirectOverride
+	for rows.Next() {
+		var i StackDirectOverride
+		if err := rows.Scan(
+			&i.StackID,
+			&i.UserID,
+			&i.Upstream,
+			&i.Position,
+			&i.Config,
 		); err != nil {
 			return nil, err
 		}
