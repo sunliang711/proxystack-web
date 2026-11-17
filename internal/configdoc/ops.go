@@ -188,7 +188,7 @@ func SetMembers(stack *Stack, members []string) {
 // Mihomo 至少有一个上游且全部引用其他 stack 的入站。这类聚合 stack 的流量会在被引用 stack 的
 // 入站再计一次，多个 stack 加总时应排除。判断只看配置结构，不看角色标记。
 func RelaysOnly(stack *Stack) bool {
-	if stack.Xray.Outbound.Type != "mihomo" || !stack.Mihomo.Enabled || len(stack.Mihomo.Upstreams) == 0 {
+	if stack.Xray.Outbound.Type != "mihomo" || !stack.Mihomo.Enabled || len(stack.Mihomo.Upstreams) == 0 || len(stack.Mihomo.Providers) > 0 {
 		return false
 	}
 	for _, upstream := range stack.Mihomo.Upstreams {
@@ -257,6 +257,9 @@ func CloneStack(source *Stack, target string) Stack {
 	clone.Mihomo.ControllerSecret = RandomSecret()
 	for index := range clone.Xray.Inbounds {
 		clone.Xray.Inbounds[index].ID = 0
+	}
+	for index := range clone.Mihomo.Providers {
+		clone.Mihomo.Providers[index].ID = 0
 	}
 	RenameStackRemarks(&clone, source.Name, target)
 	for index := range clone.Mihomo.Upstreams {

@@ -397,6 +397,9 @@ func clearStackIDs(stack *Stack) {
 	for index := range stack.Xray.Inbounds {
 		stack.Xray.Inbounds[index].ID = 0
 	}
+	for index := range stack.Mihomo.Providers {
+		stack.Mihomo.Providers[index].ID = 0
+	}
 	for index := range stack.Mihomo.Upstreams {
 		stack.Mihomo.Upstreams[index].ID = 0
 	}

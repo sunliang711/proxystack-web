@@ -68,6 +68,9 @@ func secretFields(doc *Document) []secretField {
 	}
 	for stackIndex := range doc.Stacks {
 		stack := &doc.Stacks[stackIndex]
+		for index := range stack.Mihomo.Providers {
+			fields = append(fields, secretField{&stack.Mihomo.Providers[index].URL, nil})
+		}
 		fields = append(fields,
 			secretField{&stack.Mihomo.ControllerSecret, RandomSecret},
 			secretField{&stack.Xray.Outbound.Password, nil},

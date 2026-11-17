@@ -65,6 +65,24 @@ func (s *Service) Pending(ctx context.Context) (*PendingView, error) {
 		return nil, err
 	}
 	view.Changes = runtime.Diff(rendered.Files, current)
+	for index := range view.Changes {
+		change := &view.Changes[index]
+		if change.Component != units.Mihomo {
+			continue
+		}
+		name := change.Stack
+		desired := rendered.Files[name]
+		previous := current[name]
+		desired.Mihomo = redactProviderConfig(desired.Mihomo)
+		previous.Mihomo = redactProviderConfig(previous.Mihomo)
+		masked := runtime.Diff(map[string]runtime.Files{name: desired}, map[string]runtime.Files{name: previous})
+		change.Diff = "Sensitive provider download settings changed"
+		for _, entry := range masked {
+			if entry.Component == units.Mihomo {
+				change.Diff = entry.Diff
+			}
+		}
+	}
 	return view, nil
 }
 
@@ -187,6 +205,9 @@ func (s *Service) apply(ctx context.Context, actor Actor, only []string, logf Lo
 			case errors.Is(err, runtime.ErrBinaryMissing):
 				logf("跳过 %s %s 的配置检查：%s 尚未安装", name, component, component)
 			case err != nil:
+				if component == units.Mihomo && len(doc.Stacks[doc.StackByName(name)].Mihomo.Providers) > 0 {
+					return fmt.Errorf("Mihomo rejected provider configuration; check subscription fields, filters and core compatibility")
+				}
 				return err
 			default:
 				logf("%s %s 配置检查通过", name, component)

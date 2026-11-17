@@ -172,15 +172,16 @@ type ManualNode struct {
 }
 
 type MihomoGroup struct {
-	ID       int64  `json:"id"`
-	StackID  int64  `json:"stack_id"`
-	Position int64  `json:"position"`
-	Name     string `json:"name"`
-	Type     string `json:"type"`
-	Proxies  string `json:"proxies"`
-	Url      string `json:"url"`
-	Interval int64  `json:"interval"`
-	Strategy string `json:"strategy"`
+	ID          int64  `json:"id"`
+	StackID     int64  `json:"stack_id"`
+	Position    int64  `json:"position"`
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Proxies     string `json:"proxies"`
+	Url         string `json:"url"`
+	Interval    int64  `json:"interval"`
+	Strategy    string `json:"strategy"`
+	ProviderUse string `json:"provider_use"`
 }
 
 type MihomoListener struct {
@@ -192,6 +193,21 @@ type MihomoListener struct {
 	Port     int64  `json:"port"`
 	Auth     string `json:"auth"`
 	Accounts string `json:"accounts"`
+}
+
+type MihomoProvider struct {
+	ID       int64  `json:"id"`
+	StackID  int64  `json:"stack_id"`
+	Position int64  `json:"position"`
+	Config   string `json:"config"`
+}
+
+type MihomoProviderState struct {
+	ProviderID    int64  `json:"provider_id"`
+	ConfigHash    string `json:"config_hash"`
+	LastAttemptAt int64  `json:"last_attempt_at"`
+	LastSuccessAt int64  `json:"last_success_at"`
+	LastError     string `json:"last_error"`
 }
 
 type MihomoUpstream struct {

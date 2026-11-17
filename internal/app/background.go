@@ -44,7 +44,13 @@ func (s *Service) StartBackground(ctx context.Context) error {
 	}()
 	go s.runNotifications(ctx)
 	go s.runHealthAlerts(ctx)
-	go s.runScheduler(ctx)
+	s.background.Add(1)
+	go func() {
+		defer s.background.Done()
+		s.runScheduler(ctx)
+		// Provider refreshes must finish recording their result before the database closes.
+		s.stopProviderUpdates()
+	}()
 	s.background.Add(1)
 	go func() {
 		defer s.background.Done()

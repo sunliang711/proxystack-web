@@ -271,6 +271,7 @@ func registerRuntime(api huma.API, s *Server) {
 				}
 			}
 			_ = s.svc.Logs.Read(ctx, names, in.Lines, true, func(entry units.LogEntry) {
+				entry.Message = app.SanitizeProviderLog(entry.Message)
 				_ = send.Data(entry)
 			})
 		})

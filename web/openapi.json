@@ -1638,6 +1638,12 @@
           },
           "url": {
             "type": "string"
+          },
+          "use": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -2649,6 +2655,12 @@
             ],
             "type": "string"
           },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/Provider"
+            },
+            "type": "array"
+          },
           "rules": {
             "$ref": "#/components/schemas/Rules"
           },
@@ -3401,6 +3413,112 @@
           "remark",
           "display_template",
           "tag"
+        ],
+        "type": "object"
+      },
+      "Provider": {
+        "additionalProperties": false,
+        "properties": {
+          "auto_update": {
+            "type": "boolean"
+          },
+          "exclude_filter": {
+            "type": "string"
+          },
+          "fetch_mode": {
+            "enum": [
+              "direct",
+              "system"
+            ],
+            "type": "string"
+          },
+          "filter": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "interval": {
+            "format": "int64",
+            "maximum": 2592000,
+            "minimum": 60,
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "url",
+          "fetch_mode",
+          "auto_update",
+          "interval",
+          "filter",
+          "exclude_filter"
+        ],
+        "type": "object"
+      },
+      "ProviderView": {
+        "additionalProperties": false,
+        "properties": {
+          "applied": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "last_attempt_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "last_error": {
+            "type": "string"
+          },
+          "last_success_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "node_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/Proxy"
+            },
+            "type": "array"
+          },
+          "pending": {
+            "type": "boolean"
+          },
+          "running": {
+            "type": "boolean"
+          },
+          "updating": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "running",
+          "applied",
+          "pending",
+          "updating",
+          "node_count",
+          "nodes",
+          "last_attempt_at",
+          "last_success_at",
+          "last_error"
         ],
         "type": "object"
       },
@@ -4712,6 +4830,12 @@
           },
           "outbound": {
             "$ref": "#/components/schemas/OutboundSummary"
+          },
+          "providers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "relays_only": {
             "type": "boolean"
@@ -10430,6 +10554,105 @@
         "summary": "生成预览",
         "tags": [
           "config"
+        ]
+      }
+    },
+    "/api/stacks/{id}/providers": {
+      "get": {
+        "operationId": "listStackProviders",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderView"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "上游订阅的运行状态和节点",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/stacks/{id}/providers/{provider_id}/update": {
+      "post": {
+        "operationId": "updateStackProvider",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "立即更新上游订阅",
+        "tags": [
+          "ops"
         ]
       }
     },

@@ -93,6 +93,7 @@ type StackSummary struct {
 	Loopback      bool              `json:"loopback" doc:"全部入站只监听本机回环地址"`
 	Outbound      OutboundSummary   `json:"outbound"`
 	Upstreams     []UpstreamSummary `json:"upstreams"`
+	Providers     []string          `json:"providers,omitempty"`
 }
 
 // OutboundSummary 是 xray 出站的去向，用于列表页的流量图示。
@@ -619,6 +620,9 @@ func summarizeStack(stack configdoc.Stack) StackSummary {
 			item.Protocol, item.Server = rawEndpoint(upstream.Config)
 		}
 		summary.Upstreams = append(summary.Upstreams, item)
+	}
+	for _, provider := range stack.Mihomo.Providers {
+		summary.Providers = append(summary.Providers, provider.Name)
 	}
 	for _, inbound := range stack.Xray.Inbounds {
 		summary.Inbounds = append(summary.Inbounds, InboundSummary{

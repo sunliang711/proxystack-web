@@ -69,7 +69,14 @@ func RenderConfigNode(stackSet domain.StackSet, stackName string) (*yaml.Node, e
 	if err != nil {
 		return nil, err
 	}
-	return mapping(
+	if stack.Clash.DownloadProxy != nil {
+		node, err := renderRawProxy(*stack.Clash.DownloadProxy)
+		if err != nil {
+			return nil, err
+		}
+		proxies = append(proxies, node)
+	}
+	node := mapping(
 		pair("mode", scalar(stack.Clash.Mode)),
 		pair("log-level", scalar(domain.ResolveClashLogLevel(stackSet.Config.Defaults.Clash, stack.Clash))),
 		pair("ipv6", boolScalar(true)),
@@ -80,7 +87,11 @@ func RenderConfigNode(stackSet domain.StackSet, stackName string) (*yaml.Node, e
 		pair("proxies", sequence(proxies...)),
 		pair("proxy-groups", renderGroups(stack.Clash.Groups)),
 		pair("rules", renderRules(stack.Clash.Rules)),
-	), nil
+	)
+	if len(stack.Clash.Providers) > 0 {
+		node.Content = append(node.Content, scalar("proxy-providers"), renderProviders(stack.Clash.Providers))
+	}
+	return node, nil
 }
 
 func enabledClashStack(stackSet domain.StackSet, stackName string) (domain.Stack, error) {
@@ -273,6 +284,9 @@ func renderGroups(groups []domain.ClashGroup) *yaml.Node {
 			pair("name", scalar(group.Name)),
 			pair("type", scalar(group.Type)),
 			pair("proxies", stringSequence(group.Proxies)),
+		}
+		if len(group.Use) > 0 {
+			pairs = append(pairs, pair("use", stringSequence(group.Use)))
 		}
 		if group.URL != "" {
 			pairs = append(pairs, pair("url", scalar(group.URL)))

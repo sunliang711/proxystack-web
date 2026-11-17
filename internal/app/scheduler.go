@@ -197,6 +197,7 @@ func (s *Service) seedJobs(ctx context.Context) error {
 
 // SchedulerTick 检查到期的任务并在后台执行。服务停机期间错过的执行不补跑。
 func (s *Service) SchedulerTick(ctx context.Context) {
+	s.providerTick(ctx)
 	settings, err := s.loadSettings(ctx)
 	if err != nil {
 		slog.Warn("scheduler", "err", err)

@@ -903,6 +903,7 @@ type ClashGroup struct {
 	Name     string   `json:"name"`
 	Type     string   `json:"type"`
 	Proxies  []string `json:"proxies"`
+	Use      []string `json:"use,omitempty"`
 	URL      string   `json:"url"`
 	Interval int      `json:"interval"`
 	Strategy string   `json:"strategy"`
@@ -916,7 +917,7 @@ func (c *ClashGroup) Validate() error {
 	if !validGroupType(c.Type) {
 		return fmt.Errorf("unsupported group type: %s", c.Type)
 	}
-	if len(c.Proxies) == 0 {
+	if len(c.Proxies) == 0 && len(c.Use) == 0 {
 		return fmt.Errorf("group proxies is required")
 	}
 	if c.Type == "url-test" || c.Type == "load-balance" || c.Type == "fallback" {
@@ -945,6 +946,8 @@ type ClashConfig struct {
 	Controller ClashController `json:"controller"`
 	Listeners  ClashListeners  `json:"listeners"`
 	Upstreams  []ClashUpstream `json:"upstreams"`
+	Providers  []ClashProvider `json:"providers,omitempty"`
+	DownloadProxy *ClashUpstream `json:"download_proxy,omitempty"`
 	Groups     []ClashGroup    `json:"groups"`
 	Rules      ClashRules      `json:"rules"`
 }
@@ -999,7 +1002,16 @@ func (c *ClashConfig) Validate() error {
 	for _, name := range groupNames {
 		knownTargets[name] = true
 	}
+	providers := map[string]bool{}
+	for _, provider := range c.Providers {
+		providers[provider.Name] = true
+	}
 	for _, group := range c.Groups {
+		for _, name := range group.Use {
+			if !providers[name] {
+				return fmt.Errorf("group provider does not exist: %s", name)
+			}
+		}
 		for _, target := range group.Proxies {
 			if !knownTargets[target] {
 				return fmt.Errorf("group proxy target does not exist: %s", target)

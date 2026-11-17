@@ -25,7 +25,7 @@ const columns = computed<DataTableColumns<Group & { _index: number }>>(() => [
       ]),
   },
   { title: '类型', key: 'type', width: 120 },
-  { title: '成员', key: 'proxies', render: (row) => row.proxies.join(' → ') },
+  { title: '成员', key: 'proxies', render: (row) => [...row.proxies, ...(row.use ?? []).map((name) => `订阅:${name}`)].join(' → ') },
   {
     title: '操作',
     key: 'actions',
@@ -116,6 +116,9 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
         </NFormItem>
         <NFormItem label="proxies" v-bind="f('proxies', '按顺序排列；不能选择自身，不能形成循环')">
           <OrderedPicker v-model:value="editing.draft.proxies" :options="candidates" />
+        </NFormItem>
+        <NFormItem label="订阅来源" v-bind="f('use', '动态引用订阅中的节点，可与静态成员同时使用')">
+          <NSelect v-model:value="editing.draft.use" multiple :options="(stack.mihomo.providers ?? []).map((source) => ({ label: source.name, value: source.name }))" />
         </NFormItem>
         <template v-if="editing.draft.type !== 'select'">
           <NFormItem label="url" v-bind="f('url')">

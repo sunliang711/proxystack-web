@@ -481,7 +481,7 @@ func (c legacyClash) toDomain() (domain.ClashConfig, error) {
 		config.Upstreams = append(config.Upstreams, upstream)
 	}
 	for _, group := range c.Groups {
-		config.Groups = append(config.Groups, domain.ClashGroup(group))
+		config.Groups = append(config.Groups, domain.ClashGroup{Name: group.Name, Type: group.Type, Proxies: group.Proxies, URL: group.URL, Interval: group.Interval, Strategy: group.Strategy})
 	}
 	return config, nil
 }

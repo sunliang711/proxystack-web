@@ -138,8 +138,8 @@ VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?)
 RETURNING id;
 
 -- name: InsertMihomoGroup :one
-INSERT INTO mihomo_groups (id, stack_id, position, name, type, proxies, url, interval, strategy)
-VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO mihomo_groups (id, stack_id, position, name, type, proxies, url, interval, strategy, provider_use)
+VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id;
 
 -- name: InsertConfigRevision :one

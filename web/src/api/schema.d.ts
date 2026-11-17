@@ -1246,6 +1246,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stacks/{id}/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 上游订阅的运行状态和节点 */
+        get: operations["listStackProviders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{id}/providers/{provider_id}/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 立即更新上游订阅 */
+        post: operations["updateStackProvider"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stacks/{id}/proxies": {
         parameters: {
             query?: never;
@@ -2475,6 +2509,7 @@ export interface components {
             /** @enum {string} */
             type: "select" | "url-test" | "load-balance" | "fallback";
             url: string;
+            use?: string[];
         };
         HealthCheck: {
             detail: string;
@@ -2747,6 +2782,7 @@ export interface components {
             loglevel: "inherit" | "debug" | "info" | "warning" | "error" | "silent";
             /** @enum {string} */
             mode: "inherit" | "Rule" | "Global" | "Direct";
+            providers?: components["schemas"]["Provider"][];
             rules: components["schemas"]["Rules"];
             socks: components["schemas"]["Listener"];
             upstreams: components["schemas"]["Upstream"][];
@@ -2944,6 +2980,36 @@ export interface components {
             ss_password: string;
             tag: string;
             uuid: string;
+        };
+        Provider: {
+            auto_update: boolean;
+            exclude_filter: string;
+            /** @enum {string} */
+            fetch_mode: "direct" | "system";
+            filter: string;
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            interval: number;
+            name: string;
+            url: string;
+        };
+        ProviderView: {
+            applied: boolean;
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            last_attempt_at: number;
+            last_error: string;
+            /** Format: int64 */
+            last_success_at: number;
+            name: string;
+            /** Format: int64 */
+            node_count: number;
+            nodes: components["schemas"]["Proxy"][];
+            pending: boolean;
+            running: boolean;
+            updating: boolean;
         };
         Proxy: {
             name: string;
@@ -3328,6 +3394,7 @@ export interface components {
             mihomo_socks: string;
             name: string;
             outbound: components["schemas"]["OutboundSummary"];
+            providers?: string[];
             relays_only: boolean;
             role: string;
             upstreams: components["schemas"]["UpstreamSummary"][];
@@ -6363,6 +6430,67 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PreviewOutputBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listStackProviders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderView"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateStackProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                provider_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

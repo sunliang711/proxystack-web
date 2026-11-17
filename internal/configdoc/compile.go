@@ -24,6 +24,9 @@ func Compile(doc *Document) (domain.StackSet, error) {
 		if err != nil {
 			return domain.StackSet{}, fmt.Errorf("stacks[%d]: %w", index, err)
 		}
+		if err := compileProviders(doc, doc.Stacks[index], &stack); err != nil {
+			return domain.StackSet{}, err
+		}
 		set.Stacks = append(set.Stacks, stack)
 	}
 	return set, nil

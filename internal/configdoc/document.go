@@ -449,6 +449,7 @@ type Mihomo struct {
 	Socks            Listener   `json:"socks" yaml:"socks"`
 	HTTP             Listener   `json:"http" yaml:"http"`
 	Upstreams        []Upstream `json:"upstreams" yaml:"upstreams"`
+	Providers        []Provider `json:"providers,omitempty" yaml:"providers,omitempty"`
 	Groups           []Group    `json:"groups" yaml:"groups"`
 	Rules            Rules      `json:"rules" yaml:"rules"`
 }
@@ -492,6 +493,7 @@ type Group struct {
 	Name     string   `json:"name" yaml:"name"`
 	Type     string   `json:"type" yaml:"type" enum:"select,url-test,load-balance,fallback"`
 	Proxies  []string `json:"proxies" yaml:"proxies"`
+	Use      []string `json:"use,omitempty" yaml:"use,omitempty"`
 	URL      string   `json:"url" yaml:"url,omitempty"`
 	Interval int      `json:"interval" yaml:"interval,omitempty" minimum:"0"`
 	Strategy string   `json:"strategy" yaml:"strategy,omitempty" enum:",consistent-hashing,round-robin,sticky-sessions"`

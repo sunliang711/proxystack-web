@@ -223,6 +223,17 @@ func (s *Stack) Normalize() {
 			listener.Accounts = []ListenerAccount{}
 		}
 	}
+	if s.Mihomo.Providers == nil {
+		s.Mihomo.Providers = []Provider{}
+	}
+	for index := range s.Mihomo.Providers {
+		if s.Mihomo.Providers[index].FetchMode == "" {
+			s.Mihomo.Providers[index].FetchMode = "direct"
+		}
+		if s.Mihomo.Providers[index].Interval == 0 {
+			s.Mihomo.Providers[index].Interval = 3600
+		}
+	}
 	if s.Mihomo.Upstreams == nil {
 		s.Mihomo.Upstreams = []Upstream{}
 	}

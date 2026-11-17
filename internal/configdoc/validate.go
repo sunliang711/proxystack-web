@@ -77,6 +77,7 @@ func Validate(doc *Document) Issues {
 	}
 	validateUsers(&issues, doc)
 	stackNames := map[string]bool{}
+	providerIDs := map[int64]bool{}
 	for index := range doc.Stacks {
 		path := fmt.Sprintf("stacks[%d]", index)
 		stack := &doc.Stacks[index]
@@ -84,6 +85,12 @@ func Validate(doc *Document) Issues {
 			issues.add(path+".name", "duplicate stack name: %s", stack.Name)
 		}
 		stackNames[stack.Name] = true
+		for position, provider := range stack.Mihomo.Providers {
+			if provider.ID != 0 && providerIDs[provider.ID] {
+				issues.add(fmt.Sprintf("%s.mihomo.providers[%d].id", path, position), "provider ID must be unique across stacks")
+			}
+			providerIDs[provider.ID] = true
+		}
 		validateStack(&issues, doc, path, stack)
 	}
 	validateSubscription(&issues, doc)
@@ -172,6 +179,7 @@ func MapDomainPath(doc *Document, path string) string {
 		{"clash.listeners.socks[0]", "mihomo.socks"},
 		{"clash.listeners.http[0]", "mihomo.http"},
 		{"clash.upstreams", "mihomo.upstreams"},
+		{"clash.providers", "mihomo.providers"},
 		{"clash.groups", "mihomo.groups"},
 		{".user_refs", ".users"},
 		{".auth", ".auth_type"},
@@ -537,10 +545,14 @@ func validateMihomo(issues *Issues, doc *Document, path string, stack *Stack) {
 	if mihomo.HTTP.Enabled {
 		validateListener(issues, path+".http", mihomo.HTTP)
 	}
+	providers := validateProviders(issues, doc, path, stack)
 	targets := map[string]bool{BuiltinDirect: true, BuiltinReject: true}
 	for index, upstream := range mihomo.Upstreams {
 		upstreamPath := fmt.Sprintf("%s.upstreams[%d]", path, index)
 		checkIdentifier(issues, upstreamPath+".name", upstream.Name)
+		if strings.HasPrefix(upstream.Name, "__psw_") {
+			issues.add(upstreamPath+".name", "the __psw_ prefix is reserved")
+		}
 		if targets[upstream.Name] {
 			issues.add(upstreamPath+".name", "duplicate proxy name: %s", upstream.Name)
 		}
@@ -577,6 +589,9 @@ func validateMihomo(issues *Issues, doc *Document, path string, stack *Stack) {
 	for index, group := range mihomo.Groups {
 		groupPath := fmt.Sprintf("%s.groups[%d]", path, index)
 		checkIdentifier(issues, groupPath+".name", group.Name)
+		if strings.HasPrefix(group.Name, "__psw_") {
+			issues.add(groupPath+".name", "the __psw_ prefix is reserved")
+		}
 		if targets[group.Name] {
 			issues.add(groupPath+".name", "duplicate proxy name: %s", group.Name)
 		}
@@ -589,7 +604,7 @@ func validateMihomo(issues *Issues, doc *Document, path string, stack *Stack) {
 	for index, group := range mihomo.Groups {
 		groupPath := fmt.Sprintf("%s.groups[%d]", path, index)
 		checkEnum(issues, groupPath+".type", group.Type, "select", "url-test", "load-balance", "fallback")
-		if len(group.Proxies) == 0 {
+		if len(group.Proxies) == 0 && len(group.Use) == 0 {
 			issues.add(groupPath+".proxies", "at least one proxy is required")
 		}
 		for _, proxy := range group.Proxies {
@@ -597,6 +612,11 @@ func validateMihomo(issues *Issues, doc *Document, path string, stack *Stack) {
 				issues.add(groupPath+".proxies", "group must not contain itself")
 			} else if !targets[proxy] {
 				issues.add(groupPath+".proxies", "proxy does not exist: %s", proxy)
+			}
+		}
+		for _, name := range group.Use {
+			if !providers[name] {
+				issues.add(groupPath+".use", "provider does not exist: %s", name)
 			}
 		}
 		if group.Type != "select" {

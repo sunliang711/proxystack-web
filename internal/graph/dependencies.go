@@ -306,6 +306,17 @@ func addClashDependencies(stack domain.Stack, index ReferenceIndex, dependencies
 	}
 	issues := make([]Issue, 0)
 	sourceNode := ServiceNode{Stack: stack.Name, Component: "clash"}
+	for index, provider := range stack.Clash.Providers {
+		if provider.DownloadStack == "" {
+			continue
+		}
+		target := ServiceNode{Stack: provider.DownloadStack, Component: "clash"}
+		if _, ok := dependencies[target]; !ok {
+			issues = append(issues, Issue{Path: fmt.Sprintf("stacks.%s.clash.providers[%d]", stack.Name, index), Message: "download proxy stack Mihomo must be enabled"})
+			continue
+		}
+		dependencies[sourceNode][target] = true
+	}
 	for upstreamIndex, upstream := range stack.Clash.Upstreams {
 		if upstream.Type != "xray-socks5" {
 			continue

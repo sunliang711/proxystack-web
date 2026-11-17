@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -126,9 +127,21 @@ func (s *Service) LoadConfig(ctx context.Context) (*configdoc.Document, error) {
 	return doc, err
 }
 
-// mutateConfig 在一个事务内读取配置、执行修改、全量校验、写回并生成修订版本和审计记录。
+// mutateConfig commits a validated change atomically; native provider checks run outside write transactions.
 func (s *Service) mutateConfig(ctx context.Context, actor Actor, change *ConfigChange, fn func(doc *configdoc.Document) error) (*configdoc.Document, error) {
-	var result, before *configdoc.Document
+	var result, before, pending *configdoc.Document
+	persist := func(q *dbq.Queries, doc *configdoc.Document) error {
+		if err := store.SaveDocument(ctx, q, doc); err != nil {
+			return err
+		}
+		if err := s.writeRevision(ctx, q, actor, change.Summary, doc); err != nil {
+			return err
+		}
+		result = doc
+		return audit.Write(ctx, q, s.Now(), audit.Entry{
+			Actor: actor.Name, SourceIP: actor.IP, Action: change.Action, Object: change.Object, Summary: change.Summary,
+		})
+	}
 	err := s.Store.InTx(ctx, func(q *dbq.Queries) error {
 		doc, err := store.LoadDocument(ctx, q)
 		if err != nil {
@@ -142,19 +155,46 @@ func (s *Service) mutateConfig(ctx context.Context, actor Actor, change *ConfigC
 		if issues := configdoc.Validate(doc); len(issues) > 0 {
 			return &ValidationError{Issues: issues, Scope: change.Scope, doc: doc}
 		}
-		if err := store.SaveDocument(ctx, q, doc); err != nil {
-			return err
+		if providerFiltersChanged(before, doc) {
+			pending = doc
+			return nil
 		}
-		if err := s.writeRevision(ctx, q, actor, change.Summary, doc); err != nil {
-			return err
-		}
-		result = doc
-		return audit.Write(ctx, q, s.Now(), audit.Entry{
-			Actor: actor.Name, SourceIP: actor.IP, Action: change.Action, Object: change.Object, Summary: change.Summary,
-		})
+		return persist(q, doc)
 	})
 	if err != nil {
 		return nil, err
+	}
+	if pending != nil {
+		issues := s.validateNativeProviderFilters(ctx, before, pending)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if len(issues) > 0 {
+			return nil, &ValidationError{Issues: issues, Scope: change.Scope, doc: pending}
+		}
+		expected, err := json.Marshal(before)
+		if err != nil {
+			return nil, err
+		}
+		err = s.Store.InTx(ctx, func(q *dbq.Queries) error {
+			current, err := store.LoadDocument(ctx, q)
+			if err != nil {
+				return err
+			}
+			actual, err := json.Marshal(current)
+			if err != nil {
+				return err
+			}
+			// Never overwrite changes committed while the external core was validating.
+			// Do not replay fn: callers may capture and modify their request objects.
+			if !bytes.Equal(expected, actual) {
+				return &ValidationError{Issues: configdoc.Issues{{Message: "configuration changed during filter validation; reload and retry"}}, Scope: change.Scope, doc: pending}
+			}
+			return persist(q, pending)
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 	// 手动暂停开关不进入待应用变更：无论改动来自哪里，保存后立即生效。
 	change.Notes = s.syncPauses(ctx, before, result)
@@ -378,6 +418,11 @@ func (s *Service) UpdateStack(ctx context.Context, actor Actor, id int64, stack 
 			return ErrNotFound
 		}
 		old := doc.Stacks[index]
+		for _, provider := range stack.Mihomo.Providers {
+			if provider.ID != 0 && !slices.ContainsFunc(old.Mihomo.Providers, func(p configdoc.Provider) bool { return p.ID == provider.ID }) {
+				return &FieldError{Field: "mihomo.providers", Message: "provider ID does not belong to this stack"}
+			}
+		}
 		stack.ID = id
 		configdoc.UnmaskStack(&stack, &old)
 		change.Object, change.Summary, change.Scope = "stack:"+stack.Name, "修改 stack "+stack.Name, fmt.Sprintf("stacks[%d]", index)
@@ -390,6 +435,7 @@ func (s *Service) UpdateStack(ctx context.Context, actor Actor, id int64, stack 
 		}
 		configdoc.RenameStack(doc, old.Name, stack.Name)
 		configdoc.RenameStackRemarks(&stack, old.Name, stack.Name)
+		configdoc.RenameProviderReferences(&stack, old)
 		renameTargets(&stack, old)
 		doc.Stacks[index] = stack
 		return nil
@@ -562,6 +608,7 @@ func (s *Service) PreviewStack(ctx context.Context, id int64) (*GeneratedPreview
 			preview.Errors = append(preview.Errors, "mihomo: "+err.Error())
 		}
 	}
+	preview.Mihomo = string(redactProviderConfig([]byte(preview.Mihomo)))
 	return preview, nil
 }
 

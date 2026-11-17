@@ -81,7 +81,7 @@ func (c Client) Proxies(ctx context.Context) ([]Proxy, error) {
 	}
 	out := []Proxy{}
 	for name, proxy := range response.Proxies {
-		if name != globalGroup && !slices.Contains(builtin, proxy.Type) {
+		if name != globalGroup && name != "__psw_download_proxy" && !slices.Contains(builtin, proxy.Type) {
 			proxy.Name = name
 			out = append(out, proxy)
 		}

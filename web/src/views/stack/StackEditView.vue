@@ -25,6 +25,7 @@ import ListenerForm from './ListenerForm.vue'
 import PreviewTab from './PreviewTab.vue'
 import RulesTab from './RulesTab.vue'
 import UpstreamsTab from './UpstreamsTab.vue'
+import ProvidersPanel from './ProvidersPanel.vue'
 import LogsTab from './LogsTab.vue'
 import DiagnosticsTab from './DiagnosticsTab.vue'
 import FlowTab from './FlowTab.vue'
@@ -104,6 +105,10 @@ async function reveal() {
   const keep = (current: string, plain: string) => (current === MASKED ? plain : current)
   s.mihomo.controller_secret = keep(s.mihomo.controller_secret, data.mihomo.controller_secret)
   s.xray.outbound.password = keep(s.xray.outbound.password, data.xray.outbound.password)
+  for (const provider of s.mihomo.providers ?? []) {
+    const plain = data.mihomo.providers?.find((item) => item.id === provider.id)
+    if (plain) provider.url = keep(provider.url, plain.url)
+  }
   for (const inbound of s.xray.inbounds) {
     const plain = data.xray.inbounds.find((i) => i.id === inbound.id)
     if (plain) {
@@ -158,7 +163,7 @@ function tabFor(path: string): string {
   if (path.startsWith('xray.inbounds')) return 'inbounds'
   if (path.startsWith('xray.outbound')) return 'outbound'
   if (path.startsWith('xray')) return 'xray'
-  if (path.startsWith('mihomo.upstreams')) return 'upstreams'
+  if (path.startsWith('mihomo.upstreams') || path.startsWith('mihomo.providers')) return 'upstreams'
   if (path.startsWith('mihomo.groups')) return 'groups'
   if (path.startsWith('mihomo.rules')) return 'rules'
   if (path.startsWith('mihomo')) return 'mihomo'
@@ -196,11 +201,11 @@ const groupLabel = (name: string, label: string) => () => {
 /** 按配置结构判断是否为聚合 stack：出站交给本 stack 的 Mihomo，上游全部引用其他 stack 的入站。 */
 const relaysOnly = computed(() => {
   const s = stack.value
-  if (!s || s.xray.outbound.type !== 'mihomo' || !s.mihomo.enabled || !s.mihomo.upstreams.length) return false
+  if (!s || s.xray.outbound.type !== 'mihomo' || !s.mihomo.enabled || !s.mihomo.upstreams.length || s.mihomo.providers?.length) return false
   return s.mihomo.upstreams.every((upstream) => upstream.type === 'xray-socks5')
 })
 /** 角色是 auto，但上游里混有外部节点。 */
-const mixedAuto = computed(() => stack.value?.role === 'auto' && (stack.value?.mihomo.upstreams ?? []).some((upstream) => upstream.type !== 'xray-socks5'))
+const mixedAuto = computed(() => stack.value?.role === 'auto' && ((stack.value?.mihomo.providers?.length ?? 0) > 0 || (stack.value?.mihomo.upstreams ?? []).some((upstream) => upstream.type !== 'xray-socks5')))
 
 const moreOptions = [
   { key: 'clone', label: '克隆' },
@@ -440,6 +445,7 @@ async function saveMembers() {
           <NTabs v-model:value="tab" type="segment" size="small" class="sub-tabs accent-segment">
             <NTabPane name="upstreams" :tab="tabLabel('upstreams', '上游')">
               <UpstreamsTab :stack="stack" :summaries="summaries" :users="users" :errors="errors" />
+              <ProvidersPanel :stack="stack" :errors="errors" :dirty="dirty" :saved-version="savedVersion" :reveal="reveal" />
             </NTabPane>
             <NTabPane name="groups" :tab="tabLabel('groups', '代理组')">
               <GroupsTab :stack="stack" :errors="errors" />

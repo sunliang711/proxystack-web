@@ -109,6 +109,9 @@ func UnmaskUser(user *User, old *User) {
 
 // MaskStack 遮蔽 stack 的凭据字段。
 func MaskStack(stack *Stack) {
+	for index := range stack.Mihomo.Providers {
+		mask(&stack.Mihomo.Providers[index].URL)
+	}
 	mask(&stack.Mihomo.ControllerSecret)
 	mask(&stack.Xray.Outbound.Password)
 	for index := range stack.Xray.Inbounds {
@@ -124,6 +127,16 @@ func MaskStack(stack *Stack) {
 
 // UnmaskStack 把仍为占位的凭据恢复为 old 中的原值：入站按 ID 对应，监听账号按用户名对应。
 func UnmaskStack(stack *Stack, old *Stack) {
+	for index := range stack.Mihomo.Providers {
+		provider := &stack.Mihomo.Providers[index]
+		previous, found := "", false
+		for _, candidate := range old.Mihomo.Providers {
+			if provider.ID != 0 && provider.ID == candidate.ID {
+				previous, found = candidate.URL, true
+			}
+		}
+		unmask(&provider.URL, previous, found)
+	}
 	unmask(&stack.Mihomo.ControllerSecret, old.Mihomo.ControllerSecret, true)
 	unmask(&stack.Xray.Outbound.Password, old.Xray.Outbound.Password, true)
 	for index := range stack.Xray.Inbounds {

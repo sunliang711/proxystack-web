@@ -285,21 +285,22 @@ func (q *Queries) InsertInboundUserRef(ctx context.Context, arg InsertInboundUse
 }
 
 const insertMihomoGroup = `-- name: InsertMihomoGroup :one
-INSERT INTO mihomo_groups (id, stack_id, position, name, type, proxies, url, interval, strategy)
-VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO mihomo_groups (id, stack_id, position, name, type, proxies, url, interval, strategy, provider_use)
+VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id
 `
 
 type InsertMihomoGroupParams struct {
-	NULLIF   interface{} `json:"nullif"`
-	StackID  int64       `json:"stack_id"`
-	Position int64       `json:"position"`
-	Name     string      `json:"name"`
-	Type     string      `json:"type"`
-	Proxies  string      `json:"proxies"`
-	Url      string      `json:"url"`
-	Interval int64       `json:"interval"`
-	Strategy string      `json:"strategy"`
+	NULLIF      interface{} `json:"nullif"`
+	StackID     int64       `json:"stack_id"`
+	Position    int64       `json:"position"`
+	Name        string      `json:"name"`
+	Type        string      `json:"type"`
+	Proxies     string      `json:"proxies"`
+	Url         string      `json:"url"`
+	Interval    int64       `json:"interval"`
+	Strategy    string      `json:"strategy"`
+	ProviderUse string      `json:"provider_use"`
 }
 
 func (q *Queries) InsertMihomoGroup(ctx context.Context, arg InsertMihomoGroupParams) (int64, error) {
@@ -313,6 +314,7 @@ func (q *Queries) InsertMihomoGroup(ctx context.Context, arg InsertMihomoGroupPa
 		arg.Url,
 		arg.Interval,
 		arg.Strategy,
+		arg.ProviderUse,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -596,7 +598,7 @@ func (q *Queries) ListInbounds(ctx context.Context) ([]Inbound, error) {
 }
 
 const listMihomoGroups = `-- name: ListMihomoGroups :many
-SELECT id, stack_id, position, name, type, proxies, url, interval, strategy FROM mihomo_groups ORDER BY stack_id, position, id
+SELECT id, stack_id, position, name, type, proxies, url, interval, strategy, provider_use FROM mihomo_groups ORDER BY stack_id, position, id
 `
 
 func (q *Queries) ListMihomoGroups(ctx context.Context) ([]MihomoGroup, error) {
@@ -618,6 +620,7 @@ func (q *Queries) ListMihomoGroups(ctx context.Context) ([]MihomoGroup, error) {
 			&i.Url,
 			&i.Interval,
 			&i.Strategy,
+			&i.ProviderUse,
 		); err != nil {
 			return nil, err
 		}

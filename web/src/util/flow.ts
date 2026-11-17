@@ -94,7 +94,7 @@ export function stackTopology(stacks: Summary[]): FlowGraph {
     if (stack.outbound.type === 'direct') return 'direct'
     if (stack.outbound.type !== 'mihomo') return 'external'
     if (!viaMihomo(stack)) return null
-    if (stack.upstreams.some((upstream) => upstream.type === 'raw')) return 'upstream'
+    if (stack.upstreams.some((upstream) => upstream.type === 'raw') || stack.providers?.length) return 'upstream'
     // 没有任何上游时代理组里只剩 DIRECT。
     return referenced(stack).length ? null : 'direct'
   }
@@ -150,7 +150,11 @@ export function stackTopology(stacks: Summary[]): FlowGraph {
   const exits: { id: Exit; title: string; subtitle?: string; tone: FlowTone; label: string; lines: (members: Summary[]) => string[] }[] = [
     {
       id: 'upstream', title: '上游节点', tone: 'upstream', label: '经上游节点出口',
-      lines: (members) => [`${members.reduce((sum, stack) => sum + stack.upstreams.filter((upstream) => upstream.type === 'raw').length, 0)} 个外部节点`],
+      lines: (members) => {
+        const external = members.reduce((sum, stack) => sum + stack.upstreams.filter((upstream) => upstream.type === 'raw').length, 0)
+        const providers = members.reduce((sum, stack) => sum + (stack.providers?.length ?? 0), 0)
+        return [external ? `${external} 个外部节点` : '', providers ? `${providers} 个订阅来源（动态节点）` : ''].filter(Boolean)
+      },
     },
     {
       id: 'external', title: '外部代理', tone: 'upstream', label: '经外部代理出口',
@@ -303,6 +307,7 @@ export function stackFlow(stack: Stack, summaries: Summary[]): FlowGraph {
   const upstreams = new Map(mihomo.upstreams.map((upstream) => [upstream.name, upstream]))
   const targetId = (name: string) => (groups.has(name) ? `group:${name}` : upstreams.has(name) ? `up:${name}` : `builtin:${name}`)
   const used = new Set<string>()
+  const usedProviders = new Set<string>()
 
   for (const group of mihomo.groups) {
     nodes.push({
@@ -310,7 +315,7 @@ export function stackFlow(stack: Stack, summaries: Summary[]): FlowGraph {
       column: 5 + (groupLayer.get(group.name) ?? 0),
       title: group.name,
       subtitle: groupTypes[group.type] ?? group.type,
-      lines: limit(group.proxies.map((proxy, index) => (group.type === 'select' && index === 0 ? `★ ${proxy}` : `· ${proxy}`))),
+      lines: limit([...group.proxies.map((proxy, index) => (group.type === 'select' && index === 0 ? `★ ${proxy}` : `· ${proxy}`)), ...(group.use ?? []).map((name) => `订阅：${name}`)]),
       tone: 'group',
       hint: group.type === 'select' ? '★ 为默认选中的成员' : undefined,
     })
@@ -318,6 +323,10 @@ export function stackFlow(stack: Stack, summaries: Summary[]): FlowGraph {
       used.add(proxy)
       edges.push({ from: `group:${group.name}`, to: targetId(proxy), dashed: group.type === 'select' && index > 0 })
     })
+    for (const [index, provider] of (group.use ?? []).entries()) {
+      usedProviders.add(provider)
+      edges.push({ from: `group:${group.name}`, to: `provider:${provider}`, label: '动态节点', dashed: group.type === 'select' && (group.proxies.length > 0 || index > 0) })
+    }
   }
 
   // 规则指向的目标：兜底和附加规则合并到同一条边上。
@@ -363,6 +372,12 @@ export function stackFlow(stack: Stack, summaries: Summary[]): FlowGraph {
       })
       edges.push({ from: id, to: 'internet' })
     }
+  }
+  for (const provider of mihomo.providers ?? []) {
+    const id = `provider:${provider.name}`
+    const unused = !usedProviders.has(provider.name)
+    nodes.push({ id, column: upstreamColumn, title: provider.name, subtitle: '订阅来源 · 动态节点', tone: 'upstream', dim: unused, hint: unused ? '没有被代理组引用，流量不会经过它' : '节点清单随订阅更新，流量通过代理组选择的节点出站' })
+    edges.push({ from: id, to: 'internet', label: '订阅节点出口' })
   }
   for (const builtin of ['DIRECT', 'REJECT']) {
     if (!used.has(builtin)) continue

@@ -60,6 +60,7 @@ type Service struct {
 	autoPause     autoPauseState
 	healthAlert   healthAlertState
 	scheduler     schedulerState
+	providerUpdates providerUpdates
 	subDeployMu   sync.Mutex
 	subDeploying  map[int64]bool
 	selfUpgradeMu sync.Mutex

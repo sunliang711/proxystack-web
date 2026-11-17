@@ -4,9 +4,10 @@ import { createServer } from 'vite'
 
 let server
 let stackTopology
+let stackFlow
 before(async () => {
   server = await createServer({ configFile: false, server: { middlewareMode: true }, logLevel: 'silent' })
-  ;({ stackTopology } = await server.ssrLoadModule('/src/util/flow.ts'))
+  ;({ stackTopology, stackFlow } = await server.ssrLoadModule('/src/util/flow.ts'))
 })
 after(async () => { await server?.close() })
 
@@ -66,4 +67,26 @@ test('没有聚合 stack 时省去聚合列；只经其他 stack 转发的 stack
   assert.deepEqual(node('upstream').filter.stackIds, [exit.id])
   // 没有任何上游的 stack 只剩 DIRECT。
   assert.deepEqual(node('direct').filter.stackIds, [empty.id])
+})
+
+
+test('仅使用订阅来源的 Stack 显示动态上游出口，代理组流向包含订阅引用', () => {
+  const summary = stack('provider-only', { providers: ['airport'] })
+  const topology = stackTopology([summary])
+  assert.equal(topology.nodes.some((node) => node.id === 'direct'), false)
+  assert.deepEqual(topology.nodes.find((node) => node.id === 'upstream').lines, ['1 个订阅来源（动态节点）'])
+  const detail = {
+    name: summary.name,
+    xray: { enabled: true, inbounds: [], outbound: { type: 'mihomo' } },
+    mihomo: {
+      enabled: true, mode: 'Rule', socks: { name: 'socks', listen: '127.0.0.1', port: 1080, auth: 'none', accounts: [] },
+      http: { enabled: false }, rules: { final: 'AllProxy', extra: [] }, upstreams: [],
+      groups: [{ name: 'AllProxy', type: 'select', proxies: [], use: ['airport'] }],
+      providers: [{ name: 'airport', fetch_mode: 'direct' }],
+    },
+  }
+  const flow = stackFlow(detail, [summary])
+  assert.equal(flow.nodes.find((node) => node.id === 'provider:airport').dim, false)
+  assert.ok(flow.edges.some((edge) => edge.from === 'group:AllProxy' && edge.to === 'provider:airport'))
+  assert.ok(flow.edges.some((edge) => edge.from === 'provider:airport' && edge.to === 'internet'))
 })

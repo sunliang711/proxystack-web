@@ -255,6 +255,20 @@ func LoadDocument(ctx context.Context, q *dbq.Queries) (*configdoc.Document, err
 		stack.Mihomo.Upstreams = append(stack.Mihomo.Upstreams, upstream)
 	}
 
+	providers, err := q.ListMihomoProviders(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range providers {
+		var provider configdoc.Provider
+		if err := json.Unmarshal([]byte(row.Config), &provider); err != nil {
+			return nil, fmt.Errorf("provider %d is corrupt: %w", row.ID, err)
+		}
+		provider.ID = row.ID
+		stack := &doc.Stacks[stackIndex[row.StackID]]
+		stack.Mihomo.Providers = append(stack.Mihomo.Providers, provider)
+	}
+
 	groups, err := q.ListMihomoGroups(ctx)
 	if err != nil {
 		return nil, err
@@ -265,6 +279,9 @@ func LoadDocument(ctx context.Context, q *dbq.Queries) (*configdoc.Document, err
 			ID: row.ID, Name: row.Name, Type: row.Type, URL: row.Url, Interval: int(row.Interval), Strategy: row.Strategy,
 		}
 		if err := decodeColumn(row.Proxies, &group.Proxies); err != nil {
+			return nil, err
+		}
+		if err := decodeColumn(row.ProviderUse, &group.Use); err != nil {
 			return nil, err
 		}
 		stack.Mihomo.Groups = append(stack.Mihomo.Groups, group)
@@ -389,6 +406,17 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 			return err
 		}
 	}
+	providerIDs := []int64{}
+	for _, stack := range doc.Stacks {
+		for _, provider := range stack.Mihomo.Providers {
+			if provider.ID != 0 {
+				providerIDs = append(providerIDs, provider.ID)
+			}
+		}
+	}
+	if err := deleteExcept(ctx, providerIDs, q.DeleteMihomoProvidersExcept, q.DeleteAllMihomoProviders); err != nil {
+		return err
+	}
 	for _, clear := range []func(context.Context) error{
 		q.DeleteStackDirectUsers, q.DeleteStackDirectOverrides,
 		q.DeleteUserPausedStacks, q.DeleteManualNodes, q.DeleteMihomoUpstreams, q.DeleteMihomoGroups, q.DeleteMihomoListeners,
@@ -481,6 +509,20 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 			return fmt.Errorf("save stack %s: %w", stack.Name, err)
 		}
 		stack.ID = id
+		for position := range stack.Mihomo.Providers {
+			provider := &stack.Mihomo.Providers[position]
+			stored := *provider
+			stored.ID = 0
+			data, err := json.Marshal(stored)
+			if err != nil {
+				return err
+			}
+			providerID, err := q.UpsertMihomoProvider(ctx, dbq.UpsertMihomoProviderParams{NULLIF: provider.ID, StackID: id, Position: int64(position), Config: string(data)})
+			if err != nil {
+				return err
+			}
+			provider.ID = providerID
+		}
 		for position, user := range stack.DirectUsers {
 			userID, ok := userIDByName[user]
 			if !ok {
@@ -564,9 +606,13 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 			if err != nil {
 				return err
 			}
+			providerUse, err := encodeColumn(group.Use)
+			if err != nil {
+				return err
+			}
 			groupID, err := q.InsertMihomoGroup(ctx, dbq.InsertMihomoGroupParams{
 				NULLIF: group.ID, StackID: id, Position: int64(position), Name: group.Name, Type: group.Type,
-				Proxies: proxies, Url: group.URL, Interval: int64(group.Interval), Strategy: group.Strategy,
+				Proxies: proxies, Url: group.URL, Interval: int64(group.Interval), Strategy: group.Strategy, ProviderUse: providerUse,
 			})
 			if err != nil {
 				return err
