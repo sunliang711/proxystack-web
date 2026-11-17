@@ -1263,6 +1263,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stacks/{id}/providers/{provider_id}/nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 上游订阅节点的地址和端口 */
+        get: operations["listProviderNodes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stacks/{id}/providers/{provider_id}/nodes/detail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 查看上游订阅节点配置，查看凭据记入审计 */
+        post: operations["getProviderNodeDetails"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stacks/{id}/providers/{provider_id}/update": {
         parameters: {
             query?: never;
@@ -2993,6 +3027,22 @@ export interface components {
             interval: number;
             name: string;
             url: string;
+        };
+        ProviderNodeDetails: {
+            config: string;
+            masked: boolean;
+            node: components["schemas"]["ProviderNodeSummary"];
+        };
+        ProviderNodeDetailsInputBody: {
+            name: string;
+            reveal: boolean;
+        };
+        ProviderNodeSummary: {
+            key: string;
+            name: string;
+            port: string;
+            server: string;
+            type: string;
         };
         ProviderView: {
             applied: boolean;
@@ -6460,6 +6510,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderView"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listProviderNodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                provider_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderNodeSummary"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getProviderNodeDetails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                provider_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderNodeDetailsInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderNodeDetails"];
                 };
             };
             /** @description Error */

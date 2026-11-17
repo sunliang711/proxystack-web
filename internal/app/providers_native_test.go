@@ -26,6 +26,8 @@ import (
 	"proxystack-web/internal/generator/mihomo"
 	"proxystack-web/internal/mihomoapi"
 	"proxystack-web/internal/runtime"
+	"proxystack-web/internal/store"
+	"proxystack-web/internal/store/dbq"
 	"proxystack-web/internal/units"
 )
 
@@ -148,6 +150,24 @@ func TestNativeProviderDownloads(t *testing.T) {
 			if mode != "direct" {
 				require.True(t, proxyAuthenticated.Load(), "proxy authentication was used")
 			}
+			// Read details through the application using the cache produced by the real core.
+			stack.Mihomo.Providers[0].ID = 0
+			require.NoError(t, h.svc.Store.InTx(context.Background(), func(q *dbq.Queries) error { return store.SaveDocument(context.Background(), q, doc) }))
+			cachePath := filepath.Join(h.svc.Layout.MihomoWorkDir(stack.Name), source.CachePath())
+			require.NoError(t, os.MkdirAll(filepath.Dir(cachePath), 0o750))
+			initialCache, err := os.ReadFile(filepath.Join(dir, source.CachePath()))
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(cachePath, initialCache, 0o600))
+			require.NoError(t, os.MkdirAll(filepath.Dir(h.svc.Layout.GeneratedMihomo(stack.Name)), 0o750))
+			require.NoError(t, os.WriteFile(h.svc.Layout.GeneratedMihomo(stack.Name), content, 0o600))
+			require.NoError(t, h.svc.Units.Start(context.Background(), units.Name(units.Mihomo, stack.Name)))
+			nodes, err := h.svc.ListProviderNodes(context.Background(), stack.ID, stack.Mihomo.Providers[0].ID)
+			require.NoError(t, err)
+			require.Len(t, nodes, 1)
+			require.Equal(t, "127.0.0.1", nodes[0].Server)
+			details, err := h.svc.GetProviderNodeDetails(context.Background(), h.actor, stack.ID, stack.Mihomo.Providers[0].ID, nodes[0].Key, false)
+			require.NoError(t, err)
+			require.Contains(t, details.Config, "HK-good")
 			initialRequests := requests.Load()
 			time.Sleep(120 * time.Millisecond)
 			require.Equal(t, initialRequests, requests.Load(), "interval=0 disables native periodic downloads")

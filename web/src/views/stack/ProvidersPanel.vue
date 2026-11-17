@@ -1,16 +1,18 @@
 <script setup lang="ts">
-import { computed, h, ref } from 'vue'
+import { computed, h, onScopeDispose, ref, watch } from 'vue'
 import {
-  NAlert, NButton, NCard, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NInputNumber,
+  NAlert, NButton, NCard, NDataTable, NDescriptions, NDescriptionsItem, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NInputNumber,
   NPopconfirm, NRadioButton, NRadioGroup, NSelect, NSpace, NSwitch, NTag, NText, useMessage, type DataTableColumns,
 } from 'naive-ui'
 import { api, fieldState, hasErrorsUnder, MASKED, splitProblem, type FormErrors, type Schemas } from '../../api/client'
 import SecretInput from '../../components/SecretInput.vue'
+import CodeEditor from '../../components/CodeEditor.vue'
 import { usePolling } from '../../composables/usePolling'
 import { formatTime } from '../../util/format'
 
 type Provider = Schemas['Provider']
-type Status = Schemas['ProviderView']
+type Node = Schemas['ProviderNodeSummary']
+type Details = Schemas['ProviderNodeDetails']
 const props = defineProps<{
   stack: Schemas['Stack']; errors: FormErrors; dirty: boolean; savedVersion: number; reveal: () => Promise<void>
 }>()
@@ -20,6 +22,12 @@ const draft = computed(() => editing.value?.draft as Provider)
 const selectedGroups = ref<string[]>([])
 const updating = ref<number | null>(null)
 const nodesFor = ref<number | null>(null)
+const selectedNode = ref<Node | null>(null)
+const nodeDetails = ref<Details | null>(null)
+const detailLoading = ref(false)
+const detailError = ref('')
+let detailRequest: AbortController | null = null
+let detailVersion = 0
 const sources = computed(() => props.stack.mihomo.providers ?? [])
 const status = usePolling(() => [props.stack.id, props.savedVersion], async (signal) => {
   if (!props.stack.id) return []
@@ -29,6 +37,57 @@ const status = usePolling(() => [props.stack.id, props.savedVersion], async (sig
 }, 15_000)
 const states = computed(() => new Map((status.data.value ?? []).map((view) => [view.id, view])))
 const shown = computed(() => status.data.value?.find((view) => view.id === nodesFor.value))
+const { data: providerNodes, loading: nodesLoading, error: nodesError } = usePolling(() => [props.stack.id, nodesFor.value, props.savedVersion], async (signal) => {
+  if (!props.stack.id || nodesFor.value === null) return []
+  const { data, error } = await api.GET('/api/stacks/{id}/providers/{provider_id}/nodes', {
+    params: { path: { id: props.stack.id, provider_id: nodesFor.value } }, signal,
+  })
+  if (error) throw new Error(splitProblem(error).global.join('；') || '读取节点失败')
+  return data ?? []
+}, 15_000)
+
+// Abort late detail responses and discard disclosed credentials when changing or closing the selection.
+function closeNodeDetails() {
+  detailVersion++
+  detailRequest?.abort()
+  detailRequest = null
+  selectedNode.value = null
+  nodeDetails.value = null
+  detailError.value = ''
+  detailLoading.value = false
+}
+watch(() => [props.stack.id, nodesFor.value], closeNodeDetails)
+onScopeDispose(closeNodeDetails)
+
+// Fetch a single node on demand; explicit disclosure is audited by the backend.
+async function showNode(node: Node, reveal = false) {
+  if (!props.stack.id || nodesFor.value === null) return
+  const version = ++detailVersion
+  detailRequest?.abort()
+  const controller = new AbortController()
+  detailRequest = controller
+  selectedNode.value = node
+  nodeDetails.value = null
+  detailLoading.value = true
+  detailError.value = ''
+  try {
+    const { data, error } = await api.POST('/api/stacks/{id}/providers/{provider_id}/nodes/detail', {
+      params: { path: { id: props.stack.id, provider_id: nodesFor.value } },
+      body: { name: node.key, reveal }, signal: controller.signal,
+    })
+    if (version !== detailVersion) return
+    if (error) detailError.value = splitProblem(error).global.join('；') || '读取节点详情失败，请刷新列表后重试'
+    else {
+      nodeDetails.value = data ?? null
+      if (data) selectedNode.value = data.node
+    }
+  } catch {
+    if (version === detailVersion && !controller.signal.aborted) detailError.value = '读取节点详情失败'
+  } finally {
+    if (version === detailVersion) { detailLoading.value = false; detailRequest = null }
+  }
+}
+
 
 // Open a local draft; changes join the stack's existing save/apply workflow.
 function open(index: number) {
@@ -118,7 +177,7 @@ const columns = computed<DataTableColumns<Provider & { _index: number }>>(() => 
       const view = states.value.get(row.id ?? 0)
       return h(NSpace, { size: 4 }, () => [
         h(NButton, { size: 'small', disabled: props.dirty || !view?.running || !view.applied || updating.value !== null, loading: updating.value === row.id || view?.updating, onClick: () => update(row) }, () => '立即更新'),
-        h(NButton, { size: 'small', disabled: !view?.applied, onClick: () => { nodesFor.value = row.id! } }, () => '节点'),
+        h(NButton, { size: 'small', disabled: !view?.applied || !view.running, onClick: () => { nodesFor.value = row.id! } }, () => '节点'),
         h(NButton, { size: 'small', onClick: () => open(row._index) }, () => '编辑'),
         h(NPopconfirm, { onPositiveClick: () => remove(row._index) }, {
           trigger: () => h(NButton, { size: 'small', type: 'error', quaternary: true }, () => '删除'),
@@ -131,7 +190,13 @@ const columns = computed<DataTableColumns<Provider & { _index: number }>>(() => 
 const rows = computed(() => sources.value.map((source, index) => ({ ...source, _index: index })))
 const conflict = computed(() => editing.value && sources.value.some((source, index) => index !== editing.value!.index && source.name === editing.value!.draft.name))
 const f = (field: string, hint?: string) => fieldState(props.errors, `mihomo.providers[${editing.value?.index ?? 0}].${field}`, hint)
-const nodeColumns: DataTableColumns<Status['nodes'][number]> = [{ title: '节点名称', key: 'name' }, { title: '协议', key: 'type' }]
+const nodeColumns: DataTableColumns<Node> = [
+  { title: '节点名称', key: 'name' },
+  { title: '协议', key: 'type', width: 110 },
+  { title: '服务器', key: 'server', render: (row) => row.server || '—' },
+  { title: '端口', key: 'port', width: 80, render: (row) => row.port || '—' },
+  { title: '操作', key: 'actions', width: 80, render: (row) => h(NButton, { size: 'small', onClick: () => showNode(row) }, () => '详情') },
+]
 </script>
 
 <template>
@@ -163,10 +228,26 @@ const nodeColumns: DataTableColumns<Status['nodes'][number]> = [{ title: '节点
       <template #footer><NSpace align="center"><NText v-if="conflict" type="error">来源名称重复</NText><NButton @click="editing = null">取消</NButton><NButton type="primary" :disabled="!draft.name || !draft.url || !!conflict" @click="confirm">暂存修改</NButton></NSpace></template>
     </NDrawerContent>
   </NDrawer>
-  <NDrawer :show="nodesFor !== null" :width="640" @update:show="(value) => !value && (nodesFor = null)">
+  <NDrawer :show="nodesFor !== null" width="min(900px, 100vw)" @update:show="(value) => !value && (nodesFor = null)">
     <NDrawerContent :title="`${shown?.name ?? ''} · 当前节点`" closable>
-      <NText depth="3">显示已应用筛选条件后的运行节点，共 {{ shown?.node_count ?? 0 }} 个。</NText>
-      <NDataTable :columns="nodeColumns" :data="shown?.nodes ?? []" :pagination="{ pageSize: 20 }" size="small" style="margin-top: 12px" />
+      <NText depth="3">显示已应用筛选条件后的运行节点，共 {{ providerNodes?.length ?? 0 }} 个。</NText>
+      <NAlert v-if="nodesError" type="error" :bordered="false" style="margin-top: 12px">{{ nodesError }}</NAlert>
+      <NDataTable :columns="nodeColumns" :data="providerNodes ?? []" :loading="nodesLoading" :pagination="{ pageSize: 20 }" :scroll-x="800" size="small" style="margin-top: 12px" />
+    </NDrawerContent>
+  </NDrawer>
+  <NDrawer :show="selectedNode !== null" width="min(740px, 100vw)" @update:show="(value) => !value && closeNodeDetails()">
+    <NDrawerContent :title="selectedNode?.name ?? '节点详情'" closable>
+      <NDescriptions v-if="selectedNode" label-placement="left" :column="1" bordered size="small">
+        <NDescriptionsItem label="协议">{{ selectedNode.type }}</NDescriptionsItem>
+        <NDescriptionsItem label="服务器">{{ selectedNode.server || '—' }}</NDescriptionsItem>
+        <NDescriptionsItem label="端口">{{ selectedNode.port || '—' }}</NDescriptionsItem>
+      </NDescriptions>
+      <NAlert v-if="detailError" type="error" :bordered="false" style="margin-top: 16px">{{ detailError }}</NAlert>
+      <NSpace justify="space-between" align="center" style="margin: 16px 0 12px">
+        <NText depth="3">{{ detailLoading ? '正在读取节点配置…' : nodeDetails?.masked ? '凭据已遮蔽' : nodeDetails ? '当前显示完整配置' : '' }}</NText>
+        <NButton v-if="nodeDetails && selectedNode" size="small" :disabled="detailLoading" @click="showNode(selectedNode, nodeDetails.masked)">{{ nodeDetails.masked ? '显示完整配置' : '隐藏凭据' }}</NButton>
+      </NSpace>
+      <CodeEditor v-if="nodeDetails" :value="nodeDetails.config" language="yaml" readonly min-height="300px" />
     </NDrawerContent>
   </NDrawer>
 </template>

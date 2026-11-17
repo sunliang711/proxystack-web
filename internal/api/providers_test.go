@@ -4,13 +4,20 @@ import (
 	"context"
 	"fmt"
 	"gopkg.in/yaml.v3"
+	"net"
 	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"proxystack-web/internal/app"
 	"proxystack-web/internal/configdoc"
+	"proxystack-web/internal/units"
 )
 
 // providerFilterChecker models the external core boundary without requiring a binary for API tests.
@@ -30,6 +37,54 @@ func (providerFilterChecker) Check(_ context.Context, _, _ string, content []byt
 		return fmt.Errorf("invalid native expression")
 	}
 	return nil
+}
+
+// TestProviderNodeDetailAPI verifies masking, explicit audited disclosure and request authorization.
+func TestProviderNodeDetailAPI(t *testing.T) {
+	h := newAdminHarness(t)
+	ctx := context.Background()
+	_, err := h.svc.CreateUser(ctx, app.Actor{Name: "admin"}, configdoc.User{Name: "alice", Enabled: true})
+	require.NoError(t, err)
+	stack, err := h.svc.CreateStack(ctx, app.Actor{Name: "admin"}, configdoc.NewStackOptions{Template: "pair", Name: "nodes"})
+	require.NoError(t, err)
+	stack.Mihomo.Providers = []configdoc.Provider{{Name: "airport", URL: "https://example.com/sub", FetchMode: "direct", Interval: 3600}}
+	stack, err = h.svc.UpdateStack(ctx, app.Actor{Name: "admin"}, stack.ID, *stack)
+	require.NoError(t, err)
+	source := stack.Mihomo.Providers[0]
+	controller := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprintf(w, `{"providers":{"%s":{"proxies":[{"name":"%s | node","type":"Trojan"}]}}}`, source.RuntimeName(), source.RuntimeName())
+	}))
+	defer controller.Close()
+	_, port, err := net.SplitHostPort(strings.TrimPrefix(controller.URL, "http://"))
+	require.NoError(t, err)
+	controllerPort, err := strconv.Atoi(port)
+	require.NoError(t, err)
+	config := map[string]any{"external-controller": fmt.Sprintf("127.0.0.1:%d", controllerPort), "proxy-providers": map[string]any{source.RuntimeName(): map[string]any{"path": source.CachePath()}}}
+	content, err := yaml.Marshal(config)
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(filepath.Dir(h.svc.Layout.GeneratedMihomo(stack.Name)), 0o750))
+	require.NoError(t, os.WriteFile(h.svc.Layout.GeneratedMihomo(stack.Name), content, 0o600))
+	cache := filepath.Join(h.svc.Layout.MihomoWorkDir(stack.Name), source.CachePath())
+	require.NoError(t, os.MkdirAll(filepath.Dir(cache), 0o750))
+	require.NoError(t, os.WriteFile(cache, []byte("proxies:\n  - {name: node, type: trojan, server: node.example.com, port: 443, password: private-node-password, tls: true}\n"), 0o600))
+	require.NoError(t, h.svc.Units.Start(ctx, units.Name(units.Mihomo, stack.Name)))
+	path := fmt.Sprintf("/api/stacks/%d/providers/%d/nodes/detail", stack.ID, source.ID)
+	masked := h.mustDo(http.MethodPost, path, map[string]any{"name": "node", "reveal": false}, http.StatusOK)
+	require.True(t, masked["masked"].(bool))
+	require.NotContains(t, masked["config"], "private-node-password")
+	response, plain := h.do(http.MethodPost, path, map[string]any{"name": "node", "reveal": true})
+	require.Equal(t, http.StatusOK, response.StatusCode)
+	require.Equal(t, "no-store", response.Header.Get("Cache-Control"))
+	require.Contains(t, plain["config"], "private-node-password")
+	audits, err := h.svc.ListAudit(ctx, app.ActionConfigSecretView, "admin", 10, 0)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), audits.Total)
+	h.csrf = ""
+	response, _ = h.do(http.MethodPost, path, map[string]any{"name": "node", "reveal": true})
+	require.Equal(t, http.StatusForbidden, response.StatusCode)
+	h.client = newClient(t)
+	response, _ = h.do(http.MethodPost, path, map[string]any{"name": "node", "reveal": false})
+	require.Equal(t, http.StatusUnauthorized, response.StatusCode)
 }
 
 // TestProviderAPI verifies authenticated CRUD, URL masking and update access controls.

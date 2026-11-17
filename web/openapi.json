@@ -3463,6 +3463,72 @@
         ],
         "type": "object"
       },
+      "ProviderNodeDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "type": "string"
+          },
+          "masked": {
+            "type": "boolean"
+          },
+          "node": {
+            "$ref": "#/components/schemas/ProviderNodeSummary"
+          }
+        },
+        "required": [
+          "node",
+          "config",
+          "masked"
+        ],
+        "type": "object"
+      },
+      "ProviderNodeDetailsInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "reveal": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "reveal"
+        ],
+        "type": "object"
+      },
+      "ProviderNodeSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "port": {
+            "type": "string"
+          },
+          "server": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "type",
+          "server",
+          "port"
+        ],
+        "type": "object"
+      },
       "ProviderView": {
         "additionalProperties": false,
         "properties": {
@@ -10602,6 +10668,145 @@
           }
         ],
         "summary": "上游订阅的运行状态和节点",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/stacks/{id}/providers/{provider_id}/nodes": {
+      "get": {
+        "operationId": "listProviderNodes",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderNodeSummary"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "上游订阅节点的地址和端口",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/stacks/{id}/providers/{provider_id}/nodes/detail": {
+      "post": {
+        "operationId": "getProviderNodeDetails",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderNodeDetailsInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderNodeDetails"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "查看上游订阅节点配置，查看凭据记入审计",
         "tags": [
           "ops"
         ]
