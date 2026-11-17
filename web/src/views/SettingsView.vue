@@ -311,6 +311,9 @@ async function save() {
             <NFormItem label="对外地址" v-bind="f('basic.external_host', '订阅节点默认使用的域名或 IP')">
               <NInput v-model:value="form.basic.external_host" placeholder="proxy.example.com" />
             </NFormItem>
+            <NFormItem label="内网节点地址" v-bind="f('basic.internal_host', '为授权用户额外生成内网节点时使用的域名或 IP')">
+              <NInput v-model:value="form.basic.internal_host" placeholder="10.2.1.115" />
+            </NFormItem>
             <NFormItem label="面板地址" v-bind="f('basic.panel_url', '经 nginx 访问面板的地址，用于通知邮件中的链接')">
               <NInput v-model:value="form.basic.panel_url" placeholder="https://panel.example.com" />
             </NFormItem>

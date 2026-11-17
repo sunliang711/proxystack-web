@@ -44,6 +44,7 @@ const manualNodes = ref(0)
 /** 系统设置中的每日停服时段，「跟随全局」时显示给管理员参考。 */
 const globalWindows = ref<string[]>([])
 const globalBlocked = ref<string[]>([])
+const internalHost = ref('')
 const pausing = ref(false)
 const errors = ref<FormErrors>(emptyErrors())
 const saving = ref(false)
@@ -151,6 +152,7 @@ async function load() {
   stacks.value = stackResult.data?.stacks ?? []
   globalWindows.value = settingsResult.data?.traffic.pause_windows ?? []
   globalBlocked.value = settingsResult.data?.traffic.blocked_domains ?? []
+  internalHost.value = settingsResult.data?.basic.internal_host ?? ''
   manualNodes.value = (nodeResult.data ?? []).filter((node) => node.user === data.user.name).length
   markClean()
   void loadUsage()
@@ -502,6 +504,15 @@ async function remove() {
               </NFormItem>
               <NFormItem label="展示名模板" v-bind="f('display_template', '适用于 default 档案，优先级高于入站模板；入站中的用户单独配置仍可覆盖此模板')">
                 <TemplateInput v-model:value="user.display_template" />
+              </NFormItem>
+              <NFormItem label="内网节点" v-bind="f('internal_nodes', '额外生成使用系统内网节点地址的本机 Stack 节点')">
+                <div class="field-stack">
+                  <NSwitch v-model:value="user.internal_nodes" :disabled="!internalHost" />
+                  <NText depth="3">
+                    <template v-if="internalHost">节点地址：{{ internalHost }}，名称追加 [LAN]</template>
+                    <template v-else>请先在<RouterLink :to="{ name: 'settings', query: { section: 'basic' } }">系统设置</RouterLink>中配置内网节点地址</template>
+                  </NText>
+                </div>
               </NFormItem>
             </div>
           </section>

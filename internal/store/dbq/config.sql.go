@@ -860,7 +860,7 @@ func (q *Queries) ListUserProfiles(ctx context.Context) ([]UserProfile, error) {
 
 const listUsers = `-- name: ListUsers :many
 
-SELECT id, position, name, enabled, uuid, ss_password, remark, display_template, tag, sub_token, quota_bytes, reset_mode, reset_day, expire_at, note, daily_limit_bytes, daily_limit_action, pause_window_mode, pause_windows, blocked_domains FROM users ORDER BY position, id
+SELECT id, position, name, enabled, uuid, ss_password, remark, display_template, tag, sub_token, quota_bytes, reset_mode, reset_day, expire_at, note, daily_limit_bytes, daily_limit_action, pause_window_mode, pause_windows, blocked_domains, internal_nodes FROM users ORDER BY position, id
 `
 
 // Config tables are saved as a whole: child rows are deleted, users and stacks are upserted,
@@ -895,6 +895,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.PauseWindowMode,
 			&i.PauseWindows,
 			&i.BlockedDomains,
+			&i.InternalNodes,
 		); err != nil {
 			return nil, err
 		}
@@ -1016,13 +1017,13 @@ func (q *Queries) UpsertStack(ctx context.Context, arg UpsertStackParams) (int64
 
 const upsertUser = `-- name: UpsertUser :one
 INSERT INTO users (id, position, name, enabled, uuid, ss_password, remark, display_template, tag,
-                   sub_token, quota_bytes, daily_limit_bytes, daily_limit_action, reset_mode, reset_day, expire_at, note,
+                   sub_token, internal_nodes, quota_bytes, daily_limit_bytes, daily_limit_action, reset_mode, reset_day, expire_at, note,
                    pause_window_mode, pause_windows, blocked_domains)
-VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (id) DO UPDATE SET
     position = excluded.position, name = excluded.name, enabled = excluded.enabled, uuid = excluded.uuid,
     ss_password = excluded.ss_password, remark = excluded.remark, display_template = excluded.display_template,
-    tag = excluded.tag, sub_token = excluded.sub_token, quota_bytes = excluded.quota_bytes,
+    tag = excluded.tag, sub_token = excluded.sub_token, internal_nodes = excluded.internal_nodes, quota_bytes = excluded.quota_bytes,
     daily_limit_bytes = excluded.daily_limit_bytes, daily_limit_action = excluded.daily_limit_action,
     reset_mode = excluded.reset_mode, reset_day = excluded.reset_day, expire_at = excluded.expire_at,
     note = excluded.note, pause_window_mode = excluded.pause_window_mode, pause_windows = excluded.pause_windows,
@@ -1041,6 +1042,7 @@ type UpsertUserParams struct {
 	DisplayTemplate  string      `json:"display_template"`
 	Tag              string      `json:"tag"`
 	SubToken         string      `json:"sub_token"`
+	InternalNodes    int64       `json:"internal_nodes"`
 	QuotaBytes       int64       `json:"quota_bytes"`
 	DailyLimitBytes  int64       `json:"daily_limit_bytes"`
 	DailyLimitAction string      `json:"daily_limit_action"`
@@ -1065,6 +1067,7 @@ func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (int64, 
 		arg.DisplayTemplate,
 		arg.Tag,
 		arg.SubToken,
+		arg.InternalNodes,
 		arg.QuotaBytes,
 		arg.DailyLimitBytes,
 		arg.DailyLimitAction,

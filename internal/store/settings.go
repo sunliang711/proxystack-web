@@ -21,6 +21,7 @@ type PanelSettings struct {
 // BasicSettings 是基本设置。
 type BasicSettings struct {
 	ExternalHost string `json:"external_host"`
+	InternalHost string `json:"internal_host,omitempty"`
 	Timezone     string `json:"timezone"`
 	PanelURL     string `json:"panel_url,omitempty"`
 }

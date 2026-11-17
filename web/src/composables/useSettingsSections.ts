@@ -59,7 +59,7 @@ export interface SectionEffect {
 
 /** 各分组保存后的生效方式，显示在分组标题右侧。 */
 export const sectionEffects: Record<SettingsSectionName, SectionEffect> = {
-  basic: { label: '部分随订阅包生效', type: 'info', tip: '对外地址写入订阅节点，重新发布订阅包后生效；面板地址和时区保存后立即生效。' },
+  basic: { label: '部分随订阅包生效', type: 'info', tip: '对外地址和内网节点地址写入订阅节点，重新发布订阅包后生效；面板地址和时区保存后立即生效。' },
   port_pools: { label: '立即生效', type: 'success', tip: '只影响之后自动分配的端口，已有 stack 的端口保持不变。' },
   defaults: { label: '需要应用', type: 'warning', tip: '作为各 stack 的默认值写入生成的 xray / mihomo 配置，保存后进入「待应用变更」，应用后生效。' },
   security: { label: '影响校验', type: 'info', tip: '保存后，stack 的保存和应用按新规则校验；不符合规则的 stack 在「待应用变更」中报错。' },
@@ -79,7 +79,7 @@ export const sectionEffects: Record<SettingsSectionName, SectionEffect> = {
  * 动态生成的标签（依赖源、端口池）在这里展开列出。
  */
 export const sectionSearch: Record<SettingsSectionName, { title: string; fields: string[]; keywords: string[] }> = {
-  basic: { title: '基本', fields: ['对外地址', '面板地址', '时区'], keywords: ['external host', 'panel url', 'timezone'] },
+  basic: { title: '基本', fields: ['对外地址', '内网节点地址', '面板地址', '时区'], keywords: ['external host', 'internal host', 'lan', 'panel url', 'timezone'] },
   security: { title: '安全', fields: ['公开入站必须设密码'], keywords: ['公开入站必须认证', '无认证入站', '认证'] },
   subscription: {
     title: '订阅',

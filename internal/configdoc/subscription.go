@@ -191,6 +191,11 @@ func validateSubscriptionNodes(issues *Issues, doc *Document, set domain.StackSe
 		issues.add("", "subscription nodes: %s", err.Error())
 		return
 	}
+	input.Nodes = AppendInternalNodes(doc, input.Nodes)
+	if err := input.Validate(); err != nil {
+		issues.add("", "internal subscription nodes: %s", err.Error())
+		return
+	}
 	tags := map[string]string{}
 	names := map[string]string{}
 	for _, node := range input.Nodes {

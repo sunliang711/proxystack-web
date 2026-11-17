@@ -253,6 +253,7 @@ type DownloadProxySettings struct {
 // BasicSettings 是基本设置。
 type BasicSettings struct {
 	ExternalHost string `json:"external_host" yaml:"external_host" doc:"订阅节点默认 server，域名或 IP"`
+	InternalHost string `json:"internal_host" yaml:"internal_host,omitempty" required:"false" doc:"授权用户的内网节点 server，域名或 IP"`
 	Timezone     string `json:"timezone" yaml:"timezone" doc:"流量统计周期边界使用的时区"`
 	PanelURL     string `json:"panel_url" yaml:"panel_url,omitempty" doc:"面板经 nginx 访问的地址，用于通知邮件中的链接"`
 }
@@ -322,6 +323,7 @@ type User struct {
 	DisplayTemplate string `json:"display_template" yaml:"display_template,omitempty"`
 	Tag             string `json:"tag" yaml:"tag,omitempty"`
 	SubToken        string `json:"sub_token" yaml:"sub_token"`
+	InternalNodes   bool   `json:"internal_nodes" yaml:"internal_nodes,omitempty" required:"false" doc:"在订阅中同时生成使用内网地址的本机节点"`
 	QuotaBytes      int64  `json:"quota_bytes" yaml:"quota_bytes" minimum:"0"`
 	// DailyLimitBytes 是每日用量阈值（上下行合计，按设置时区的自然日统计），0 表示不限。
 	DailyLimitBytes  int64  `json:"daily_limit_bytes" yaml:"daily_limit_bytes,omitempty" minimum:"0" required:"false"`

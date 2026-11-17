@@ -93,7 +93,8 @@ func LoadDocument(ctx context.Context, q *dbq.Queries) (*configdoc.Document, err
 		doc.Users = append(doc.Users, configdoc.User{
 			ID: row.ID, Name: row.Name, Enabled: row.Enabled != 0, UUID: row.Uuid, SSPassword: row.SsPassword,
 			Remark: row.Remark, DisplayTemplate: row.DisplayTemplate, Tag: row.Tag, SubToken: row.SubToken,
-			QuotaBytes: row.QuotaBytes, DailyLimitBytes: row.DailyLimitBytes, DailyLimitAction: row.DailyLimitAction,
+			InternalNodes: row.InternalNodes != 0,
+			QuotaBytes:    row.QuotaBytes, DailyLimitBytes: row.DailyLimitBytes, DailyLimitAction: row.DailyLimitAction,
 			ResetMode: row.ResetMode, ResetDay: int(row.ResetDay),
 			ExpireAt: row.ExpireAt, Note: row.Note, Profiles: []configdoc.Profile{},
 			PauseWindowMode: row.PauseWindowMode, PauseWindows: configdoc.SplitPauseWindows(row.PauseWindows),
@@ -423,7 +424,8 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 		id, err := q.UpsertUser(ctx, dbq.UpsertUserParams{
 			NULLIF: user.ID, Position: int64(index), Name: user.Name, Enabled: boolInt(user.Enabled),
 			Uuid: user.UUID, SsPassword: user.SSPassword, Remark: user.Remark, DisplayTemplate: user.DisplayTemplate,
-			Tag: user.Tag, SubToken: user.SubToken, QuotaBytes: user.QuotaBytes, DailyLimitBytes: user.DailyLimitBytes,
+			Tag: user.Tag, SubToken: user.SubToken, InternalNodes: boolInt(user.InternalNodes),
+			QuotaBytes: user.QuotaBytes, DailyLimitBytes: user.DailyLimitBytes,
 			DailyLimitAction: user.DailyLimitAction, ResetMode: user.ResetMode,
 			ResetDay: int64(user.ResetDay), ExpireAt: user.ExpireAt, Note: user.Note,
 			PauseWindowMode: user.PauseWindowMode, PauseWindows: configdoc.JoinPauseWindows(user.PauseWindows),

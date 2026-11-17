@@ -8,7 +8,7 @@ export type UserTab = 'basic' | 'subscription' | 'credentials' | 'access' | 'usa
  */
 export const userTabs: { name: UserTab; label: string; fields: (keyof Schemas['User'])[] }[] = [
   { name: 'basic', label: '基本', fields: ['name', 'remark', 'note', 'quota_bytes', 'reset_mode', 'reset_day', 'daily_limit_bytes', 'daily_limit_action', 'expire_at', 'pause_window_mode', 'pause_windows', 'blocked_domains'] },
-  { name: 'subscription', label: '订阅', fields: ['sub_token', 'display_template'] },
+  { name: 'subscription', label: '订阅', fields: ['sub_token', 'display_template', 'internal_nodes'] },
   { name: 'credentials', label: '凭据', fields: ['uuid', 'ss_password', 'tag', 'profiles'] },
   { name: 'access', label: '接入', fields: [] },
   { name: 'usage', label: '用量', fields: [] },

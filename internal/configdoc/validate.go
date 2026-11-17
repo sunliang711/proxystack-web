@@ -190,6 +190,9 @@ func validateSettings(issues *Issues, doc *Document, settings Settings) {
 	if host := settings.Basic.ExternalHost; host != "" && !validHost(host) {
 		issues.add("settings.basic.external_host", "must be a domain name or IP address")
 	}
+	if host := settings.Basic.InternalHost; host != "" && !validHost(host) {
+		issues.add("settings.basic.internal_host", "must be a domain name or IP address")
+	}
 	if settings.Basic.Timezone != "" {
 		if _, err := time.LoadLocation(settings.Basic.Timezone); err != nil {
 			issues.add("settings.basic.timezone", "unknown time zone")
@@ -301,6 +304,9 @@ func validateUsers(issues *Issues, doc *Document) {
 			issues.add(path+".sub_token", "duplicate subscription token")
 		}
 		tokens[user.SubToken] = true
+		if user.InternalNodes && doc.Settings.Basic.InternalHost == "" {
+			issues.add(path+".internal_nodes", "requires settings.basic.internal_host")
+		}
 		if user.QuotaBytes < 0 {
 			issues.add(path+".quota_bytes", "must not be negative")
 		}

@@ -421,6 +421,7 @@ type User struct {
 	PauseWindowMode  string `json:"pause_window_mode"`
 	PauseWindows     string `json:"pause_windows"`
 	BlockedDomains   string `json:"blocked_domains"`
+	InternalNodes    int64  `json:"internal_nodes"`
 }
 
 type UserAutoPause struct {

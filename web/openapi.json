@@ -436,6 +436,10 @@
             "description": "订阅节点默认 server，域名或 IP",
             "type": "string"
           },
+          "internal_host": {
+            "description": "授权用户的内网节点 server，域名或 IP",
+            "type": "string"
+          },
           "panel_url": {
             "description": "面板经 nginx 访问的地址，用于通知邮件中的链接",
             "type": "string"
@@ -5990,6 +5994,10 @@
           "id": {
             "format": "int64",
             "type": "integer"
+          },
+          "internal_nodes": {
+            "description": "在订阅中同时生成使用内网地址的本机节点",
+            "type": "boolean"
           },
           "name": {
             "type": "string"

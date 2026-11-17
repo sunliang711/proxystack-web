@@ -172,23 +172,26 @@ func (s *Service) buildSubscription(ctx context.Context) (*subSnapshot, error) {
 		}
 		snapshot.local = append(snapshot.local, input.Nodes...)
 	}
+	regular := snapshot.local
 	// 直连不依赖本机进程，始终按当前授权生成，撤销授权无需重新应用运行配置。
 	direct, err := configdoc.StackDirectNodes(doc)
 	if err != nil {
 		return nil, err
 	}
-	snapshot.local = append(snapshot.local, direct...)
 	// 手动暂停：用户关闭时不提供订阅（由响应规则处理），逐 stack 暂停时去掉该 stack 的节点。
 	paused := map[string][]string{}
 	for _, user := range doc.Users {
 		paused[user.Name] = user.PausedStacks
 	}
-	snapshot.local = slices.DeleteFunc(snapshot.local, func(node sub.Node) bool {
+	removePaused := func(node sub.Node) bool {
 		stack, _, _ := strings.Cut(node.ID, ":")
 		return slices.Contains(paused[node.User], stack)
-	})
+	}
+	regular = slices.DeleteFunc(regular, removePaused)
+	direct = slices.DeleteFunc(direct, removePaused)
+	snapshot.local = append(append([]sub.Node{}, regular...), direct...)
 
-	nodes := append([]sub.Node{}, snapshot.local...)
+	following := append([]sub.Node{}, direct...)
 	for index, manual := range doc.ManualNodes {
 		node, err := manual.SubNode(index)
 		if err != nil {
@@ -196,8 +199,9 @@ func (s *Service) buildSubscription(ctx context.Context) (*subSnapshot, error) {
 			snapshot.manualSkipped[manual.User] = append(snapshot.manualSkipped[manual.User], fmt.Sprintf("手工节点 %s 无法生成：%v", manual.Remark, err))
 			continue
 		}
-		nodes = append(nodes, node)
+		following = append(following, node)
 	}
+	nodes := appendInternalSubscriptionNodes(doc, regular, following, &snapshot.warnings)
 	nodes = s.mergeRemoteNodes(doc, remoteStates, nodes, &snapshot.warnings)
 	snapshot.data = subscriptionData(doc, nodes, s.Now())
 	if snapshot.view, err = subscription.Merge(snapshot.data, nil); err != nil {
@@ -207,6 +211,32 @@ func (s *Service) buildSubscription(ctx context.Context) (*subSnapshot, error) {
 		slog.Warn("subscription build", "warning", warning)
 	}
 	return snapshot, nil
+}
+
+// appendInternalSubscriptionNodes adds LAN copies without letting a stale applied topology break the whole subscription.
+func appendInternalSubscriptionNodes(doc *configdoc.Document, regular, following []sub.Node, warnings *[]string) []sub.Node {
+	names := map[string]bool{}
+	ids := map[string]bool{}
+	for _, node := range append(append([]sub.Node{}, regular...), following...) {
+		names[node.User+"\x00"+node.Remark] = true
+		ids[node.ID] = true
+	}
+	out := make([]sub.Node, 0, len(regular)*2+len(following))
+	for _, node := range regular {
+		out = append(out, node)
+		internal, ok := configdoc.InternalNode(doc, node)
+		if !ok {
+			continue
+		}
+		if names[internal.User+"\x00"+internal.Remark] || ids[internal.ID] {
+			*warnings = append(*warnings, fmt.Sprintf("internal node %s: skipped because its ID or proxy name is already used", internal.ID))
+			continue
+		}
+		names[internal.User+"\x00"+internal.Remark] = true
+		ids[internal.ID] = true
+		out = append(out, internal)
+	}
+	return append(out, following...)
 }
 
 // mergeRemoteNodes 合并远端节点源同步来的节点：只保留本机存在的用户的节点，

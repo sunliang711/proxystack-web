@@ -2115,6 +2115,8 @@ export interface components {
         BasicSettings: {
             /** @description 订阅节点默认 server，域名或 IP */
             external_host: string;
+            /** @description 授权用户的内网节点 server，域名或 IP */
+            internal_host?: string;
             /** @description 面板经 nginx 访问的地址，用于通知邮件中的链接 */
             panel_url: string;
             /** @description 流量统计周期边界使用的时区 */
@@ -3689,6 +3691,8 @@ export interface components {
             expire_at: string;
             /** Format: int64 */
             id?: number;
+            /** @description 在订阅中同时生成使用内网地址的本机节点 */
+            internal_nodes?: boolean;
             name: string;
             note: string;
             /**
