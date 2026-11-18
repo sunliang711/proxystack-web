@@ -49,4 +49,16 @@ func TestUpstreamUserReferenceRoundTrip(t *testing.T) {
 	require.Equal(t, "travel", loaded.Stacks[0].Mihomo.Upstreams[0].Profile)
 	require.Equal(t, "xray-socks5", loaded.Stacks[0].Mihomo.Upstreams[1].Type)
 	require.Empty(t, configdoc.Validate(loaded))
+
+	// Default profiles must also be canonical when SaveDocument is called without Normalize.
+	loaded.Stacks[1].Xray.Inbounds[1].Users[0].Profile = ""
+	loaded.Stacks[0].Mihomo.Upstreams[0].Profile = configdoc.DefaultProfile
+	require.NoError(t, st.InTx(ctx, func(q *dbq.Queries) error { return store.SaveDocument(ctx, q, loaded) }))
+	require.Empty(t, loaded.Stacks[0].Mihomo.Upstreams[0].Profile)
+	want := loaded.Stacks[0].Mihomo.Upstreams[0]
+	require.NoError(t, st.InTx(ctx, func(q *dbq.Queries) error {
+		loaded, err = store.LoadDocument(ctx, q)
+		return err
+	}))
+	require.Equal(t, want, loaded.Stacks[0].Mihomo.Upstreams[0])
 }

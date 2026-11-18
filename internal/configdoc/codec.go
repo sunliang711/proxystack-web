@@ -241,6 +241,9 @@ func (s *Stack) Normalize() {
 		s.Mihomo.Upstreams = []Upstream{}
 	}
 	for index := range s.Mihomo.Upstreams {
+		if s.Mihomo.Upstreams[index].IsInboundReference() && s.Mihomo.Upstreams[index].Profile == DefaultProfile {
+			s.Mihomo.Upstreams[index].Profile = ""
+		}
 		if s.Mihomo.Upstreams[index].Enabled == nil {
 			enabled := true
 			s.Mihomo.Upstreams[index].Enabled = &enabled

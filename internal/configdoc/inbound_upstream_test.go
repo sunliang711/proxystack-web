@@ -1,6 +1,7 @@
 package configdoc_test
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -11,6 +12,53 @@ import (
 	"proxystack-web/internal/generator/mihomo"
 	"proxystack-web/internal/graph"
 )
+
+// TestRemoveInboundUpstreamUserRefs clears both identity fields before choosing any surviving account.
+func TestRemoveInboundUpstreamUserRefs(t *testing.T) {
+	for _, protocol := range []string{"vmess", "shadowsocks"} {
+		t.Run(protocol, func(t *testing.T) {
+			doc := loadExampleDoc(t)
+			other := doc.Users[0]
+			other.Name, other.UUID, other.SubToken = "bob", configdoc.RandomUUID(), "bob-token"
+			other.Profiles = []configdoc.Profile{{Name: "mobile", UUID: configdoc.RandomUUID(), SSPassword: "bob-mobile-password"}}
+			doc.Users = append(doc.Users, other)
+			inbound := &doc.Stacks[1].Xray.Inbounds[1]
+			inbound.Sub = false
+			inbound.Users = []configdoc.UserRef{{User: "bob", Profile: "mobile"}}
+			if protocol == "vmess" {
+				inbound.Users = append(inbound.Users, configdoc.UserRef{User: "alice"})
+			} else {
+				inbound.Protocol, inbound.Network = "shadowsocks", ""
+				inbound.Method, inbound.Password = "aes-128-gcm", "server-password"
+			}
+			upstream := &doc.Stacks[0].Mihomo.Upstreams[0]
+			upstream.Type, upstream.Inbound, upstream.User, upstream.Profile = "xray-inbound", inbound.Name, "bob", "mobile"
+			unrelated := doc.Stacks[0].Mihomo.Upstreams[1]
+			require.Empty(t, configdoc.Validate(doc))
+			configdoc.RemoveUserRefs(doc, "bob")
+			doc.Users = slices.DeleteFunc(doc.Users, func(user configdoc.User) bool { return user.Name == "bob" })
+			require.Empty(t, upstream.User)
+			require.Empty(t, upstream.Profile)
+			require.Equal(t, unrelated, doc.Stacks[0].Mihomo.Upstreams[1])
+			set := compileResolved(t, doc)
+			rendered, err := mihomo.DumpsConfig(set, "auto")
+			require.NoError(t, err)
+			require.NotContains(t, rendered, "bob-mobile-password")
+		})
+	}
+}
+
+// TestInboundUpstreamDefaultProfileNormalization gives snapshots and persisted documents the same spelling.
+func TestInboundUpstreamDefaultProfileNormalization(t *testing.T) {
+	doc := loadExampleDoc(t)
+	upstream := &doc.Stacks[0].Mihomo.Upstreams[0]
+	upstream.Type, upstream.Inbound, upstream.User, upstream.Profile = "xray-inbound", "vmess", "alice", "default"
+	doc.Normalize()
+	require.Empty(t, upstream.Profile)
+	require.Empty(t, configdoc.Validate(doc))
+	doc.Normalize()
+	require.Empty(t, upstream.Profile)
+}
 
 // TestInboundUpstreamProtocols verifies local addressing, credentials, transports and legacy coexistence.
 func TestInboundUpstreamProtocols(t *testing.T) {

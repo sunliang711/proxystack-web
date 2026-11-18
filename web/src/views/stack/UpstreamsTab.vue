@@ -91,7 +91,10 @@ const columns = computed<DataTableColumns<Upstream & { _index: number }>>(() => 
     title: '目标',
     key: 'target',
     render: (row) => {
-      if (isInboundReference(row.type)) return h(EntityLink, { kind: 'stack', name: row.stack, label: `${row.stack}.${row.inbound}`, tab: 'inbounds', target: '_blank', rel: 'noopener' })
+      if (isInboundReference(row.type)) return h(NSpace, { vertical: true, size: 2 }, () => [
+        h(EntityLink, { kind: 'stack', name: row.stack, label: `${row.stack}.${row.inbound}`, tab: 'inbounds', target: '_blank', rel: 'noopener' }),
+        row.user ? h(NText, { depth: 3 }, () => `${row.user} / ${row.profile || 'default'}`) : null,
+      ])
       const config = (row.config ?? {}) as RawConfig
       return `${config.type ?? '?'} ${config.server ?? ''}:${config.port ?? ''}`
     },
@@ -137,7 +140,7 @@ function remove(index: number) {
   if (dropped) message.warning(`已同时移除该上游的 ${dropped} 条直连覆盖，保存后生效`)
 }
 
-/** Open a draft and normalize legacy references for the generic selector. */
+/** Open a draft without changing the stored reference type. */
 function open(index: number) {
   const source: Upstream =
     index < props.stack.mihomo.upstreams.length
@@ -145,7 +148,6 @@ function open(index: number) {
       : { name: '', enabled: true, type: 'raw', stack: '', inbound: '', config: { type: 'vmess', server: '', port: 443, uuid: '', network: 'ws', tls: true } }
   const draft: Upstream = JSON.parse(JSON.stringify(source))
   draft.enabled = draft.enabled !== false
-  if (draft.type === 'xray-socks5') draft.type = 'xray-inbound'
   editing.value = { index, draft, config: (draft.config ?? {}) as RawConfig }
   syncReferenceUser()
   yamlText.value = YAML.stringify(editing.value.config)
@@ -331,6 +333,10 @@ const wsPath = nested('ws-opts', 'path')
 const grpcService = nested('grpc-opts', 'grpc-service-name')
 
 const referenceProtocols = ['socks5', 'http', 'vmess', 'shadowsocks']
+const upstreamType = computed({
+  get: () => editing.value?.draft.type === 'raw' ? 'raw' : 'xray-inbound',
+  set: (value: Upstream['type']) => { if (editing.value) editing.value.draft.type = value },
+})
 const cascaderOptions = computed(() =>
   props.summaries
     .filter((s) => s.inbounds.some((i) => referenceProtocols.includes(i.protocol)))
@@ -347,6 +353,10 @@ const refValue = computed({
     const [stack, inbound] = (value ?? '').split('\u0000')
     editing.value.draft.stack = stack ?? ''
     editing.value.draft.inbound = inbound ?? ''
+    // Promote legacy references only when the chosen protocol requires the generic type.
+    if (editing.value.draft.type === 'xray-socks5' && referenceInbound.value && referenceInbound.value.protocol !== 'socks5') {
+      editing.value.draft.type = 'xray-inbound'
+    }
     editing.value.draft.user = ''
     editing.value.draft.profile = ''
     syncReferenceUser()
@@ -356,6 +366,9 @@ const referenceInbound = computed(() => {
   const draft = editing.value?.draft
   return props.summaries.find((s) => s.name === draft?.stack)?.inbounds.find((inbound) => inbound.name === draft?.inbound)
 })
+const referenceUnavailable = computed(() => referenceInbound.value?.protocol === 'vmess' && !referenceInbound.value.users?.length
+  ? '目标 VMess 入站尚未配置用户，请先为目标入站添加用户。'
+  : '')
 const referenceNeedsUser = computed(() => {
   const inbound = referenceInbound.value
   return !!inbound && ['vmess', 'shadowsocks'].includes(inbound.protocol) && !!inbound.users?.length
@@ -376,7 +389,7 @@ const referenceUser = computed({
 const referenceMissing = computed(() => {
   const draft = editing.value?.draft
   if (!draft || !isInboundReference(draft.type)) return false
-  if (!referenceInbound.value || (referenceInbound.value.protocol === 'vmess' && !referenceInbound.value.users?.length)) return true
+  if (!referenceInbound.value || referenceUnavailable.value) return true
   return referenceNeedsUser.value && !referenceUserOptions.value.some((option) => option.value === referenceUser.value)
 })
 
@@ -453,7 +466,7 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
           <NSwitch :value="editing.draft.enabled !== false" @update:value="(v: boolean) => { if (editing) editing.draft.enabled = v }" />
         </NFormItem>
         <NFormItem label="type" v-bind="f('type')">
-          <NRadioGroup v-model:value="editing.draft.type">
+          <NRadioGroup v-model:value="upstreamType">
             <NRadioButton value="raw">外部节点</NRadioButton>
             <NRadioButton value="xray-inbound">引用其他 stack 的入站</NRadioButton>
           </NRadioGroup>
@@ -463,6 +476,7 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
             <NSpace vertical style="width: 100%">
               <NCascader v-model:value="refValue" :options="cascaderOptions" check-strategy="child" filterable />
               <EntityLink v-if="editing.draft.stack" kind="stack" :name="editing.draft.stack" label="查看目标入站 ↗" tab="inbounds" target="_blank" rel="noopener" />
+              <NAlert v-if="referenceUnavailable" type="warning" :bordered="false">{{ referenceUnavailable }}</NAlert>
             </NSpace>
           </NFormItem>
           <NFormItem v-if="referenceNeedsUser" label="用户／档案" required v-bind="f('user', '使用目标入站已配置的用户档案连接')">

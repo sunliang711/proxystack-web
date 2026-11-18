@@ -662,6 +662,10 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 			rawConfig := ""
 			switch upstream.Type {
 			case "xray-socks5", "xray-inbound":
+				// Keep the caller's document consistent with NULL default-profile references.
+				if upstream.Profile == configdoc.DefaultProfile {
+					upstream.Profile = ""
+				}
 				value, ok := inboundIDs[upstream.Stack+"\x00"+upstream.Inbound]
 				if !ok {
 					return fmt.Errorf("upstream %s.%s references a missing inbound: %s.%s", stack.Name, upstream.Name, upstream.Stack, upstream.Inbound)

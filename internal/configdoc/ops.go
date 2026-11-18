@@ -80,6 +80,13 @@ func RemoveProfileRefs(doc *Document, user, profile string) {
 
 // RemoveUserRefs 删除全部入站对 user 的引用。
 func RemoveUserRefs(doc *Document, user string) {
+	// Clear the selected connection identity alongside the target inbound's user references.
+	forEachUpstream(doc, func(upstream *Upstream) {
+		if upstream.IsInboundReference() && upstream.User == user {
+			upstream.User = ""
+			upstream.Profile = ""
+		}
+	})
 	for stackIndex := range doc.Stacks {
 		doc.Stacks[stackIndex].DirectUsers = slices.DeleteFunc(doc.Stacks[stackIndex].DirectUsers, func(name string) bool { return name == user })
 		doc.Stacks[stackIndex].DirectOverrides = slices.DeleteFunc(doc.Stacks[stackIndex].DirectOverrides, func(override DirectOverride) bool {
