@@ -497,6 +497,7 @@ func (s *Service) DeleteStack(ctx context.Context, actor Actor, id int64) error 
 		change.Object, change.Summary = "stack:"+name, "删除 stack "+name
 		doc.Stacks = append(doc.Stacks[:index], doc.Stacks[index+1:]...)
 		configdoc.RemovePausedStack(doc, name)
+		configdoc.RemoveStackOrder(doc, name)
 		return nil
 	})
 	return err

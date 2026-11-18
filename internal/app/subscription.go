@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"crypto/subtle"
 	"encoding/json"
@@ -189,19 +190,19 @@ func (s *Service) buildSubscription(ctx context.Context) (*subSnapshot, error) {
 	}
 	regular = slices.DeleteFunc(regular, removePaused)
 	direct = slices.DeleteFunc(direct, removePaused)
-	snapshot.local = append(append([]sub.Node{}, regular...), direct...)
+	snapshot.local = orderStackNodes(doc.Settings.Subscription.StackOrder, regular, direct)
 
-	following := append([]sub.Node{}, direct...)
-	for index, manual := range doc.ManualNodes {
-		node, err := manual.SubNode(index)
+	manual := make([]sub.Node, 0, len(doc.ManualNodes))
+	for index, item := range doc.ManualNodes {
+		node, err := item.SubNode(index)
 		if err != nil {
-			snapshot.warnings = append(snapshot.warnings, fmt.Sprintf("manual node %s: %v", manual.Remark, err))
-			snapshot.manualSkipped[manual.User] = append(snapshot.manualSkipped[manual.User], fmt.Sprintf("手工节点 %s 无法生成：%v", manual.Remark, err))
+			snapshot.warnings = append(snapshot.warnings, fmt.Sprintf("manual node %s: %v", item.Remark, err))
+			snapshot.manualSkipped[item.User] = append(snapshot.manualSkipped[item.User], fmt.Sprintf("手工节点 %s 无法生成：%v", item.Remark, err))
 			continue
 		}
-		following = append(following, node)
+		manual = append(manual, node)
 	}
-	nodes := appendInternalSubscriptionNodes(doc, regular, following, &snapshot.warnings)
+	nodes := expandAndOrderStackNodes(doc, regular, direct, manual, &snapshot.warnings)
 	nodes = s.mergeRemoteNodes(doc, remoteStates, nodes, &snapshot.warnings)
 	snapshot.data = subscriptionData(doc, nodes, s.Now())
 	if snapshot.view, err = subscription.Merge(snapshot.data, nil); err != nil {
@@ -213,17 +214,20 @@ func (s *Service) buildSubscription(ctx context.Context) (*subSnapshot, error) {
 	return snapshot, nil
 }
 
-// appendInternalSubscriptionNodes adds LAN copies without letting a stale applied topology break the whole subscription.
-func appendInternalSubscriptionNodes(doc *configdoc.Document, regular, following []sub.Node, warnings *[]string) []sub.Node {
+// expandAndOrderStackNodes 为有权限的普通节点补充 [LAN] 副本，再按 Stack 顺序交叉合并普通节点与直连节点，
+// 最后追加手工节点。排序只重排用户已拥有的节点，不引入未授权或已暂停的节点。
+func expandAndOrderStackNodes(doc *configdoc.Document, regular, direct, manual []sub.Node, warnings *[]string) []sub.Node {
 	names := map[string]bool{}
 	ids := map[string]bool{}
-	for _, node := range append(append([]sub.Node{}, regular...), following...) {
-		names[node.User+"\x00"+node.Remark] = true
-		ids[node.ID] = true
+	for _, list := range [][]sub.Node{regular, direct, manual} {
+		for _, node := range list {
+			names[node.User+"\x00"+node.Remark] = true
+			ids[node.ID] = true
+		}
 	}
-	out := make([]sub.Node, 0, len(regular)*2+len(following))
+	regularWithLAN := make([]sub.Node, 0, len(regular)*2)
 	for _, node := range regular {
-		out = append(out, node)
+		regularWithLAN = append(regularWithLAN, node)
 		internal, ok := configdoc.InternalNode(doc, node)
 		if !ok {
 			continue
@@ -234,9 +238,44 @@ func appendInternalSubscriptionNodes(doc *configdoc.Document, regular, following
 		}
 		names[internal.User+"\x00"+internal.Remark] = true
 		ids[internal.ID] = true
-		out = append(out, internal)
+		regularWithLAN = append(regularWithLAN, internal)
 	}
-	return append(out, following...)
+	ordered := orderStackNodes(doc.Settings.Subscription.StackOrder, regularWithLAN, direct)
+	return append(ordered, manual...)
+}
+
+// orderStackNodes 按 stackOrder（未列入的按名称标准升序）交叉排列各 stack 的节点：
+// 同 stack 内保持 regular（含紧跟的 LAN 副本）在前、direct 在后，且各自保持原有入站/上游顺序。
+func orderStackNodes(stackOrder []string, regular, direct []sub.Node) []sub.Node {
+	rank := make(map[string]int, len(stackOrder))
+	for index, name := range stackOrder {
+		if _, exists := rank[name]; !exists {
+			rank[name] = index
+		}
+	}
+	out := make([]sub.Node, 0, len(regular)+len(direct))
+	out = append(out, regular...)
+	out = append(out, direct...)
+	slices.SortStableFunc(out, func(a, b sub.Node) int {
+		sa, _, _ := strings.Cut(a.ID, ":")
+		sb, _, _ := strings.Cut(b.ID, ":")
+		if sa == sb {
+			return 0
+		}
+		ra, okA := rank[sa]
+		rb, okB := rank[sb]
+		switch {
+		case okA && okB:
+			return cmp.Compare(ra, rb)
+		case okA:
+			return -1
+		case okB:
+			return 1
+		default:
+			return cmp.Compare(sa, sb)
+		}
+	})
+	return out
 }
 
 // mergeRemoteNodes 合并远端节点源同步来的节点：只保留本机存在的用户的节点，

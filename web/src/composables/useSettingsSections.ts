@@ -83,8 +83,8 @@ export const sectionSearch: Record<SettingsSectionName, { title: string; fields:
   security: { title: '安全', fields: ['公开入站必须设密码'], keywords: ['公开入站必须认证', '无认证入站', '认证'] },
   subscription: {
     title: '订阅',
-    fields: ['来源名', '订阅端对外地址', '全局展示名模板', 'Surge managed config', '更新间隔', 'strict', '自动发布订阅包', '停用或到期用户'],
-    keywords: ['展示名模板', '自动发布'],
+    fields: ['来源名', '订阅端对外地址', '全局展示名模板', '节点 Stack 顺序', 'Surge managed config', '更新间隔', 'strict', '自动发布订阅包', '停用或到期用户'],
+    keywords: ['展示名模板', '自动发布', '排序', 'stack order'],
   },
   pause: { title: '停服时段', fields: ['每日停服时段', '暂停时断开现有连接'], keywords: ['停服', '自动暂停', '断开连接', '维护'] },
   blocklist: { title: '域名黑名单', fields: ['全局域名黑名单'], keywords: ['黑名单', '拦截', '屏蔽', '封禁', '禁止访问', 'block', 'blacklist', '网站'] },

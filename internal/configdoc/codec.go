@@ -122,6 +122,9 @@ func (s *Settings) Normalize() {
 	if s.Subscription.SourceName == "" && s.Subscription.Interval == 0 && s.Subscription.DisabledResponse == "" {
 		s.Subscription = defaults.Subscription
 	}
+	if s.Subscription.StackOrder == nil {
+		s.Subscription.StackOrder = []string{}
+	}
 	fill(&s.Subscription.DisabledResponse, defaults.Subscription.DisabledResponse)
 	if s.Traffic.Interval == 0 {
 		s.Traffic = defaults.Traffic

@@ -5172,6 +5172,13 @@
             "description": "本机在订阅端的来源名，订阅端按它找到验签用的公钥",
             "type": "string"
           },
+          "stack_order": {
+            "description": "订阅中各 Stack 节点的输出顺序；未列入的按名称字典序排在末尾",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "strict": {
             "type": "boolean"
           },

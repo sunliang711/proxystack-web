@@ -131,6 +131,8 @@ type SubscriptionSettings struct {
 	DisabledResponse string `json:"disabled_response" yaml:"disabled_response" enum:"not_found,empty"`
 	// ManualPublish 为 false（默认）时，订阅内容变化后自动签发并发布到已部署且测试通过的在线订阅端。
 	ManualPublish bool `json:"manual_publish" yaml:"manual_publish,omitempty" doc:"为 true 时关闭自动发布，订阅包只在「发布订阅包」页面手动签发"`
+	// StackOrder 指定订阅中各 Stack 节点的输出顺序；未列入的 Stack 按名称标准升序排在末尾。
+	StackOrder []string `json:"stack_order" yaml:"stack_order,omitempty" required:"false" doc:"订阅中各 Stack 节点的输出顺序；未列入的按名称字典序排在末尾"`
 }
 
 // 达到每日阈值后的动作。

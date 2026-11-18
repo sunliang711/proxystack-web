@@ -118,6 +118,17 @@ func validateSubscription(issues *Issues, doc *Document) {
 		}
 		checkDisplayTemplate(issues, path+".display_template", settings.DisplayTemplate)
 		checkEnum(issues, path+".disabled_response", settings.DisabledResponse, DisabledNotFound, DisabledEmpty)
+		seenOrder := map[string]bool{}
+		for index, name := range settings.StackOrder {
+			orderPath := fmt.Sprintf("%s.stack_order[%d]", path, index)
+			if seenOrder[name] {
+				issues.add(orderPath, "duplicate stack in stack_order: %s", name)
+			}
+			seenOrder[name] = true
+			if doc.StackByName(name) < 0 {
+				issues.add(orderPath, "stack does not exist: %s", name)
+			}
+		}
 		if doc.Settings.NodeExport.Enabled && len(doc.Settings.NodeExport.Token) < 16 {
 			issues.add("settings.node_export.token", "a token of at least 16 characters is required")
 		}

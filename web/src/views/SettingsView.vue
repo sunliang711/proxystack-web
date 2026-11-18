@@ -14,6 +14,7 @@ import ErrorList from '../components/ErrorList.vue'
 import PauseWindowsInput from '../components/PauseWindowsInput.vue'
 import BlockedDomainsInput from '../components/BlockedDomainsInput.vue'
 import ManualIconsCard from '../components/ManualIconsCard.vue'
+import OrderedPicker from '../components/OrderedPicker.vue'
 import { refreshPauseWindow } from '../composables/usePauseWindow'
 import SettingsSection from '../components/SettingsSection.vue'
 import EntityLink from '../components/EntityLink.vue'
@@ -190,6 +191,22 @@ const intervalValue = computed({
     if (form.value) form.value.subscription.interval = Math.round(value * intervalUnit.value)
   },
 })
+const stackOrder = computed({
+  get: () => settings.value?.subscription.stack_order ?? [],
+  set: (value: string[]) => {
+    if (settings.value) settings.value.subscription.stack_order = value
+  },
+})
+const stackOrderOptions = computed(() => {
+  const names = new Set(stacks.value.map((stack) => stack.name))
+  for (const name of stackOrder.value) names.add(name)
+  return [...names].sort()
+})
+const effectiveStackOrder = computed(() => {
+  const listed = stackOrder.value
+  const rest = stacks.value.map((stack) => stack.name).filter((name) => !listed.includes(name)).sort()
+  return [...listed, ...rest]
+})
 
 const notifyEvents = [
   { value: 'daily_limit', label: '每日阈值触发' },
@@ -353,6 +370,15 @@ async function save() {
             </NFormItem>
             <NFormItem label="全局展示名模板" v-bind="f('subscription.display_template', '最低模板优先级；仅当入站用户覆盖、所选用户档案和入站模板均为空时生效')">
               <TemplateInput v-model:value="form.subscription.display_template" />
+            </NFormItem>
+            <NFormItem label="节点 Stack 顺序" v-bind="f('subscription.stack_order', '留空时全部 Stack 按名称标准升序排列；指定部分 Stack 时排在前面，未列入及新增的 Stack 按字典序排在末尾。同一 Stack 内本机节点（含内网副本）在前，直连节点在后；每个用户只包含自己有权限且未暂停的节点')">
+              <NSpace vertical style="width: 100%">
+                <OrderedPicker v-model:value="stackOrder" :options="stackOrderOptions" />
+                <NSpace v-if="effectiveStackOrder.length" align="center" :size="8">
+                  <NText depth="3">实际输出顺序：{{ effectiveStackOrder.join(' → ') }}</NText>
+                  <NButton v-if="stackOrder.length" size="tiny" quaternary @click="stackOrder = []">恢复默认字典序</NButton>
+                </NSpace>
+              </NSpace>
             </NFormItem>
             <NFormItem label="Surge managed config" v-bind="f('subscription.surge_managed')">
               <NSwitch v-model:value="form.subscription.surge_managed" />

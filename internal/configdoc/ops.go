@@ -98,8 +98,30 @@ func RenameStack(doc *Document, oldName, newName string) {
 		}
 	}
 	if doc.Settings != nil && doc.Settings.DownloadProxy.Stack == oldName {
+		doc.Settings.Subscription.StackOrder = replaceSliceValue(doc.Settings.Subscription.StackOrder, oldName, newName)
 		doc.Settings.DownloadProxy.Stack = newName
+	} else if doc.Settings != nil {
+		doc.Settings.Subscription.StackOrder = replaceSliceValue(doc.Settings.Subscription.StackOrder, oldName, newName)
 	}
+}
+
+// RemoveStackOrder 从订阅的 Stack 顺序设置中移除已删除的 stack。
+func RemoveStackOrder(doc *Document, stack string) {
+	if doc.Settings == nil {
+		return
+	}
+	doc.Settings.Subscription.StackOrder = slices.DeleteFunc(doc.Settings.Subscription.StackOrder, func(name string) bool {
+		return name == stack
+	})
+}
+
+func replaceSliceValue(items []string, oldValue, newValue string) []string {
+	for i := range items {
+		if items[i] == oldValue {
+			items[i] = newValue
+		}
+	}
+	return items
 }
 
 // RemovePausedStack 从全部用户的手动暂停列表中删除已删除的 stack。

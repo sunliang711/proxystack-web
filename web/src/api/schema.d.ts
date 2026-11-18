@@ -3519,6 +3519,8 @@ export interface components {
             public_base_url: string;
             /** @description 本机在订阅端的来源名，订阅端按它找到验签用的公钥 */
             source_name: string;
+            /** @description 订阅中各 Stack 节点的输出顺序；未列入的按名称字典序排在末尾 */
+            stack_order?: string[];
             strict: boolean;
             surge_managed: boolean;
         };
