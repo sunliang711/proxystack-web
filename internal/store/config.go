@@ -247,6 +247,20 @@ func LoadDocument(ctx context.Context, q *dbq.Queries) (*configdoc.Document, err
 			upstream.Stack = target.Name
 			upstream.Inbound = target.Xray.Inbounds[pos.inbound].Name
 		}
+		if row.RefUserID.Valid {
+			position, ok := userIndex[row.RefUserID.Int64]
+			if !ok {
+				return nil, fmt.Errorf("upstream %d references a missing user", row.ID)
+			}
+			upstream.User = doc.Users[position].Name
+		}
+		if row.RefProfileID.Valid {
+			name, ok := profileNames[row.RefProfileID.Int64]
+			if !ok {
+				return nil, fmt.Errorf("upstream %d references a missing profile", row.ID)
+			}
+			upstream.Profile = name
+		}
 		if row.RawConfig != "" {
 			if err := upstream.Config.UnmarshalJSON([]byte(row.RawConfig)); err != nil {
 				return nil, err
@@ -644,14 +658,29 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 		for position := range stack.Mihomo.Upstreams {
 			upstream := &stack.Mihomo.Upstreams[position]
 			refInbound := sql.NullInt64{}
+			refUser, refProfile := sql.NullInt64{}, sql.NullInt64{}
 			rawConfig := ""
 			switch upstream.Type {
-			case "xray-socks5":
+			case "xray-socks5", "xray-inbound":
 				value, ok := inboundIDs[upstream.Stack+"\x00"+upstream.Inbound]
 				if !ok {
 					return fmt.Errorf("upstream %s.%s references a missing inbound: %s.%s", stack.Name, upstream.Name, upstream.Stack, upstream.Inbound)
 				}
 				refInbound = sql.NullInt64{Int64: value, Valid: true}
+				if upstream.User != "" {
+					userID, ok := userIDByName[upstream.User]
+					if !ok {
+						return fmt.Errorf("upstream %s.%s references a missing user", stack.Name, upstream.Name)
+					}
+					refUser = sql.NullInt64{Int64: userID, Valid: true}
+				}
+				if upstream.Profile != "" && upstream.Profile != configdoc.DefaultProfile {
+					profileID, ok := profileIDs[upstream.User+"\x00"+upstream.Profile]
+					if !ok {
+						return fmt.Errorf("upstream %s.%s references a missing profile", stack.Name, upstream.Name)
+					}
+					refProfile = sql.NullInt64{Int64: profileID, Valid: true}
+				}
 			case "raw":
 				data, err := upstream.Config.MarshalJSON()
 				if err != nil {
@@ -662,6 +691,7 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 			upstreamID, err := q.InsertMihomoUpstream(ctx, dbq.InsertMihomoUpstreamParams{
 				NULLIF: upstream.ID, StackID: stack.ID, Position: int64(position), Enabled: boolInt(upstream.IsEnabled()), Name: upstream.Name,
 				Type: upstream.Type, RefInboundID: refInbound, RawConfig: rawConfig,
+				RefUserID: refUser, RefProfileID: refProfile,
 			})
 			if err != nil {
 				return err

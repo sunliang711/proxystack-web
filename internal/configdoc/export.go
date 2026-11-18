@@ -62,6 +62,12 @@ func Subset(doc *Document, scope ExportScope, exportedAt time.Time) (*Document, 
 					users = append(users, user)
 				}
 			}
+			// Referenced connection accounts belong to the exported stack's dependencies too.
+			for _, upstream := range stack.Mihomo.Upstreams {
+				if upstream.IsInboundReference() && upstream.User != "" && !slices.Contains(users, upstream.User) {
+					users = append(users, upstream.User)
+				}
+			}
 			for _, inbound := range stack.Xray.Inbounds {
 				for _, ref := range inbound.Users {
 					if !slices.Contains(users, ref.User) {

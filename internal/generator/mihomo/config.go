@@ -202,6 +202,8 @@ func renderProxy(stackSet domain.StackSet, referenceGraph graph.ReferenceGraph, 
 		return renderRawProxy(upstream)
 	case "xray-socks5":
 		return renderXraySocks5Proxy(stackSet, referenceGraph, upstream)
+	case "xray-inbound":
+		return renderXrayInboundProxy(stackSet, referenceGraph, upstream)
 	default:
 		return nil, GeneratorError{Message: "unsupported mihomo upstream type: " + upstream.Type}
 	}

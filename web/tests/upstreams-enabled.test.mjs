@@ -109,3 +109,73 @@ test('规则目标和直连覆盖下拉保留已停用上游并标明状态', (t
     { label: 'node-b（已停用）', value: 'node-b' },
   ])
 })
+
+test('通用引用列出四种入站协议，多用户明确选择档案后才能暂存', (t) => {
+  const stack = makeStack()
+  const summaries = [{ name: 'target', inbounds: [
+    { name: 'relay', protocol: 'socks5', listen: '127.0.0.1', port: 10001, users: [] },
+    { name: 'http', protocol: 'http', listen: '127.0.0.1', port: 10002, users: [] },
+    { name: 'vmess', protocol: 'vmess', listen: '127.0.0.1', port: 10003, users: [{ user: 'alice', profile: '' }, { user: 'alice', profile: 'mobile' }] },
+    { name: 'ss', protocol: 'shadowsocks', listen: '127.0.0.1', port: 10004, users: [{ user: 'bob', profile: '' }] },
+  ] }]
+  const state = setupComponent(t, UpstreamsTab, { stack, summaries, users: [], errors: { fields: {}, global: [] } })
+  assert.equal(state.cascaderOptions.value[0].children.length, 4)
+  assert.match(state.cascaderOptions.value[0].children[2].label, /vmess/)
+  state.open(stack.mihomo.upstreams.length)
+  state.editing.value.draft.type = 'xray-inbound'
+  state.editing.value.draft.name = 'reference'
+  state.refValue.value = 'target\u0000vmess'
+  assert.equal(state.referenceMissing.value, true)
+  state.confirm()
+  assert.equal(stack.mihomo.upstreams.length, 2)
+  state.referenceUser.value = 'alice\u0000mobile'
+  assert.equal(state.referenceMissing.value, false)
+  state.confirm()
+  assert.equal(stack.mihomo.upstreams[2].type, 'xray-inbound')
+  assert.equal(stack.mihomo.upstreams[2].user, 'alice')
+  assert.equal(stack.mihomo.upstreams[2].profile, 'mobile')
+  assert.equal(stack.mihomo.upstreams[2].config, null)
+})
+
+test('切换引用清除旧凭据选择，单用户自动选择，HTTP 不要求用户', (t) => {
+  const stack = makeStack()
+  stack.mihomo.upstreams[0] = { name: 'reference', type: 'xray-inbound', stack: 'target', inbound: 'vmess', user: 'alice', profile: 'mobile' }
+  const summaries = [{ name: 'target', inbounds: [
+    { name: 'vmess', protocol: 'vmess', users: [{ user: 'alice', profile: 'mobile' }] },
+    { name: 'ss', protocol: 'shadowsocks', users: [{ user: 'bob', profile: '' }] },
+    { name: 'multi', protocol: 'vmess', users: [{ user: 'bob', profile: '' }, { user: 'alice', profile: '' }] },
+    { name: 'http', protocol: 'http', users: [{ user: 'alice', profile: '' }] },
+  ] }]
+  const state = setupComponent(t, UpstreamsTab, { stack, summaries, users: [], errors: { fields: {}, global: [] } })
+  state.open(0)
+  assert.equal(state.referenceUser.value, 'alice\u0000mobile')
+  state.refValue.value = 'target\u0000ss'
+  assert.equal(state.referenceUser.value, 'bob\u0000default')
+  assert.equal(state.editing.value.draft.profile, '')
+  state.refValue.value = 'target\u0000multi'
+  assert.equal(state.referenceUser.value, null)
+  assert.equal(state.referenceMissing.value, true)
+  state.refValue.value = 'target\u0000http'
+  assert.equal(state.referenceNeedsUser.value, false)
+  assert.equal(state.referenceUser.value, null)
+  assert.equal(state.referenceMissing.value, false)
+})
+
+test('旧 SOCKS5 引用编辑为通用引用，切换到外部节点清除引用身份', (t) => {
+  const stack = makeStack()
+  stack.mihomo.upstreams[0] = { name: 'legacy', type: 'xray-socks5', stack: 'target', inbound: 'relay', config: null }
+  const summaries = [{ name: 'target', inbounds: [{ name: 'relay', protocol: 'socks5', users: [] }] }]
+  const state = setupComponent(t, UpstreamsTab, { stack, summaries, users: [], errors: { fields: {}, global: [] } })
+  state.open(0)
+  assert.equal(state.editing.value.draft.type, 'xray-inbound')
+  assert.equal(state.refValue.value, 'target\u0000relay')
+  assert.equal(state.referenceMissing.value, false)
+  state.editing.value.draft.user = 'alice'
+  state.editing.value.draft.profile = 'mobile'
+  state.editing.value.draft.type = 'raw'
+  state.confirm()
+  assert.equal(stack.mihomo.upstreams[0].stack, '')
+  assert.equal(stack.mihomo.upstreams[0].inbound, '')
+  assert.equal(stack.mihomo.upstreams[0].user, '')
+  assert.equal(stack.mihomo.upstreams[0].profile, '')
+})

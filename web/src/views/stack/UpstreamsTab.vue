@@ -11,6 +11,7 @@ import CodeEditor from '../../components/CodeEditor.vue'
 import DirectOverrides from './DirectOverrides.vue'
 import EntityLink from '../../components/EntityLink.vue'
 import { ssMethods } from '../../util/options'
+import { isInboundReference } from '../../util/flow'
 
 type Upstream = Schemas['Upstream']
 type RawConfig = Record<string, unknown>
@@ -90,7 +91,7 @@ const columns = computed<DataTableColumns<Upstream & { _index: number }>>(() => 
     title: '目标',
     key: 'target',
     render: (row) => {
-      if (row.type === 'xray-socks5') return h(EntityLink, { kind: 'stack', name: row.stack, label: `${row.stack}.${row.inbound}`, tab: 'inbounds', target: '_blank', rel: 'noopener' })
+      if (isInboundReference(row.type)) return h(EntityLink, { kind: 'stack', name: row.stack, label: `${row.stack}.${row.inbound}`, tab: 'inbounds', target: '_blank', rel: 'noopener' })
       const config = (row.config ?? {}) as RawConfig
       return `${config.type ?? '?'} ${config.server ?? ''}:${config.port ?? ''}`
     },
@@ -136,6 +137,7 @@ function remove(index: number) {
   if (dropped) message.warning(`已同时移除该上游的 ${dropped} 条直连覆盖，保存后生效`)
 }
 
+/** Open a draft and normalize legacy references for the generic selector. */
 function open(index: number) {
   const source: Upstream =
     index < props.stack.mihomo.upstreams.length
@@ -143,20 +145,25 @@ function open(index: number) {
       : { name: '', enabled: true, type: 'raw', stack: '', inbound: '', config: { type: 'vmess', server: '', port: 443, uuid: '', network: 'ws', tls: true } }
   const draft: Upstream = JSON.parse(JSON.stringify(source))
   draft.enabled = draft.enabled !== false
+  if (draft.type === 'xray-socks5') draft.type = 'xray-inbound'
   editing.value = { index, draft, config: (draft.config ?? {}) as RawConfig }
+  syncReferenceUser()
   yamlText.value = YAML.stringify(editing.value.config)
   yamlError.value = ''
   // 表单不支持的协议直接打开 YAML。
   editorTab.value = protocol.value === 'other' ? 'yaml' : 'form'
 }
 
+/** Stage the selected connection and discard fields from the other type. */
 function confirm() {
-  if (!editing.value) return
+  if (!editing.value || referenceMissing.value) return
   const { index, draft, config } = editing.value
   draft.config = draft.type === 'raw' ? config : null
   if (draft.type === 'raw') {
     draft.stack = ''
     draft.inbound = ''
+    draft.user = ''
+    draft.profile = ''
   }
   if (index < props.stack.mihomo.upstreams.length) {
     const oldName = props.stack.mihomo.upstreams[index].name
@@ -323,13 +330,14 @@ function nested(parent: string, key: string) {
 const wsPath = nested('ws-opts', 'path')
 const grpcService = nested('grpc-opts', 'grpc-service-name')
 
+const referenceProtocols = ['socks5', 'http', 'vmess', 'shadowsocks']
 const cascaderOptions = computed(() =>
   props.summaries
-    .filter((s) => s.inbounds.some((i) => i.protocol === 'socks5'))
+    .filter((s) => s.inbounds.some((i) => referenceProtocols.includes(i.protocol)))
     .map((s) => ({
       label: s.name,
       value: s.name,
-      children: s.inbounds.filter((i) => i.protocol === 'socks5').map((i) => ({ label: `${i.name}（${i.listen}:${i.port}）`, value: `${s.name}\u0000${i.name}` })),
+      children: s.inbounds.filter((i) => referenceProtocols.includes(i.protocol)).map((i) => ({ label: `${i.name} · ${i.protocol}（${i.listen}:${i.port}）`, value: `${s.name}\u0000${i.name}` })),
     })),
 )
 const refValue = computed({
@@ -339,8 +347,50 @@ const refValue = computed({
     const [stack, inbound] = (value ?? '').split('\u0000')
     editing.value.draft.stack = stack ?? ''
     editing.value.draft.inbound = inbound ?? ''
+    editing.value.draft.user = ''
+    editing.value.draft.profile = ''
+    syncReferenceUser()
   },
 })
+const referenceInbound = computed(() => {
+  const draft = editing.value?.draft
+  return props.summaries.find((s) => s.name === draft?.stack)?.inbounds.find((inbound) => inbound.name === draft?.inbound)
+})
+const referenceNeedsUser = computed(() => {
+  const inbound = referenceInbound.value
+  return !!inbound && ['vmess', 'shadowsocks'].includes(inbound.protocol) && !!inbound.users?.length
+})
+const referenceUserOptions = computed(() => (referenceInbound.value?.users ?? []).map((ref) => ({
+  label: `${ref.user} / ${ref.profile || 'default'}`,
+  value: `${ref.user}\u0000${ref.profile || 'default'}`,
+})))
+const referenceUser = computed({
+  get: () => editing.value?.draft.user ? `${editing.value.draft.user}\u0000${editing.value.draft.profile || 'default'}` : null,
+  set: (value: string | null) => {
+    if (!editing.value) return
+    const [user, profile] = (value ?? '').split('\u0000')
+    editing.value.draft.user = user ?? ''
+    editing.value.draft.profile = profile === 'default' ? '' : profile ?? ''
+  },
+})
+const referenceMissing = computed(() => {
+  const draft = editing.value?.draft
+  if (!draft || !isInboundReference(draft.type)) return false
+  if (!referenceInbound.value || (referenceInbound.value.protocol === 'vmess' && !referenceInbound.value.users?.length)) return true
+  return referenceNeedsUser.value && !referenceUserOptions.value.some((option) => option.value === referenceUser.value)
+})
+
+/** Select the only available account without guessing among multiple users. */
+function syncReferenceUser() {
+  const draft = editing.value?.draft
+  if (!draft || !isInboundReference(draft.type)) return
+  if (!referenceNeedsUser.value) {
+    draft.user = ''
+    draft.profile = ''
+  } else if (!draft.user && referenceUserOptions.value.length === 1) {
+    referenceUser.value = referenceUserOptions.value[0].value
+  }
+}
 
 const prefix = computed(() => `mihomo.upstreams[${editing.value?.index ?? 0}]`)
 const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.value}.${path}`, hint)
@@ -405,15 +455,23 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
         <NFormItem label="type" v-bind="f('type')">
           <NRadioGroup v-model:value="editing.draft.type">
             <NRadioButton value="raw">外部节点</NRadioButton>
-            <NRadioButton value="xray-socks5">引用其他 stack 的 SOCKS5 入站</NRadioButton>
+            <NRadioButton value="xray-inbound">引用其他 stack 的入站</NRadioButton>
           </NRadioGroup>
         </NFormItem>
-        <NFormItem v-if="editing.draft.type === 'xray-socks5'" label="引用" v-bind="f('inbound')">
-          <NSpace vertical style="width: 100%">
-            <NCascader v-model:value="refValue" :options="cascaderOptions" check-strategy="child" filterable />
-            <EntityLink v-if="editing.draft.stack" kind="stack" :name="editing.draft.stack" label="查看目标入站 ↗" tab="inbounds" target="_blank" rel="noopener" />
-          </NSpace>
-        </NFormItem>
+        <template v-if="isInboundReference(editing.draft.type)">
+          <NFormItem label="引用" v-bind="f('inbound', '支持 SOCKS5、HTTP、VMess、Shadowsocks 入站')">
+            <NSpace vertical style="width: 100%">
+              <NCascader v-model:value="refValue" :options="cascaderOptions" check-strategy="child" filterable />
+              <EntityLink v-if="editing.draft.stack" kind="stack" :name="editing.draft.stack" label="查看目标入站 ↗" tab="inbounds" target="_blank" rel="noopener" />
+            </NSpace>
+          </NFormItem>
+          <NFormItem v-if="referenceNeedsUser" label="用户／档案" required v-bind="f('user', '使用目标入站已配置的用户档案连接')">
+            <NSpace vertical style="width: 100%">
+              <NSelect v-model:value="referenceUser" :options="referenceUserOptions" filterable placeholder="选择连接用户及档案" />
+              <NText v-if="f('profile').feedback" type="error">{{ f('profile').feedback }}</NText>
+            </NSpace>
+          </NFormItem>
+        </template>
         <template v-else>
           <NFormItem label="节点协议">
             <NSelect v-model:value="protocol" :options="[...protocols.map((p) => ({ label: p, value: p })), { label: '其他（只能编辑 YAML）', value: 'other' }]" />
@@ -459,10 +517,11 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
       <template #footer>
         <NSpace align="center">
           <NText v-if="nameConflict" type="error">名称与已有上游或代理组重复</NText>
+          <NText v-else-if="referenceMissing" type="warning">选择目标入站及连接用户／档案</NText>
           <NText v-else-if="typeMissing" type="warning">先在 YAML 中填写 type</NText>
           <NText v-else depth="3" class="drawer-hint">暂存后回到页面点「保存」才会写入</NText>
           <NButton @click="editing = null">取消</NButton>
-          <NButton type="primary" :disabled="!editing.draft.name || !!yamlError || typeMissing || nameConflict" @click="confirm">暂存修改</NButton>
+          <NButton type="primary" :disabled="!editing.draft.name || !!yamlError || typeMissing || nameConflict || referenceMissing" @click="confirm">暂存修改</NButton>
         </NSpace>
       </template>
     </NDrawerContent>

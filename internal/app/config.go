@@ -549,9 +549,17 @@ func (s *Service) SetStackMembers(ctx context.Context, actor Actor, id int64, me
 			return &FieldError{Field: "members", Message: "only auto stacks have members"}
 		}
 		for _, member := range members {
+			// Preserve explicitly configured references even when they do not use a default relay.
+			if slices.Contains(configdoc.Members(stack), member) {
+				continue
+			}
 			target := doc.StackByName(member)
-			if target < 0 || doc.Stacks[target].InboundByName(configdoc.RelayInbound) < 0 {
+			if target < 0 {
 				return &FieldError{Field: "members", Message: "member must be a stack with a relay inbound: " + member}
+			}
+			relay := doc.Stacks[target].InboundByName(configdoc.RelayInbound)
+			if relay < 0 || doc.Stacks[target].Xray.Inbounds[relay].Protocol != "socks5" {
+				return &FieldError{Field: "members", Message: "new member must have a socks5 relay inbound: " + member}
 			}
 		}
 		change.Object, change.Summary, change.Scope = "stack:"+stack.Name, "修改 stack "+stack.Name+" 的成员", fmt.Sprintf("stacks[%d]", index)

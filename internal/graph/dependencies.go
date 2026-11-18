@@ -318,7 +318,7 @@ func addClashDependencies(stack domain.Stack, index ReferenceIndex, dependencies
 		dependencies[sourceNode][target] = true
 	}
 	for upstreamIndex, upstream := range stack.Clash.Upstreams {
-		if upstream.Type != "xray-socks5" {
+		if !domain.IsInboundUpstreamType(upstream.Type) {
 			continue
 		}
 		path := fmt.Sprintf("stacks.%s.clash.upstreams[%d].ref", stack.Name, upstreamIndex)
@@ -332,8 +332,12 @@ func addClashDependencies(stack domain.Stack, index ReferenceIndex, dependencies
 			issues = append(issues, Issue{Path: path, Message: "xray inbound ref does not exist: " + parsed.Raw})
 			continue
 		}
-		if endpoint.Kind != "socks5" {
+		if upstream.Type == "xray-socks5" && endpoint.Kind != "socks5" {
 			issues = append(issues, Issue{Path: path, Message: fmt.Sprintf("xray-socks5 ref must target socks5 inbound, got %s: %s", endpoint.Kind, parsed.Raw)})
+			continue
+		}
+		if !domain.SupportsInboundUpstream(endpoint.Kind) {
+			issues = append(issues, Issue{Path: path, Message: "unsupported referenced inbound protocol: " + endpoint.Kind})
 			continue
 		}
 		targetNode := ServiceNode{Stack: endpoint.Stack, Component: "xray"}

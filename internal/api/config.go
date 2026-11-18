@@ -66,12 +66,13 @@ type userUpdateInput struct {
 
 // InboundSummary 是列表和下拉框使用的入站摘要。
 type InboundSummary struct {
-	ID       int64  `json:"id"`
-	Name     string `json:"name"`
-	Protocol string `json:"protocol"`
-	Listen   string `json:"listen"`
-	Port     int    `json:"port"`
-	Sub      bool   `json:"sub"`
+	ID       int64               `json:"id"`
+	Name     string              `json:"name"`
+	Protocol string              `json:"protocol"`
+	Listen   string              `json:"listen"`
+	Port     int                 `json:"port"`
+	Sub      bool                `json:"sub"`
+	Users    []configdoc.UserRef `json:"users"`
 }
 
 // StackSummary 是 stack 列表的一行。
@@ -106,7 +107,7 @@ type OutboundSummary struct {
 type UpstreamSummary struct {
 	Name     string `json:"name"`
 	Enabled  bool   `json:"enabled"`
-	Type     string `json:"type" enum:"raw,xray-socks5"`
+	Type     string `json:"type" enum:"raw,xray-inbound,xray-socks5"`
 	Stack    string `json:"stack"`
 	Inbound  string `json:"inbound"`
 	Protocol string `json:"protocol"`
@@ -628,6 +629,7 @@ func summarizeStack(stack configdoc.Stack) StackSummary {
 	for _, inbound := range stack.Xray.Inbounds {
 		summary.Inbounds = append(summary.Inbounds, InboundSummary{
 			ID: inbound.ID, Name: inbound.Name, Protocol: inbound.Protocol, Listen: inbound.Listen, Port: inbound.Port, Sub: inbound.Sub,
+			Users: append([]configdoc.UserRef{}, inbound.Users...),
 		})
 		if inbound.Listen != "127.0.0.1" && inbound.Listen != "::1" {
 			summary.Loopback = false

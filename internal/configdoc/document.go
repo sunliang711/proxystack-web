@@ -4,6 +4,8 @@
 // 实体带有数据库 ID（导出时清空），引用一律写名字，改名时由本包同步改写引用方。
 package configdoc
 
+import "proxystack-web/internal/domain"
+
 // 文件头常量。
 const (
 	Schema  = "proxystack-web.config"
@@ -484,15 +486,22 @@ type Upstream struct {
 	ID      int64      `json:"id,omitempty" yaml:"-"`
 	Enabled *bool      `json:"enabled" yaml:"enabled,omitempty" required:"false" doc:"是否启用；缺省为 true"`
 	Name    string     `json:"name" yaml:"name"`
-	Type    string     `json:"type" yaml:"type" enum:"raw,xray-socks5"`
-	Stack   string     `json:"stack" yaml:"stack,omitempty" doc:"type=xray-socks5 时引用的 stack"`
-	Inbound string     `json:"inbound" yaml:"inbound,omitempty" doc:"type=xray-socks5 时引用的 socks5 入站"`
+	Type    string     `json:"type" yaml:"type" enum:"raw,xray-inbound,xray-socks5"`
+	Stack   string     `json:"stack" yaml:"stack,omitempty" doc:"引用类型的目标 stack"`
+	Inbound string     `json:"inbound" yaml:"inbound,omitempty" doc:"引用类型的目标 Xray 入站；xray-socks5 仅支持 SOCKS5"`
+	User    string     `json:"user,omitempty" yaml:"user,omitempty" doc:"VMess/Shadowsocks 引用使用的入站用户"`
+	Profile string     `json:"profile,omitempty" yaml:"profile,omitempty" doc:"引用用户的档案；空表示 default"`
 	Config  RawMapping `json:"config" yaml:"config,omitempty" doc:"type=raw 时的 mihomo 节点字段"`
 }
 
 // IsEnabled 返回上游是否启用；未显式指定时视为启用。
 func (u Upstream) IsEnabled() bool {
 	return u.Enabled == nil || *u.Enabled
+}
+
+// IsInboundReference identifies both generic references and legacy SOCKS5 references.
+func (u Upstream) IsInboundReference() bool {
+	return domain.IsInboundUpstreamType(u.Type)
 }
 
 // Group 是 mihomo 代理组。

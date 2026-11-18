@@ -2015,6 +2015,12 @@
           },
           "sub": {
             "type": "boolean"
+          },
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/UserRef"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -2023,7 +2029,8 @@
           "protocol",
           "listen",
           "port",
-          "sub"
+          "sub",
+          "users"
         ],
         "type": "object"
       },
@@ -6099,21 +6106,30 @@
             "type": "integer"
           },
           "inbound": {
-            "description": "type=xray-socks5 时引用的 socks5 入站",
+            "description": "引用类型的目标 Xray 入站；xray-socks5 仅支持 SOCKS5",
             "type": "string"
           },
           "name": {
             "type": "string"
           },
+          "profile": {
+            "description": "引用用户的档案；空表示 default",
+            "type": "string"
+          },
           "stack": {
-            "description": "type=xray-socks5 时引用的 stack",
+            "description": "引用类型的目标 stack",
             "type": "string"
           },
           "type": {
             "enum": [
               "raw",
+              "xray-inbound",
               "xray-socks5"
             ],
+            "type": "string"
+          },
+          "user": {
+            "description": "VMess/Shadowsocks 引用使用的入站用户",
             "type": "string"
           }
         },
@@ -6150,6 +6166,7 @@
           "type": {
             "enum": [
               "raw",
+              "xray-inbound",
               "xray-socks5"
             ],
             "type": "string"

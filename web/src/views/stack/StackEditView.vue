@@ -34,6 +34,7 @@ import { useBackgroundTask } from '../../composables/useBackgroundTask'
 import UnitStatus from '../../components/UnitStatus.vue'
 import { notifySaved, refreshPending, runtime } from '../../runtime'
 import { stackPorts } from './ports'
+import { isInboundReference } from '../../util/flow'
 
 type Stack = Schemas['Stack']
 
@@ -203,10 +204,10 @@ const relaysOnly = computed(() => {
   const s = stack.value
   if (!s || s.xray.outbound.type !== 'mihomo' || !s.mihomo.enabled || s.mihomo.providers?.length) return false
   const active = s.mihomo.upstreams.filter((upstream) => upstream.enabled !== false)
-  return active.length > 0 && active.every((upstream) => upstream.type === 'xray-socks5')
+  return active.length > 0 && active.every((upstream) => isInboundReference(upstream.type))
 })
 /** 角色是 auto，但已启用的上游里混有外部节点。 */
-const mixedAuto = computed(() => stack.value?.role === 'auto' && ((stack.value?.mihomo.providers?.length ?? 0) > 0 || (stack.value?.mihomo.upstreams ?? []).some((upstream) => upstream.enabled !== false && upstream.type !== 'xray-socks5')))
+const mixedAuto = computed(() => stack.value?.role === 'auto' && ((stack.value?.mihomo.providers?.length ?? 0) > 0 || (stack.value?.mihomo.upstreams ?? []).some((upstream) => upstream.enabled !== false && !isInboundReference(upstream.type))))
 
 const moreOptions = [
   { key: 'clone', label: '克隆' },
@@ -262,12 +263,12 @@ async function remove() {
 const members = ref<string[]>([])
 watch(stack, (s) => {
   if (s && !dirty.value) {
-    members.value = [...new Set(s.mihomo.upstreams.filter((u) => u.type === 'xray-socks5').map((u) => u.stack))].sort()
+    members.value = [...new Set(s.mihomo.upstreams.filter((u) => isInboundReference(u.type)).map((u) => u.stack))].sort()
   }
 }, { immediate: true })
 const memberOptions = computed(() =>
   summaries.value
-    .filter((s) => s.id !== id.value && s.role === 'edge' && s.inbounds.some((i) => i.name === 'relay' && i.protocol === 'socks5'))
+    .filter((s) => s.id !== id.value && (stack.value?.mihomo.upstreams.some((upstream) => isInboundReference(upstream.type) && upstream.stack === s.name) || (s.role === 'edge' && s.inbounds.some((i) => i.name === 'relay' && i.protocol === 'socks5'))))
     .map((s) => ({ label: s.name, value: s.name })),
 )
 

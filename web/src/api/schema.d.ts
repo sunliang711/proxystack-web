@@ -2634,6 +2634,7 @@ export interface components {
             port: number;
             protocol: string;
             sub: boolean;
+            users: components["schemas"]["UserRef"][];
         };
         InstallInputBody: {
             /** @enum {string} */
@@ -3779,13 +3780,17 @@ export interface components {
             enabled?: boolean | null;
             /** Format: int64 */
             id?: number;
-            /** @description type=xray-socks5 时引用的 socks5 入站 */
+            /** @description 引用类型的目标 Xray 入站；xray-socks5 仅支持 SOCKS5 */
             inbound: string;
             name: string;
-            /** @description type=xray-socks5 时引用的 stack */
+            /** @description 引用用户的档案；空表示 default */
+            profile?: string;
+            /** @description 引用类型的目标 stack */
             stack: string;
             /** @enum {string} */
-            type: "raw" | "xray-socks5";
+            type: "raw" | "xray-inbound" | "xray-socks5";
+            /** @description VMess/Shadowsocks 引用使用的入站用户 */
+            user?: string;
         };
         UpstreamSummary: {
             enabled: boolean;
@@ -3795,7 +3800,7 @@ export interface components {
             server: string;
             stack: string;
             /** @enum {string} */
-            type: "raw" | "xray-socks5";
+            type: "raw" | "xray-inbound" | "xray-socks5";
         };
         User: {
             /** @description 用户域名黑名单，与全局名单叠加；写法同全局名单 */

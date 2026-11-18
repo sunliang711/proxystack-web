@@ -121,3 +121,30 @@ test('停用的上游节点不计入拓扑出口也不在详细流向中连线',
   const groupNode = flow.nodes.find((item) => item.id === 'group:AllProxy')
   assert.deepEqual(groupNode.lines, ['★ a', '· DIRECT'])
 })
+
+test('通用引用沿其他 stack 转发，详情图显示引用的来源和去向', () => {
+  const target = stack('vmess-exit', { upstreams: [raw('remote')] })
+  const reference = { name: 'internal-vmess', type: 'xray-inbound', stack: target.name, inbound: 'main', user: 'alice', profile: 'mobile', enabled: true }
+  const auto = stack('auto', { role: 'auto', upstreams: [reference] })
+  const topology = stackTopology([target, auto])
+  assert.equal(topology.edges.some((edge) => edge.from === 'auto' && edge.to === 'edge'), true)
+  assert.equal(topology.edges.some((edge) => edge.from === 'auto' && edge.to === 'direct'), false)
+  const detail = {
+    name: auto.name,
+    xray: { enabled: true, inbounds: [], outbound: { type: 'mihomo' } },
+    mihomo: {
+      enabled: true, mode: 'Rule', socks: { name: 'socks', listen: '127.0.0.1', port: 1080, auth: 'none', accounts: [] },
+      http: { enabled: false }, rules: { final: 'AllProxy', extra: [] }, upstreams: [reference],
+      groups: [{ name: 'AllProxy', type: 'select', proxies: [reference.name] }],
+    },
+  }
+  const flow = stackFlow(detail, [target, auto])
+  assert.equal(flow.nodes.find((node) => node.id === 'up:internal-vmess').stackId, target.id)
+  assert.equal(flow.nodes.find((node) => node.id === 'up:internal-vmess').tone, 'stack')
+  detail.name = target.name
+  detail.xray.inbounds = [{ name: 'main', protocol: 'vmess', users: [{ user: 'alice', profile: 'mobile' }], sub: false }]
+  detail.mihomo.enabled = false
+  const targetFlow = stackFlow(detail, [target, auto])
+  assert.ok(targetFlow.nodes.some((node) => node.id === 'ref:auto'))
+  assert.ok(targetFlow.edges.some((edge) => edge.from === 'ref:auto' && edge.to === 'in:main'))
+})

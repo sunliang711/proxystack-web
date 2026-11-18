@@ -211,9 +211,9 @@ func compileStack(settings Settings, stack *Stack) (domain.Stack, error) {
 			disabledUpstreams[upstream.Name] = true
 			continue
 		}
-		compiled := domain.ClashUpstream{Name: upstream.Name, Type: upstream.Type}
+		compiled := domain.ClashUpstream{Name: upstream.Name, Type: upstream.Type, User: upstream.User, Profile: upstream.Profile}
 		switch upstream.Type {
-		case "xray-socks5":
+		case "xray-socks5", "xray-inbound":
 			compiled.Ref = upstream.Stack + "." + upstream.Inbound
 		case "raw":
 			if err := compiled.SetRawConfig(upstream.Config.Node); err != nil {

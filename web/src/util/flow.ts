@@ -43,6 +43,11 @@ type Stack = Schemas['Stack']
 
 const MAX_LINES = 3
 
+/** Identify both generic inbound references and legacy SOCKS5 references. */
+export function isInboundReference(type: string): boolean {
+  return type === 'xray-inbound' || type === 'xray-socks5'
+}
+
 /** 最多列出 MAX_LINES 行，其余合并成「另 N 个」。 */
 function limit(lines: string[], unit = '个'): string[] {
   if (lines.length <= MAX_LINES) return lines
@@ -85,7 +90,7 @@ export function stackTopology(stacks: Summary[]): FlowGraph {
   const viaMihomo = (stack: Summary) => stack.xray_enabled && stack.mihomo_enabled && stack.outbound.type === 'mihomo'
   // 上游里引用的其他 stack（经其入站转发）。
   const referenced = (stack: Summary) =>
-    viaMihomo(stack) ? [...new Set(stack.upstreams.filter((upstream) => upstream.enabled !== false && upstream.type === 'xray-socks5' && byName.has(upstream.stack)).map((upstream) => upstream.stack))] : []
+    viaMihomo(stack) ? [...new Set(stack.upstreams.filter((upstream) => upstream.enabled !== false && isInboundReference(upstream.type) && byName.has(upstream.stack)).map((upstream) => upstream.stack))] : []
 
   type Exit = 'upstream' | 'external' | 'direct'
   /** stack 自己的出口；只经其他 stack 转发、或 Xray / Mihomo 未启用时没有自己的出口。 */
@@ -192,7 +197,7 @@ export function stackFlow(stack: Stack, summaries: Summary[]): FlowGraph {
   const inbounds = stack.xray.enabled ? stack.xray.inbounds : []
 
   // 来源：订阅客户端、引用本 stack 入站的其他 stack、本机程序。
-  const referrers = summaries.filter((other) => other.name !== stack.name && other.upstreams.some((upstream) => upstream.enabled !== false && upstream.type === 'xray-socks5' && upstream.stack === stack.name))
+  const referrers = summaries.filter((other) => other.name !== stack.name && other.upstreams.some((upstream) => upstream.enabled !== false && isInboundReference(upstream.type) && upstream.stack === stack.name))
   const referenced = new Set(referrers.flatMap((other) => other.upstreams.filter((upstream) => upstream.enabled !== false && upstream.stack === stack.name).map((upstream) => upstream.inbound)))
   const subUsers = new Set(inbounds.filter((inbound) => inbound.sub).flatMap((inbound) => inbound.users.map((ref) => ref.user)))
   if (inbounds.some((inbound) => inbound.sub)) {
@@ -347,7 +352,7 @@ export function stackFlow(stack: Stack, summaries: Summary[]): FlowGraph {
     const id = `up:${upstream.name}`
     const disabled = upstream.enabled === false
     const unused = disabled || !used.has(upstream.name)
-    if (upstream.type === 'xray-socks5') {
+    if (isInboundReference(upstream.type)) {
       nodes.push({
         id,
         column: upstreamColumn,

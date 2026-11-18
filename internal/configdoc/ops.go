@@ -18,6 +18,11 @@ func RenameUser(doc *Document, oldName, newName string) {
 			ref.User = newName
 		}
 	})
+	forEachUpstream(doc, func(upstream *Upstream) {
+		if upstream.IsInboundReference() && upstream.User == oldName {
+			upstream.User = newName
+		}
+	})
 	for index := range doc.ManualNodes {
 		if doc.ManualNodes[index].User == oldName {
 			doc.ManualNodes[index].User = newName
@@ -52,6 +57,11 @@ func RenameProfile(doc *Document, user, oldName, newName string) {
 			ref.Profile = newName
 		}
 	})
+	forEachUpstream(doc, func(upstream *Upstream) {
+		if upstream.IsInboundReference() && upstream.User == user && upstream.Profile == oldName {
+			upstream.Profile = newName
+		}
+	})
 }
 
 // RemoveProfileRefs 把引用已删除档案的入站改回 default 档案。
@@ -59,6 +69,11 @@ func RemoveProfileRefs(doc *Document, user, profile string) {
 	forEachUserRef(doc, func(ref *UserRef) {
 		if ref.User == user && ref.Profile == profile {
 			ref.Profile = ""
+		}
+	})
+	forEachUpstream(doc, func(upstream *Upstream) {
+		if upstream.IsInboundReference() && upstream.User == user && upstream.Profile == profile {
+			upstream.Profile = ""
 		}
 	})
 }
@@ -85,7 +100,7 @@ func RenameStack(doc *Document, oldName, newName string) {
 		return
 	}
 	forEachUpstream(doc, func(upstream *Upstream) {
-		if upstream.Type == "xray-socks5" && upstream.Stack == oldName {
+		if upstream.IsInboundReference() && upstream.Stack == oldName {
 			upstream.Stack = newName
 		}
 	})
@@ -137,7 +152,7 @@ func RenameInbound(doc *Document, stack, oldName, newName string) {
 		return
 	}
 	forEachUpstream(doc, func(upstream *Upstream) {
-		if upstream.Type == "xray-socks5" && upstream.Stack == stack && upstream.Inbound == oldName {
+		if upstream.IsInboundReference() && upstream.Stack == stack && upstream.Inbound == oldName {
 			upstream.Inbound = newName
 		}
 	})
@@ -182,7 +197,7 @@ func RenameDirectOverrideUpstream(stack *Stack, oldName, newName string) {
 func Members(stack *Stack) []string {
 	members := []string{}
 	for _, upstream := range stack.Mihomo.Upstreams {
-		if upstream.Type == "xray-socks5" && upstream.Stack != "" && !slices.Contains(members, upstream.Stack) {
+		if upstream.IsInboundReference() && upstream.Stack != "" && !slices.Contains(members, upstream.Stack) {
 			members = append(members, upstream.Stack)
 		}
 	}
@@ -218,7 +233,7 @@ func RelaysOnly(stack *Stack) bool {
 		if !upstream.IsEnabled() {
 			continue
 		}
-		if upstream.Type != "xray-socks5" {
+		if !upstream.IsInboundReference() {
 			return false
 		}
 		hasEnabled = true
@@ -262,7 +277,7 @@ func AddMember(stack *Stack, member string) {
 func RemoveMember(stack *Stack, member string) {
 	removed := map[string]bool{}
 	stack.Mihomo.Upstreams = slices.DeleteFunc(stack.Mihomo.Upstreams, func(upstream Upstream) bool {
-		if upstream.Type == "xray-socks5" && upstream.Stack == member {
+		if upstream.IsInboundReference() && upstream.Stack == member {
 			removed[upstream.Name] = true
 			return true
 		}
@@ -293,7 +308,7 @@ func CloneStack(source *Stack, target string) Stack {
 	for index := range clone.Mihomo.Upstreams {
 		upstream := &clone.Mihomo.Upstreams[index]
 		upstream.ID = 0
-		if upstream.Type == "xray-socks5" && upstream.Stack == source.Name {
+		if upstream.IsInboundReference() && upstream.Stack == source.Name {
 			upstream.Stack = target
 		}
 	}

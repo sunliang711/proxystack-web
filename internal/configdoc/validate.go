@@ -602,7 +602,7 @@ func validateMihomo(issues *Issues, doc *Document, path string, stack *Stack) {
 			} else if err := domain.ValidateRawProxyConfig(compiled.Config); err != nil {
 				issues.add(upstreamPath+".config", "%s", err.Error())
 			}
-		case "xray-socks5":
+		case "xray-socks5", "xray-inbound":
 			stackIndex := doc.StackByName(upstream.Stack)
 			if stackIndex < 0 {
 				issues.add(upstreamPath+".stack", "stack does not exist: %s", upstream.Stack)
@@ -612,11 +612,23 @@ func validateMihomo(issues *Issues, doc *Document, path string, stack *Stack) {
 			inboundIndex := target.InboundByName(upstream.Inbound)
 			if inboundIndex < 0 {
 				issues.add(upstreamPath+".inbound", "inbound does not exist: %s.%s", upstream.Stack, upstream.Inbound)
-			} else if target.Xray.Inbounds[inboundIndex].Protocol != "socks5" {
-				issues.add(upstreamPath+".inbound", "must reference a socks5 inbound")
+			} else {
+				inbound := target.Xray.Inbounds[inboundIndex]
+				compiled := domain.ClashUpstream{Type: upstream.Type, Ref: upstream.Stack + "." + upstream.Inbound, User: upstream.User, Profile: upstream.Profile}
+				candidate := domain.Inbound{Protocol: inbound.Protocol}
+				for _, ref := range inbound.Users {
+					candidate.Users = append(candidate.Users, domain.InboundUser{User: ref.User, Profile: ref.Profile})
+				}
+				if _, err := compiled.SelectInboundUser(candidate); err != nil {
+					field := ".user"
+					if !domain.SupportsInboundUpstream(inbound.Protocol) || upstream.Type == "xray-socks5" && inbound.Protocol != "socks5" {
+						field = ".inbound"
+					}
+					issues.add(upstreamPath+field, "%s", err.Error())
+				}
 			}
 		default:
-			issues.add(upstreamPath+".type", "must be raw or xray-socks5")
+			issues.add(upstreamPath+".type", "must be raw, xray-inbound or xray-socks5")
 		}
 	}
 	for index, group := range mihomo.Groups {

@@ -133,8 +133,8 @@ INSERT INTO mihomo_listeners (stack_id, kind, enabled, name, listen, port, auth,
 VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: InsertMihomoUpstream :one
-INSERT INTO mihomo_upstreams (id, stack_id, position, enabled, name, type, ref_inbound_id, raw_config)
-VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO mihomo_upstreams (id, stack_id, position, enabled, name, type, ref_inbound_id, raw_config, ref_user_id, ref_profile_id)
+VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id;
 
 -- name: InsertMihomoGroup :one

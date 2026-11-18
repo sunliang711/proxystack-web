@@ -850,10 +850,12 @@ func (c ClashListeners) Validate() error {
 
 // ClashUpstream 保存 mihomo upstream/proxy 配置。
 type ClashUpstream struct {
-	Name   string         `json:"name"`
-	Type   string         `json:"type"`
-	Ref    string         `json:"ref"`
-	Config map[string]any `json:"config"`
+	Name    string         `json:"name"`
+	Type    string         `json:"type"`
+	Ref     string         `json:"ref"`
+	User    string         `json:"user,omitempty"`
+	Profile string         `json:"profile,omitempty"`
+	Config  map[string]any `json:"config"`
 
 	// configNode 保留 raw config 的原始字段顺序，避免生成 mihomo YAML 时 map 迭代导致 diff 抖动。
 	configNode *yaml.Node
@@ -889,8 +891,8 @@ func (c ClashUpstream) Validate() error {
 		return err
 	}
 	switch c.Type {
-	case "xray-socks5":
-		return ValidateRef(c.Ref, 2, "xray-socks5 ref is required")
+	case "xray-socks5", "xray-inbound":
+		return ValidateRef(c.Ref, 2, c.Type+" ref is required")
 	case "raw":
 		return ValidateRawProxyConfig(c.Config)
 	default:
