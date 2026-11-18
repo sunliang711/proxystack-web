@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -187,11 +188,39 @@ func MapDomainPath(doc *Document, path string) string {
 	for _, replacement := range replacements {
 		rest = strings.Replace(rest, replacement.from, replacement.to, 1)
 	}
+	rest = mapCompiledUpstreamIndex(doc.Stacks[index].Mihomo.Upstreams, rest)
 	rest = strings.TrimSuffix(rest, ".ref")
 	if strings.HasPrefix(rest, "mihomo.upstreams[") && !strings.Contains(rest, "].") {
 		rest += ".inbound"
 	}
 	return prefix + "." + rest
+}
+
+// mapCompiledUpstreamIndex 把过滤停用上游后的下标还原为配置文档中的原始下标。
+func mapCompiledUpstreamIndex(upstreams []Upstream, rest string) string {
+	const prefix = "mihomo.upstreams["
+	if !strings.HasPrefix(rest, prefix) {
+		return rest
+	}
+	end := strings.IndexByte(rest[len(prefix):], ']')
+	if end < 0 {
+		return rest
+	}
+	compiledIdx, err := strconv.Atoi(rest[len(prefix) : len(prefix)+end])
+	if err != nil || compiledIdx < 0 {
+		return rest
+	}
+	seen := 0
+	for actualIdx, upstream := range upstreams {
+		if !upstream.IsEnabled() {
+			continue
+		}
+		if seen == compiledIdx {
+			return fmt.Sprintf("%s%d%s", prefix, actualIdx, rest[len(prefix)+end:])
+		}
+		seen++
+	}
+	return rest
 }
 
 func validateSettings(issues *Issues, doc *Document, settings Settings) {
@@ -547,6 +576,7 @@ func validateMihomo(issues *Issues, doc *Document, path string, stack *Stack) {
 	}
 	providers := validateProviders(issues, doc, path, stack)
 	targets := map[string]bool{BuiltinDirect: true, BuiltinReject: true}
+	disabledUpstreams := map[string]bool{}
 	for index, upstream := range mihomo.Upstreams {
 		upstreamPath := fmt.Sprintf("%s.upstreams[%d]", path, index)
 		checkIdentifier(issues, upstreamPath+".name", upstream.Name)
@@ -557,6 +587,9 @@ func validateMihomo(issues *Issues, doc *Document, path string, stack *Stack) {
 			issues.add(upstreamPath+".name", "duplicate proxy name: %s", upstream.Name)
 		}
 		targets[upstream.Name] = true
+		if !upstream.IsEnabled() {
+			disabledUpstreams[upstream.Name] = true
+		}
 		switch upstream.Type {
 		case "raw":
 			if upstream.Config.Node == nil {
@@ -607,12 +640,18 @@ func validateMihomo(issues *Issues, doc *Document, path string, stack *Stack) {
 		if len(group.Proxies) == 0 && len(group.Use) == 0 {
 			issues.add(groupPath+".proxies", "at least one proxy is required")
 		}
+		enabledCount := 0
 		for _, proxy := range group.Proxies {
 			if proxy == group.Name {
 				issues.add(groupPath+".proxies", "group must not contain itself")
 			} else if !targets[proxy] {
 				issues.add(groupPath+".proxies", "proxy does not exist: %s", proxy)
+			} else if !disabledUpstreams[proxy] {
+				enabledCount++
 			}
+		}
+		if len(group.Proxies) > 0 && enabledCount == 0 && len(group.Use) == 0 {
+			issues.add(groupPath+".proxies", "all referenced upstreams are disabled")
 		}
 		for _, name := range group.Use {
 			if !providers[name] {
@@ -639,6 +678,8 @@ func validateMihomo(issues *Issues, doc *Document, path string, stack *Stack) {
 	}
 	if !targets[mihomo.Rules.Final] {
 		issues.add(path+".rules.final", "target does not exist: %s", mihomo.Rules.Final)
+	} else if disabledUpstreams[mihomo.Rules.Final] {
+		issues.add(path+".rules.final", "target upstream is disabled: %s", mihomo.Rules.Final)
 	}
 	for index, rule := range mihomo.Rules.Extra {
 		rulePath := fmt.Sprintf("%s.rules.extra[%d]", path, index)
@@ -650,6 +691,8 @@ func validateMihomo(issues *Issues, doc *Document, path string, stack *Stack) {
 		}
 		if !targets[rule.Target] {
 			issues.add(rulePath+".target", "target does not exist: %s", rule.Target)
+		} else if disabledUpstreams[rule.Target] {
+			issues.add(rulePath+".target", "target upstream is disabled: %s", rule.Target)
 		}
 	}
 	if stack.Xray.Enabled && stack.Xray.Outbound.Type == "mihomo" && !mihomo.Enabled {

@@ -90,3 +90,34 @@ test('仅使用订阅来源的 Stack 显示动态上游出口，代理组流向�
   assert.ok(flow.edges.some((edge) => edge.from === 'group:AllProxy' && edge.to === 'provider:airport'))
   assert.ok(flow.edges.some((edge) => edge.from === 'provider:airport' && edge.to === 'internet'))
 })
+
+test('停用的上游节点不计入拓扑出口也不在详细流向中连线', () => {
+  const hk = stack('hk', { upstreams: [{ ...raw('a'), enabled: true }, { ...raw('b'), enabled: false }] })
+  const jp = stack('jp', { upstreams: [{ ...raw('c'), enabled: false }] })
+  const topology = stackTopology([hk, jp])
+  const node = (id) => topology.nodes.find((item) => item.id === id)
+  assert.deepEqual(node('upstream').lines, ['1 个外部节点'])
+  assert.deepEqual(node('upstream').filter.stackIds, [hk.id])
+  assert.deepEqual(node('direct').filter.stackIds, [jp.id])
+
+  const detail = {
+    name: 'hk',
+    xray: { enabled: true, inbounds: [], outbound: { type: 'mihomo' } },
+    mihomo: {
+      enabled: true, mode: 'Rule', socks: { name: 'socks', listen: '127.0.0.1', port: 1080, auth: 'none', accounts: [] },
+      http: { enabled: false }, rules: { final: 'AllProxy', extra: [] },
+      upstreams: [
+        { name: 'a', enabled: true, type: 'raw', config: { type: 'vmess', server: 'a.example.com', port: 443 } },
+        { name: 'b', enabled: false, type: 'raw', config: { type: 'vmess', server: 'b.example.com', port: 443 } },
+      ],
+      groups: [{ name: 'AllProxy', type: 'select', proxies: ['b', 'a', 'DIRECT'] }],
+    },
+  }
+  const flow = stackFlow(detail, [hk, jp])
+  const disabledNode = flow.nodes.find((item) => item.id === 'up:b')
+  assert.equal(disabledNode.dim, true)
+  assert.equal(disabledNode.badge, '已停用')
+  assert.equal(flow.edges.some((edge) => edge.to === 'up:b' || edge.from === 'up:b'), false)
+  const groupNode = flow.nodes.find((item) => item.id === 'group:AllProxy')
+  assert.deepEqual(groupNode.lines, ['★ a', '· DIRECT'])
+})

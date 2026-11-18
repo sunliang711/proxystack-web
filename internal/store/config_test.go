@@ -33,6 +33,8 @@ func TestSaveLoadDocumentRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	doc.Users[0].Profiles = []configdoc.Profile{{Name: "mobile", UUID: configdoc.RandomUUID(), SSPassword: "x"}}
 	doc.Stacks[1].Xray.Inbounds[1].Users[0].Profile = "mobile"
+	disabled := false
+	doc.Stacks[0].Mihomo.Upstreams[1].Enabled = &disabled
 
 	require.NoError(t, st.InTx(ctx, func(q *dbq.Queries) error { return store.SaveDocument(ctx, q, doc) }))
 	var loaded *configdoc.Document
@@ -45,6 +47,7 @@ func TestSaveLoadDocumentRoundTrip(t *testing.T) {
 	got, err := configdoc.Marshal(loaded, configdoc.FormatJSON)
 	require.NoError(t, err)
 	require.JSONEq(t, string(want), string(got))
+	require.False(t, loaded.Stacks[0].Mihomo.Upstreams[1].IsEnabled())
 
 	// 改名并删除一个 stack 后再保存：ID 不变，引用跟随改名。
 	usa1ID := loaded.Stacks[1].ID

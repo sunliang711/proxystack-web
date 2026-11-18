@@ -198,14 +198,15 @@ const groupLabel = (name: string, label: string) => () => {
   return tabs.some((t) => tabErrors.value[t]) ? h(NBadge, { dot: true, type: 'error', offset: [6, 0] }, () => label) : label
 }
 
-/** 按配置结构判断是否为聚合 stack：出站交给本 stack 的 Mihomo，上游全部引用其他 stack 的入站。 */
+/** 按配置结构判断是否为聚合 stack：出站交给本 stack 的 Mihomo，已启用的上游全部引用其他 stack 的入站。 */
 const relaysOnly = computed(() => {
   const s = stack.value
-  if (!s || s.xray.outbound.type !== 'mihomo' || !s.mihomo.enabled || !s.mihomo.upstreams.length || s.mihomo.providers?.length) return false
-  return s.mihomo.upstreams.every((upstream) => upstream.type === 'xray-socks5')
+  if (!s || s.xray.outbound.type !== 'mihomo' || !s.mihomo.enabled || s.mihomo.providers?.length) return false
+  const active = s.mihomo.upstreams.filter((upstream) => upstream.enabled !== false)
+  return active.length > 0 && active.every((upstream) => upstream.type === 'xray-socks5')
 })
-/** 角色是 auto，但上游里混有外部节点。 */
-const mixedAuto = computed(() => stack.value?.role === 'auto' && ((stack.value?.mihomo.providers?.length ?? 0) > 0 || (stack.value?.mihomo.upstreams ?? []).some((upstream) => upstream.type !== 'xray-socks5')))
+/** 角色是 auto，但已启用的上游里混有外部节点。 */
+const mixedAuto = computed(() => stack.value?.role === 'auto' && ((stack.value?.mihomo.providers?.length ?? 0) > 0 || (stack.value?.mihomo.upstreams ?? []).some((upstream) => upstream.enabled !== false && upstream.type !== 'xray-socks5')))
 
 const moreOptions = [
   { key: 'clone', label: '克隆' },

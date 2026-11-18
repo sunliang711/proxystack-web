@@ -85,7 +85,7 @@ export function stackTopology(stacks: Summary[]): FlowGraph {
   const viaMihomo = (stack: Summary) => stack.xray_enabled && stack.mihomo_enabled && stack.outbound.type === 'mihomo'
   // 上游里引用的其他 stack（经其入站转发）。
   const referenced = (stack: Summary) =>
-    viaMihomo(stack) ? [...new Set(stack.upstreams.filter((upstream) => upstream.type === 'xray-socks5' && byName.has(upstream.stack)).map((upstream) => upstream.stack))] : []
+    viaMihomo(stack) ? [...new Set(stack.upstreams.filter((upstream) => upstream.enabled !== false && upstream.type === 'xray-socks5' && byName.has(upstream.stack)).map((upstream) => upstream.stack))] : []
 
   type Exit = 'upstream' | 'external' | 'direct'
   /** stack 自己的出口；只经其他 stack 转发、或 Xray / Mihomo 未启用时没有自己的出口。 */
@@ -94,7 +94,7 @@ export function stackTopology(stacks: Summary[]): FlowGraph {
     if (stack.outbound.type === 'direct') return 'direct'
     if (stack.outbound.type !== 'mihomo') return 'external'
     if (!viaMihomo(stack)) return null
-    if (stack.upstreams.some((upstream) => upstream.type === 'raw') || stack.providers?.length) return 'upstream'
+    if (stack.upstreams.some((upstream) => upstream.enabled !== false && upstream.type === 'raw') || stack.providers?.length) return 'upstream'
     // 没有任何上游时代理组里只剩 DIRECT。
     return referenced(stack).length ? null : 'direct'
   }
@@ -151,7 +151,7 @@ export function stackTopology(stacks: Summary[]): FlowGraph {
     {
       id: 'upstream', title: '上游节点', tone: 'upstream', label: '经上游节点出口',
       lines: (members) => {
-        const external = members.reduce((sum, stack) => sum + stack.upstreams.filter((upstream) => upstream.type === 'raw').length, 0)
+        const external = members.reduce((sum, stack) => sum + stack.upstreams.filter((upstream) => upstream.enabled !== false && upstream.type === 'raw').length, 0)
         const providers = members.reduce((sum, stack) => sum + (stack.providers?.length ?? 0), 0)
         return [external ? `${external} 个外部节点` : '', providers ? `${providers} 个订阅来源（动态节点）` : ''].filter(Boolean)
       },
@@ -192,8 +192,8 @@ export function stackFlow(stack: Stack, summaries: Summary[]): FlowGraph {
   const inbounds = stack.xray.enabled ? stack.xray.inbounds : []
 
   // 来源：订阅客户端、引用本 stack 入站的其他 stack、本机程序。
-  const referrers = summaries.filter((other) => other.name !== stack.name && other.upstreams.some((upstream) => upstream.type === 'xray-socks5' && upstream.stack === stack.name))
-  const referenced = new Set(referrers.flatMap((other) => other.upstreams.filter((upstream) => upstream.stack === stack.name).map((upstream) => upstream.inbound)))
+  const referrers = summaries.filter((other) => other.name !== stack.name && other.upstreams.some((upstream) => upstream.enabled !== false && upstream.type === 'xray-socks5' && upstream.stack === stack.name))
+  const referenced = new Set(referrers.flatMap((other) => other.upstreams.filter((upstream) => upstream.enabled !== false && upstream.stack === stack.name).map((upstream) => upstream.inbound)))
   const subUsers = new Set(inbounds.filter((inbound) => inbound.sub).flatMap((inbound) => inbound.users.map((ref) => ref.user)))
   if (inbounds.some((inbound) => inbound.sub)) {
     nodes.push({ id: 'client', column: 0, title: '订阅客户端', subtitle: '经订阅导入节点', lines: [`${subUsers.size} 个用户`], tone: 'client' })
@@ -225,7 +225,7 @@ export function stackFlow(stack: Stack, summaries: Summary[]): FlowGraph {
     })
     if (inbound.sub) edges.push({ from: 'client', to: id })
     for (const other of referrers) {
-      if (other.upstreams.some((upstream) => upstream.stack === stack.name && upstream.inbound === inbound.name)) {
+      if (other.upstreams.some((upstream) => upstream.enabled !== false && upstream.stack === stack.name && upstream.inbound === inbound.name)) {
         edges.push({ from: `ref:${other.name}`, to: id, label: 'relay' })
       }
     }
@@ -305,27 +305,29 @@ export function stackFlow(stack: Stack, summaries: Summary[]): FlowGraph {
   columns.push('上游', '出口')
 
   const upstreams = new Map(mihomo.upstreams.map((upstream) => [upstream.name, upstream]))
+  const disabledUpstreams = new Set(mihomo.upstreams.filter((upstream) => upstream.enabled === false).map((upstream) => upstream.name))
   const targetId = (name: string) => (groups.has(name) ? `group:${name}` : upstreams.has(name) ? `up:${name}` : `builtin:${name}`)
   const used = new Set<string>()
   const usedProviders = new Set<string>()
 
   for (const group of mihomo.groups) {
+    const activeProxies = group.proxies.filter((proxy) => !disabledUpstreams.has(proxy))
     nodes.push({
       id: `group:${group.name}`,
       column: 5 + (groupLayer.get(group.name) ?? 0),
       title: group.name,
       subtitle: groupTypes[group.type] ?? group.type,
-      lines: limit([...group.proxies.map((proxy, index) => (group.type === 'select' && index === 0 ? `★ ${proxy}` : `· ${proxy}`)), ...(group.use ?? []).map((name) => `订阅：${name}`)]),
+      lines: limit([...activeProxies.map((proxy, index) => (group.type === 'select' && index === 0 ? `★ ${proxy}` : `· ${proxy}`)), ...(group.use ?? []).map((name) => `订阅：${name}`)]),
       tone: 'group',
       hint: group.type === 'select' ? '★ 为默认选中的成员' : undefined,
     })
-    group.proxies.forEach((proxy, index) => {
+    activeProxies.forEach((proxy, index) => {
       used.add(proxy)
       edges.push({ from: `group:${group.name}`, to: targetId(proxy), dashed: group.type === 'select' && index > 0 })
     })
     for (const [index, provider] of (group.use ?? []).entries()) {
       usedProviders.add(provider)
-      edges.push({ from: `group:${group.name}`, to: `provider:${provider}`, label: '动态节点', dashed: group.type === 'select' && (group.proxies.length > 0 || index > 0) })
+      edges.push({ from: `group:${group.name}`, to: `provider:${provider}`, label: '动态节点', dashed: group.type === 'select' && (activeProxies.length > 0 || index > 0) })
     }
   }
 
@@ -343,34 +345,37 @@ export function stackFlow(stack: Stack, summaries: Summary[]): FlowGraph {
   const byName = new Map(summaries.map((summary) => [summary.name, summary]))
   for (const upstream of mihomo.upstreams) {
     const id = `up:${upstream.name}`
-    const unused = !used.has(upstream.name)
+    const disabled = upstream.enabled === false
+    const unused = disabled || !used.has(upstream.name)
     if (upstream.type === 'xray-socks5') {
       nodes.push({
         id,
         column: upstreamColumn,
         title: upstream.name,
+        badge: disabled ? '已停用' : undefined,
         subtitle: `经 stack ${upstream.stack}`,
         lines: [`${upstream.stack}.${upstream.inbound}`],
         tone: 'stack',
         dim: unused,
-        hint: unused ? '没有被代理组或规则引用，流量不会经过它' : '点击打开该 stack',
+        hint: disabled ? '该上游已停用，不会写入 Mihomo 配置' : unused ? '没有被代理组或规则引用，流量不会经过它' : '点击打开该 stack',
         clickable: byName.has(upstream.stack),
         stackId: byName.get(upstream.stack)?.id,
       })
-      edges.push({ from: id, to: 'internet', label: `经 ${upstream.stack}` })
+      if (!disabled) edges.push({ from: id, to: 'internet', label: `经 ${upstream.stack}` })
     } else {
       const config = (upstream.config ?? {}) as Record<string, unknown>
       nodes.push({
         id,
         column: upstreamColumn,
         title: upstream.name,
+        badge: disabled ? '已停用' : undefined,
         subtitle: `外部节点 · ${config.type ?? '?'}`,
         lines: [`${config.server ?? ''}:${config.port ?? ''}`],
         tone: 'upstream',
         dim: unused,
-        hint: unused ? '没有被代理组或规则引用，流量不会经过它' : undefined,
+        hint: disabled ? '该上游已停用，不会写入 Mihomo 配置' : unused ? '没有被代理组或规则引用，流量不会经过它' : undefined,
       })
-      edges.push({ from: id, to: 'internet' })
+      if (!disabled) edges.push({ from: id, to: 'internet' })
     }
   }
   for (const provider of mihomo.providers ?? []) {

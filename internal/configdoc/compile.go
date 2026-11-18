@@ -205,7 +205,12 @@ func compileStack(settings Settings, stack *Stack) (domain.Stack, error) {
 			Users:  listenerUsers(mihomo.HTTP),
 		}}
 	}
+	disabledUpstreams := map[string]bool{}
 	for index, upstream := range mihomo.Upstreams {
+		if !upstream.IsEnabled() {
+			disabledUpstreams[upstream.Name] = true
+			continue
+		}
 		compiled := domain.ClashUpstream{Name: upstream.Name, Type: upstream.Type}
 		switch upstream.Type {
 		case "xray-socks5":
@@ -218,10 +223,16 @@ func compileStack(settings Settings, stack *Stack) (domain.Stack, error) {
 		result.Clash.Upstreams = append(result.Clash.Upstreams, compiled)
 	}
 	for _, group := range mihomo.Groups {
+		proxies := make([]string, 0, len(group.Proxies))
+		for _, proxy := range group.Proxies {
+			if !disabledUpstreams[proxy] {
+				proxies = append(proxies, proxy)
+			}
+		}
 		result.Clash.Groups = append(result.Clash.Groups, domain.ClashGroup{
 			Name:     group.Name,
 			Type:     group.Type,
-			Proxies:  append([]string(nil), group.Proxies...),
+			Proxies:  proxies,
 			URL:      group.URL,
 			Interval: group.Interval,
 			Strategy: group.Strategy,

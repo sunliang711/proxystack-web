@@ -41,7 +41,7 @@ const directSuffix = computed({
 const directNameExample = computed(() => `${props.stack.name} vmess${externalCount.value > 1 ? ' · 上游名' : ''}${directSuffix.value || ' [DRT]'}`)
 const userOptions = computed(() => props.users.map((user) => ({ label: user.remark ? `${user.name}（${user.remark}）` : user.name, value: user.name })))
 const missingDirectUsers = computed(() => props.users.filter((user) => !directUsers.value.includes(user.name)))
-const externalCount = computed(() => props.stack.mihomo.upstreams.filter((upstream) => upstream.type === 'raw').length)
+const externalCount = computed(() => props.stack.mihomo.upstreams.filter((upstream) => upstream.enabled !== false && upstream.type === 'raw').length)
 
 function selectAllDirectUsers() {
   directUsers.value = [...directUsers.value, ...missingDirectUsers.value.map((user) => user.name)]
@@ -79,8 +79,9 @@ const columns = computed<DataTableColumns<Upstream & { _index: number }>>(() => 
     title: '名称',
     key: 'name',
     render: (row) =>
-      h(NSpace, { size: 4 }, () => [
-        row.name,
+      h(NSpace, { size: 4, align: 'center' }, () => [
+        row.enabled === false ? h(NText, { depth: 3 }, () => row.name) : row.name,
+        row.enabled === false ? h(NTag, { size: 'small', bordered: false }, () => '已停用') : null,
         hasErrorsUnder(props.errors, `mihomo.upstreams[${row._index}]`) ? h(NTag, { size: 'small', type: 'error' }, () => '有错误') : null,
       ]),
   },
@@ -93,6 +94,18 @@ const columns = computed<DataTableColumns<Upstream & { _index: number }>>(() => 
       const config = (row.config ?? {}) as RawConfig
       return `${config.type ?? '?'} ${config.server ?? ''}:${config.port ?? ''}`
     },
+  },
+  {
+    title: '启用',
+    key: 'enabled',
+    width: 80,
+    render: (row) =>
+      h(NSwitch, {
+        size: 'small',
+        value: row.enabled !== false,
+        'aria-label': `启用上游 ${row.name}`,
+        onUpdateValue: (value: boolean) => setEnabled(row._index, value),
+      }),
   },
   {
     title: '操作',
@@ -109,6 +122,10 @@ const columns = computed<DataTableColumns<Upstream & { _index: number }>>(() => 
   },
 ])
 
+function setEnabled(index: number, value: boolean) {
+  props.stack.mihomo.upstreams[index].enabled = value
+}
+
 function remove(index: number) {
   const name = props.stack.mihomo.upstreams[index].name
   props.stack.mihomo.upstreams.splice(index, 1)
@@ -123,8 +140,9 @@ function open(index: number) {
   const source: Upstream =
     index < props.stack.mihomo.upstreams.length
       ? props.stack.mihomo.upstreams[index]
-      : { name: '', type: 'raw', stack: '', inbound: '', config: { type: 'vmess', server: '', port: 443, uuid: '', network: 'ws', tls: true } }
+      : { name: '', enabled: true, type: 'raw', stack: '', inbound: '', config: { type: 'vmess', server: '', port: 443, uuid: '', network: 'ws', tls: true } }
   const draft: Upstream = JSON.parse(JSON.stringify(source))
+  draft.enabled = draft.enabled !== false
   editing.value = { index, draft, config: (draft.config ?? {}) as RawConfig }
   yamlText.value = YAML.stringify(editing.value.config)
   yamlError.value = ''
@@ -333,7 +351,7 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
     <NText depth="3">新增的上游会自动加入代理组，排在 DIRECT 之前；顺序和成员可以在「代理组」标签页调整。</NText>
     <NButton type="primary" @click="open(stack.mihomo.upstreams.length)">添加上游</NButton>
   </NSpace>
-  <NDataTable :columns="columns" :data="rows" :scroll-x="840" size="small" />
+  <NDataTable :columns="columns" :data="rows" :scroll-x="920" size="small" />
 
   <!-- 直连订阅是附加功能，放在上游列表之后，默认折叠。 -->
   <NCard size="small" style="margin-top: 20px">
@@ -380,6 +398,9 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
       <NForm label-placement="left" label-width="130">
         <NFormItem label="name" required v-bind="f('name', '在本 stack 的上游和代理组中唯一；改名会同步代理组和规则')">
           <NInput v-model:value="editing.draft.name" />
+        </NFormItem>
+        <NFormItem label="启用" v-bind="f('enabled')">
+          <NSwitch :value="editing.draft.enabled !== false" @update:value="(v: boolean) => { if (editing) editing.draft.enabled = v }" />
         </NFormItem>
         <NFormItem label="type" v-bind="f('type')">
           <NRadioGroup v-model:value="editing.draft.type">

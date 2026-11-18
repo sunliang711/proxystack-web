@@ -237,6 +237,12 @@ func (s *Stack) Normalize() {
 	if s.Mihomo.Upstreams == nil {
 		s.Mihomo.Upstreams = []Upstream{}
 	}
+	for index := range s.Mihomo.Upstreams {
+		if s.Mihomo.Upstreams[index].Enabled == nil {
+			enabled := true
+			s.Mihomo.Upstreams[index].Enabled = &enabled
+		}
+	}
 	if s.Mihomo.Groups == nil {
 		s.Mihomo.Groups = []Group{}
 	}

@@ -13,6 +13,7 @@ type Group = Schemas['Group']
 const props = defineProps<{ stack: Schemas['Stack']; errors: FormErrors }>()
 const editing = ref<{ index: number; draft: Group } | null>(null)
 const rows = computed(() => props.stack.mihomo.groups.map((group, index) => ({ ...group, _index: index })))
+const disabledUpstreams = computed(() => new Set(props.stack.mihomo.upstreams.filter((u) => u.enabled === false).map((u) => u.name)))
 
 const columns = computed<DataTableColumns<Group & { _index: number }>>(() => [
   {
@@ -25,7 +26,14 @@ const columns = computed<DataTableColumns<Group & { _index: number }>>(() => [
       ]),
   },
   { title: '类型', key: 'type', width: 120 },
-  { title: '成员', key: 'proxies', render: (row) => [...row.proxies, ...(row.use ?? []).map((name) => `订阅:${name}`)].join(' → ') },
+  {
+    title: '成员',
+    key: 'proxies',
+    render: (row) => [
+      ...row.proxies.map((name) => (disabledUpstreams.value.has(name) ? `${name}（已停用）` : name)),
+      ...(row.use ?? []).map((name) => `订阅:${name}`),
+    ].join(' → '),
+  },
   {
     title: '操作',
     key: 'actions',

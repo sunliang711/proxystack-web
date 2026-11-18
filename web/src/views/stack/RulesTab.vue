@@ -12,7 +12,13 @@ const textMode = ref(false)
 const text = ref('')
 const parseError = ref('')
 
-const targets = computed(() => proxyTargets(props.stack).map((t) => ({ label: t, value: t })))
+const disabledUpstreams = computed(() => new Set(props.stack.mihomo.upstreams.filter((u) => u.enabled === false).map((u) => u.name)))
+const targets = computed(() =>
+  proxyTargets(props.stack).map((t) => ({
+    label: disabledUpstreams.value.has(t) ? `${t}（已停用）` : t,
+    value: t,
+  })),
+)
 const typeOptions = ruleTypes.map((t) => ({ label: t, value: t }))
 const f = (path: string, hint?: string) => fieldState(props.errors, `mihomo.rules.${path}`, hint)
 const rules = computed(() => props.stack.mihomo.rules)

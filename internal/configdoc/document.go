@@ -480,11 +480,17 @@ type ListenerAccount struct {
 // Upstream 是 mihomo 上游代理。
 type Upstream struct {
 	ID      int64      `json:"id,omitempty" yaml:"-"`
+	Enabled *bool      `json:"enabled" yaml:"enabled,omitempty" required:"false" doc:"是否启用；缺省为 true"`
 	Name    string     `json:"name" yaml:"name"`
 	Type    string     `json:"type" yaml:"type" enum:"raw,xray-socks5"`
 	Stack   string     `json:"stack" yaml:"stack,omitempty" doc:"type=xray-socks5 时引用的 stack"`
 	Inbound string     `json:"inbound" yaml:"inbound,omitempty" doc:"type=xray-socks5 时引用的 socks5 入站"`
 	Config  RawMapping `json:"config" yaml:"config,omitempty" doc:"type=raw 时的 mihomo 节点字段"`
+}
+
+// IsEnabled 返回上游是否启用；未显式指定时视为启用。
+func (u Upstream) IsEnabled() bool {
+	return u.Enabled == nil || *u.Enabled
 }
 
 // Group 是 mihomo 代理组。

@@ -6080,6 +6080,13 @@
               "null"
             ]
           },
+          "enabled": {
+            "description": "是否启用；缺省为 true",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "id": {
             "format": "int64",
             "type": "integer"
@@ -6115,6 +6122,9 @@
       "UpstreamSummary": {
         "additionalProperties": false,
         "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
           "inbound": {
             "type": "string"
           },
@@ -6140,6 +6150,7 @@
         },
         "required": [
           "name",
+          "enabled",
           "type",
           "stack",
           "inbound",

@@ -352,8 +352,8 @@ func (q *Queries) InsertMihomoListener(ctx context.Context, arg InsertMihomoList
 }
 
 const insertMihomoUpstream = `-- name: InsertMihomoUpstream :one
-INSERT INTO mihomo_upstreams (id, stack_id, position, name, type, ref_inbound_id, raw_config)
-VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?)
+INSERT INTO mihomo_upstreams (id, stack_id, position, enabled, name, type, ref_inbound_id, raw_config)
+VALUES (nullif(?, 0), ?, ?, ?, ?, ?, ?, ?)
 RETURNING id
 `
 
@@ -361,6 +361,7 @@ type InsertMihomoUpstreamParams struct {
 	NULLIF       interface{}   `json:"nullif"`
 	StackID      int64         `json:"stack_id"`
 	Position     int64         `json:"position"`
+	Enabled      int64         `json:"enabled"`
 	Name         string        `json:"name"`
 	Type         string        `json:"type"`
 	RefInboundID sql.NullInt64 `json:"ref_inbound_id"`
@@ -372,6 +373,7 @@ func (q *Queries) InsertMihomoUpstream(ctx context.Context, arg InsertMihomoUpst
 		arg.NULLIF,
 		arg.StackID,
 		arg.Position,
+		arg.Enabled,
 		arg.Name,
 		arg.Type,
 		arg.RefInboundID,
@@ -672,7 +674,7 @@ func (q *Queries) ListMihomoListeners(ctx context.Context) ([]MihomoListener, er
 }
 
 const listMihomoUpstreams = `-- name: ListMihomoUpstreams :many
-SELECT id, stack_id, position, name, type, ref_inbound_id, raw_config FROM mihomo_upstreams ORDER BY stack_id, position, id
+SELECT id, stack_id, position, name, type, ref_inbound_id, raw_config, enabled FROM mihomo_upstreams ORDER BY stack_id, position, id
 `
 
 func (q *Queries) ListMihomoUpstreams(ctx context.Context) ([]MihomoUpstream, error) {
@@ -692,6 +694,7 @@ func (q *Queries) ListMihomoUpstreams(ctx context.Context) ([]MihomoUpstream, er
 			&i.Type,
 			&i.RefInboundID,
 			&i.RawConfig,
+			&i.Enabled,
 		); err != nil {
 			return nil, err
 		}

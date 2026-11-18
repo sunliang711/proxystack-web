@@ -24,8 +24,14 @@ const canonical = (key: string) => key.replaceAll('_', '-')
 const overrides = computed(() => props.stack.direct_overrides ?? [])
 const directUsers = computed(() => props.stack.direct_users ?? [])
 const rawUpstreams = computed(() => props.stack.mihomo.upstreams.filter((upstream) => upstream.type === 'raw'))
+const disabledUpstreams = computed(() => new Set(props.stack.mihomo.upstreams.filter((upstream) => upstream.enabled === false).map((upstream) => upstream.name)))
 const userOptions = computed(() => directUsers.value.map((name) => ({ label: name, value: name })))
-const upstreamOptions = computed(() => rawUpstreams.value.map((upstream) => ({ label: upstream.name, value: upstream.name })))
+const upstreamOptions = computed(() =>
+  rawUpstreams.value.map((upstream) => ({
+    label: upstream.enabled === false ? `${upstream.name}（已停用）` : upstream.name,
+    value: upstream.name,
+  })),
+)
 
 const rows = computed(() => overrides.value.map((override, index) => ({ ...override, _index: index })))
 const columns = computed<DataTableColumns<Override & { _index: number }>>(() => [
@@ -38,7 +44,14 @@ const columns = computed<DataTableColumns<Override & { _index: number }>>(() => 
         hasErrorsUnder(props.errors, `direct_overrides[${row._index}]`) ? h(NTag, { size: 'small', type: 'error' }, () => '有错误') : null,
       ]),
   },
-  { title: '上游', key: 'upstream' },
+  {
+    title: '上游',
+    key: 'upstream',
+    render: (row) =>
+      disabledUpstreams.value.has(row.upstream)
+        ? h(NSpace, { size: 4, align: 'center' }, () => [h(NText, { depth: 3 }, () => row.upstream), h(NTag, { size: 'small', bordered: false }, () => '已停用')])
+        : row.upstream,
+  },
   { title: '覆盖字段', key: 'fields', render: (row) => Object.keys((row.config ?? {}) as RawConfig).join('、') },
   {
     title: '操作',

@@ -237,7 +237,7 @@ func LoadDocument(ctx context.Context, q *dbq.Queries) (*configdoc.Document, err
 	}
 	for _, row := range upstreams {
 		stack := &doc.Stacks[stackIndex[row.StackID]]
-		upstream := configdoc.Upstream{ID: row.ID, Name: row.Name, Type: row.Type}
+		upstream := configdoc.Upstream{ID: row.ID, Enabled: boolPtr(row.Enabled != 0), Name: row.Name, Type: row.Type}
 		if row.RefInboundID.Valid {
 			pos, ok := inboundIndex[row.RefInboundID.Int64]
 			if !ok {
@@ -660,7 +660,7 @@ func SaveDocument(ctx context.Context, q *dbq.Queries, doc *configdoc.Document) 
 				rawConfig = string(data)
 			}
 			upstreamID, err := q.InsertMihomoUpstream(ctx, dbq.InsertMihomoUpstreamParams{
-				NULLIF: upstream.ID, StackID: stack.ID, Position: int64(position), Name: upstream.Name,
+				NULLIF: upstream.ID, StackID: stack.ID, Position: int64(position), Enabled: boolInt(upstream.IsEnabled()), Name: upstream.Name,
 				Type: upstream.Type, RefInboundID: refInbound, RawConfig: rawConfig,
 			})
 			if err != nil {
@@ -699,6 +699,10 @@ func boolInt(value bool) int64 {
 		return 1
 	}
 	return 0
+}
+
+func boolPtr(value bool) *bool {
+	return &value
 }
 
 func encodeColumn(value any) (string, error) {

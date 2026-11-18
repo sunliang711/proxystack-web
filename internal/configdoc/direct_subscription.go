@@ -22,7 +22,7 @@ func StackDirectNodes(doc *Document) ([]sub.Node, error) {
 		}
 		externalCount := 0
 		for _, upstream := range stack.Mihomo.Upstreams {
-			if upstream.Type == "raw" {
+			if upstream.IsEnabled() && upstream.Type == "raw" {
 				externalCount++
 			}
 		}
@@ -36,7 +36,7 @@ func StackDirectNodes(doc *Document) ([]sub.Node, error) {
 				continue
 			}
 			for _, upstream := range stack.Mihomo.Upstreams {
-				if upstream.Type != "raw" {
+				if !upstream.IsEnabled() || upstream.Type != "raw" {
 					continue
 				}
 				protocol, _ := upstream.Config.Get("type")

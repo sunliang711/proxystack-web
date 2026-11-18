@@ -218,6 +218,7 @@ type MihomoUpstream struct {
 	Type         string        `json:"type"`
 	RefInboundID sql.NullInt64 `json:"ref_inbound_id"`
 	RawConfig    string        `json:"raw_config"`
+	Enabled      int64         `json:"enabled"`
 }
 
 type Notification struct {

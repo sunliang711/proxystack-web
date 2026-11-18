@@ -105,6 +105,7 @@ type OutboundSummary struct {
 // UpstreamSummary 是 mihomo 上游的去向：外部节点给出协议和地址，引用其他 stack 时给出 stack 和入站名。
 type UpstreamSummary struct {
 	Name     string `json:"name"`
+	Enabled  bool   `json:"enabled"`
 	Type     string `json:"type" enum:"raw,xray-socks5"`
 	Stack    string `json:"stack"`
 	Inbound  string `json:"inbound"`
@@ -615,7 +616,7 @@ func summarizeStack(stack configdoc.Stack) StackSummary {
 		summary.Outbound.Target = net.JoinHostPort(stack.Xray.Outbound.Server, strconv.Itoa(stack.Xray.Outbound.Port))
 	}
 	for _, upstream := range stack.Mihomo.Upstreams {
-		item := UpstreamSummary{Name: upstream.Name, Type: upstream.Type, Stack: upstream.Stack, Inbound: upstream.Inbound}
+		item := UpstreamSummary{Name: upstream.Name, Enabled: upstream.IsEnabled(), Type: upstream.Type, Stack: upstream.Stack, Inbound: upstream.Inbound}
 		if upstream.Type == "raw" {
 			item.Protocol, item.Server = rawEndpoint(upstream.Config)
 		}

@@ -3773,6 +3773,8 @@ export interface components {
             config: {
                 [key: string]: unknown;
             } | null;
+            /** @description 是否启用；缺省为 true */
+            enabled?: boolean | null;
             /** Format: int64 */
             id?: number;
             /** @description type=xray-socks5 时引用的 socks5 入站 */
@@ -3784,6 +3786,7 @@ export interface components {
             type: "raw" | "xray-socks5";
         };
         UpstreamSummary: {
+            enabled: boolean;
             inbound: string;
             name: string;
             protocol: string;
