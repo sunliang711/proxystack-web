@@ -57,14 +57,16 @@ const series = computed(() => {
 const days = computed(() => daily.value.map((item) => item.day.slice(5)))
 const reference = computed(() => (!stackId.value && props.dailyLimit ? { value: props.dailyLimit, label: '每日阈值' } : undefined))
 
-/** 趋势图可在近 30 天日用量和最近若干小时的小时用量之间切换；小时用量来自流量明细，随用量轮询一起刷新。 */
-const view = ref<'daily' | 'hourly'>('daily')
+/** 趋势图可在最近若干小时的小时用量和近 30 天日用量之间切换，默认按小时；小时用量来自流量明细，随用量轮询一起刷新。 */
+const view = ref<'daily' | 'hourly'>('hourly')
 const hours = ref(24)
 const hourOptions = [{ label: '24 小时', value: 24 }, { label: '48 小时', value: 48 }, { label: '7 天', value: 168 }]
 const { trend: hourly, error: hourlyError, load: loadHourly } = useTrafficTrend(() => view.value === 'hourly'
   ? { level: 'hour', span: hours.value, view: 'stack', stacks: stackId.value ? [stackId.value] : [], users: [props.userId] }
   : null)
-watch(usage, () => void loadHourly())
+watch(usage, (next, prev) => {
+  if (next && prev) void loadHourly()
+})
 /** 在流量明细页查看同一用户、同一 Stack 的更长范围或导出。 */
 const trafficLink = computed(() => ({
   name: 'traffic',
@@ -119,7 +121,7 @@ const trafficLink = computed(() => ({
         <NText strong>各 Stack 用量</NText>
         <NSelect v-model:value="stackId" :options="usage.by_stack.map((stack) => ({ label: stack.stack, value: stack.stack_id }))" clearable filterable size="small" placeholder="全部 Stack" class="stack-select" />
       </div>
-      <NText depth="3" class="stack-note">今日用量和最近 30 天已保留的明细，趋势图可按天或按小时查看；额度和暂停仍以全部 Stack 的合计判定。</NText>
+      <NText depth="3" class="stack-note">今日用量和最近 30 天已保留的明细，趋势图可按小时或按天查看；额度和暂停仍以全部 Stack 的合计判定。</NText>
       <div v-if="selectedStacks.length" class="table-scroll"><NTable :bordered="false" size="small">
         <thead><tr><th>Stack</th><th>今日上行 / 下行</th><th>今日合计</th><th>近 30 天上行 / 下行</th><th>近 30 天合计</th></tr></thead>
         <tbody>
@@ -139,8 +141,8 @@ const trafficLink = computed(() => ({
       </NTable></div>
       <div class="trend-head">
         <NRadioGroup v-model:value="view" size="small">
-          <NRadioButton value="daily">按天</NRadioButton>
           <NRadioButton value="hourly">按小时</NRadioButton>
+          <NRadioButton value="daily">按天</NRadioButton>
         </NRadioGroup>
         <NRadioGroup v-if="view === 'hourly'" v-model:value="hours" size="small">
           <NRadioButton v-for="option in hourOptions" :key="option.value" :value="option.value">{{ option.label }}</NRadioButton>

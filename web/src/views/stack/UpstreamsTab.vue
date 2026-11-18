@@ -2,7 +2,7 @@
 import { computed, h, ref, watch } from 'vue'
 import YAML from 'yaml'
 import {
-  NAlert, NButton, NCard, NCascader, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NInputNumber,
+  NAlert, NButton, NCard, NCascader, NCollapse, NCollapseItem, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NInputNumber,
   NPopconfirm, NRadioButton, NRadioGroup, NSelect, NSpace, NSwitch, NTabPane, NTabs, NTag, NText, useMessage,
   type DataTableColumns,
 } from 'naive-ui'
@@ -46,6 +46,26 @@ const externalCount = computed(() => props.stack.mihomo.upstreams.filter((upstre
 function selectAllDirectUsers() {
   directUsers.value = [...directUsers.value, ...missingDirectUsers.value.map((user) => user.name)]
 }
+
+// 直连订阅默认折叠，出现校验错误时自动展开，切换 Stack 时恢复折叠。
+const directHasErrors = computed(() =>
+  hasErrorsUnder(props.errors, 'direct_users') ||
+  hasErrorsUnder(props.errors, 'direct_suffix') ||
+  hasErrorsUnder(props.errors, 'direct_overrides'),
+)
+const directExpanded = ref<string[]>(directHasErrors.value ? ['direct'] : [])
+watch(() => props.errors, () => {
+  if (directHasErrors.value && !directExpanded.value.includes('direct')) directExpanded.value = ['direct']
+})
+watch(() => props.stack.id, () => {
+  directExpanded.value = directHasErrors.value ? ['direct'] : []
+})
+const directSummary = computed(() => {
+  const parts = [directUsers.value.length ? `已授权 ${directUsers.value.length} 人` : '未启用']
+  const overrides = props.stack.direct_overrides?.length ?? 0
+  if (overrides) parts.push(`${overrides} 条覆盖`)
+  return parts.join(' · ')
+})
 
 const editing = ref<{ index: number; draft: Upstream; config: RawConfig } | null>(null)
 const yamlText = ref('')
@@ -315,33 +335,44 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
   </NSpace>
   <NDataTable :columns="columns" :data="rows" :scroll-x="840" size="small" />
 
-  <!-- 直连订阅是附加功能，放在上游列表之后。 -->
-  <NCard title="直连上游订阅" size="small" style="margin-top: 20px">
-    <NForm label-placement="top">
-      <NFormItem label="允许直连的用户" v-bind="fieldState(errors, 'direct_users')">
-        <NSpace vertical style="width: 100%">
-          <NSelect v-model:value="directUsers" :options="userOptions" multiple filterable clearable placeholder="未选择时不生成直连节点" />
+  <!-- 直连订阅是附加功能，放在上游列表之后，默认折叠。 -->
+  <NCard size="small" style="margin-top: 20px">
+    <NCollapse v-model:expanded-names="directExpanded">
+      <NCollapseItem name="direct">
+        <template #header>
           <NSpace align="center" :size="8">
-            <NText depth="3">已选 {{ directUsers.length }} / 共 {{ users.length }}</NText>
-            <NButton size="tiny" :disabled="!missingDirectUsers.length" @click="selectAllDirectUsers">选择所有用户</NButton>
-            <NButton size="tiny" :disabled="!directUsers.length" @click="directUsers = []">清空</NButton>
+            <NText strong>直连上游订阅</NText>
+            <NText depth="3">{{ directSummary }}</NText>
+            <NTag v-if="directHasErrors" size="small" type="error">有错误</NTag>
           </NSpace>
-        </NSpace>
-      </NFormItem>
-      <NFormItem label="直连节点后缀" v-bind="fieldState(errors, 'direct_suffix', '保留输入中的空格；留空使用默认值「 [DRT]」，其中包含一个前导空格')">
-        <NInput v-model:value="directSuffix" placeholder=" [DRT]" style="max-width: 360px" />
-      </NFormItem>
-    </NForm>
-    <NText depth="3">命名示例：<NText code style="white-space: pre-wrap">{{ directNameExample }}</NText></NText>
-    <NText depth="3" style="display: block; margin-top: 8px">
-      保留原订阅节点，为授权用户额外提供 {{ externalCount }} 个外部上游的直连节点，名称追加上述后缀；多个上游会同时标注上游名。
-      不包含引用其他 Stack 入站的上游，无需加入入站用户列表。保存后即可预览，发布订阅包后下发，无需应用运行配置。
-      各订阅格式沿用现有协议转换能力，Surge 不支持的节点会被跳过。
-    </NText>
-    <NAlert v-if="directUsers.length" type="info" :show-icon="false" style="margin-top: 12px">
-      直连会向授权用户下发上游连接凭据，流量不经过本机，无法计入本机用量统计或由本机限额阻断。取消授权并发布后停止下发，已下载配置需在上游更换凭据才能失效。
-    </NAlert>
-    <DirectOverrides :stack="stack" :errors="errors" />
+        </template>
+        <NForm label-placement="top">
+          <NFormItem label="允许直连的用户" v-bind="fieldState(errors, 'direct_users')">
+            <NSpace vertical style="width: 100%">
+              <NSelect v-model:value="directUsers" :options="userOptions" multiple filterable clearable placeholder="未选择时不生成直连节点" />
+              <NSpace align="center" :size="8">
+                <NText depth="3">已选 {{ directUsers.length }} / 共 {{ users.length }}</NText>
+                <NButton size="tiny" :disabled="!missingDirectUsers.length" @click="selectAllDirectUsers">选择所有用户</NButton>
+                <NButton size="tiny" :disabled="!directUsers.length" @click="directUsers = []">清空</NButton>
+              </NSpace>
+            </NSpace>
+          </NFormItem>
+          <NFormItem label="直连节点后缀" v-bind="fieldState(errors, 'direct_suffix', '保留输入中的空格；留空使用默认值「 [DRT]」，其中包含一个前导空格')">
+            <NInput v-model:value="directSuffix" placeholder=" [DRT]" style="max-width: 360px" />
+          </NFormItem>
+        </NForm>
+        <NText depth="3">命名示例：<NText code style="white-space: pre-wrap">{{ directNameExample }}</NText></NText>
+        <NText depth="3" style="display: block; margin-top: 8px">
+          保留原订阅节点，为授权用户额外提供 {{ externalCount }} 个外部上游的直连节点，名称追加上述后缀；多个上游会同时标注上游名。
+          不包含引用其他 Stack 入站的上游，无需加入入站用户列表。保存后即可预览，发布订阅包后下发，无需应用运行配置。
+          各订阅格式沿用现有协议转换能力，Surge 不支持的节点会被跳过。
+        </NText>
+        <NAlert v-if="directUsers.length" type="info" :show-icon="false" style="margin-top: 12px">
+          直连会向授权用户下发上游连接凭据，流量不经过本机，无法计入本机用量统计或由本机限额阻断。取消授权并发布后停止下发，已下载配置需在上游更换凭据才能失效。
+        </NAlert>
+        <DirectOverrides :stack="stack" :errors="errors" />
+      </NCollapseItem>
+    </NCollapse>
   </NCard>
 
   <NDrawer :show="!!editing" :width="640" @update:show="(v) => !v && (editing = null)">
