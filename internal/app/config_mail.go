@@ -23,7 +23,7 @@ func configMailRecipients(params JobParams, settings configdoc.NotifySettings) [
 	return []string{settings.From}
 }
 
-// validateConfigMailParams 校验配置导出邮件任务的收件人和口令。口令可以留空，此时任务跳过。
+// validateConfigMailParams 校验配置导出邮件任务的收件人和口令。口令可以留空，此时凭据明文导出。
 func validateConfigMailParams(params JobParams) error {
 	for index, recipient := range params.Recipients {
 		if _, err := mail.ParseAddress(recipient); err != nil {
@@ -36,7 +36,7 @@ func validateConfigMailParams(params JobParams) error {
 	return nil
 }
 
-// runConfigMailJob 导出全部配置（凭据用任务口令加密），作为附件通过 SMTP 发出。邮件通知未启用或未设置口令时跳过。
+// runConfigMailJob 导出全部配置，作为附件通过 SMTP 发出。设置口令时凭据加密，未设置时明文导出；邮件通知未启用时跳过。
 func runConfigMailJob(ctx context.Context, s *Service, params JobParams, logf Logf) error {
 	settings, err := s.loadSettings(ctx)
 	if err != nil {
@@ -44,10 +44,6 @@ func runConfigMailJob(ctx context.Context, s *Service, params JobParams, logf Lo
 	}
 	if !settings.Notify.Enabled {
 		logf("系统设置中的邮件通知未启用，跳过")
-		return errJobSkipped
-	}
-	if params.Passphrase == "" {
-		logf("未设置加密口令，跳过；请在任务的「编辑」中设置口令")
 		return errJobSkipped
 	}
 	recipients := configMailRecipients(params, settings.Notify)
@@ -58,19 +54,21 @@ func runConfigMailJob(ctx context.Context, s *Service, params JobParams, logf Lo
 	if err != nil {
 		return err
 	}
-	exported, err := s.ExportConfig(ctx, SystemActor, ExportOptions{
-		Scope: configdoc.ExportScope{Scope: configdoc.ScopeAll}, Format: configdoc.FormatYAML,
-		Secrets: configdoc.SecretsEncrypted, Passphrase: params.Passphrase,
-	})
+	exported, err := s.exportAllConfig(ctx, params.Passphrase)
 	if err != nil {
 		return err
+	}
+	secretsNote, restoreNote := "凭据字段已用「配置导出邮件」任务中设置的口令加密。", "上传附件并输入口令"
+	if params.Passphrase == "" {
+		secretsNote, restoreNote = "任务未设置加密口令，凭据字段为明文，请妥善保管此邮件。", "上传附件"
+		logf("未设置加密口令，凭据明文导出")
 	}
 	logf("已导出 %s（%d 个用户，%d 个 Stack，%d 字节）", exported.Filename, len(doc.Users), len(doc.Stacks), len(exported.Data))
 	hostname, _ := os.Hostname()
 	at := s.Now().In(location(settings))
 	lines := []string{
 		"附件是本实例全部配置的导出文件：系统设置（不含面板监听和管理员）、全部用户和 Stack。",
-		"凭据字段已用「配置导出邮件」任务中设置的口令加密。",
+		secretsNote,
 		"",
 		"主机：" + hostname,
 		"导出时间：" + at.Format(time.DateTime+" MST"),
@@ -79,7 +77,7 @@ func runConfigMailJob(ctx context.Context, s *Service, params JobParams, logf Lo
 	if info, err := s.Info(ctx); err == nil {
 		lines = append(lines, "面板："+info.PanelURL)
 	}
-	lines = append(lines, "", "恢复方法：在面板「备份与迁移」页点「导入配置」，上传附件并输入口令。流量数据、审计日志和管理员账号不在此文件中。")
+	lines = append(lines, "", "恢复方法：在面板「备份与迁移」页点「导入配置」，"+restoreNote+"。流量数据、审计日志和管理员账号不在此文件中。")
 	subject := fmt.Sprintf("[proxystack-web] 配置导出：%s %s", hostname, at.Format(time.DateOnly))
 	config := smtpConfig(settings.Notify)
 	config.To = recipients

@@ -2648,7 +2648,7 @@ export interface components {
              * @description 数据库备份保留份数
              */
             keep?: number;
-            /** @description 配置导出邮件中凭据的加密口令，至少 8 个字符；读取时返回占位 */
+            /** @description 配置导出中凭据的加密口令，至少 8 个字符；留空时凭据明文导出；读取时返回占位 */
             passphrase?: string;
             /**
              * Format: int64
@@ -2662,6 +2662,14 @@ export interface components {
              * @description 出口首次查询失败后的额外重试次数
              */
             retry_count?: number;
+            /** @description SafeKeep 客户 API Key；读取时返回占位 */
+            safekeep_api_key?: string;
+            /** @description SafeKeep 中的存放子路径 */
+            safekeep_path?: string;
+            /** @description 上传到的 SafeKeep 上游名称，留空时用客户默认上游组 */
+            safekeep_targets?: string[];
+            /** @description SafeKeep 服务地址，例如 https://safekeep.example.com */
+            safekeep_url?: string;
         };
         JobRun: {
             /** Format: date-time */

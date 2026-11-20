@@ -41,6 +41,7 @@ const planPresets = computed(() => {
     ]
   }
   if (editing.value?.kind === 'config_mail') return [{ label: '每月 1 日和 15 日', value: '30 4 1,15 * *' }, ...presets]
+  if (editing.value?.kind === 'safekeep_backup') return [{ label: '每天 05:00', value: '0 5 * * *' }, ...presets]
   return presets
 })
 const statusView: Record<Run['status'], { label: string; type: 'default' | 'info' | 'success' | 'warning' | 'error' }> = {
@@ -82,6 +83,7 @@ async function toggle(job: Job, enabled: boolean) {
 function edit(job: Job) {
   const copy: Job = JSON.parse(JSON.stringify(job))
   if (copy.kind === 'config_mail') copy.params.recipients ??= []
+  if (copy.kind === 'safekeep_backup') copy.params.safekeep_targets ??= []
   editing.value = copy
   preset.value = planPresets.value.find((item) => item.value === job.schedule)?.value ?? 'custom'
   errors.value = emptyErrors()
@@ -184,8 +186,25 @@ const columns: DataTableColumns<Job> = [
           <NFormItem label="收件人" v-bind="fieldState(errors, 'params.recipients', '留空时发给系统设置中 SMTP 的发件人地址')">
             <NDynamicTags v-model:value="editing.params.recipients" />
           </NFormItem>
-          <NFormItem label="加密口令" v-bind="fieldState(errors, 'params.passphrase', '附件中的凭据用此口令加密，至少 8 个字符；导入配置时需要输入。请另行保存，未设置时任务跳过')">
-            <NInput v-model:value="editing.params.passphrase" type="password" show-password-on="click" :input-props="{ autocomplete: 'new-password' }" />
+          <NFormItem label="加密口令" v-bind="fieldState(errors, 'params.passphrase', '附件中的凭据用此口令加密，至少 8 个字符；导入配置时需要输入，请另行保存。留空时凭据以明文随邮件发出')">
+            <NInput v-model:value="editing.params.passphrase" type="password" show-password-on="click" clearable :input-props="{ autocomplete: 'new-password' }" />
+          </NFormItem>
+        </template>
+        <template v-if="editing.kind === 'safekeep_backup'">
+          <NFormItem label="SafeKeep 地址" v-bind="fieldState(errors, 'params.safekeep_url', 'SafeKeep 服务的根地址；与 API Key 任一未填写时任务跳过')">
+            <NInput v-model:value="editing.params.safekeep_url" />
+          </NFormItem>
+          <NFormItem label="API Key" v-bind="fieldState(errors, 'params.safekeep_api_key', '在 SafeKeep 中为本实例签发的客户 API Key')">
+            <NInput v-model:value="editing.params.safekeep_api_key" type="password" show-password-on="click" :input-props="{ autocomplete: 'new-password' }" />
+          </NFormItem>
+          <NFormItem label="存放子路径" v-bind="fieldState(errors, 'params.safekeep_path', '可选，例如 proxystack/主机名')">
+            <NInput v-model:value="editing.params.safekeep_path" />
+          </NFormItem>
+          <NFormItem label="上游" v-bind="fieldState(errors, 'params.safekeep_targets', '可选，填写 SafeKeep 中的上游名称；留空时使用该 API Key 的默认上游组')">
+            <NDynamicTags v-model:value="editing.params.safekeep_targets" />
+          </NFormItem>
+          <NFormItem label="加密口令" v-bind="fieldState(errors, 'params.passphrase', '上传文件中的凭据用此口令加密，至少 8 个字符；导入配置时需要输入，请另行保存。留空时凭据明文上传')">
+            <NInput v-model:value="editing.params.passphrase" type="password" show-password-on="click" clearable :input-props="{ autocomplete: 'new-password' }" />
           </NFormItem>
         </template>
         <NFormItem v-if="editing.has_keep" label="保留份数" v-bind="fieldState(errors, 'params.keep')">

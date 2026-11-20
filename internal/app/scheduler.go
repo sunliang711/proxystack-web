@@ -31,6 +31,7 @@ const (
 	JobReconcile    = "reconcile"
 	JobEgressCheck  = "egress_check"
 	JobConfigMail   = "config_mail"
+	JobSafekeep     = "safekeep_backup"
 )
 
 // 执行状态。
@@ -72,13 +73,18 @@ type jobType struct {
 // errJobSkipped 表示任务按条件跳过本次执行，原因由任务自己写入日志。
 var errJobSkipped = errors.New("job skipped")
 
-// JobParams 是备份保留、出口检测和配置导出邮件任务的参数。
+// JobParams 是备份保留、出口检测、配置导出邮件和 SafeKeep 备份任务的参数。
 type JobParams struct {
 	Keep         int      `json:"keep,omitempty" minimum:"0" doc:"数据库备份保留份数"`
 	RetryCount   int      `json:"retry_count" required:"false" minimum:"0" maximum:"10" doc:"出口首次查询失败后的额外重试次数"`
 	ProbeTimeout int      `json:"probe_timeout,omitempty" minimum:"0" maximum:"60" doc:"每个 Stack 单次出口查询超时（秒）"`
 	Recipients   []string `json:"recipients,omitempty" doc:"配置导出邮件的收件人，留空时发给 SMTP 发件人地址"`
-	Passphrase   string   `json:"passphrase,omitempty" doc:"配置导出邮件中凭据的加密口令，至少 8 个字符；读取时返回占位"`
+	Passphrase   string   `json:"passphrase,omitempty" doc:"配置导出中凭据的加密口令，至少 8 个字符；留空时凭据明文导出；读取时返回占位"`
+	// SafekeepURL 等字段只用于 SafeKeep 备份任务。
+	SafekeepURL     string   `json:"safekeep_url,omitempty" doc:"SafeKeep 服务地址，例如 https://safekeep.example.com"`
+	SafekeepAPIKey  string   `json:"safekeep_api_key,omitempty" doc:"SafeKeep 客户 API Key；读取时返回占位"`
+	SafekeepPath    string   `json:"safekeep_path,omitempty" doc:"SafeKeep 中的存放子路径"`
+	SafekeepTargets []string `json:"safekeep_targets,omitempty" doc:"上传到的 SafeKeep 上游名称，留空时用客户默认上游组"`
 }
 
 // jobTypes 是任务注册表，顺序决定列表页的显示顺序。
@@ -131,8 +137,10 @@ var jobTypes = []jobType{
 		}},
 	{Kind: JobEgressCheck, Name: "Stack 出口检测", Description: "检测运行中 Stack 的 IPv4/IPv6 出口，失败后间隔 1 秒重试，耗尽重试后告警、恢复后通知；仅支持已应用的 Mihomo SOCKS 监听",
 		Schedule: "*/2 * * * *", Timeout: 120, Params: JobParams{RetryCount: 3, ProbeTimeout: 12}, Run: runEgressCheckJob},
-	{Kind: JobConfigMail, Name: "配置导出邮件", Description: "导出全部配置作为邮件附件发送，凭据用任务口令加密；邮件通知未启用或未设置口令时跳过",
+	{Kind: JobConfigMail, Name: "配置导出邮件", Description: "导出全部配置作为邮件附件发送，设置口令时凭据加密，未设置时明文导出；邮件通知未启用时跳过",
 		Schedule: "30 4 1,15 * *", Timeout: 120, Run: runConfigMailJob},
+	{Kind: JobSafekeep, Name: "配置备份到 SafeKeep", Description: "导出全部配置并上传到 SafeKeep，设置口令时凭据加密，未设置时明文导出；未配置地址或 API Key 时跳过",
+		Schedule: "0 5 * * *", Timeout: 300, Run: runSafekeepBackupJob},
 }
 
 func jobTypeOf(kind string) *jobType {
@@ -449,6 +457,9 @@ func (s *Service) ListJobs(ctx context.Context) ([]JobView, error) {
 		if view.Params.Passphrase != "" {
 			view.Params.Passphrase = configdoc.MaskedValue
 		}
+		if view.Params.SafekeepAPIKey != "" {
+			view.Params.SafekeepAPIKey = configdoc.MaskedValue
+		}
 		if next, err := s.JobSchedulePreview(ctx, row.Schedule, 5); err == nil {
 			view.NextRuns = next
 		}
@@ -491,24 +502,37 @@ func (s *Service) UpdateJob(ctx context.Context, actor Actor, id int64, update J
 		if definition.Params.Keep > 0 && update.Params.Keep < 1 {
 			return &FieldError{Field: "params.keep", Message: "must be at least 1"}
 		}
-		if kind == JobConfigMail {
-			if update.Params.Passphrase == configdoc.MaskedValue {
-				var stored JobParams
-				_ = json.Unmarshal([]byte(job.Params), &stored)
-				update.Params.Passphrase = stored.Passphrase
-			}
-			recipients := update.Params.Recipients[:0:0]
-			for _, recipient := range update.Params.Recipients {
-				if recipient = strings.TrimSpace(recipient); recipient != "" {
-					recipients = append(recipients, recipient)
-				}
-			}
-			update.Params.Recipients = recipients
+		var stored JobParams
+		_ = json.Unmarshal([]byte(job.Params), &stored)
+		if update.Params.Passphrase == configdoc.MaskedValue {
+			update.Params.Passphrase = stored.Passphrase
+		}
+		if update.Params.SafekeepAPIKey == configdoc.MaskedValue {
+			update.Params.SafekeepAPIKey = stored.SafekeepAPIKey
+		}
+		if kind != JobConfigMail && kind != JobSafekeep {
+			update.Params.Passphrase = ""
+		}
+		switch kind {
+		case JobConfigMail:
+			update.Params.Recipients = trimNonEmpty(update.Params.Recipients)
 			if err := validateConfigMailParams(update.Params); err != nil {
 				return err
 			}
-		} else {
-			update.Params.Recipients, update.Params.Passphrase = nil, ""
+		default:
+			update.Params.Recipients = nil
+		}
+		switch kind {
+		case JobSafekeep:
+			update.Params.SafekeepURL = strings.TrimSpace(update.Params.SafekeepURL)
+			update.Params.SafekeepAPIKey = strings.TrimSpace(update.Params.SafekeepAPIKey)
+			update.Params.SafekeepPath = strings.Trim(strings.TrimSpace(update.Params.SafekeepPath), "/")
+			update.Params.SafekeepTargets = trimNonEmpty(update.Params.SafekeepTargets)
+			if err := validateSafekeepParams(update.Params); err != nil {
+				return err
+			}
+		default:
+			update.Params.SafekeepURL, update.Params.SafekeepAPIKey, update.Params.SafekeepPath, update.Params.SafekeepTargets = "", "", "", nil
 		}
 		if kind == JobEgressCheck {
 			if update.Params.RetryCount < 0 || update.Params.RetryCount > maxEgressRetries {
@@ -546,6 +570,17 @@ func (s *Service) UpdateJob(ctx context.Context, actor Actor, id int64, update J
 	delete(s.scheduler.next, kind)
 	s.scheduler.mu.Unlock()
 	return nil
+}
+
+// trimNonEmpty 去掉每项首尾空白并丢弃空项。
+func trimNonEmpty(values []string) []string {
+	out := values[:0:0]
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			out = append(out, value)
+		}
+	}
+	return out
 }
 
 // RunJobNow 立即在后台执行任务。任务脱离请求的生命周期运行。

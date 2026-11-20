@@ -2065,7 +2065,7 @@
             "type": "integer"
           },
           "passphrase": {
-            "description": "配置导出邮件中凭据的加密口令，至少 8 个字符；读取时返回占位",
+            "description": "配置导出中凭据的加密口令，至少 8 个字符；留空时凭据明文导出；读取时返回占位",
             "type": "string"
           },
           "probe_timeout": {
@@ -2088,6 +2088,25 @@
             "maximum": 10,
             "minimum": 0,
             "type": "integer"
+          },
+          "safekeep_api_key": {
+            "description": "SafeKeep 客户 API Key；读取时返回占位",
+            "type": "string"
+          },
+          "safekeep_path": {
+            "description": "SafeKeep 中的存放子路径",
+            "type": "string"
+          },
+          "safekeep_targets": {
+            "description": "上传到的 SafeKeep 上游名称，留空时用客户默认上游组",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "safekeep_url": {
+            "description": "SafeKeep 服务地址，例如 https://safekeep.example.com",
+            "type": "string"
           }
         },
         "type": "object"

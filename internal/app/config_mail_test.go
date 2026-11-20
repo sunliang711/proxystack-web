@@ -21,7 +21,7 @@ type sentMail struct {
 	attachments []notify.Attachment
 }
 
-// TestConfigMailJob 验证配置导出邮件任务：邮件通知未启用或未设口令时跳过；收件人默认是发件人地址，可以改；
+// TestConfigMailJob 验证配置导出邮件任务：邮件通知未启用时跳过；未设口令时凭据明文导出；收件人默认是发件人地址，可以改；
 // 附件能用任务口令解开；口令读取时打码，原样提交占位时保留原值；发送失败记为失败。
 func TestConfigMailJob(t *testing.T) {
 	ctx := context.Background()
@@ -66,8 +66,14 @@ func TestConfigMailJob(t *testing.T) {
 	settings.Notify.From, settings.Notify.To = "Panel <panel@example.com>", []string{"admin@example.com"}
 	_, err = h.svc.UpdateSettings(ctx, h.actor, settings)
 	require.NoError(t, err)
-	require.Contains(t, runOnce(app.RunSkipped).Log, "未设置加密口令")
-	require.Empty(t, mails)
+	require.Contains(t, runOnce(app.RunSucceeded).Log, "凭据明文导出")
+	require.Len(t, mails, 1)
+	require.Contains(t, mails[0].body, "凭据字段为明文")
+	plain, err := configdoc.Parse(mails[0].attachments[0].Data)
+	require.NoError(t, err)
+	require.Equal(t, configdoc.SecretsPlain, plain.Secrets)
+	require.Equal(t, doc.Users[0].UUID, plain.Users[0].UUID)
+	mails = nil
 
 	require.Error(t, update(app.JobParams{Passphrase: "short"}))
 	require.Error(t, update(app.JobParams{Passphrase: "correct horse", Recipients: []string{"not an address"}}))
