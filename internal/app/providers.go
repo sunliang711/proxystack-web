@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +19,7 @@ import (
 	"proxystack-web/internal/configdoc"
 	"proxystack-web/internal/mihomoapi"
 	"proxystack-web/internal/runtime"
+	"proxystack-web/internal/store"
 	"proxystack-web/internal/store/dbq"
 	"proxystack-web/internal/units"
 )
@@ -287,8 +290,33 @@ func (s *Service) updateStackProvider(ctx context.Context, actor Actor, stackID,
 	}
 	started := s.Now().Unix()
 	updateErr := providerClient(applied).UpdateProvider(ctx, source.RuntimeName())
+	var syncedDirectNodes map[string]configdoc.RawMapping
+	if updateErr == nil {
+		if cfg, ok := applied.Providers[source.RuntimeName()]; ok {
+			if native, nativeErr := providerClient(applied).Providers(ctx); nativeErr == nil {
+				if nativeProvider, ok := native[source.RuntimeName()]; ok {
+					if configs, cacheErr := readProviderNodeCache(s.Layout.MihomoWorkDir(stack.Name), cfg); cacheErr == nil {
+						syncedDirectNodes = make(map[string]configdoc.RawMapping, len(nativeProvider.Proxies))
+						for _, node := range nativeProvider.Proxies {
+							key := strings.TrimPrefix(node.Name, source.RuntimeName()+" | ")
+							rawMap, ok := configs[key]
+							if !ok {
+								continue
+							}
+							mapping, err := rawMappingFromMap(rawMap)
+							if err != nil || configdoc.CheckDirectRawConfig(mapping) != nil {
+								continue
+							}
+							syncedDirectNodes[key] = mapping
+						}
+					}
+				}
+			}
+		}
+	}
 	finish, finishCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer finishCancel()
+	directNodesChanged := false
 	err = s.Store.InTx(finish, func(q *dbq.Queries) error {
 		// Configuration saves can delete a provider while the core is downloading.
 		providers, err := q.ListMihomoProviders(finish)
@@ -320,12 +348,91 @@ func (s *Service) updateStackProvider(ctx context.Context, actor Actor, stackID,
 		if err := q.PutMihomoProviderState(finish, state); err != nil {
 			return err
 		}
-		return audit.Write(finish, q, s.Now(), audit.Entry{Actor: actor.Name, SourceIP: actor.IP, Action: "runtime.provider_update", Object: fmt.Sprintf("provider:%d", providerID), Summary: "Refresh Mihomo upstream subscription"})
+		if err := audit.Write(finish, q, s.Now(), audit.Entry{Actor: actor.Name, SourceIP: actor.IP, Action: "runtime.provider_update", Object: fmt.Sprintf("provider:%d", providerID), Summary: "Refresh Mihomo upstream subscription"}); err != nil {
+			return err
+		}
+		if syncedDirectNodes != nil {
+			latestDoc, err := store.LoadDocument(finish, q)
+			if err != nil {
+				return err
+			}
+			if synced, syncErr := syncProviderDirectNodes(latestDoc, stackID, providerID, *source, syncedDirectNodes); syncErr != nil {
+				slog.Warn("sync provider direct nodes", "stack_id", stackID, "provider_id", providerID, "err", syncErr)
+			} else if synced {
+				if err := store.SaveDocument(finish, q, latestDoc); err != nil {
+					return err
+				}
+				summary := "同步上游订阅直连节点 " + source.Name
+				if err := s.writeRevision(finish, q, actor, summary, latestDoc); err != nil {
+					return err
+				}
+				if err := audit.Write(finish, q, s.Now(), audit.Entry{Actor: actor.Name, SourceIP: actor.IP, Action: ActionConfigStack, Object: "stack:" + stack.Name, Summary: summary}); err != nil {
+					return err
+				}
+				directNodesChanged = true
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return err
 	}
+	if directNodesChanged {
+		s.kickAutoPublish()
+	}
 	return updateErr
+}
+
+// syncProviderDirectNodes removes missing/renamed nodes and refreshes configurations against the fetched subscription.
+func syncProviderDirectNodes(doc *configdoc.Document, stackID, providerID int64, appliedSource configdoc.Provider, active map[string]configdoc.RawMapping) (bool, error) {
+	stackIdx := doc.StackByID(stackID)
+	if stackIdx < 0 {
+		return false, nil
+	}
+	stack := &doc.Stacks[stackIdx]
+	pIdx := slices.IndexFunc(stack.Mihomo.Providers, func(p configdoc.Provider) bool { return p.ID == providerID })
+	if pIdx < 0 {
+		return false, nil
+	}
+	provider := &stack.Mihomo.Providers[pIdx]
+	if provider.URL != appliedSource.URL || provider.Filter != appliedSource.Filter || provider.ExcludeFilter != appliedSource.ExcludeFilter {
+		return false, nil
+	}
+	if len(provider.DirectNodes) == 0 {
+		return false, nil
+	}
+	changed := false
+	kept := make([]configdoc.ProviderDirectNode, 0, len(provider.DirectNodes))
+	for _, dn := range provider.DirectNodes {
+		freshCfg, ok := active[dn.Name]
+		if !ok {
+			changed = true
+			continue
+		}
+		if !rawMappingEqual(dn.Config, freshCfg) {
+			dn.Config = freshCfg
+			changed = true
+		}
+		kept = append(kept, dn)
+	}
+	if !changed {
+		return false, nil
+	}
+	provider.DirectNodes = kept
+	doc.Normalize()
+	if issues := configdoc.Validate(doc); len(issues) > 0 {
+		return false, fmt.Errorf("validation failed: %s", issues.Error())
+	}
+	return true, nil
+}
+
+func rawMappingEqual(a, b configdoc.RawMapping) bool {
+	left, err := json.Marshal(a)
+	if err != nil {
+		return false
+	}
+	right, err := json.Marshal(b)
+	return err == nil && string(left) == string(right)
 }
 
 // providerTick runs at most one scheduler pass and respects cancellation during shutdown.

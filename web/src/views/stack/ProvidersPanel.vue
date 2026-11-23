@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, h, onScopeDispose, ref, watch } from 'vue'
 import {
-  NAlert, NButton, NCard, NDataTable, NDescriptions, NDescriptionsItem, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NInputNumber,
+  NAlert, NButton, NCard, NCheckbox, NDataTable, NDescriptions, NDescriptionsItem, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NInputNumber,
   NPopconfirm, NRadioButton, NRadioGroup, NSelect, NSpace, NSwitch, NTag, NText, useMessage, type DataTableColumns,
 } from 'naive-ui'
 import { api, fieldState, hasErrorsUnder, MASKED, splitProblem, type FormErrors, type Schemas } from '../../api/client'
@@ -22,6 +22,7 @@ const draft = computed(() => editing.value?.draft as Provider)
 const selectedGroups = ref<string[]>([])
 const updating = ref<number | null>(null)
 const nodesFor = ref<number | null>(null)
+const nodeFilter = ref('')
 const selectedNode = ref<Node | null>(null)
 const nodeDetails = ref<Details | null>(null)
 const detailLoading = ref(false)
@@ -37,6 +38,8 @@ const status = usePolling(() => [props.stack.id, props.savedVersion], async (sig
 }, 15_000)
 const states = computed(() => new Map((status.data.value ?? []).map((view) => [view.id, view])))
 const shown = computed(() => status.data.value?.find((view) => view.id === nodesFor.value))
+const activeProvider = computed(() => sources.value.find((source) => source.id === nodesFor.value) ?? null)
+const directNodeNames = computed(() => new Set((activeProvider.value?.direct_nodes ?? []).map((item) => item.name)))
 const { data: providerNodes, loading: nodesLoading, error: nodesError } = usePolling(() => [props.stack.id, nodesFor.value, props.savedVersion], async (signal) => {
   if (!props.stack.id || nodesFor.value === null) return []
   const { data, error } = await api.GET('/api/stacks/{id}/providers/{provider_id}/nodes', {
@@ -45,6 +48,47 @@ const { data: providerNodes, loading: nodesLoading, error: nodesError } = usePol
   if (error) throw new Error(splitProblem(error).global.join('；') || '读取节点失败')
   return data ?? []
 }, 15_000)
+const filteredProviderNodes = computed(() => {
+  const keyword = nodeFilter.value.trim().toLowerCase()
+  const list = providerNodes.value ?? []
+  if (!keyword) return list
+  return list.filter((node) =>
+    node.name.toLowerCase().includes(keyword) ||
+    node.key.toLowerCase().includes(keyword) ||
+    node.type.toLowerCase().includes(keyword) ||
+    node.server.toLowerCase().includes(keyword) ||
+    node.port.toLowerCase().includes(keyword),
+  )
+})
+const staleDirectNodes = computed(() => {
+  if (nodesLoading.value || nodesError.value || !shown.value?.running) return []
+  const active = new Set((providerNodes.value ?? []).map((node) => node.key))
+  return (activeProvider.value?.direct_nodes ?? []).filter((item) => !active.has(item.name))
+})
+
+function toggleDirectNode(key: string, checked: boolean) {
+  const provider = activeProvider.value
+  if (!provider) return
+  provider.direct_nodes ??= []
+  if (checked) {
+    if (!provider.direct_nodes.some((item) => item.name === key)) {
+      provider.direct_nodes.push({ name: key })
+    }
+  } else {
+    provider.direct_nodes = provider.direct_nodes.filter((item) => item.name !== key)
+  }
+}
+
+function clearDirectNodes() {
+  if (!activeProvider.value) return
+  activeProvider.value.direct_nodes = []
+}
+
+function removeStaleDirectNodes() {
+  if (!activeProvider.value) return
+  const stale = new Set(staleDirectNodes.value.map((item) => item.name))
+  activeProvider.value.direct_nodes = (activeProvider.value.direct_nodes ?? []).filter((item) => !stale.has(item.name))
+}
 
 // Abort late detail responses and discard disclosed credentials when changing or closing the selection.
 function closeNodeDetails() {
@@ -56,7 +100,10 @@ function closeNodeDetails() {
   detailError.value = ''
   detailLoading.value = false
 }
-watch(() => [props.stack.id, nodesFor.value], closeNodeDetails)
+watch(() => [props.stack.id, nodesFor.value], () => {
+  nodeFilter.value = ''
+  closeNodeDetails()
+})
 onScopeDispose(closeNodeDetails)
 
 // Fetch a single node on demand; explicit disclosure is audited by the backend.
@@ -154,8 +201,10 @@ async function update(source: Provider) {
 const timeLabel = (value?: number) => value ? formatTime(new Date(value * 1000).toISOString()) : '—'
 const columns = computed<DataTableColumns<Provider & { _index: number }>>(() => [
   {
-    title: '名称', key: 'name', render: (row) => h(NSpace, { size: 4 }, () => [
-      row.name, hasErrorsUnder(props.errors, `mihomo.providers[${row._index}]`) ? h(NTag, { type: 'error', size: 'small' }, () => '有错误') : null,
+    title: '名称', key: 'name', render: (row) => h(NSpace, { size: 4, align: 'center' }, () => [
+      row.name,
+      (row.direct_nodes?.length ?? 0) > 0 ? h(NTag, { type: 'info', size: 'small', bordered: false }, () => `直连 ${row.direct_nodes!.length} 个`) : null,
+      hasErrorsUnder(props.errors, `mihomo.providers[${row._index}]`) ? h(NTag, { type: 'error', size: 'small' }, () => '有错误') : null,
     ]),
   },
   { title: '获取方式', key: 'fetch_mode', render: (row) => row.fetch_mode === 'system' ? '系统下载代理' : '直连' },
@@ -191,6 +240,16 @@ const rows = computed(() => sources.value.map((source, index) => ({ ...source, _
 const conflict = computed(() => editing.value && sources.value.some((source, index) => index !== editing.value!.index && source.name === editing.value!.draft.name))
 const f = (field: string, hint?: string) => fieldState(props.errors, `mihomo.providers[${editing.value?.index ?? 0}].${field}`, hint)
 const nodeColumns: DataTableColumns<Node> = [
+  {
+    title: '直连',
+    key: 'direct',
+    width: 64,
+    render: (row) => h(NCheckbox, {
+      checked: directNodeNames.value.has(row.key),
+      'aria-label': `设为直连节点 ${row.key}`,
+      onUpdateChecked: (checked: boolean) => toggleDirectNode(row.key, checked),
+    }),
+  },
   { title: '节点名称', key: 'name' },
   { title: '协议', key: 'type', width: 110 },
   { title: '服务器', key: 'server', render: (row) => row.server || '—' },
@@ -230,9 +289,24 @@ const nodeColumns: DataTableColumns<Node> = [
   </NDrawer>
   <NDrawer :show="nodesFor !== null" width="min(900px, 100vw)" @update:show="(value) => !value && (nodesFor = null)">
     <NDrawerContent :title="`${shown?.name ?? ''} · 当前节点`" closable>
-      <NText depth="3">显示已应用筛选条件后的运行节点，共 {{ providerNodes?.length ?? 0 }} 个。</NText>
+      <NAlert type="info" :bordered="false" style="margin-bottom: 12px">
+        勾选为「直连」的节点将下发给本 Stack「直连上游订阅」中授权的用户（含连接凭据）；修改后请点击页面顶部「保存」，无需重新应用。原订阅更新时若节点被删除或改名会同步移除。
+      </NAlert>
+      <NAlert v-if="staleDirectNodes.length" type="warning" :bordered="false" style="margin-bottom: 12px">
+        <NSpace justify="space-between" align="center">
+          <span>有 {{ staleDirectNodes.length }} 个已勾选直连节点不在当前订阅节点中（原订阅可能已删除或改名）：{{ staleDirectNodes.map((item) => item.name).join('、') }}</span>
+          <NButton size="tiny" @click="removeStaleDirectNodes">移除失效勾选</NButton>
+        </NSpace>
+      </NAlert>
+      <NSpace justify="space-between" align="center" style="margin-bottom: 12px">
+        <NSpace align="center" :size="8">
+          <NText depth="3">显示已应用筛选条件后的运行节点，共 {{ providerNodes?.length ?? 0 }} 个；已勾选直连 {{ directNodeNames.size }} 个。</NText>
+          <NButton v-if="directNodeNames.size" size="tiny" @click="clearDirectNodes">清空直连</NButton>
+        </NSpace>
+        <NInput v-model:value="nodeFilter" size="small" clearable placeholder="筛选节点" style="width: 220px" />
+      </NSpace>
       <NAlert v-if="nodesError" type="error" :bordered="false" style="margin-top: 12px">{{ nodesError }}</NAlert>
-      <NDataTable :columns="nodeColumns" :data="providerNodes ?? []" :loading="nodesLoading" :pagination="{ pageSize: 20 }" :scroll-x="800" size="small" style="margin-top: 12px" />
+      <NDataTable :columns="nodeColumns" :data="filteredProviderNodes" :loading="nodesLoading" :pagination="{ pageSize: 20 }" :scroll-x="840" size="small" style="margin-top: 12px" />
     </NDrawerContent>
   </NDrawer>
   <NDrawer :show="selectedNode !== null" width="min(740px, 100vw)" @update:show="(value) => !value && closeNodeDetails()">

@@ -1,6 +1,7 @@
 package configdoc
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"slices"
 	"strings"
@@ -9,7 +10,7 @@ import (
 	"proxystack-web/internal/generator/sub"
 )
 
-// StackDirectNodes 按当前保存的授权生成外部上游节点，不依赖本机进程的应用状态。
+// StackDirectNodes 按当前保存的授权生成外部上游与订阅直连节点，不依赖本机进程的应用状态。
 func StackDirectNodes(doc *Document) ([]sub.Node, error) {
 	nodes := []sub.Node{}
 	for _, stack := range doc.Stacks {
@@ -20,11 +21,22 @@ func StackDirectNodes(doc *Document) ([]sub.Node, error) {
 		if suffix == "" {
 			suffix = DefaultDirectSuffix
 		}
-		externalCount := 0
+		directCount := 0
+		nameCounts := map[string]int{}
 		for _, upstream := range stack.Mihomo.Upstreams {
 			if upstream.IsEnabled() && upstream.Type == "raw" {
-				externalCount++
+				directCount++
+				nameCounts[upstream.Name]++
 			}
+		}
+		for _, provider := range stack.Mihomo.Providers {
+			for _, dn := range provider.DirectNodes {
+				directCount++
+				nameCounts[dn.Name]++
+			}
+		}
+		if directCount == 0 {
+			continue
 		}
 		for _, name := range stack.DirectUsers {
 			index := doc.UserByName(name)
@@ -44,7 +56,7 @@ func StackDirectNodes(doc *Document) ([]sub.Node, error) {
 				if err != nil {
 					return nil, err
 				}
-				if externalCount > 1 {
+				if directCount > 1 {
 					remark += " · " + upstream.Name
 				}
 				remark += suffix
@@ -55,6 +67,31 @@ func StackDirectNodes(doc *Document) ([]sub.Node, error) {
 					return nil, fmt.Errorf("stack %s upstream %s: %w", stack.Name, upstream.Name, err)
 				}
 				nodes = append(nodes, node)
+			}
+			for _, provider := range stack.Mihomo.Providers {
+				for _, dn := range provider.DirectNodes {
+					protocol, _ := dn.Config.Get("type")
+					remark, region, err := directSubscriptionName(doc, stack, user, protocol)
+					if err != nil {
+						return nil, err
+					}
+					if directCount > 1 {
+						label := dn.Name
+						if nameCounts[dn.Name] > 1 {
+							label = provider.Name + "/" + dn.Name
+						}
+						remark += " · " + label
+					}
+					remark += suffix
+					hash := sha256.Sum256([]byte(dn.Name))
+					id := fmt.Sprintf("%s:direct-provider:%s:%x:%s", stack.Name, provider.Name, hash[:6], name)
+					config := StripDirectServerOnlyFields(dn.Config)
+					node, err := (ManualNode{User: name, Remark: remark, Region: region, Config: config}).directNode(id, id)
+					if err != nil {
+						return nil, fmt.Errorf("stack %s provider %s node %s: %w", stack.Name, provider.Name, dn.Name, err)
+					}
+					nodes = append(nodes, node)
+				}
 			}
 		}
 	}
@@ -89,6 +126,29 @@ func FindDirectOverride(stack Stack, user, upstream string) *DirectOverride {
 		}
 	}
 	return nil
+}
+
+// StripDirectServerOnlyFields 复制节点配置并删除只对服务器拨号有意义的字段。
+func StripDirectServerOnlyFields(raw RawMapping) RawMapping {
+	config := raw.Clone()
+	for _, key := range directServerOnlyFields {
+		config.Delete(key)
+	}
+	return config
+}
+
+// CheckDirectRawConfig 按直连节点生成规则检查外部或订阅直连节点配置。
+// 订阅节点可能省略 Clash 默认字段（例如 TCP VMess 的 network），因此按 directNode 规则校验而非表单严格规则。
+func CheckDirectRawConfig(raw RawMapping) error {
+	clean := StripDirectServerOnlyFields(raw)
+	if clean.Node == nil {
+		return fmt.Errorf("config is required")
+	}
+	if protocol, _ := clean.Get("type"); protocol == "" {
+		return fmt.Errorf("config.type is required")
+	}
+	_, err := (ManualNode{User: "direct", Remark: "direct", Config: clean}).directNode("direct", "direct")
+	return err
 }
 
 // DirectNodeConfig 生成用户直连 upstream 时下发的节点字段：复制上游配置，用该用户的覆盖整体替换同名顶层字段，

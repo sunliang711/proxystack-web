@@ -2,6 +2,7 @@ package configdoc_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -66,6 +67,24 @@ func TestStackDirectNodes(t *testing.T) {
 		{name: "no grant", mutate: func(doc *configdoc.Document) { doc.Stacks[1].DirectUsers = nil }},
 		{name: "disabled stack", mutate: func(doc *configdoc.Document) { doc.Stacks[1].Enabled = false }},
 		{name: "paused user", mutate: func(doc *configdoc.Document) { doc.Users[0].PausedStacks = []string{"usa1"} }},
+		{name: "single provider direct node", mutate: func(doc *configdoc.Document) {
+			doc.Stacks[1].Mihomo.Upstreams = nil
+			doc.Stacks[1].Mihomo.Providers = []configdoc.Provider{{
+				Name: "airport", URL: "https://example.com/sub", FetchMode: "direct", Interval: 3600,
+				DirectNodes: []configdoc.ProviderDirectNode{{
+					Name:   "HK-node",
+					Config: directUpstream(t, "hk", "type: vmess\nserver: server-a.example.com\nport: 443\nuuid: 11111111-1111-4111-8111-111111111111\nalterId: 0\ncipher: auto\ntls: true\ndialer-proxy: other\ninterface-name: eth0\nrouting-mark: 100").Config,
+				}},
+			}}
+		}, want: []string{"usa1 vmess [DRT]"}},
+		{name: "mixed raw upstream and provider direct nodes with collision", mutate: func(doc *configdoc.Document) {
+			cfgA := directUpstream(t, "a", "type: socks5\nserver: server-a.example.com\nport: 1080\nusername: remote-user\npassword: remote-password\nudp: true\ntls: true").Config
+			cfgB := directUpstream(t, "b", "type: socks5\nserver: b.example.com\nport: 1080\nusername: remote-user\npassword: remote-password\nudp: true\ntls: true").Config
+			doc.Stacks[1].Mihomo.Providers = []configdoc.Provider{
+				{Name: "p1", URL: "https://example.com/1", FetchMode: "direct", Interval: 3600, DirectNodes: []configdoc.ProviderDirectNode{{Name: "HK", Config: cfgA}}},
+				{Name: "p2", URL: "https://example.com/2", FetchMode: "direct", Interval: 3600, DirectNodes: []configdoc.ProviderDirectNode{{Name: "HK", Config: cfgB}}},
+			}
+		}, want: []string{"usa1 vmess · server-a [DRT]", "usa1 vmess · p1/HK [DRT]", "usa1 vmess · p2/HK [DRT]"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := loadExampleDoc(t)
@@ -86,19 +105,21 @@ func TestStackDirectNodes(t *testing.T) {
 				require.Equal(t, tc.want[index], node.Remark)
 				require.True(t, node.Direct)
 				require.Equal(t, "alice", node.User)
-				require.Contains(t, node.ID, "usa1:direct:")
+				require.True(t, strings.Contains(node.ID, "usa1:direct:") || strings.Contains(node.ID, "usa1:direct-provider:"))
 				proxy, err := yaml.Marshal(sub.RenderClashProxy(node))
 				require.NoError(t, err)
 				require.NotContains(t, string(proxy), "dialer-proxy")
 				require.NotContains(t, string(proxy), "interface-name")
 				require.NotContains(t, string(proxy), "routing-mark")
 				require.Contains(t, string(proxy), "tls: true")
-				if index == 0 {
-					require.Equal(t, "server-a.example.com", node.Server)
-					require.Contains(t, sub.RenderDirectSurgeProxy(node), "tls=true")
-				} else {
-					require.Contains(t, sub.RenderDirectSurgeProxy(node), `username="remote-user", password="remote-password"`)
-					require.Contains(t, sub.RenderDirectSurgeProxy(node), "socks5-tls")
+				if strings.Contains(node.ID, "usa1:direct:") {
+					if index == 0 {
+						require.Equal(t, "server-a.example.com", node.Server)
+						require.Contains(t, sub.RenderDirectSurgeProxy(node), "tls=true")
+					} else {
+						require.Contains(t, sub.RenderDirectSurgeProxy(node), `username="remote-user", password="remote-password"`)
+						require.Contains(t, sub.RenderDirectSurgeProxy(node), "socks5-tls")
+					}
 				}
 			}
 			after, err := json.Marshal(doc)
@@ -131,4 +152,34 @@ func TestDirectUserValidationAndLifecycle(t *testing.T) {
 	require.Equal(t, []string{"bob"}, doc.Stacks[1].DirectUsers)
 	configdoc.RemoveUserRefs(doc, "bob")
 	require.Empty(t, doc.Stacks[1].DirectUsers)
+}
+
+// TestProviderDirectNodeValidationAndMasking 验证订阅直连节点的校验与凭据遮蔽恢复。
+func TestProviderDirectNodeValidationAndMasking(t *testing.T) {
+	doc := loadExampleDoc(t)
+	rawCfg := directUpstream(t, "hk", "type: socks5\nserver: hk.example.com\nport: 1080\nusername: u\npassword: p").Config
+	doc.Stacks[1].Mihomo.Providers = []configdoc.Provider{{
+		ID: 7, Name: "airport", URL: "https://example.com/sub", FetchMode: "direct", Interval: 3600,
+		DirectNodes: []configdoc.ProviderDirectNode{{Name: "HK-1", Config: rawCfg}},
+	}}
+	require.Empty(t, configdoc.Validate(doc))
+
+	masked := doc.Stacks[1].Clone()
+	configdoc.MaskStack(&masked)
+	require.True(t, masked.Mihomo.Providers[0].DirectNodes[0].Config.IsZero())
+
+	configdoc.UnmaskStack(&masked, &doc.Stacks[1])
+	require.False(t, masked.Mihomo.Providers[0].DirectNodes[0].Config.IsZero())
+	server, ok := masked.Mihomo.Providers[0].DirectNodes[0].Config.Get("server")
+	require.True(t, ok)
+	require.Equal(t, "hk.example.com", server)
+
+	doc.Stacks[1].Mihomo.Providers[0].DirectNodes = []configdoc.ProviderDirectNode{
+		{Name: "HK-1", Config: rawCfg},
+		{Name: "HK-1", Config: rawCfg},
+	}
+	require.Contains(t, configdoc.Validate(doc).Error(), "duplicate direct node")
+
+	doc.Stacks[1].Mihomo.Providers[0].DirectNodes = []configdoc.ProviderDirectNode{{Name: "HK-1"}}
+	require.Contains(t, configdoc.Validate(doc).Error(), "config is required")
 }

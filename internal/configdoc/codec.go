@@ -236,6 +236,9 @@ func (s *Stack) Normalize() {
 		if s.Mihomo.Providers[index].Interval == 0 {
 			s.Mihomo.Providers[index].Interval = 3600
 		}
+		if s.Mihomo.Providers[index].DirectNodes == nil {
+			s.Mihomo.Providers[index].DirectNodes = []ProviderDirectNode{}
+		}
 	}
 	if s.Mihomo.Upstreams == nil {
 		s.Mihomo.Upstreams = []Upstream{}

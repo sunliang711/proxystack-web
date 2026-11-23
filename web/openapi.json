@@ -3448,6 +3448,12 @@
           "auto_update": {
             "type": "boolean"
           },
+          "direct_nodes": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderDirectNode"
+            },
+            "type": "array"
+          },
           "exclude_filter": {
             "type": "string"
           },
@@ -3486,6 +3492,25 @@
           "interval",
           "filter",
           "exclude_filter"
+        ],
+        "type": "object"
+      },
+      "ProviderDirectNode": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
         ],
         "type": "object"
       },

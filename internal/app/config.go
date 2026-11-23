@@ -410,6 +410,17 @@ func remarkConflictError(doc *configdoc.Document, stack *configdoc.Stack) error 
 
 // UpdateStack 保存整个 stack。按子项 ID 识别改名，同步其他 stack 中的引用和本 stack 内的代理组、规则。
 func (s *Service) UpdateStack(ctx context.Context, actor Actor, id int64, stack configdoc.Stack) (*configdoc.Stack, error) {
+	oldDoc, err := s.LoadConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	oldIndex := oldDoc.StackByID(id)
+	if oldIndex < 0 {
+		return nil, ErrNotFound
+	}
+	if err := s.resolveProviderDirectNodes(ctx, id, &stack, &oldDoc.Stacks[oldIndex]); err != nil {
+		return nil, err
+	}
 	change := &ConfigChange{Action: ActionConfigStack}
 	var index int
 	doc, err := s.mutateConfig(ctx, actor, change, func(doc *configdoc.Document) error {

@@ -13,16 +13,23 @@ import (
 	"proxystack-web/internal/domain"
 )
 
+// ProviderDirectNode is a provider node selected for direct subscription delivery.
+type ProviderDirectNode struct {
+	Name   string     `json:"name" yaml:"name"`
+	Config RawMapping `json:"config,omitempty" yaml:"config,omitempty"`
+}
+
 // Provider is a dynamic upstream collection owned by one stack.
 type Provider struct {
-	ID            int64  `json:"id,omitempty" yaml:"-"`
-	Name          string `json:"name" yaml:"name"`
-	URL           string `json:"url" yaml:"url"`
-	FetchMode     string `json:"fetch_mode" yaml:"fetch_mode" enum:"direct,system"`
-	AutoUpdate    bool   `json:"auto_update" yaml:"auto_update"`
-	Interval      int    `json:"interval" yaml:"interval" minimum:"60" maximum:"2592000"`
-	Filter        string `json:"filter" yaml:"filter,omitempty"`
-	ExcludeFilter string `json:"exclude_filter" yaml:"exclude_filter,omitempty"`
+	ID            int64                `json:"id,omitempty" yaml:"-"`
+	Name          string               `json:"name" yaml:"name"`
+	URL           string               `json:"url" yaml:"url"`
+	FetchMode     string               `json:"fetch_mode" yaml:"fetch_mode" enum:"direct,system"`
+	AutoUpdate    bool                 `json:"auto_update" yaml:"auto_update"`
+	Interval      int                  `json:"interval" yaml:"interval" minimum:"60" maximum:"2592000"`
+	Filter        string               `json:"filter" yaml:"filter,omitempty"`
+	ExcludeFilter string               `json:"exclude_filter" yaml:"exclude_filter,omitempty"`
+	DirectNodes   []ProviderDirectNode `json:"direct_nodes,omitempty" yaml:"direct_nodes,omitempty"`
 }
 
 // ProviderDownloadProxy is reserved for subscription downloads, outside business groups.
@@ -68,6 +75,25 @@ func validateProviders(issues *Issues, doc *Document, path string, stack *Stack)
 		for key, pattern := range map[string]string{"filter": provider.Filter, "exclude_filter": provider.ExcludeFilter} {
 			if len(pattern) > 4096 {
 				issues.add(field+"."+key, "regular expression is too long")
+			}
+		}
+		seenDirect := map[string]bool{}
+		for dnIndex, dn := range provider.DirectNodes {
+			dnField := fmt.Sprintf("%s.direct_nodes[%d]", field, dnIndex)
+			if dn.Name == "" {
+				issues.add(dnField+".name", "is required")
+				continue
+			}
+			if seenDirect[dn.Name] {
+				issues.add(dnField+".name", "duplicate direct node: %s", dn.Name)
+			}
+			seenDirect[dn.Name] = true
+			if dn.Config.IsZero() {
+				issues.add(dnField+".config", "config is required")
+				continue
+			}
+			if err := CheckDirectRawConfig(dn.Config); err != nil {
+				issues.add(dnField+".config", "%s", err.Error())
 			}
 		}
 		if provider.FetchMode != "system" || doc.Settings == nil {

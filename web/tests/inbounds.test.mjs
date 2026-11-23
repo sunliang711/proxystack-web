@@ -75,3 +75,19 @@ test('没有可添加用户时保持空列表', (t) => {
   assert.equal(state.missingUsers.value.length, 0)
   assert.deepEqual(state.editing.value.draft.users, [])
 })
+
+test('删除全部清空草稿中的全部订阅用户并在暂存后生效', (t) => {
+  const refs = [
+    { user: 'alice', profile: 'phone', remark: 'phone-node', display_template: '', tag: '' },
+    { user: 'bob', profile: '', remark: '', display_template: '', tag: '' },
+  ]
+  const users = [{ name: 'alice', enabled: true }, { name: 'bob', enabled: true }]
+  const { state, stack } = setup(t, users, refs)
+  state.removeAllUsers()
+  assert.deepEqual(state.editing.value.draft.users, [])
+  assert.equal(state.selectedUserCount.value, 0)
+  assert.equal(state.missingUsers.value.length, 2)
+  assert.deepEqual(stack.xray.inbounds[0].users, refs)
+  state.confirm()
+  assert.deepEqual(stack.xray.inbounds[0].users, [])
+})

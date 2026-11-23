@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -141,6 +142,75 @@ func (s *Service) providerNodeSnapshot(ctx context.Context, stackID, providerID 
 		return nil, err
 	}
 	return out, nil
+}
+
+// rawMappingFromMap converts a parsed YAML proxy map into a deterministic RawMapping.
+func rawMappingFromMap(raw map[string]any) (configdoc.RawMapping, error) {
+	var node yaml.Node
+	if err := node.Encode(raw); err != nil {
+		return configdoc.RawMapping{}, err
+	}
+	if node.Kind != yaml.MappingNode {
+		return configdoc.RawMapping{}, fmt.Errorf("provider node config must be a mapping")
+	}
+	return configdoc.RawMapping{Node: &node}, nil
+}
+
+// resolveProviderDirectNodes populates missing Config snapshots for newly selected provider direct nodes.
+func (s *Service) resolveProviderDirectNodes(ctx context.Context, stackID int64, stack *configdoc.Stack, oldStack *configdoc.Stack) error {
+	snapshots := map[int64]*providerNodeSnapshot{}
+	for pIdx := range stack.Mihomo.Providers {
+		provider := &stack.Mihomo.Providers[pIdx]
+		var prevProvider *configdoc.Provider
+		if oldStack != nil && provider.ID != 0 {
+			for oldIdx := range oldStack.Mihomo.Providers {
+				if oldStack.Mihomo.Providers[oldIdx].ID == provider.ID {
+					prevProvider = &oldStack.Mihomo.Providers[oldIdx]
+					break
+				}
+			}
+		}
+		for dnIdx := range provider.DirectNodes {
+			dn := &provider.DirectNodes[dnIdx]
+			if !dn.Config.IsZero() {
+				continue
+			}
+			if prevProvider != nil && slices.ContainsFunc(prevProvider.DirectNodes, func(prev configdoc.ProviderDirectNode) bool {
+				return prev.Name == dn.Name && !prev.Config.IsZero()
+			}) {
+				continue
+			}
+			field := fmt.Sprintf("mihomo.providers[%d].direct_nodes[%d]", pIdx, dnIdx)
+			if provider.ID == 0 {
+				return &FieldError{Field: field, Message: "save and apply this provider before selecting direct nodes"}
+			}
+			snapshot := snapshots[provider.ID]
+			if snapshot == nil {
+				var err error
+				snapshot, err = s.providerNodeSnapshot(ctx, stackID, provider.ID)
+				if err != nil {
+					return err
+				}
+				snapshots[provider.ID] = snapshot
+			}
+			if !slices.ContainsFunc(snapshot.nodes, func(n ProviderNodeSummary) bool { return n.Key == dn.Name }) {
+				return &FieldError{Field: field, Message: fmt.Sprintf("node %q is no longer available; refresh the node list", dn.Name)}
+			}
+			rawCfg, exists := snapshot.configs[dn.Name]
+			if !exists {
+				return &FieldError{Field: field, Message: fmt.Sprintf("node %q is no longer available; refresh the node list", dn.Name)}
+			}
+			mapping, err := rawMappingFromMap(rawCfg)
+			if err != nil {
+				return &FieldError{Field: field, Message: err.Error()}
+			}
+			if err := configdoc.CheckDirectRawConfig(mapping); err != nil {
+				return &FieldError{Field: field, Message: err.Error()}
+			}
+			dn.Config = mapping
+		}
+	}
+	return nil
 }
 
 // readProviderNodeCache reads only a bounded file inside the applied stack's provider directory.

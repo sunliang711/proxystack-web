@@ -3026,6 +3026,7 @@ export interface components {
         };
         Provider: {
             auto_update: boolean;
+            direct_nodes?: components["schemas"]["ProviderDirectNode"][];
             exclude_filter: string;
             /** @enum {string} */
             fetch_mode: "direct" | "system";
@@ -3036,6 +3037,12 @@ export interface components {
             interval: number;
             name: string;
             url: string;
+        };
+        ProviderDirectNode: {
+            config?: {
+                [key: string]: unknown;
+            } | null;
+            name: string;
         };
         ProviderNodeDetails: {
             config: string;

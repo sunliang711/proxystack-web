@@ -39,10 +39,12 @@ const directSuffix = computed({
   get: () => props.stack.direct_suffix ?? ' [DRT]',
   set: (value: string) => { props.stack.direct_suffix = value },
 })
-const directNameExample = computed(() => `${props.stack.name} vmess${externalCount.value > 1 ? ' · 上游名' : ''}${directSuffix.value || ' [DRT]'}`)
+const directNameExample = computed(() => `${props.stack.name} vmess${directSourceCount.value > 1 ? ' · 上游名' : ''}${directSuffix.value || ' [DRT]'}`)
 const userOptions = computed(() => props.users.map((user) => ({ label: user.remark ? `${user.name}（${user.remark}）` : user.name, value: user.name })))
 const missingDirectUsers = computed(() => props.users.filter((user) => !directUsers.value.includes(user.name)))
 const externalCount = computed(() => props.stack.mihomo.upstreams.filter((upstream) => upstream.enabled !== false && upstream.type === 'raw').length)
+const providerDirectCount = computed(() => (props.stack.mihomo.providers ?? []).reduce((sum, provider) => sum + (provider.direct_nodes?.length ?? 0), 0))
+const directSourceCount = computed(() => externalCount.value + providerDirectCount.value)
 
 function selectAllDirectUsers() {
   directUsers.value = [...directUsers.value, ...missingDirectUsers.value.map((user) => user.name)]
@@ -444,7 +446,7 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
         </NForm>
         <NText depth="3">命名示例：<NText code style="white-space: pre-wrap">{{ directNameExample }}</NText></NText>
         <NText depth="3" style="display: block; margin-top: 8px">
-          保留原订阅节点，为授权用户额外提供 {{ externalCount }} 个外部上游的直连节点，名称追加上述后缀；多个上游会同时标注上游名。
+          保留原订阅节点，为授权用户额外提供 {{ externalCount }} 个外部上游{{ providerDirectCount ? `和 ${providerDirectCount} 个订阅勾选节点` : '' }}的直连节点，名称追加上述后缀；多个直连节点会同时标注上游名或订阅节点名。
           不包含引用其他 Stack 入站的上游，无需加入入站用户列表。保存后即可预览，发布订阅包后下发，无需应用运行配置。
           各订阅格式沿用现有协议转换能力，Surge 不支持的节点会被跳过。
         </NText>

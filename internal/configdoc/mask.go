@@ -111,6 +111,9 @@ func UnmaskUser(user *User, old *User) {
 func MaskStack(stack *Stack) {
 	for index := range stack.Mihomo.Providers {
 		mask(&stack.Mihomo.Providers[index].URL)
+		for nodeIndex := range stack.Mihomo.Providers[index].DirectNodes {
+			stack.Mihomo.Providers[index].DirectNodes[nodeIndex].Config = RawMapping{}
+		}
 	}
 	mask(&stack.Mihomo.ControllerSecret)
 	mask(&stack.Xray.Outbound.Password)
@@ -130,12 +133,28 @@ func UnmaskStack(stack *Stack, old *Stack) {
 	for index := range stack.Mihomo.Providers {
 		provider := &stack.Mihomo.Providers[index]
 		previous, found := "", false
+		var prevProvider Provider
 		for _, candidate := range old.Mihomo.Providers {
 			if provider.ID != 0 && provider.ID == candidate.ID {
 				previous, found = candidate.URL, true
+				prevProvider = candidate
 			}
 		}
 		unmask(&provider.URL, previous, found)
+		if found {
+			for nodeIndex := range provider.DirectNodes {
+				node := &provider.DirectNodes[nodeIndex]
+				if !node.Config.IsZero() {
+					continue
+				}
+				for _, prevNode := range prevProvider.DirectNodes {
+					if prevNode.Name == node.Name && !prevNode.Config.IsZero() {
+						node.Config = prevNode.Config.Clone()
+						break
+					}
+				}
+			}
+		}
 	}
 	unmask(&stack.Mihomo.ControllerSecret, old.Mihomo.ControllerSecret, true)
 	unmask(&stack.Xray.Outbound.Password, old.Xray.Outbound.Password, true)

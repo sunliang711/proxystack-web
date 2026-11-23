@@ -120,6 +120,9 @@ function addAllUsers() {
   // 仅追加缺少的用户，保留已有凭据档案及覆盖设置。
   editing.value!.draft.users.push(...missingUsers.value.map((user) => ({ user: user.name, profile: '', remark: '', display_template: '', tag: '' })))
 }
+function removeAllUsers() {
+  editing.value!.draft.users = []
+}
 // 单用户设置默认收起，有错误时展开；用户多时可筛选，列表限高滚动。
 const overridesOpen = ref<string[]>([])
 const userFilter = ref('')
@@ -244,7 +247,10 @@ const showUsers = computed(() => isUserProtocol.value || (isAuthProtocol.value &
               <NSelect v-model:value="selectedUsers" :options="userOptions" multiple filterable max-tag-count="responsive" />
               <NSpace justify="space-between" align="center">
                 <NText depth="3">已选 {{ selectedUserCount }} / 共 {{ users.length }}</NText>
-                <NButton size="tiny" secondary :disabled="!missingUsers.length" @click="addAllUsers">{{ !users.length ? '暂无用户' : missingUsers.length ? '添加全部' : '已全部添加' }}</NButton>
+                <NSpace align="center" :size="6">
+                  <NButton size="tiny" secondary :disabled="!missingUsers.length" @click="addAllUsers">{{ !users.length ? '暂无用户' : missingUsers.length ? '添加全部' : '已全部添加' }}</NButton>
+                  <NButton size="tiny" secondary :disabled="!editing?.draft.users.length" @click="removeAllUsers">删除全部</NButton>
+                </NSpace>
               </NSpace>
             </NSpace>
           </NFormItem>

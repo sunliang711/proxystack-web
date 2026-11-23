@@ -476,8 +476,9 @@ func (snapshot *subSnapshot) explainNoNodes(user configdoc.User) string {
 				reasons = append(reasons, fmt.Sprintf("stack %s 已停用，未提供直连节点", stack.Name))
 			case slices.Contains(user.PausedStacks, stack.Name):
 				reasons = append(reasons, fmt.Sprintf("该用户在 stack %s 上已暂停", stack.Name))
-			case !slices.ContainsFunc(stack.Mihomo.Upstreams, func(upstream configdoc.Upstream) bool { return upstream.IsEnabled() && upstream.Type == "raw" }):
-				reasons = append(reasons, fmt.Sprintf("stack %s 没有可直连的外部上游", stack.Name))
+			case !slices.ContainsFunc(stack.Mihomo.Upstreams, func(upstream configdoc.Upstream) bool { return upstream.IsEnabled() && upstream.Type == "raw" }) &&
+				!slices.ContainsFunc(stack.Mihomo.Providers, func(provider configdoc.Provider) bool { return len(provider.DirectNodes) > 0 }):
+				reasons = append(reasons, fmt.Sprintf("stack %s 没有可直连的外部上游或订阅直连节点", stack.Name))
 			}
 		}
 		if !servesUser(stack, user.Name) {
