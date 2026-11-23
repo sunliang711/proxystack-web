@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -36,8 +37,9 @@ type ProviderNodeDetails struct {
 
 // providerNodeSnapshot keeps configuration material inside the service layer.
 type providerNodeSnapshot struct {
-	nodes   []ProviderNodeSummary
-	configs map[string]map[string]any
+	nodes      []ProviderNodeSummary
+	configs    map[string]map[string]any
+	appliedCfg map[string]any
 }
 
 // ListProviderNodes loads server and port information only when the node browser requests it.
@@ -129,7 +131,7 @@ func (s *Service) providerNodeSnapshot(ctx context.Context, stackID, providerID 
 	if err != nil {
 		return nil, err
 	}
-	out := &providerNodeSnapshot{nodes: []ProviderNodeSummary{}, configs: configs}
+	out := &providerNodeSnapshot{nodes: []ProviderNodeSummary{}, configs: configs, appliedCfg: config}
 	for _, node := range provider.Proxies {
 		key := strings.TrimPrefix(node.Name, source.RuntimeName()+" | ")
 		cached := configs[key]
@@ -189,9 +191,23 @@ func (s *Service) resolveProviderDirectNodes(ctx context.Context, stackID int64,
 				var err error
 				snapshot, err = s.providerNodeSnapshot(ctx, stackID, provider.ID)
 				if err != nil {
+					if ctx.Err() == nil && (errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)) {
+						return &FieldError{Field: field, Message: "provider is busy applying or updating; retry after it finishes"}
+					}
+					var fieldErr *FieldError
+					if errors.As(err, &fieldErr) {
+						return &FieldError{Field: field, Message: fieldErr.Message}
+					}
 					return err
 				}
 				snapshots[provider.ID] = snapshot
+			}
+			effective := *provider
+			if effective.URL == configdoc.MaskedValue && prevProvider != nil {
+				effective.URL = prevProvider.URL
+			}
+			if !providerMatchesApplied(effective, snapshot.appliedCfg) {
+				return &FieldError{Field: field, Message: "apply provider URL or filter changes before selecting new direct nodes"}
 			}
 			if !slices.ContainsFunc(snapshot.nodes, func(n ProviderNodeSummary) bool { return n.Key == dn.Name }) {
 				return &FieldError{Field: field, Message: fmt.Sprintf("node %q is no longer available; refresh the node list", dn.Name)}

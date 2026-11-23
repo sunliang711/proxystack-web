@@ -3505,6 +3505,9 @@
               "null"
             ]
           },
+          "encrypted_config": {
+            "type": "string"
+          },
           "name": {
             "type": "string"
           }

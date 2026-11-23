@@ -161,6 +161,17 @@ func TestProviderDirectNodeSelectionAndSync(t *testing.T) {
 	_, err = h.svc.UpdateStack(ctx, h.actor, bad.ID, bad)
 	require.Error(t, err)
 
+	// Selecting direct nodes on an unsaved provider (ID == 0) is rejected with FieldError.
+	unsaved := saved.Clone()
+	unsaved.Mihomo.Providers = append(unsaved.Mihomo.Providers, configdoc.Provider{
+		Name: "new-sub", URL: "https://example.com/new", FetchMode: "direct", Interval: 3600,
+		DirectNodes: []configdoc.ProviderDirectNode{{Name: "HK-node"}},
+	})
+	_, err = h.svc.UpdateStack(ctx, h.actor, unsaved.ID, unsaved)
+	var fieldErr *app.FieldError
+	require.ErrorAs(t, err, &fieldErr)
+	require.Contains(t, fieldErr.Field, "direct_nodes")
+
 	// Selecting an active node resolves its config snapshot and delivers it in subscription preview.
 	saved.Mihomo.Providers[0].DirectNodes = []configdoc.ProviderDirectNode{{Name: "HK-node"}}
 	saved, err = h.svc.UpdateStack(ctx, h.actor, saved.ID, *saved)
@@ -177,6 +188,37 @@ func TestProviderDirectNodeSelectionAndSync(t *testing.T) {
 	saved, err = h.svc.UpdateStack(ctx, h.actor, masked.ID, masked)
 	require.NoError(t, err)
 	require.False(t, saved.Mihomo.Providers[0].DirectNodes[0].Config.IsZero())
+
+	// Modifying provider URL/filter without applying prevents selecting new direct nodes and skips stale sync.
+	pendingEdit := saved.Clone()
+	pendingEdit.Mihomo.Providers[0].URL = "https://example.com/sub-v2"
+	pendingEdit.Mihomo.Providers[0].DirectNodes = append(pendingEdit.Mihomo.Providers[0].DirectNodes, configdoc.ProviderDirectNode{Name: "SG-node"})
+	_, err = h.svc.UpdateStack(ctx, h.actor, pendingEdit.ID, pendingEdit)
+	require.ErrorAs(t, err, &fieldErr)
+	require.Contains(t, fieldErr.Message, "apply")
+
+	pendingURLOnly := saved.Clone()
+	pendingURLOnly.Mihomo.Providers[0].URL = "https://example.com/sub-v2"
+	_, err = h.svc.UpdateStack(ctx, h.actor, pendingURLOnly.ID, pendingURLOnly)
+	require.NoError(t, err)
+	require.NoError(t, h.svc.UpdateStackProvider(ctx, h.actor, stack.ID, source.ID))
+	reloadedPending, err := h.svc.LoadConfig(ctx)
+	require.NoError(t, err)
+	require.Len(t, reloadedPending.Stacks[reloadedPending.StackByID(stack.ID)].Mihomo.Providers[0].DirectNodes, 1)
+
+	// Restore URL so applied == saved before testing normal sync.
+	saved, err = h.svc.UpdateStack(ctx, h.actor, saved.ID, *saved)
+	require.NoError(t, err)
+
+	// Upstream returning 0 proxies preserves existing DirectNodes rather than wiping them.
+	savedProxies := activeProxies
+	activeProxies = nil
+	cacheYAML = "proxies: []\n"
+	require.NoError(t, h.svc.UpdateStackProvider(ctx, h.actor, stack.ID, source.ID))
+	reloadedEmpty, err := h.svc.LoadConfig(ctx)
+	require.NoError(t, err)
+	require.Len(t, reloadedEmpty.Stacks[reloadedEmpty.StackByID(stack.ID)].Mihomo.Providers[0].DirectNodes, 1)
+	activeProxies = savedProxies
 
 	// Upstream refresh updates the node's config snapshot when credentials/server change.
 	cacheYAML = `proxies:

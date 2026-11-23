@@ -61,10 +61,24 @@ const filteredProviderNodes = computed(() => {
   )
 })
 const staleDirectNodes = computed(() => {
-  if (nodesLoading.value || nodesError.value || !shown.value?.running) return []
-  const active = new Set((providerNodes.value ?? []).map((node) => node.key))
+  const list = providerNodes.value ?? []
+  if (nodesLoading.value || nodesError.value || !shown.value?.running || list.length === 0) return []
+  const active = new Set(list.map((node) => node.key))
   return (activeProvider.value?.direct_nodes ?? []).filter((item) => !active.has(item.name))
 })
+
+function directNodeErrors(index: number): string[] {
+  const prefix = `mihomo.providers[${index}].direct_nodes`
+  return Object.entries(props.errors.fields)
+    .filter(([path]) => path === prefix || path.startsWith(`${prefix}[`) || path.startsWith(`${prefix}.`))
+    .map(([, msg]) => msg)
+}
+
+const activeProviderIndex = computed(() => sources.value.findIndex((source) => source.id === nodesFor.value))
+const activeDirectErrors = computed(() => (activeProviderIndex.value >= 0 ? directNodeErrors(activeProviderIndex.value) : []))
+const allDirectErrors = computed(() =>
+  sources.value.flatMap((source, index) => directNodeErrors(index).map((msg) => `${source.name || `来源 #${index + 1}`}：${msg}`)),
+)
 
 function toggleDirectNode(key: string, checked: boolean) {
   const provider = activeProvider.value
@@ -266,6 +280,9 @@ const nodeColumns: DataTableColumns<Node> = [
       自动更新关闭后仍可手动更新；首次启动没有缓存时会初始化获取一次。
     </NAlert>
     <NAlert v-if="dirty" type="warning" :bordered="false" style="margin-bottom: 12px">请先保存修改。更新使用当前已应用的订阅地址和下载方式。</NAlert>
+    <NAlert v-if="allDirectErrors.length" type="error" :bordered="false" style="margin-bottom: 12px">
+      <div v-for="(item, idx) in allDirectErrors" :key="idx">{{ item }}</div>
+    </NAlert>
     <NAlert v-if="status.error.value" type="error" :bordered="false">{{ status.error.value }}</NAlert>
     <NDataTable :columns="columns" :data="rows" :scroll-x="1050" size="small" />
   </NCard>
@@ -291,6 +308,12 @@ const nodeColumns: DataTableColumns<Node> = [
     <NDrawerContent :title="`${shown?.name ?? ''} · 当前节点`" closable>
       <NAlert type="info" :bordered="false" style="margin-bottom: 12px">
         勾选为「直连」的节点将下发给本 Stack「直连上游订阅」中授权的用户（含连接凭据）；修改后请点击页面顶部「保存」，无需重新应用。原订阅更新时若节点被删除或改名会同步移除。
+      </NAlert>
+      <NAlert v-if="dirty || shown?.pending" type="warning" :bordered="false" style="margin-bottom: 12px">
+        当前订阅配置有未保存或未应用的修改，以下节点列表来自已应用版本；若修改了订阅地址或筛选条件，需先保存并应用后才能勾选新的直连节点。
+      </NAlert>
+      <NAlert v-if="activeDirectErrors.length" type="error" :bordered="false" style="margin-bottom: 12px">
+        <div v-for="(item, idx) in activeDirectErrors" :key="idx">{{ item }}</div>
       </NAlert>
       <NAlert v-if="staleDirectNodes.length" type="warning" :bordered="false" style="margin-bottom: 12px">
         <NSpace justify="space-between" align="center">

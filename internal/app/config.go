@@ -436,6 +436,17 @@ func (s *Service) UpdateStack(ctx context.Context, actor Actor, id int64, stack 
 		}
 		stack.ID = id
 		configdoc.UnmaskStack(&stack, &old)
+		for pIdx := range stack.Mihomo.Providers {
+			for dnIdx := range stack.Mihomo.Providers[pIdx].DirectNodes {
+				dn := &stack.Mihomo.Providers[pIdx].DirectNodes[dnIdx]
+				if dn.Config.IsZero() {
+					return &FieldError{
+						Field:   fmt.Sprintf("mihomo.providers[%d].direct_nodes[%d]", pIdx, dnIdx),
+						Message: fmt.Sprintf("node %q is no longer available; refresh the node list", dn.Name),
+					}
+				}
+			}
+		}
 		change.Object, change.Summary, change.Scope = "stack:"+stack.Name, "修改 stack "+stack.Name, fmt.Sprintf("stacks[%d]", index)
 		for _, oldInbound := range old.Xray.Inbounds {
 			for _, inbound := range stack.Xray.Inbounds {

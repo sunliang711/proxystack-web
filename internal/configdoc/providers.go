@@ -15,8 +15,9 @@ import (
 
 // ProviderDirectNode is a provider node selected for direct subscription delivery.
 type ProviderDirectNode struct {
-	Name   string     `json:"name" yaml:"name"`
-	Config RawMapping `json:"config,omitempty" yaml:"config,omitempty"`
+	Name            string     `json:"name" yaml:"name"`
+	Config          RawMapping `json:"config,omitempty" yaml:"config,omitempty"`
+	EncryptedConfig string     `json:"encrypted_config,omitempty" yaml:"encrypted_config,omitempty"`
 }
 
 // Provider is a dynamic upstream collection owned by one stack.

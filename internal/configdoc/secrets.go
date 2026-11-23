@@ -4,11 +4,13 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
+	"gopkg.in/yaml.v3"
 )
 
 // 口令加密参数：argon2id 派生 AES-256-GCM 密钥，字段值写成 enc:<base64(nonce|密文)>。
@@ -152,6 +154,27 @@ func ApplySecrets(doc *Document, mode, passphrase string) error {
 			}
 			*field.Value = encrypted
 		}
+		for stackIndex := range doc.Stacks {
+			for pIndex := range doc.Stacks[stackIndex].Mihomo.Providers {
+				provider := &doc.Stacks[stackIndex].Mihomo.Providers[pIndex]
+				for dnIndex := range provider.DirectNodes {
+					dn := &provider.DirectNodes[dnIndex]
+					if dn.Config.IsZero() {
+						continue
+					}
+					raw, err := json.Marshal(dn.Config)
+					if err != nil {
+						return err
+					}
+					encrypted, err := encryptValue(key, string(raw))
+					if err != nil {
+						return err
+					}
+					dn.EncryptedConfig = encrypted
+					dn.Config = RawMapping{}
+				}
+			}
+		}
 		return nil
 	default:
 		return fmt.Errorf("unknown secrets mode: %s", mode)
@@ -186,6 +209,27 @@ func Decrypt(doc *Document, passphrase string) error {
 			return ErrWrongPassphrase
 		}
 		*field.Value = plain
+	}
+	for stackIndex := range doc.Stacks {
+		for pIndex := range doc.Stacks[stackIndex].Mihomo.Providers {
+			provider := &doc.Stacks[stackIndex].Mihomo.Providers[pIndex]
+			for dnIndex := range provider.DirectNodes {
+				dn := &provider.DirectNodes[dnIndex]
+				if dn.EncryptedConfig == "" {
+					continue
+				}
+				plain, err := decryptValue(key, dn.EncryptedConfig)
+				if err != nil {
+					return ErrWrongPassphrase
+				}
+				var cfg RawMapping
+				if err := json.Unmarshal([]byte(plain), &cfg); err != nil {
+					return fmt.Errorf("invalid encrypted direct node config: %w", err)
+				}
+				dn.Config = cfg
+				dn.EncryptedConfig = ""
+			}
+		}
 	}
 	doc.Secrets = SecretsPlain
 	doc.Encryption = nil
@@ -233,6 +277,52 @@ func MaskSecrets(doc *Document) {
 	for _, field := range secretFields(doc) {
 		if *field.Value != "" {
 			*field.Value = "******"
+		}
+	}
+	for stackIndex := range doc.Stacks {
+		for pIndex := range doc.Stacks[stackIndex].Mihomo.Providers {
+			provider := &doc.Stacks[stackIndex].Mihomo.Providers[pIndex]
+			for dnIndex := range provider.DirectNodes {
+				dn := &provider.DirectNodes[dnIndex]
+				if dn.EncryptedConfig != "" {
+					dn.EncryptedConfig = "******"
+				}
+				maskRawYAMLSecrets(dn.Config.Node)
+			}
+		}
+	}
+}
+
+func isRawSecretKey(key string) bool {
+	normalized := strings.ToLower(strings.NewReplacer("-", "", "_", "").Replace(key))
+	for _, part := range []string{"password", "passwd", "passphrase", "uuid", "token", "secret", "privatekey", "presharedkey", "authorization"} {
+		if strings.Contains(normalized, part) {
+			return true
+		}
+	}
+	return (strings.HasSuffix(normalized, "key") && !strings.Contains(normalized, "public")) ||
+		normalized == "username" || normalized == "auth" || normalized == "authstr" || normalized == "authstring" ||
+		normalized == "psk" || normalized == "headers" || normalized == "shortid" || normalized == "seed" || normalized == "protocolparam"
+}
+
+func maskRawYAMLSecrets(node *yaml.Node) {
+	if node == nil {
+		return
+	}
+	switch node.Kind {
+	case yaml.MappingNode:
+		for index := 0; index+1 < len(node.Content); index += 2 {
+			key := node.Content[index].Value
+			val := node.Content[index+1]
+			if isRawSecretKey(key) {
+				node.Content[index+1] = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "******"}
+			} else {
+				maskRawYAMLSecrets(val)
+			}
+		}
+	case yaml.SequenceNode:
+		for _, child := range node.Content {
+			maskRawYAMLSecrets(child)
 		}
 	}
 }

@@ -113,6 +113,7 @@ func MaskStack(stack *Stack) {
 		mask(&stack.Mihomo.Providers[index].URL)
 		for nodeIndex := range stack.Mihomo.Providers[index].DirectNodes {
 			stack.Mihomo.Providers[index].DirectNodes[nodeIndex].Config = RawMapping{}
+			stack.Mihomo.Providers[index].DirectNodes[nodeIndex].EncryptedConfig = ""
 		}
 	}
 	mask(&stack.Mihomo.ControllerSecret)

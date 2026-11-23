@@ -3042,6 +3042,7 @@ export interface components {
             config?: {
                 [key: string]: unknown;
             } | null;
+            encrypted_config?: string;
             name: string;
         };
         ProviderNodeDetails: {

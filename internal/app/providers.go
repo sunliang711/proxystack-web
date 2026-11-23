@@ -291,24 +291,26 @@ func (s *Service) updateStackProvider(ctx context.Context, actor Actor, stackID,
 	started := s.Now().Unix()
 	updateErr := providerClient(applied).UpdateProvider(ctx, source.RuntimeName())
 	var syncedDirectNodes map[string]configdoc.RawMapping
-	if updateErr == nil {
-		if cfg, ok := applied.Providers[source.RuntimeName()]; ok {
-			if native, nativeErr := providerClient(applied).Providers(ctx); nativeErr == nil {
-				if nativeProvider, ok := native[source.RuntimeName()]; ok {
-					if configs, cacheErr := readProviderNodeCache(s.Layout.MihomoWorkDir(stack.Name), cfg); cacheErr == nil {
-						syncedDirectNodes = make(map[string]configdoc.RawMapping, len(nativeProvider.Proxies))
-						for _, node := range nativeProvider.Proxies {
-							key := strings.TrimPrefix(node.Name, source.RuntimeName()+" | ")
-							rawMap, ok := configs[key]
-							if !ok {
-								continue
-							}
-							mapping, err := rawMappingFromMap(rawMap)
-							if err != nil || configdoc.CheckDirectRawConfig(mapping) != nil {
-								continue
-							}
-							syncedDirectNodes[key] = mapping
+	appliedProviderCfg := applied.Providers[source.RuntimeName()]
+	if updateErr == nil && appliedProviderCfg != nil {
+		if native, nativeErr := providerClient(applied).Providers(ctx); nativeErr == nil {
+			if nativeProvider, ok := native[source.RuntimeName()]; ok && len(nativeProvider.Proxies) > 0 {
+				if configs, cacheErr := readProviderNodeCache(s.Layout.MihomoWorkDir(stack.Name), appliedProviderCfg); cacheErr == nil {
+					candidate := make(map[string]configdoc.RawMapping, len(nativeProvider.Proxies))
+					for _, node := range nativeProvider.Proxies {
+						key := strings.TrimPrefix(node.Name, source.RuntimeName()+" | ")
+						rawMap, ok := configs[key]
+						if !ok {
+							continue
 						}
+						mapping, err := rawMappingFromMap(rawMap)
+						if err != nil || configdoc.CheckDirectRawConfig(mapping) != nil {
+							continue
+						}
+						candidate[key] = mapping
+					}
+					if len(candidate) > 0 {
+						syncedDirectNodes = candidate
 					}
 				}
 			}
@@ -356,8 +358,12 @@ func (s *Service) updateStackProvider(ctx context.Context, actor Actor, stackID,
 			if err != nil {
 				return err
 			}
-			if synced, syncErr := syncProviderDirectNodes(latestDoc, stackID, providerID, *source, syncedDirectNodes); syncErr != nil {
+			synced, syncErr := syncProviderDirectNodes(latestDoc, stackID, providerID, appliedProviderCfg, syncedDirectNodes)
+			if syncErr != nil {
 				slog.Warn("sync provider direct nodes", "stack_id", stackID, "provider_id", providerID, "err", syncErr)
+				if err := audit.Write(finish, q, s.Now(), audit.Entry{Actor: actor.Name, SourceIP: actor.IP, Action: ActionConfigStack, Object: "stack:" + stack.Name, Summary: "同步上游订阅直连节点失败：" + syncErr.Error()}); err != nil {
+					return err
+				}
 			} else if synced {
 				if err := store.SaveDocument(finish, q, latestDoc); err != nil {
 					return err
@@ -383,8 +389,19 @@ func (s *Service) updateStackProvider(ctx context.Context, actor Actor, stackID,
 	return updateErr
 }
 
+// providerMatchesApplied checks whether the saved provider URL and filters match the applied Mihomo config.
+func providerMatchesApplied(provider configdoc.Provider, appliedCfg map[string]any) bool {
+	if appliedCfg == nil {
+		return false
+	}
+	appliedURL, _ := appliedCfg["url"].(string)
+	appliedFilter, _ := appliedCfg["filter"].(string)
+	appliedExclude, _ := appliedCfg["exclude-filter"].(string)
+	return provider.URL == appliedURL && provider.Filter == appliedFilter && provider.ExcludeFilter == appliedExclude
+}
+
 // syncProviderDirectNodes removes missing/renamed nodes and refreshes configurations against the fetched subscription.
-func syncProviderDirectNodes(doc *configdoc.Document, stackID, providerID int64, appliedSource configdoc.Provider, active map[string]configdoc.RawMapping) (bool, error) {
+func syncProviderDirectNodes(doc *configdoc.Document, stackID, providerID int64, appliedCfg map[string]any, active map[string]configdoc.RawMapping) (bool, error) {
 	stackIdx := doc.StackByID(stackID)
 	if stackIdx < 0 {
 		return false, nil
@@ -395,7 +412,7 @@ func syncProviderDirectNodes(doc *configdoc.Document, stackID, providerID int64,
 		return false, nil
 	}
 	provider := &stack.Mihomo.Providers[pIdx]
-	if provider.URL != appliedSource.URL || provider.Filter != appliedSource.Filter || provider.ExcludeFilter != appliedSource.ExcludeFilter {
+	if !providerMatchesApplied(*provider, appliedCfg) {
 		return false, nil
 	}
 	if len(provider.DirectNodes) == 0 {

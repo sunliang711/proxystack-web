@@ -183,3 +183,56 @@ func TestProviderDirectNodeValidationAndMasking(t *testing.T) {
 	doc.Stacks[1].Mihomo.Providers[0].DirectNodes = []configdoc.ProviderDirectNode{{Name: "HK-1"}}
 	require.Contains(t, configdoc.Validate(doc).Error(), "config is required")
 }
+
+// TestProviderDirectNodeSecretsDiffCloneAndHysteria 验证加密导出/解密、修订差异遮蔽、克隆以及 Hysteria 标量 auth / 字符串端口兼容。
+func TestProviderDirectNodeSecretsDiffCloneAndHysteria(t *testing.T) {
+	doc := loadExampleDoc(t)
+	doc.Stacks[1].DirectUsers = []string{"alice"}
+	hysteriaCfg := directUpstream(t, "hy", "type: hysteria\nserver: hy.example.com\nport: \"443\"\nauth: hy-secret-pass\nup: 10\ndown: 100").Config
+	require.NoError(t, configdoc.CheckDirectRawConfig(hysteriaCfg))
+	doc.Stacks[1].Mihomo.Providers = []configdoc.Provider{{
+		ID: 7, Name: "airport", URL: "https://example.com/sub?token=sub-secret", FetchMode: "direct", Interval: 3600,
+		DirectNodes: []configdoc.ProviderDirectNode{{Name: "HY-1", Config: hysteriaCfg}},
+	}}
+	// Direct node generation + YAML/JSON roundtrip preserves Hysteria scalar auth and numeric port.
+	nodes, err := configdoc.StackDirectNodes(doc)
+	require.NoError(t, err)
+	require.Len(t, nodes, 2)
+	hyNode := nodes[1]
+	rawJSON, err := json.Marshal(hyNode)
+	require.NoError(t, err)
+	var decodedJSON sub.Node
+	require.NoError(t, json.Unmarshal(rawJSON, &decodedJSON))
+	require.Equal(t, 443, decodedJSON.Port)
+	clashYAML, err := yaml.Marshal(sub.RenderClashProxy(decodedJSON))
+	require.NoError(t, err)
+	require.Contains(t, string(clashYAML), "hy-secret-pass")
+
+	// Diff masks secrets inside Provider.DirectNodes[].Config.
+	before := doc.Clone()
+	before.Stacks[1].Mihomo.Providers[0].DirectNodes[0].Config.Set("auth", "old-hy-secret")
+	entries := configdoc.Diff(before, doc)
+	diffJSON, err := json.Marshal(entries)
+	require.NoError(t, err)
+	require.NotContains(t, string(diffJSON), "hy-secret-pass")
+	require.NotContains(t, string(diffJSON), "old-hy-secret")
+
+	// SecretsEncrypted encrypts DirectNodes[].Config and Decrypt restores it cleanly.
+	exported, err := configdoc.Subset(doc, configdoc.ExportScope{Scope: configdoc.ScopeStacks, Stacks: []string{"usa1"}, IncludeReferencedUsers: true}, time.Now())
+	require.NoError(t, err)
+	require.NoError(t, configdoc.ApplySecrets(exported, configdoc.SecretsEncrypted, "strong-passphrase"))
+	encJSON, err := json.Marshal(exported)
+	require.NoError(t, err)
+	require.NotContains(t, string(encJSON), "hy-secret-pass")
+	require.NotEmpty(t, exported.Stacks[0].Mihomo.Providers[0].DirectNodes[0].EncryptedConfig)
+	require.True(t, exported.Stacks[0].Mihomo.Providers[0].DirectNodes[0].Config.IsZero())
+	require.NoError(t, configdoc.Decrypt(exported, "strong-passphrase"))
+	authVal, ok := exported.Stacks[0].Mihomo.Providers[0].DirectNodes[0].Config.Get("auth")
+	require.True(t, ok)
+	require.Equal(t, "hy-secret-pass", authVal)
+
+	// CloneStack clears IDs while keeping DirectNodes.
+	cloned := configdoc.CloneStack(&doc.Stacks[1], "usa3")
+	require.Zero(t, cloned.Mihomo.Providers[0].ID)
+	require.Len(t, cloned.Mihomo.Providers[0].DirectNodes, 1)
+}

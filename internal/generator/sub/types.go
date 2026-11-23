@@ -130,7 +130,11 @@ func (n *Node) UnmarshalYAML(value *yaml.Node) error {
 	}
 	type raw Node
 	var decoded raw
-	if err := value.Decode(&decoded); err != nil {
+	decodeTarget := value
+	if direct {
+		decodeTarget = sanitizeDirectDecodeYAML(value)
+	}
+	if err := decodeTarget.Decode(&decoded); err != nil {
 		return err
 	}
 	*n = Node(decoded)
@@ -142,21 +146,71 @@ func (n *Node) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
+// sanitizeDirectDecodeYAML avoids struct type conflicts (such as Hysteria scalar auth strings or quoted ports)
+// while rawFields preserves the untouched original values.
+func sanitizeDirectDecodeYAML(value *yaml.Node) *yaml.Node {
+	cleaned := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	for index := 0; index+1 < len(value.Content); index += 2 {
+		key := value.Content[index]
+		val := value.Content[index+1]
+		if key.Value == "auth" && val.Kind != yaml.MappingNode {
+			continue
+		}
+		if key.Value == "port" && val.Kind == yaml.ScalarNode && val.Tag == "!!str" {
+			if _, err := strconv.Atoi(strings.TrimSpace(val.Value)); err == nil {
+				cleaned.Content = append(cleaned.Content, key, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!int", Value: strings.TrimSpace(val.Value)})
+				continue
+			}
+		}
+		cleaned.Content = append(cleaned.Content, key, val)
+	}
+	return cleaned
+}
+
 // UnmarshalJSON 按 direct 开关兼容 JSON input 中的直通节点。
 func (n *Node) UnmarshalJSON(data []byte) error {
-	type raw Node
-	var decoded raw
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
 		return err
 	}
-	if !decoded.Direct {
+	direct := false
+	if rawDirect, ok := fields["direct"]; ok {
+		_ = json.Unmarshal(rawDirect, &direct)
+	}
+	if !direct {
 		if err := rejectUnknownNodeJSONFields(fields); err != nil {
 			return err
 		}
+	}
+	decodeData := data
+	if direct {
+		sanitized := make(map[string]json.RawMessage, len(fields))
+		for k, v := range fields {
+			if k == "auth" && len(bytes.TrimSpace(v)) > 0 && bytes.TrimSpace(v)[0] != '{' {
+				continue
+			}
+			if k == "port" && len(bytes.TrimSpace(v)) > 0 && bytes.TrimSpace(v)[0] == '"' {
+				var text string
+				if json.Unmarshal(v, &text) == nil {
+					if port, err := strconv.Atoi(strings.TrimSpace(text)); err == nil {
+						if encoded, err := json.Marshal(port); err == nil {
+							sanitized[k] = encoded
+							continue
+						}
+					}
+				}
+			}
+			sanitized[k] = v
+		}
+		var err error
+		if decodeData, err = json.Marshal(sanitized); err != nil {
+			return err
+		}
+	}
+	type raw Node
+	var decoded raw
+	if err := json.Unmarshal(decodeData, &decoded); err != nil {
+		return err
 	}
 	*n = Node(decoded)
 	if n.Direct {
