@@ -17,11 +17,26 @@ function add(option: string | null) {
   pending.value = null
 }
 
-function move(index: number, delta: number) {
+function moveTo(index: number, target: number) {
+  if (index < 0 || index >= value.value.length) return
+  const clamped = Math.max(0, Math.min(value.value.length - 1, target))
+  if (clamped === index) return
   const next = [...value.value]
   const [item] = next.splice(index, 1)
-  next.splice(index + delta, 0, item)
+  next.splice(clamped, 0, item)
   value.value = next
+}
+
+function move(index: number, delta: number) {
+  moveTo(index, index + delta)
+}
+
+function moveTop(index: number) {
+  moveTo(index, 0)
+}
+
+function moveBottom(index: number) {
+  moveTo(index, value.value.length - 1)
 }
 
 function remove(index: number) {
@@ -42,10 +57,12 @@ function remove(index: number) {
       <NEmpty v-if="!value.length" size="small" description="尚未选择" />
       <div v-for="(item, index) in value" :key="item" class="row">
         <NTag size="small" :bordered="false">{{ index + 1 }}</NTag>
-        <span class="name">{{ item }}</span>
-        <NSpace :size="4">
+        <span class="name" :title="item">{{ item }}</span>
+        <NSpace :size="4" :wrap="false" class="row-actions">
+          <NButton size="tiny" quaternary :disabled="index === 0" @click="moveTop(index)">置顶</NButton>
           <NButton size="tiny" quaternary :disabled="index === 0" @click="move(index, -1)">上移</NButton>
           <NButton size="tiny" quaternary :disabled="index === value.length - 1" @click="move(index, 1)">下移</NButton>
+          <NButton size="tiny" quaternary :disabled="index === value.length - 1" @click="moveBottom(index)">置底</NButton>
           <NButton size="tiny" quaternary type="error" @click="remove(index)">移除</NButton>
         </NSpace>
       </div>
@@ -65,6 +82,13 @@ function remove(index: number) {
 }
 .name {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: ui-monospace, monospace;
+}
+.row-actions {
+  flex-shrink: 0;
 }
 </style>
