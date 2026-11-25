@@ -1,17 +1,21 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { NButton, NIcon, NInput, NRadioButton, NRadioGroup, NSpace, NText } from 'naive-ui'
+import { NButton, NDropdown, NIcon, NInput, NRadioButton, NRadioGroup, NSpace, NText, type DropdownOption } from 'naive-ui'
 import { SearchOutline } from '@vicons/ionicons5'
 
 export interface UserPickerOption {
   name: string
   remark?: string
+  profiles?: { name: string }[]
 }
 
 type FilterMode = 'all' | 'selected' | 'unselected'
 
+const DEFAULT_PROFILE_KEY = '\0default'
+
 const props = withDefaults(defineProps<{
   users: UserPickerOption[]
+  selectedProfiles?: Record<string, string>
   emptyText?: string
   selectAllLabel?: string
   clearAllLabel?: string
@@ -24,10 +28,15 @@ const props = withDefaults(defineProps<{
 })
 
 const value = defineModel<string[]>('value', { required: true })
+const emit = defineEmits<{
+  'update:profile': [user: string, profile: string]
+}>()
+
 const query = ref('')
 const filter = ref<FilterMode>('all')
 
 const selectedSet = computed(() => new Set(value.value))
+const profileEnabled = computed(() => props.selectedProfiles !== undefined)
 
 /** 已知用户按原顺序展示，同时保留草稿中可能残留的未知已选用户，方便取消勾选。 */
 const allItems = computed<UserPickerOption[]>(() => {
@@ -43,6 +52,36 @@ const normalizedQuery = computed(() => query.value.trim().toLowerCase())
 const hasQuery = computed(() => normalizedQuery.value.length > 0)
 const isFiltered = computed(() => hasQuery.value || filter.value !== 'all')
 
+function currentProfile(name: string): string {
+  return props.selectedProfiles?.[name] ?? ''
+}
+
+function showProfilePicker(item: UserPickerOption): boolean {
+  if (!profileEnabled.value || !selectedSet.value.has(item.name)) return false
+  return (item.profiles?.length ?? 0) > 0 || currentProfile(item.name) !== ''
+}
+
+function profileLabel(name: string): string {
+  return currentProfile(name) || 'default'
+}
+
+function profileMenuOptions(item: UserPickerOption): DropdownOption[] {
+  const current = currentProfile(item.name)
+  const names = new Set((item.profiles ?? []).map((profile) => profile.name).filter(Boolean))
+  if (current) names.add(current)
+  return [
+    { key: DEFAULT_PROFILE_KEY, label: current === '' ? '✓ default' : 'default' },
+    ...[...names].map((name) => ({
+      key: name,
+      label: current === name ? `✓ ${name}` : name,
+    })),
+  ]
+}
+
+function selectProfile(user: string, key: string | number) {
+  emit('update:profile', user, key === DEFAULT_PROFILE_KEY ? '' : String(key))
+}
+
 const visibleItems = computed(() => {
   const keyword = normalizedQuery.value
   return allItems.value.filter((item) => {
@@ -50,7 +89,10 @@ const visibleItems = computed(() => {
     if (filter.value === 'selected' && !selected) return false
     if (filter.value === 'unselected' && selected) return false
     if (!keyword) return true
-    return item.name.toLowerCase().includes(keyword) || (item.remark ?? '').toLowerCase().includes(keyword)
+    if (item.name.toLowerCase().includes(keyword) || (item.remark ?? '').toLowerCase().includes(keyword)) return true
+    if (!profileEnabled.value) return false
+    if (currentProfile(item.name).toLowerCase().includes(keyword)) return true
+    return (item.profiles ?? []).some((profile) => profile.name.toLowerCase().includes(keyword))
   })
 })
 
@@ -113,7 +155,7 @@ function clearAll() {
         v-model:value="query"
         size="small"
         clearable
-        placeholder="搜索用户名或备注"
+        :placeholder="profileEnabled ? '搜索用户名、备注或档案' : '搜索用户名或备注'"
         class="picker-search"
         :input-props="{ 'aria-label': '搜索用户' }"
       >
@@ -127,23 +169,46 @@ function clearAll() {
     </div>
 
     <div v-if="visibleItems.length" class="picker-grid" role="group" aria-label="用户列表">
-      <button
+      <div
         v-for="item in visibleItems"
         :key="item.name"
-        type="button"
-        role="checkbox"
-        :aria-checked="selectedSet.has(item.name)"
         class="picker-item"
         :class="{ selected: selectedSet.has(item.name) }"
-        :title="item.remark ? `${item.name}（${item.remark}）` : item.name"
-        @click="toggle(item.name)"
       >
-        <span class="picker-check" aria-hidden="true">{{ selectedSet.has(item.name) ? '✓' : '' }}</span>
-        <span class="picker-label">
-          <span class="picker-name">{{ item.name }}</span>
-          <span v-if="item.remark" class="picker-remark">{{ item.remark }}</span>
-        </span>
-      </button>
+        <button
+          type="button"
+          role="checkbox"
+          :aria-checked="selectedSet.has(item.name)"
+          class="picker-toggle"
+          :title="item.remark ? `${item.name}（${item.remark}）` : item.name"
+          @click="toggle(item.name)"
+        >
+          <span class="picker-check" aria-hidden="true">{{ selectedSet.has(item.name) ? '✓' : '' }}</span>
+          <span class="picker-label">
+            <span class="picker-name">{{ item.name }}</span>
+            <span v-if="item.remark" class="picker-remark">{{ item.remark }}</span>
+          </span>
+        </button>
+        <NDropdown
+          v-if="showProfilePicker(item)"
+          trigger="click"
+          size="small"
+          placement="bottom-end"
+          :options="profileMenuOptions(item)"
+          @select="(key: string | number) => selectProfile(item.name, key)"
+        >
+          <button
+            type="button"
+            class="picker-profile"
+            :class="{ custom: !!currentProfile(item.name) }"
+            :title="`切换档案（当前：${profileLabel(item.name)}）`"
+            :aria-label="`切换 ${item.name} 的档案`"
+          >
+            <span class="picker-profile-text">{{ profileLabel(item.name) }}</span>
+            <span class="picker-caret" aria-hidden="true">▾</span>
+          </button>
+        </NDropdown>
+      </div>
     </div>
     <div v-else class="picker-empty">
       <NText depth="3">{{ emptyMessage }}</NText>
@@ -200,19 +265,14 @@ function clearAll() {
 .picker-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
   width: 100%;
-  padding: 6px 8px;
+  padding: 2px 4px 2px 2px;
   border: 1px solid var(--ps-border);
   border-radius: 6px;
   background: var(--ps-surface);
   color: var(--ps-text);
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.3;
-  text-align: left;
-  cursor: pointer;
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 .picker-item:hover {
@@ -221,6 +281,22 @@ function clearAll() {
 .picker-item.selected {
   border-color: var(--ps-accent);
   background: var(--ps-accent-soft);
+}
+.picker-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 4px 4px 4px 6px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
 }
 .picker-check {
   flex-shrink: 0;
@@ -265,6 +341,43 @@ function clearAll() {
   white-space: nowrap;
   font-size: 12px;
   color: var(--ps-muted);
+}
+.picker-profile {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 68px;
+  padding: 2px 5px;
+  border: 1px solid var(--ps-border);
+  border-radius: 4px;
+  background: var(--ps-surface);
+  color: var(--ps-muted);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+.picker-profile:hover {
+  border-color: var(--ps-accent);
+  color: var(--ps-text);
+}
+.picker-profile.custom {
+  border-color: var(--ps-accent);
+  background: var(--ps-accent);
+  color: var(--ps-bg);
+  font-weight: 600;
+}
+.picker-profile-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.picker-caret {
+  flex-shrink: 0;
+  font-size: 10px;
+  opacity: 0.8;
 }
 .picker-empty {
   padding: 18px 8px;

@@ -122,6 +122,17 @@ const selectedUsers = computed({
 })
 const missingUsers = computed(() => props.users.filter((user) => !selectedUsers.value.includes(user.name)))
 const selectedUserCount = computed(() => new Set(selectedUsers.value).size)
+const selectedUserProfiles = computed<Record<string, string>>(() => {
+  const profiles: Record<string, string> = {}
+  for (const ref of editing.value?.draft.users ?? []) {
+    if (!(ref.user in profiles)) profiles[ref.user] = ref.profile ?? ''
+  }
+  return profiles
+})
+function setUserProfile(user: string, profile: string) {
+  const ref = editing.value?.draft.users.find((u) => u.user === user)
+  if (ref) ref.profile = profile
+}
 function addAllUsers() {
   // 仅追加缺少的用户，保留已有凭据档案及覆盖设置。
   editing.value!.draft.users.push(...missingUsers.value.map((user) => ({ user: user.name, profile: '', remark: '', display_template: '', tag: '' })))
@@ -252,8 +263,10 @@ const showUsers = computed(() => isUserProtocol.value || (isAuthProtocol.value &
             <UserMultiPicker
               v-model:value="selectedUsers"
               :users="users"
+              :selected-profiles="selectedUserProfiles"
               :on-select-all="addAllUsers"
               :on-clear-all="removeAllUsers"
+              @update:profile="setUserProfile"
             />
           </NFormItem>
           <NCollapse v-if="selectedUserCount" v-model:expanded-names="overridesOpen" class="inbound-user-overrides">

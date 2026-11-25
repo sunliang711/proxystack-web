@@ -15,10 +15,10 @@ before(async () => {
 after(async () => { await server?.close() })
 
 const sampleUsers = [
-  { name: 'alice', remark: '开发组' },
-  { name: 'bob', remark: '测试' },
-  { name: 'carol', remark: '运维' },
-  { name: 'dave', remark: '开发实习' },
+  { name: 'alice', remark: '开发组', profiles: [{ name: 'phone' }, { name: 'laptop' }] },
+  { name: 'bob', remark: '测试', profiles: [] },
+  { name: 'carol', remark: '运维', profiles: [{ name: 'office' }] },
+  { name: 'dave', remark: '开发实习', profiles: [] },
 ]
 
 function setup(t, initial = [], extraProps = {}) {
@@ -26,6 +26,7 @@ function setup(t, initial = [], extraProps = {}) {
     createComment: () => ({}), insert() {}, remove() {}, parentNode: () => null, nextSibling: () => null,
   })
   const model = reactive({ value: [...initial] })
+  const profileChanges = []
   const component = { ...UserMultiPicker, render: () => null }
   let node
   const app = renderer.createApp({
@@ -34,12 +35,13 @@ function setup(t, initial = [], extraProps = {}) {
       ...extraProps,
       value: model.value,
       'onUpdate:value': (value) => { model.value = value },
+      'onUpdate:profile': (user, profile) => { profileChanges.push([user, profile]) },
     })),
   })
   app.provide(ssrContextKey, {})
   app.mount({})
   t.after(() => app.unmount())
-  return { model, state: node.component.setupState }
+  return { model, profileChanges, state: node.component.setupState }
 }
 
 test('支持点击切换、搜索过滤（用户名与备注）以及全部/已选/未选切换', async (t) => {
@@ -123,4 +125,56 @@ test('渲染多列勾选按钮与选中状态，并显示计数与操作区', as
     { name: 'dave', checked: false },
   ])
   assert.match(html, /已选 2 \/ 共 4/)
+  // 未传 selectedProfiles 时不渲染档案切换按钮
+  assert.doesNotMatch(html, /class="picker-profile"/)
+})
+
+test('传入 selectedProfiles 时仅对已选且有额外档案（或非默认档案）的用户提供内联档案切换，并支持按档案名搜索', async (t) => {
+  const { state, profileChanges } = setup(t, ['alice', 'bob'], {
+    selectedProfiles: { alice: 'phone', bob: '', carol: '' },
+  })
+  // alice 已选且有额外档案 -> 显示；bob 无额外档案且为默认 -> 不显示；carol 有额外档案但未选 -> 不显示
+  assert.equal(state.showProfilePicker(sampleUsers[0]), true)
+  assert.equal(state.showProfilePicker(sampleUsers[1]), false)
+  assert.equal(state.showProfilePicker(sampleUsers[2]), false)
+
+  // 菜单包含 default 与所有档案，当前项带勾选标记
+  assert.deepEqual(
+    state.profileMenuOptions(sampleUsers[0]).map((o) => o.label),
+    ['default', '✓ phone', 'laptop'],
+  )
+
+  state.selectProfile('alice', 'laptop')
+  state.selectProfile('alice', state.profileMenuOptions(sampleUsers[0])[0].key)
+  assert.deepEqual(profileChanges, [['alice', 'laptop'], ['alice', '']])
+
+  // 按档案名搜索可命中对应用户
+  state.query = 'office'
+  await nextTick()
+  assert.deepEqual(state.visibleItems.map((u) => u.name), ['carol'])
+
+  // 渲染时仅为已选多档案用户渲染档案徽章，且非默认档案高亮 custom 类
+  const prevDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  const el = () => ({ style: {}, dataset: {}, setAttribute() {}, appendChild: (child) => child, insertBefore: (child) => child, querySelector: () => null, classList: { add() {}, remove() {} }, textContent: '' })
+  globalThis.document = { baseURI: 'http://localhost/', documentElement: el(), head: el(), createElement: el, createTextNode: el, querySelector: () => null }
+  t.after(() => {
+    if (prevDocument) Object.defineProperty(globalThis, 'document', prevDocument)
+    else delete globalThis.document
+  })
+  const app = createSSRApp({
+    render: () => h(UserMultiPicker, {
+      value: ['alice', 'bob', 'carol'],
+      users: sampleUsers,
+      selectedProfiles: { alice: 'phone', bob: '', carol: '' },
+    }),
+  })
+  const html = await renderToString(app)
+  const badges = [...html.matchAll(/<button\b([^>]*class="picker-profile[^"]*"[^>]*)>[\s\S]*?<span class="picker-profile-text"[^>]*>([^<]+)<\/span>/g)].map((m) => ({
+    label: m[2].trim(),
+    custom: /\bcustom\b/.test(m[1]),
+  }))
+  assert.deepEqual(badges, [
+    { label: 'phone', custom: true },
+    { label: 'default', custom: false },
+  ])
 })

@@ -91,3 +91,28 @@ test('删除全部清空草稿中的全部订阅用户并在暂存后生效', (t
   state.confirm()
   assert.deepEqual(stack.xray.inbounds[0].users, [])
 })
+
+test('在用户网格中直接切换档案会同步更新草稿且保留其他单用户覆盖', (t) => {
+  const refs = [
+    { user: 'alice', profile: '', remark: 'my-node', display_template: '{{ .stack }}', tag: 't1' },
+    { user: 'bob', profile: 'mobile', remark: '', display_template: '', tag: '' },
+  ]
+  const users = [
+    { name: 'alice', enabled: true, profiles: [{ name: 'phone' }, { name: 'laptop' }] },
+    { name: 'bob', enabled: true, profiles: [{ name: 'mobile' }] },
+  ]
+  const { state, stack } = setup(t, users, refs)
+  assert.deepEqual(state.selectedUserProfiles.value, { alice: '', bob: 'mobile' })
+
+  state.setUserProfile('alice', 'phone')
+  state.setUserProfile('bob', '')
+  assert.deepEqual(state.selectedUserProfiles.value, { alice: 'phone', bob: '' })
+  assert.deepEqual(state.editing.value.draft.users[0], {
+    user: 'alice', profile: 'phone', remark: 'my-node', display_template: '{{ .stack }}', tag: 't1',
+  })
+  assert.equal(state.editing.value.draft.users[1].profile, '')
+
+  state.confirm()
+  assert.equal(stack.xray.inbounds[0].users[0].profile, 'phone')
+  assert.equal(stack.xray.inbounds[0].users[1].profile, '')
+})
