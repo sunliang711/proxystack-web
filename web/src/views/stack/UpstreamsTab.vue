@@ -10,6 +10,7 @@ import { fieldState, hasErrorsUnder, type FormErrors, type Schemas } from '../..
 import CodeEditor from '../../components/CodeEditor.vue'
 import DirectOverrides from './DirectOverrides.vue'
 import EntityLink from '../../components/EntityLink.vue'
+import UserMultiPicker from '../../components/UserMultiPicker.vue'
 import { ssMethods } from '../../util/options'
 import { isInboundReference } from '../../util/flow'
 
@@ -40,15 +41,9 @@ const directSuffix = computed({
   set: (value: string) => { props.stack.direct_suffix = value },
 })
 const directNameExample = computed(() => `${props.stack.name} vmess${directSourceCount.value > 1 ? ' · 上游名' : ''}${directSuffix.value || ' [DRT]'}`)
-const userOptions = computed(() => props.users.map((user) => ({ label: user.remark ? `${user.name}（${user.remark}）` : user.name, value: user.name })))
-const missingDirectUsers = computed(() => props.users.filter((user) => !directUsers.value.includes(user.name)))
 const externalCount = computed(() => props.stack.mihomo.upstreams.filter((upstream) => upstream.enabled !== false && upstream.type === 'raw').length)
 const providerDirectCount = computed(() => (props.stack.mihomo.providers ?? []).reduce((sum, provider) => sum + (provider.direct_nodes?.length ?? 0), 0))
 const directSourceCount = computed(() => externalCount.value + providerDirectCount.value)
-
-function selectAllDirectUsers() {
-  directUsers.value = [...directUsers.value, ...missingDirectUsers.value.map((user) => user.name)]
-}
 
 // 直连订阅默认折叠，出现校验错误时自动展开，切换 Stack 时恢复折叠。
 const directHasErrors = computed(() =>
@@ -431,14 +426,12 @@ const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.va
         </template>
         <NForm label-placement="top">
           <NFormItem label="允许直连的用户" v-bind="fieldState(errors, 'direct_users')">
-            <NSpace vertical style="width: 100%">
-              <NSelect v-model:value="directUsers" :options="userOptions" multiple filterable clearable placeholder="未选择时不生成直连节点" />
-              <NSpace align="center" :size="8">
-                <NText depth="3">已选 {{ directUsers.length }} / 共 {{ users.length }}</NText>
-                <NButton size="tiny" :disabled="!missingDirectUsers.length" @click="selectAllDirectUsers">选择所有用户</NButton>
-                <NButton size="tiny" :disabled="!directUsers.length" @click="directUsers = []">清空</NButton>
-              </NSpace>
-            </NSpace>
+            <UserMultiPicker
+              v-model:value="directUsers"
+              :users="users"
+              select-all-label="选择所有用户"
+              clear-all-label="清空"
+            />
           </NFormItem>
           <NFormItem label="直连节点后缀" v-bind="fieldState(errors, 'direct_suffix', '保留输入中的空格；留空使用默认值「 [DRT]」，其中包含一个前导空格')">
             <NInput v-model:value="directSuffix" placeholder=" [DRT]" style="max-width: 360px" />

@@ -9,6 +9,7 @@ import PortInput from '../../components/PortInput.vue'
 import SecretInput from '../../components/SecretInput.vue'
 import TemplateInput from '../../components/TemplateInput.vue'
 import EntityLink from '../../components/EntityLink.vue'
+import UserMultiPicker from '../../components/UserMultiPicker.vue'
 import { randomString, shadowsocksKey } from '../../util/generate'
 import { listenOptions, protocolLabels, regions, ssMethods } from '../../util/options'
 import { stackPorts } from './ports'
@@ -106,12 +107,17 @@ const prefix = computed(() => `xray.inbounds[${editing.value?.index ?? 0}]`)
 const f = (path: string, hint?: string) => fieldState(props.errors, `${prefix.value}.${path}`, hint)
 const otherPorts = computed(() => stackPorts(props.stack))
 
-const userOptions = computed(() => props.users.map((u) => ({ label: u.remark ? `${u.name}（${u.remark}）` : u.name, value: u.name })))
 const selectedUsers = computed({
   get: () => editing.value?.draft.users.map((u) => u.user) ?? [],
   set: (names: string[]) => {
     const draft = editing.value!.draft
-    draft.users = names.map((name) => draft.users.find((u) => u.user === name) ?? { user: name, profile: '', remark: '', display_template: '', tag: '' })
+    const keep = new Set(names)
+    const preserved = draft.users.filter((u) => keep.has(u.user))
+    const existing = new Set(preserved.map((u) => u.user))
+    const added = names
+      .filter((name, i) => !existing.has(name) && names.indexOf(name) === i)
+      .map((name) => ({ user: name, profile: '', remark: '', display_template: '', tag: '' }))
+    draft.users = [...preserved, ...added]
   },
 })
 const missingUsers = computed(() => props.users.filter((user) => !selectedUsers.value.includes(user.name)))
@@ -243,18 +249,14 @@ const showUsers = computed(() => isUserProtocol.value || (isAuthProtocol.value &
 
         <template v-if="showUsers">
           <NFormItem :label="isAuthProtocol ? '订阅用户' : '用户'" v-bind="f('users')">
-            <NSpace vertical :size="6" style="width: 100%">
-              <NSelect v-model:value="selectedUsers" :options="userOptions" multiple filterable max-tag-count="responsive" />
-              <NSpace justify="space-between" align="center">
-                <NText depth="3">已选 {{ selectedUserCount }} / 共 {{ users.length }}</NText>
-                <NSpace align="center" :size="6">
-                  <NButton size="tiny" secondary :disabled="!missingUsers.length" @click="addAllUsers">{{ !users.length ? '暂无用户' : missingUsers.length ? '添加全部' : '已全部添加' }}</NButton>
-                  <NButton size="tiny" secondary :disabled="!editing?.draft.users.length" @click="removeAllUsers">删除全部</NButton>
-                </NSpace>
-              </NSpace>
-            </NSpace>
+            <UserMultiPicker
+              v-model:value="selectedUsers"
+              :users="users"
+              :on-select-all="addAllUsers"
+              :on-clear-all="removeAllUsers"
+            />
           </NFormItem>
-          <NCollapse v-if="editing.draft.users.length" v-model:expanded-names="overridesOpen" class="inbound-user-overrides">
+          <NCollapse v-if="selectedUserCount" v-model:expanded-names="overridesOpen" class="inbound-user-overrides">
             <NCollapseItem name="overrides">
               <template #header>
                 <NSpace align="center" :size="6">
