@@ -28,6 +28,21 @@ function list(value: string, format: (item: string) => string): string | null {
   return out.join('、')
 }
 
+export const jobSchedulePresets = [
+  { label: '每分钟', value: '* * * * *' },
+  { label: '每 5 分钟', value: '*/5 * * * *' },
+  { label: '每 10 分钟', value: '*/10 * * * *' },
+  { label: '每小时', value: '0 * * * *' },
+  { label: '每天（0点）', value: '0 0 * * *' },
+  { label: '每周（周一0点）', value: '0 0 * * 1' },
+  { label: '每月（1号0点）', value: '0 0 1 * *' },
+  { label: '自定义', value: 'custom' },
+]
+
+export function resolveSchedulePreset(schedule: string): string {
+  return jobSchedulePresets.find((item) => item.value !== 'custom' && item.value === schedule)?.value ?? 'custom'
+}
+
 export function describeCron(expr: string): string | null {
   const text = expr.trim()
   if (text.startsWith('@')) {

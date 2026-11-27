@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   NButton, NCard, NCode, NDataTable, NDrawer, NDrawerContent, NDynamicTags, NForm, NFormItem, NInput, NInputNumber, NSelect, NSpace, NSwitch, NTag, NText,
   useMessage, type DataTableColumns,
@@ -7,7 +7,7 @@ import {
 import { api, emptyErrors, fieldState, problemMessage, splitProblem, type FormErrors, type Schemas } from '../api/client'
 import ErrorList from '../components/ErrorList.vue'
 import { formatTime } from '../util/format'
-import { describeCron } from '../util/cron'
+import { describeCron, jobSchedulePresets, resolveSchedulePreset } from '../util/cron'
 import { onJobTaskEvent } from '../runtime'
 import { taskCenter } from '../tasks'
 
@@ -24,26 +24,6 @@ const previewError = ref('')
 const errors = ref<FormErrors>(emptyErrors())
 const history = ref<{ job: Job; runs: Run[] } | null>(null)
 
-const presets = [
-  { label: '每小时', value: '0 * * * *' },
-  { label: '每天', value: '0 4 * * *' },
-  { label: '每周', value: '0 5 * * 1' },
-  { label: '每月', value: '0 4 1 * *' },
-  { label: '自定义', value: 'custom' },
-]
-const planPresets = computed(() => {
-  if (editing.value?.kind === 'egress_check') {
-    return [
-      { label: '每分钟', value: '* * * * *' },
-      { label: '每 2 分钟', value: '*/2 * * * *' },
-      { label: '每 5 分钟', value: '*/5 * * * *' },
-      ...presets,
-    ]
-  }
-  if (editing.value?.kind === 'config_mail') return [{ label: '每月 1 日和 15 日', value: '30 4 1,15 * *' }, ...presets]
-  if (editing.value?.kind === 'safekeep_backup') return [{ label: '每天 05:00', value: '0 5 * * *' }, ...presets]
-  return presets
-})
 const statusView: Record<Run['status'], { label: string; type: 'default' | 'info' | 'success' | 'warning' | 'error' }> = {
   running: { label: '执行中', type: 'info' },
   succeeded: { label: '成功', type: 'success' },
@@ -85,7 +65,7 @@ function edit(job: Job) {
   if (copy.kind === 'config_mail') copy.params.recipients ??= []
   if (copy.kind === 'safekeep_backup') copy.params.safekeep_targets ??= []
   editing.value = copy
-  preset.value = planPresets.value.find((item) => item.value === job.schedule)?.value ?? 'custom'
+  preset.value = resolveSchedulePreset(job.schedule)
   errors.value = emptyErrors()
 }
 
@@ -162,7 +142,7 @@ const columns: DataTableColumns<Job> = [
       <ErrorList :errors="errors.global" />
       <NForm label-placement="top">
         <NFormItem label="计划">
-          <NSelect v-model:value="preset" :options="planPresets" />
+          <NSelect v-model:value="preset" :options="jobSchedulePresets" />
         </NFormItem>
         <NFormItem v-if="preset === 'custom'" label="cron 表达式" v-bind="fieldState(errors, 'schedule', `五段式：分 时 日 月 周；默认 ${editing.default_schedule}`)">
           <NInput v-model:value="editing.schedule" />
