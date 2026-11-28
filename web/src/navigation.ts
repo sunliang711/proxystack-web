@@ -84,6 +84,7 @@ export const extraDestinations: { key: string; label: string; group: string; key
   { key: 'records/audit', label: '审计日志', group: '日志与历史', keywords: ['操作记录', 'audit'], to: { name: 'records', query: { tab: 'audit' } } },
   { key: 'records/history', label: '配置历史', group: '日志与历史', keywords: ['快照', '回滚', '版本', 'diff'], to: { name: 'records', query: { tab: 'history' } } },
   { key: 'records/notifications', label: '通知记录', group: '日志与历史', keywords: ['邮件', '重发'], to: { name: 'records', query: { tab: 'notifications' } } },
-  { key: 'security', label: '账号安全', group: '账号', keywords: ['两步验证', '2fa', 'totp', '锁定'], to: { name: 'security' } },
+  { key: 'security', label: '账号安全', group: '账号', keywords: ['两步验证', '2fa', 'totp', '锁定', '账户与会话', '多账号', '管理员', '只读'], to: { name: 'security' } },
+  { key: 'security/sessions', label: '活跃会话', group: '账号安全', keywords: ['设备', '注销', '登录'], to: { name: 'security', hash: '#active-sessions' } },
   { key: 'change-password', label: '修改密码', group: '账号', keywords: ['密码'], to: { name: 'change-password' } },
 ]

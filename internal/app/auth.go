@@ -35,6 +35,7 @@ type AdminView struct {
 	Username           string `json:"username"`
 	MustChangePassword bool   `json:"must_change_password"`
 	TOTPEnabled        bool   `json:"totp_enabled"`
+	Role               string `json:"role" enum:"admin,viewer"`
 }
 
 // SessionInfo 是一个有效会话。
@@ -48,7 +49,7 @@ type SessionInfo struct {
 }
 
 func adminView(a dbq.Admin) AdminView {
-	return AdminView{ID: a.ID, Username: a.Username, MustChangePassword: a.MustChangePassword != 0, TOTPEnabled: a.TotpSecret != ""}
+	return AdminView{ID: a.ID, Username: a.Username, MustChangePassword: a.MustChangePassword != 0, TOTPEnabled: a.TotpSecret != "", Role: a.Role}
 }
 
 // Login 校验账号密码，账号开启两步验证时再校验验证码，然后创建会话。
@@ -68,6 +69,11 @@ func (s *Service) Login(ctx context.Context, username, password, totpCode string
 	}
 	if err != nil {
 		return nil, err
+	}
+	if admin.Disabled != 0 {
+		s.guard.fail(meta.IP, now)
+		s.auditLoginFailure(ctx, username, meta, "disabled account")
+		return nil, ErrInvalidCredentials
 	}
 	if admin.LockedUntil > now.Unix() {
 		s.guard.fail(meta.IP, now)
@@ -103,7 +109,15 @@ func (s *Service) Login(ctx context.Context, username, password, totpCode string
 		ExpiresAt: now.Add(SessionIdleTimeout), MaxExpiresAt: now.Add(SessionMaxLifetime),
 	}
 	err = s.Store.InTx(ctx, func(q *dbq.Queries) error {
-		if err := q.ResetLoginFailures(ctx, admin.ID); err != nil {
+		// 密码校验期间账号可能被停用、降级或重置，事务内重新确认后才签发会话。
+		current, err := q.GetAdminByID(ctx, admin.ID)
+		if err != nil {
+			return err
+		}
+		if current.Disabled != 0 || current.Role != admin.Role || current.PasswordHash != admin.PasswordHash || current.TotpSecret != admin.TotpSecret {
+			return ErrInvalidCredentials
+		}
+		if err := q.RecordAdminLogin(ctx, dbq.RecordAdminLoginParams{LastLoginAt: now.Unix(), ID: admin.ID}); err != nil {
 			return err
 		}
 		if err := q.DeleteExpiredSessions(ctx, now.Unix()); err != nil {
@@ -188,7 +202,7 @@ func (s *Service) Authenticate(ctx context.Context, token string, activity bool)
 		return nil, ErrUnauthenticated
 	}
 	admin, err := s.Store.Q.GetAdminByID(ctx, sess.AdminID)
-	if err != nil {
+	if err != nil || admin.Disabled != 0 {
 		return nil, ErrUnauthenticated
 	}
 	expiresAt := sess.ExpiresAt

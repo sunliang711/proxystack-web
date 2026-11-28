@@ -110,6 +110,7 @@ func OpenAPI() *huma.OpenAPI {
 
 func (s *Server) register(api huma.API) {
 	registerAuth(api, s)
+	registerAccounts(api, s)
 	registerSystem(api, s)
 	registerConfig(api, s)
 	registerRuntime(api, s)
@@ -161,6 +162,16 @@ func (s *Server) authMiddleware(ctx huma.Context, next func(huma.Context)) {
 	if sess.Admin.MustChangePassword && op.Metadata[metaAllowPending] != true {
 		_ = huma.WriteErr(s.api, ctx, http.StatusForbidden, "password change required")
 		return
+	}
+	if sess.Admin.Role != app.RoleAdmin && !viewerOperationAllowed(op.OperationID) {
+		_ = huma.WriteErr(s.api, ctx, http.StatusForbidden, app.ErrForbidden.Error())
+		return
+	}
+	switch op.OperationID {
+	case "events", "streamLogs", "streamStackSpeedTest":
+		stream, cancel := s.monitorSession(ctx.Context(), sess.Token)
+		defer cancel()
+		ctx = huma.WithContext(ctx, stream)
 	}
 	next(huma.WithValue(ctx, ctxSession, sess))
 }
@@ -259,6 +270,10 @@ func toHTTPError(err error) error {
 		return huma.Error502BadGateway(remote.Message)
 	case errors.Is(err, app.ErrNotFound):
 		return huma.Error404NotFound(err.Error())
+	case errors.Is(err, app.ErrForbidden):
+		return huma.Error403Forbidden(err.Error())
+	case errors.Is(err, app.ErrLastAdmin):
+		return huma.Error409Conflict(err.Error())
 	case errors.Is(err, app.ErrInvalidCredentials), errors.Is(err, app.ErrUnauthenticated):
 		return huma.Error401Unauthorized(err.Error())
 	case errors.Is(err, app.ErrAccountLocked):

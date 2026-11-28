@@ -34,6 +34,9 @@ type Admin struct {
 	UpdatedAt          int64  `json:"updated_at"`
 	TotpPendingSecret  string `json:"totp_pending_secret"`
 	TotpLastStep       int64  `json:"totp_last_step"`
+	Role               string `json:"role"`
+	Disabled           int64  `json:"disabled"`
+	LastLoginAt        int64  `json:"last_login_at"`
 }
 
 type AdminResetToken struct {

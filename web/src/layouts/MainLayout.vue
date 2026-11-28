@@ -3,6 +3,7 @@ import { computed, h, onBeforeUnmount, onMounted, ref, watch, type Component } f
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   NBadge,
+  NAlert,
   NBreadcrumb,
   NBreadcrumbItem,
   NButton,
@@ -295,6 +296,7 @@ async function onAccount(key: string) {
             <h1 class="page-title">{{ title }}</h1>
             <p v-if="description" class="page-desc">{{ description }}</p>
           </div>
+          <NAlert v-if="session.admin?.role === 'viewer'" type="info" :bordered="false" style="margin-bottom: 20px">当前账号为只读运维，可查看状态与脱敏配置；修改配置、部署和查看明文凭据仅限管理员。你仍可管理自己的密码、两步验证和会话。</NAlert>
           <div class="page-body"><RouterView /></div>
         </main>
       </NLayoutContent>

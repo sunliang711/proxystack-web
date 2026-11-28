@@ -47,5 +47,25 @@ DELETE FROM admins;
 
 -- name: RestoreAdmin :exec
 INSERT INTO admins (id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at,
-                    totp_pending_secret, totp_last_step)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                    totp_pending_secret, totp_last_step, role, disabled, last_login_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: CreateManagedAdmin :one
+INSERT INTO admins (username, password_hash, role, must_change_password, created_at, updated_at)
+VALUES (?, ?, ?, 1, ?, ?)
+RETURNING *;
+
+-- name: CountEnabledAdmins :one
+SELECT count(*) FROM admins WHERE role = 'admin' AND disabled = 0;
+
+-- name: SetAdminUsername :exec
+UPDATE admins SET username = ?, updated_at = ? WHERE id = ?;
+
+-- name: SetAdminRole :exec
+UPDATE admins SET role = ?, updated_at = ? WHERE id = ?;
+
+-- name: SetAdminDisabled :exec
+UPDATE admins SET disabled = ?, updated_at = ? WHERE id = ?;
+
+-- name: RecordAdminLogin :exec
+UPDATE admins SET failed_logins = 0, locked_until = 0, last_login_at = ? WHERE id = ?;

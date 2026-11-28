@@ -95,6 +95,7 @@ func (s *Server) sessionCookie(value string, maxAge int, forwardedProto string) 
 }
 
 func registerAuth(api huma.API, s *Server) {
+	registerSessions(api, s)
 	huma.Register(api, huma.Operation{
 		OperationID: "login",
 		Method:      http.MethodPost,

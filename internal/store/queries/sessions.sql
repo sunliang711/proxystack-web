@@ -35,3 +35,12 @@ DELETE FROM sessions WHERE admin_id = ? AND id_hash != ?;
 
 -- name: DeleteAllSessions :exec
 DELETE FROM sessions;
+
+-- name: ListActiveAdminSessions :many
+SELECT id_hash, created_at, last_seen_at, expires_at, ip, user_agent
+FROM sessions
+WHERE admin_id = ? AND expires_at > sqlc.arg(now) AND created_at > sqlc.arg(created_after)
+ORDER BY last_seen_at DESC, created_at DESC, id_hash;
+
+-- name: DeleteOwnedSession :execrows
+DELETE FROM sessions WHERE id_hash = ? AND admin_id = ?;

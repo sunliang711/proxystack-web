@@ -53,10 +53,21 @@ func (q *Queries) CountAdmins(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countEnabledAdmins = `-- name: CountEnabledAdmins :one
+SELECT count(*) FROM admins WHERE role = 'admin' AND disabled = 0
+`
+
+func (q *Queries) CountEnabledAdmins(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countEnabledAdmins)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAdmin = `-- name: CreateAdmin :one
 INSERT INTO admins (username, password_hash, must_change_password, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?)
-RETURNING id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at, totp_pending_secret, totp_last_step
+RETURNING id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at, totp_pending_secret, totp_last_step, role, disabled, last_login_at
 `
 
 type CreateAdminParams struct {
@@ -88,6 +99,51 @@ func (q *Queries) CreateAdmin(ctx context.Context, arg CreateAdminParams) (Admin
 		&i.UpdatedAt,
 		&i.TotpPendingSecret,
 		&i.TotpLastStep,
+		&i.Role,
+		&i.Disabled,
+		&i.LastLoginAt,
+	)
+	return i, err
+}
+
+const createManagedAdmin = `-- name: CreateManagedAdmin :one
+INSERT INTO admins (username, password_hash, role, must_change_password, created_at, updated_at)
+VALUES (?, ?, ?, 1, ?, ?)
+RETURNING id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at, totp_pending_secret, totp_last_step, role, disabled, last_login_at
+`
+
+type CreateManagedAdminParams struct {
+	Username     string `json:"username"`
+	PasswordHash string `json:"password_hash"`
+	Role         string `json:"role"`
+	CreatedAt    int64  `json:"created_at"`
+	UpdatedAt    int64  `json:"updated_at"`
+}
+
+func (q *Queries) CreateManagedAdmin(ctx context.Context, arg CreateManagedAdminParams) (Admin, error) {
+	row := q.db.QueryRowContext(ctx, createManagedAdmin,
+		arg.Username,
+		arg.PasswordHash,
+		arg.Role,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	var i Admin
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.MustChangePassword,
+		&i.TotpSecret,
+		&i.FailedLogins,
+		&i.LockedUntil,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.TotpPendingSecret,
+		&i.TotpLastStep,
+		&i.Role,
+		&i.Disabled,
+		&i.LastLoginAt,
 	)
 	return i, err
 }
@@ -119,7 +175,7 @@ func (q *Queries) EnableAdminTOTP(ctx context.Context, arg EnableAdminTOTPParams
 }
 
 const getAdminByID = `-- name: GetAdminByID :one
-SELECT id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at, totp_pending_secret, totp_last_step FROM admins WHERE id = ?
+SELECT id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at, totp_pending_secret, totp_last_step, role, disabled, last_login_at FROM admins WHERE id = ?
 `
 
 func (q *Queries) GetAdminByID(ctx context.Context, id int64) (Admin, error) {
@@ -137,12 +193,15 @@ func (q *Queries) GetAdminByID(ctx context.Context, id int64) (Admin, error) {
 		&i.UpdatedAt,
 		&i.TotpPendingSecret,
 		&i.TotpLastStep,
+		&i.Role,
+		&i.Disabled,
+		&i.LastLoginAt,
 	)
 	return i, err
 }
 
 const getAdminByUsername = `-- name: GetAdminByUsername :one
-SELECT id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at, totp_pending_secret, totp_last_step FROM admins WHERE username = ?
+SELECT id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at, totp_pending_secret, totp_last_step, role, disabled, last_login_at FROM admins WHERE username = ?
 `
 
 func (q *Queries) GetAdminByUsername(ctx context.Context, username string) (Admin, error) {
@@ -160,12 +219,15 @@ func (q *Queries) GetAdminByUsername(ctx context.Context, username string) (Admi
 		&i.UpdatedAt,
 		&i.TotpPendingSecret,
 		&i.TotpLastStep,
+		&i.Role,
+		&i.Disabled,
+		&i.LastLoginAt,
 	)
 	return i, err
 }
 
 const listAdmins = `-- name: ListAdmins :many
-SELECT id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at, totp_pending_secret, totp_last_step FROM admins ORDER BY id
+SELECT id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at, totp_pending_secret, totp_last_step, role, disabled, last_login_at FROM admins ORDER BY id
 `
 
 func (q *Queries) ListAdmins(ctx context.Context) ([]Admin, error) {
@@ -189,6 +251,9 @@ func (q *Queries) ListAdmins(ctx context.Context) ([]Admin, error) {
 			&i.UpdatedAt,
 			&i.TotpPendingSecret,
 			&i.TotpLastStep,
+			&i.Role,
+			&i.Disabled,
+			&i.LastLoginAt,
 		); err != nil {
 			return nil, err
 		}
@@ -201,6 +266,20 @@ func (q *Queries) ListAdmins(ctx context.Context) ([]Admin, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const recordAdminLogin = `-- name: RecordAdminLogin :exec
+UPDATE admins SET failed_logins = 0, locked_until = 0, last_login_at = ? WHERE id = ?
+`
+
+type RecordAdminLoginParams struct {
+	LastLoginAt int64 `json:"last_login_at"`
+	ID          int64 `json:"id"`
+}
+
+func (q *Queries) RecordAdminLogin(ctx context.Context, arg RecordAdminLoginParams) error {
+	_, err := q.db.ExecContext(ctx, recordAdminLogin, arg.LastLoginAt, arg.ID)
+	return err
 }
 
 const recordLoginFailure = `-- name: RecordLoginFailure :exec
@@ -228,8 +307,8 @@ func (q *Queries) ResetLoginFailures(ctx context.Context, id int64) error {
 
 const restoreAdmin = `-- name: RestoreAdmin :exec
 INSERT INTO admins (id, username, password_hash, must_change_password, totp_secret, failed_logins, locked_until, created_at, updated_at,
-                    totp_pending_secret, totp_last_step)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    totp_pending_secret, totp_last_step, role, disabled, last_login_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type RestoreAdminParams struct {
@@ -244,6 +323,9 @@ type RestoreAdminParams struct {
 	UpdatedAt          int64  `json:"updated_at"`
 	TotpPendingSecret  string `json:"totp_pending_secret"`
 	TotpLastStep       int64  `json:"totp_last_step"`
+	Role               string `json:"role"`
+	Disabled           int64  `json:"disabled"`
+	LastLoginAt        int64  `json:"last_login_at"`
 }
 
 func (q *Queries) RestoreAdmin(ctx context.Context, arg RestoreAdminParams) error {
@@ -259,7 +341,25 @@ func (q *Queries) RestoreAdmin(ctx context.Context, arg RestoreAdminParams) erro
 		arg.UpdatedAt,
 		arg.TotpPendingSecret,
 		arg.TotpLastStep,
+		arg.Role,
+		arg.Disabled,
+		arg.LastLoginAt,
 	)
+	return err
+}
+
+const setAdminDisabled = `-- name: SetAdminDisabled :exec
+UPDATE admins SET disabled = ?, updated_at = ? WHERE id = ?
+`
+
+type SetAdminDisabledParams struct {
+	Disabled  int64 `json:"disabled"`
+	UpdatedAt int64 `json:"updated_at"`
+	ID        int64 `json:"id"`
+}
+
+func (q *Queries) SetAdminDisabled(ctx context.Context, arg SetAdminDisabledParams) error {
+	_, err := q.db.ExecContext(ctx, setAdminDisabled, arg.Disabled, arg.UpdatedAt, arg.ID)
 	return err
 }
 
@@ -286,6 +386,21 @@ func (q *Queries) SetAdminPassword(ctx context.Context, arg SetAdminPasswordPara
 	return err
 }
 
+const setAdminRole = `-- name: SetAdminRole :exec
+UPDATE admins SET role = ?, updated_at = ? WHERE id = ?
+`
+
+type SetAdminRoleParams struct {
+	Role      string `json:"role"`
+	UpdatedAt int64  `json:"updated_at"`
+	ID        int64  `json:"id"`
+}
+
+func (q *Queries) SetAdminRole(ctx context.Context, arg SetAdminRoleParams) error {
+	_, err := q.db.ExecContext(ctx, setAdminRole, arg.Role, arg.UpdatedAt, arg.ID)
+	return err
+}
+
 const setAdminTOTPPending = `-- name: SetAdminTOTPPending :exec
 UPDATE admins SET totp_pending_secret = ?, updated_at = ? WHERE id = ?
 `
@@ -298,5 +413,20 @@ type SetAdminTOTPPendingParams struct {
 
 func (q *Queries) SetAdminTOTPPending(ctx context.Context, arg SetAdminTOTPPendingParams) error {
 	_, err := q.db.ExecContext(ctx, setAdminTOTPPending, arg.TotpPendingSecret, arg.UpdatedAt, arg.ID)
+	return err
+}
+
+const setAdminUsername = `-- name: SetAdminUsername :exec
+UPDATE admins SET username = ?, updated_at = ? WHERE id = ?
+`
+
+type SetAdminUsernameParams struct {
+	Username  string `json:"username"`
+	UpdatedAt int64  `json:"updated_at"`
+	ID        int64  `json:"id"`
+}
+
+func (q *Queries) SetAdminUsername(ctx context.Context, arg SetAdminUsernameParams) error {
+	_, err := q.db.ExecContext(ctx, setAdminUsername, arg.Username, arg.UpdatedAt, arg.ID)
 	return err
 }

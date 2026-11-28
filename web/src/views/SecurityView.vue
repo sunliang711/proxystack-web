@@ -3,9 +3,12 @@ import { computed, reactive, ref } from 'vue'
 import { NAlert, NButton, NCard, NForm, NFormItem, NInput, NQrCode, NSpace, NSteps, NStep, NTag, NText, useMessage } from 'naive-ui'
 import { api, fieldErrors, problemMessage, type Schemas } from '../api/client'
 import { loadSession, session } from '../session'
+import ActiveSessionsCard from '../components/ActiveSessionsCard.vue'
+import AccountsCard from '../components/AccountsCard.vue'
 
 const message = useMessage()
 const enabled = computed(() => session.admin?.totp_enabled ?? false)
+const sessionsVersion = ref(0)
 
 // 开启流程：生成密钥 → 验证器扫码 → 输入第一个验证码确认。
 const setup = ref<Schemas['TOTPSetup'] | null>(null)
@@ -86,6 +89,8 @@ const feedback = (key: string) => ({
 
 <template>
   <NSpace vertical :size="20">
+    <ActiveSessionsCard :key="sessionsVersion" />
+    <AccountsCard v-if="session.admin?.role === 'admin'" @changed="sessionsVersion++" />
     <NCard title="两步验证" size="small">
       <template #header-extra>
         <NTag :type="enabled ? 'success' : 'default'" size="small">{{ enabled ? '已开启' : '未开启' }}</NTag>
@@ -147,7 +152,7 @@ const feedback = (key: string) => ({
         同一账号连续 5 次登录失败后锁定 15 分钟；同一来源地址 15 分钟内失败 10 次后，暂停接受该地址的登录 15 分钟。验证码错误同样计入失败次数。
       </NText>
       <NText depth="3" tag="p" style="margin: 0">
-        验证器设备丢失时，在服务器上执行 <NText code>sudo proxystack-web admin reset-password --disable-totp</NText>，重置密码的同时关闭两步验证。
+        验证器设备丢失时，在服务器上执行 <NText code>sudo proxystack-web admin reset-password --username {{ session.admin?.username }} --disable-totp</NText>，重置该账号密码的同时关闭两步验证。
       </NText>
     </NCard>
   </NSpace>

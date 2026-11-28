@@ -45,7 +45,7 @@ const router = createRouter({
         { path: 'health', name: 'health', component: () => import('./views/HealthView.vue'), meta: { title: '健康检查', description: '依赖、服务、配置漂移、端口、采集、磁盘与备份等检查项及处理建议。' } },
         { path: 'backup', name: 'backup', component: () => import('./views/BackupView.vue'), meta: { title: '备份与还原', description: '导出整机迁移包、下载自动备份，或从迁移包恢复整个实例。' } },
         { path: 'settings', name: 'settings', component: () => import('./views/SettingsView.vue'), meta: { title: '系统设置', description: '全局设置；分组标题旁的标签说明保存后何时生效，悬停查看详情。' } },
-        { path: 'security', name: 'security', component: () => import('./views/SecurityView.vue'), meta: { title: '账号安全', description: '管理员账号的两步验证、登录失败锁定和设备丢失时的恢复方法。' } },
+        { path: 'security', name: 'security', component: () => import('./views/SecurityView.vue'), meta: { title: '账号安全', description: '管理各设备的活跃会话、管理账号与角色，以及当前账号的两步验证。' } },
         { path: 'system', name: 'system', component: () => import('./views/SystemView.vue'), meta: { title: '版本与升级', description: '管理服务的版本、升级和面板监听地址。' } },
       ],
     },

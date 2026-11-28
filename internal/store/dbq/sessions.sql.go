@@ -102,6 +102,23 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context, expiresAt int64) er
 	return err
 }
 
+const deleteOwnedSession = `-- name: DeleteOwnedSession :execrows
+DELETE FROM sessions WHERE id_hash = ? AND admin_id = ?
+`
+
+type DeleteOwnedSessionParams struct {
+	IDHash  string `json:"id_hash"`
+	AdminID int64  `json:"admin_id"`
+}
+
+func (q *Queries) DeleteOwnedSession(ctx context.Context, arg DeleteOwnedSessionParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteOwnedSession, arg.IDHash, arg.AdminID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteSession = `-- name: DeleteSession :exec
 DELETE FROM sessions WHERE id_hash = ?
 `
@@ -155,6 +172,58 @@ func (q *Queries) GetSession(ctx context.Context, idHash string) (Session, error
 		&i.UserAgent,
 	)
 	return i, err
+}
+
+const listActiveAdminSessions = `-- name: ListActiveAdminSessions :many
+SELECT id_hash, created_at, last_seen_at, expires_at, ip, user_agent
+FROM sessions
+WHERE admin_id = ? AND expires_at > ?2 AND created_at > ?3
+ORDER BY last_seen_at DESC, created_at DESC, id_hash
+`
+
+type ListActiveAdminSessionsParams struct {
+	AdminID      int64 `json:"admin_id"`
+	Now          int64 `json:"now"`
+	CreatedAfter int64 `json:"created_after"`
+}
+
+type ListActiveAdminSessionsRow struct {
+	IDHash     string `json:"id_hash"`
+	CreatedAt  int64  `json:"created_at"`
+	LastSeenAt int64  `json:"last_seen_at"`
+	ExpiresAt  int64  `json:"expires_at"`
+	Ip         string `json:"ip"`
+	UserAgent  string `json:"user_agent"`
+}
+
+func (q *Queries) ListActiveAdminSessions(ctx context.Context, arg ListActiveAdminSessionsParams) ([]ListActiveAdminSessionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveAdminSessions, arg.AdminID, arg.Now, arg.CreatedAfter)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListActiveAdminSessionsRow
+	for rows.Next() {
+		var i ListActiveAdminSessionsRow
+		if err := rows.Scan(
+			&i.IDHash,
+			&i.CreatedAt,
+			&i.LastSeenAt,
+			&i.ExpiresAt,
+			&i.Ip,
+			&i.UserAgent,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const markResetTokenUsed = `-- name: MarkResetTokenUsed :execrows
